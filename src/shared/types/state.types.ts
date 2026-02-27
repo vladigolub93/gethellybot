@@ -10,6 +10,7 @@ import { CandidateTechnicalSummaryV1 } from "./candidate-summary.types";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "./job-profile.types";
 
 export type UserRole = "candidate" | "manager";
+export type PreferredLanguage = "en" | "ru" | "uk" | "unknown";
 
 export type UserState =
   | "role_selection"
@@ -31,6 +32,8 @@ export interface UserSessionState {
   chatId: number;
   state: UserState;
   role?: UserRole;
+  preferredLanguage?: PreferredLanguage;
+  languageSampleCount?: number;
   username?: string;
   onboardingCompleted?: boolean;
   firstMatchExplained?: boolean;
@@ -66,6 +69,9 @@ export interface InterviewAnswer {
   readonly questionId: string;
   readonly questionText: string;
   readonly answerText: string;
+  readonly originalText?: string;
+  readonly normalizedEnglishText?: string;
+  readonly detectedLanguage?: "en" | "ru" | "uk" | "other";
   readonly inputType: "text" | "voice";
   readonly telegramVoiceFileId?: string;
   readonly voiceDurationSec?: number;

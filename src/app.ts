@@ -24,9 +24,11 @@ import { InterviewResultService } from "./interviews/interview-result.service";
 import { CandidateResumeAnalysisService } from "./interviews/candidate-resume-analysis.service";
 import { CandidateProfileUpdateV2Service } from "./interviews/candidate-profile-update-v2.service";
 import { CandidateTechnicalSummaryService } from "./interviews/candidate-technical-summary.service";
+import { InterviewIntentRouterService } from "./interviews/interview-intent-router.service";
 import { ManagerJobProfileV2Service } from "./interviews/manager-job-profile-v2.service";
 import { ManagerJobTechnicalSummaryService } from "./interviews/manager-job-technical-summary.service";
 import { HiringScopeGuardrailsService } from "./guardrails/hiring-scope-guardrails.service";
+import { NormalizationService } from "./i18n/normalization.service";
 import { MatchingEngine } from "./matching/matching.engine";
 import { VectorSearchRepository } from "./matching/vector-search.repo";
 import { CandidateNotifier } from "./notifications/candidate-notifier";
@@ -61,7 +63,7 @@ export function createApp(env: EnvConfig): AppContext {
   const telegramClient = new TelegramClient(env.telegramBotToken, logger);
   const telegramFileService = new TelegramFileService(telegramClient);
   const documentService = new DocumentService(logger);
-  const llmClient = new LlmClient(env.openaiApiKey, env.openaiModel, logger);
+  const llmClient = new LlmClient(env.openaiApiKey, env.openaiChatModel, logger);
   const transcriptionClient = new TranscriptionClient(
     env.openaiApiKey,
     env.openaiTranscriptionModel,
@@ -114,6 +116,8 @@ export function createApp(env: EnvConfig): AppContext {
     qualityFlagsService,
   );
   const candidateTechnicalSummaryService = new CandidateTechnicalSummaryService(llmClient);
+  const interviewIntentRouterService = new InterviewIntentRouterService(llmClient, logger);
+  const normalizationService = new NormalizationService(llmClient);
   const managerJobProfileV2Service = new ManagerJobProfileV2Service(
     llmClient,
     jobsRepository,
@@ -195,6 +199,8 @@ export function createApp(env: EnvConfig): AppContext {
     dataDeletionService,
     jobsRepository,
     llmClient,
+    interviewIntentRouterService,
+    normalizationService,
     logger,
   );
   const webhookController = buildWebhookController({

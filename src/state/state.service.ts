@@ -2,6 +2,7 @@ import {
   CandidateConfidenceUpdate,
   InterviewAnswer,
   ManagerProfileUpdate,
+  PreferredLanguage,
   UserRole,
   UserSessionState,
   UserState,
@@ -36,6 +37,7 @@ export class StateService {
       chatId,
       username,
       state: "role_selection",
+      preferredLanguage: "unknown",
     };
     this.sessions.set(userId, created);
     return created;
@@ -51,11 +53,15 @@ export class StateService {
   }
 
   reset(userId: number, chatId: number, username?: string): UserSessionState {
+    const existing = this.sessions.get(userId);
     const session: UserSessionState = {
       userId,
       chatId,
       username,
       state: "role_selection",
+      preferredLanguage: existing?.preferredLanguage ?? "unknown",
+      firstMatchExplained: existing?.firstMatchExplained,
+      onboardingCompleted: existing?.onboardingCompleted,
     };
     this.sessions.set(userId, session);
     return session;
@@ -77,6 +83,41 @@ export class StateService {
       throw new Error(`Session not found for user: ${userId}`);
     }
     session.role = role;
+    return session;
+  }
+
+  setPreferredLanguage(userId: number, preferredLanguage: PreferredLanguage): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.preferredLanguage = preferredLanguage;
+    return session;
+  }
+
+  recordPreferredLanguageSample(
+    userId: number,
+    detectedLanguage: "en" | "ru" | "uk" | "unknown" | "other",
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const currentCount = session.languageSampleCount ?? 0;
+    if (currentCount >= 3) {
+      return session;
+    }
+
+    session.languageSampleCount = currentCount + 1;
+    if (detectedLanguage === "other") {
+      if (!session.preferredLanguage) {
+        session.preferredLanguage = "unknown";
+      }
+      return session;
+    }
+
+    if (detectedLanguage === "ru" || detectedLanguage === "uk") {
+      session.preferredLanguage = detectedLanguage;
+      return session;
+    }
+
+    if (!session.preferredLanguage || session.preferredLanguage === "unknown") {
+      session.preferredLanguage = "en";
+    }
     return session;
   }
 

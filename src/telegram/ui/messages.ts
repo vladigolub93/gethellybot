@@ -75,6 +75,10 @@ export function managerInterviewPreparationMessage(): string {
   ].join("\n");
 }
 
+export function interviewLanguageSupportMessage(): string {
+  return "You can answer in Russian or Ukrainian, I will understand.";
+}
+
 export function interviewOngoingReminderMessage(): string {
   return [
     "We are currently in the interview step.",
@@ -99,6 +103,10 @@ export function processingDocumentMessage(): string {
 
 export function questionMessage(questionIndex: number, questionText: string): string {
   return `Question ${questionIndex + 1}:\n${questionText}`;
+}
+
+export function quickFollowUpMessage(followUpText: string): string {
+  return `Quick follow up:\n${followUpText}`;
 }
 
 export function interviewAlreadyStartedMessage(): string {

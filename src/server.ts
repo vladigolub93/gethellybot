@@ -7,6 +7,7 @@ async function bootstrap(): Promise<void> {
 
   app.listen(env.port, async () => {
     logger.info("Server started", { port: env.port, path: env.telegramWebhookPath });
+    logger.info(`LLM chat model: ${env.openaiChatModel}`);
 
     if (!env.telegramWebhookUrl) {
       logger.warn("TELEGRAM_WEBHOOK_URL is not set, skipping webhook registration");

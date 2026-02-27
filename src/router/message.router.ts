@@ -68,11 +68,25 @@ export class MessageRouter {
     }
 
     if (session.state === "waiting_resume") {
+      if (isTimingQuestion(text)) {
+        await this.telegramClient.sendMessage(
+          update.chatId,
+          "Usually this takes a couple of minutes. I will send the next question as soon as the text is extracted. You do not need to do anything.",
+        );
+        return;
+      }
       await this.telegramClient.sendMessage(update.chatId, candidateResumePrompt());
       return;
     }
 
     if (session.state === "waiting_job") {
+      if (isTimingQuestion(text)) {
+        await this.telegramClient.sendMessage(
+          update.chatId,
+          "Usually this takes a couple of minutes. I will send the next question as soon as the text is extracted. You do not need to do anything.",
+        );
+        return;
+      }
       await this.telegramClient.sendMessage(update.chatId, managerJobPrompt());
       return;
     }
@@ -398,4 +412,17 @@ function getStateNextStep(state: UserState): string {
     return "Tell user contacts are shared and /start can begin a new flow.";
   }
   return "Guide user to use /start.";
+}
+
+function isTimingQuestion(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized.includes("how long") ||
+    normalized.includes("when") ||
+    normalized.includes("сколько") ||
+    normalized.includes("когда")
+  );
 }

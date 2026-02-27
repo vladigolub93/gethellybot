@@ -4,6 +4,7 @@ import { DecisionService } from "../decisions/decision.service";
 import { LlmClient } from "../ai/llm.client";
 import { JobsRepository } from "../db/repositories/jobs.repo";
 import { HiringScopeGuardrailsService } from "../guardrails/hiring-scope-guardrails.service";
+import { NormalizationService, detectLanguageQuick, toPreferredLanguage } from "../i18n/normalization.service";
 import { DataDeletionService } from "../privacy/data-deletion.service";
 import { TranscriptionClient } from "../ai/transcription.client";
 import { DocumentService } from "../documents/document.service";
@@ -14,6 +15,7 @@ import {
   isInterviewingState,
 } from "../interviews/interview-bootstrap.guard";
 import { InterviewEngine } from "../interviews/interview.engine";
+import { InterviewIntentRouterService } from "../interviews/interview-intent-router.service";
 import { MatchingEngine } from "../matching/matching.engine";
 import { NotificationEngine } from "../notifications/notification.engine";
 import { ProfileSummaryService } from "../profiles/profile-summary.service";
@@ -29,10 +31,11 @@ import {
   candidateInterviewPreparationMessage,
   documentUploadNotAllowedMessage,
   interviewAlreadyStartedMessage,
-  interviewOngoingReminderMessage,
+  interviewLanguageSupportMessage,
   managerInterviewPreparationMessage,
   missingInterviewContextMessage,
   processingDocumentMessage,
+  quickFollowUpMessage,
   questionMessage,
   textOnlyReplyMessage,
   transcriptionFailedMessage,
@@ -68,6 +71,8 @@ export class StateRouter {
     private readonly dataDeletionService: DataDeletionService,
     private readonly jobsRepository: JobsRepository,
     private readonly llmClient: LlmClient,
+    private readonly interviewIntentRouterService: InterviewIntentRouterService,
+    private readonly normalizationService: NormalizationService,
     private readonly logger: Logger,
   ) {
     this.messageRouter = new MessageRouter(
@@ -115,13 +120,13 @@ export class StateRouter {
 
     switch (update.kind) {
       case "text":
+        this.stateService.recordPreferredLanguageSample(
+          session.userId,
+          toPreferredLanguage(detectLanguageQuick(update.text)),
+        );
         if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
           if (shouldRouteInterviewTextToGeneralFlow(update.text)) {
             await this.messageRouter.route(update, session);
-            break;
-          }
-          if (isLikelyInterviewInterruption(update.text)) {
-            await this.telegramClient.sendMessage(update.chatId, interviewOngoingReminderMessage());
             break;
           }
           await this.handleInterviewAnswer(
@@ -134,7 +139,13 @@ export class StateRouter {
           );
           break;
         }
-        await this.messageRouter.route(update, session);
+        await this.messageRouter.route(
+          {
+            ...update,
+            text: await this.normalizeGeneralText(update.text),
+          },
+          session,
+        );
         break;
       case "callback":
         await this.callbackRouter.route(update, session);
@@ -207,6 +218,7 @@ export class StateRouter {
       if (bootstrap.answerInstruction) {
         await this.telegramClient.sendMessage(update.chatId, bootstrap.answerInstruction);
       }
+      await this.telegramClient.sendMessage(update.chatId, interviewLanguageSupportMessage());
       await this.telegramClient.sendMessage(update.chatId, questionMessage(0, bootstrap.firstQuestion));
       this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
       if (bootstrap.candidatePlanV2) {
@@ -237,6 +249,8 @@ export class StateRouter {
   private async handleInterviewAnswer(
     input: {
       answerText: string;
+      originalText?: string;
+      detectedLanguage?: "en" | "ru" | "uk" | "other";
       inputType: "text" | "voice";
       telegramVoiceFileId?: string;
       voiceDurationSec?: number;
@@ -245,20 +259,90 @@ export class StateRouter {
     session: UserSessionState,
     sourceMessageId?: number,
   ): Promise<void> {
+    if (session.state !== "interviewing_candidate" && session.state !== "interviewing_manager") {
+      await this.telegramClient.sendMessage(session.chatId, missingInterviewContextMessage());
+      return;
+    }
+
     if (!session.interviewPlan) {
       await this.telegramClient.sendMessage(session.chatId, missingInterviewContextMessage());
       return;
     }
 
+    const originalText = input.answerText.trim();
+    const normalized = await this.normalizeInterviewInput(originalText);
+    this.stateService.recordPreferredLanguageSample(
+      session.userId,
+      toPreferredLanguage(normalized.detected_language),
+    );
+
+    const currentQuestionText = resolveCurrentInterviewQuestionText(session);
+    if (!currentQuestionText) {
+      await this.telegramClient.sendMessage(session.chatId, missingInterviewContextMessage());
+      return;
+    }
+
+    const intentDecision = await this.interviewIntentRouterService.classify({
+      currentState: session.state,
+      currentQuestionText,
+      userMessage: normalized.english_text,
+    });
+
+    if (intentDecision.intent === "META" || intentDecision.intent === "CONTROL") {
+      await this.telegramClient.sendMessage(
+        session.chatId,
+        this.buildInterviewMetaReply(
+          intentDecision.meta_type,
+          intentDecision.control_type,
+          session,
+          intentDecision.suggested_reply,
+        ),
+      );
+      return;
+    }
+
+    if (intentDecision.intent === "OFFTOPIC") {
+      const reply =
+        session.preferredLanguage === "ru"
+          ? "Давайте держаться темы интервью по найму. Ответьте на текущий вопрос, и я продолжу."
+          : session.preferredLanguage === "uk"
+            ? "Давайте триматися теми інтерв'ю з найму. Відповідайте на поточне питання, і я продовжу."
+          : intentDecision.suggested_reply ||
+            "Let us keep this focused on your interview. Please answer the current question to continue.";
+      await this.telegramClient.sendMessage(session.chatId, reply);
+      return;
+    }
+
+    if (!intentDecision.should_advance_interview) {
+      await this.telegramClient.sendMessage(
+        session.chatId,
+        this.buildInterviewMetaReply(
+          intentDecision.meta_type,
+          intentDecision.control_type,
+          session,
+          intentDecision.suggested_reply,
+        ),
+      );
+      return;
+    }
+
     try {
-      const result = await this.interviewEngine.submitAnswer(session, input);
+      const normalizedInput = {
+        ...input,
+        answerText: normalized.english_text,
+        originalText,
+        detectedLanguage: normalized.detected_language,
+      };
+      const result = await this.interviewEngine.submitAnswer(session, normalizedInput);
 
       if (result.kind === "next_question") {
-        await this.maybeSendInterviewReaction(session, input.answerText, sourceMessageId);
+        await this.maybeSendInterviewReaction(session, originalText, sourceMessageId);
         await this.maybeSendCandidateEmpathyLine(session);
         await this.telegramClient.sendMessage(
           session.chatId,
-          questionMessage(result.questionIndex, result.questionText),
+          result.isFollowUp
+            ? quickFollowUpMessage(result.questionText)
+            : questionMessage(result.questionIndex, result.questionText),
         );
         return;
       }
@@ -331,6 +415,8 @@ export class StateRouter {
     try {
       const buffer = await this.telegramFileService.downloadFile(update.fileId);
       const transcription = await this.transcriptionClient.transcribeOgg(buffer);
+      const normalized = await this.normalizeInterviewInput(transcription);
+      this.stateService.recordPreferredLanguageSample(update.userId, toPreferredLanguage(normalized.detected_language));
       await this.messageRouter.route(
         {
           kind: "text",
@@ -339,7 +425,7 @@ export class StateRouter {
           chatId: update.chatId,
           userId: update.userId,
           username: update.username,
-          text: transcription,
+          text: normalized.english_text,
         },
         session,
       );
@@ -472,6 +558,123 @@ export class StateRouter {
       );
     }
   }
+
+  private async normalizeInterviewInput(
+    originalText: string,
+  ): Promise<{ detected_language: "en" | "ru" | "uk" | "other"; english_text: string }> {
+    try {
+      const normalized = await this.normalizationService.normalizeUserTextToEnglish(originalText);
+      const englishText = normalized.english_text.trim();
+      if (!englishText) {
+        return {
+          detected_language: normalized.detected_language,
+          english_text: originalText,
+        };
+      }
+      return {
+        detected_language: normalized.detected_language,
+        english_text: englishText,
+      };
+    } catch (error) {
+      this.logger.warn("Interview input normalization failed, using original text", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return {
+        detected_language: detectLanguageQuick(originalText),
+        english_text: originalText,
+      };
+    }
+  }
+
+  private async normalizeGeneralText(text: string): Promise<string> {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith("/")) {
+      return text;
+    }
+
+    const detected = detectLanguageQuick(trimmed);
+    if (detected === "en" || detected === "other") {
+      return text;
+    }
+
+    try {
+      const normalized = await this.normalizationService.normalizeUserTextToEnglish(trimmed);
+      const englishText = normalized.english_text.trim();
+      return englishText || text;
+    } catch {
+      return text;
+    }
+  }
+
+  private buildInterviewMetaReply(
+    metaType: "timing" | "language" | "format" | "privacy" | "other" | null,
+    controlType: "pause" | "resume" | "restart" | "help" | "stop" | null,
+    session: UserSessionState,
+    suggestedReply: string,
+  ): string {
+    if (session.preferredLanguage === "ru") {
+      if (metaType === "timing") {
+        return "Обычно это занимает пару минут. Я отправлю следующий вопрос сразу после обработки текста. Вам ничего дополнительно делать не нужно.";
+      }
+      if (metaType === "language") {
+        return "Да, можно отвечать голосом на русском или украинском. Я расшифрую и продолжу. Пожалуйста, отвечайте подробно и с реальными примерами.";
+      }
+      if (metaType === "format") {
+        return "Можно отвечать текстом или голосом. Подробные ответы помогают собрать точный профиль.";
+      }
+      if (metaType === "privacy") {
+        return "Ваш профиль передается менеджеру только после вашего отклика, а контакты только после взаимного согласия.";
+      }
+      if (controlType === "restart") {
+        return "Чтобы начать заново, используйте /start.";
+      }
+      if (controlType === "pause" || controlType === "stop") {
+        return "Сейчас пауза вручную не нужна. Можете ответить на текущий вопрос или использовать /start.";
+      }
+      return "Сейчас идет интервью. Ответьте на текущий вопрос подробно текстом или голосом.";
+    }
+    if (session.preferredLanguage === "uk") {
+      if (metaType === "timing") {
+        return "Зазвичай це займає кілька хвилин. Я надішлю наступне питання одразу після обробки тексту. Вам нічого додатково робити не потрібно.";
+      }
+      if (metaType === "language") {
+        return "Так, можна відповідати голосом російською або українською. Я розшифрую і продовжу. Будь ласка, відповідайте детально та з реальними прикладами.";
+      }
+      if (metaType === "format") {
+        return "Можна відповідати текстом або голосом. Детальні відповіді допомагають зібрати точний профіль.";
+      }
+      if (metaType === "privacy") {
+        return "Ваш профіль передається менеджеру тільки після вашого відгуку, а контакти тільки після взаємного підтвердження.";
+      }
+      if (controlType === "restart") {
+        return "Щоб почати заново, використайте /start.";
+      }
+      if (controlType === "pause" || controlType === "stop") {
+        return "Зараз пауза вручну не потрібна. Можете відповісти на поточне питання або використати /start.";
+      }
+      return "Зараз триває інтерв'ю. Відповідайте на поточне питання детально текстом або голосом.";
+    }
+
+    if (metaType === "timing") {
+      return "Usually this takes a couple of minutes. I will send the next question as soon as the text is extracted. You do not need to do anything.";
+    }
+    if (metaType === "language") {
+      return "Yes, you can answer by voice in Russian or Ukrainian. I will transcribe it and continue. Please be detailed and use real examples.";
+    }
+    if (metaType === "privacy") {
+      return "Your profile is only shared after you apply, and contacts are shared only after mutual approval.";
+    }
+    if (metaType === "format" || metaType === "other") {
+      return "You can answer in text or voice. Detailed answers help me build an accurate profile.";
+    }
+    if (controlType === "restart") {
+      return "Use /start to restart the flow.";
+    }
+    if (controlType === "pause" || controlType === "stop") {
+      return "You can pause by returning later, or continue by answering the current question.";
+    }
+    return suggestedReply || "Please answer the current question so I can continue the interview.";
+  }
 }
 
 function formatCandidateJobSummary(
@@ -508,30 +711,28 @@ function shouldRouteInterviewTextToGeneralFlow(text: string): boolean {
   );
 }
 
-function isLikelyInterviewInterruption(text: string): boolean {
-  const normalized = text.trim().toLowerCase();
-  if (!normalized) {
-    return true;
+function resolveCurrentInterviewQuestionText(session: UserSessionState): string | null {
+  if (!session.interviewPlan) {
+    return null;
   }
 
-  const interruptionPhrases = [
-    "what next",
-    "what now",
-    "help",
-    "hello",
-    "hi",
-    "can i ask",
-    "wait",
-    "stop",
-    "pause",
-    "why",
-  ];
-
-  if (interruptionPhrases.some((phrase) => normalized.includes(phrase))) {
-    return true;
+  const followUp = session.pendingFollowUp;
+  if (followUp?.questionText?.trim()) {
+    return followUp.questionText.trim();
   }
 
-  return normalized.length <= 3 && normalized === "?";
+  const index = session.currentQuestionIndex;
+  if (
+    typeof index !== "number" ||
+    index < 0 ||
+    index >= session.interviewPlan.questions.length
+  ) {
+    return null;
+  }
+
+  const question = session.interviewPlan.questions[index];
+  const text = question?.question?.trim();
+  return text || null;
 }
 
 function estimateAnswerQuality(answerText: string): "low" | "medium" | "high" {

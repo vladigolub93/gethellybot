@@ -6,7 +6,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "ts-node src/server.ts",
     "start": "node dist/server.js",
-    "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts"
+    "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts",
+    "test:normalization": "ts-node src/tests/unit/normalization.service.smoke.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

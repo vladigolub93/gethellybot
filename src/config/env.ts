@@ -10,7 +10,7 @@ export interface EnvConfig {
   telegramWebhookUrl?: string;
   telegramSecretToken?: string;
   openaiApiKey: string;
-  openaiModel: string;
+  openaiChatModel: string;
   openaiEmbeddingModel: string;
   openaiTranscriptionModel: string;
   voiceMaxDurationSec: number;
@@ -61,9 +61,9 @@ export function loadEnv(): EnvConfig {
     telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
     telegramSecretToken: process.env.TELEGRAM_SECRET_TOKEN,
     openaiApiKey: getRequiredString("OPENAI_API_KEY"),
-    openaiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small",
-    openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "gpt-4o-mini-transcribe",
+    openaiChatModel: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.2",
+    openaiEmbeddingModel: process.env.OPENAI_EMBEDDINGS_MODEL ?? process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-large",
+    openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
     voiceMaxDurationSec,
     telegramReactionsEnabled,
     telegramReactionsProbability,

@@ -70,6 +70,7 @@ export class StatePersistenceService {
         telegramUserId: session.userId,
         telegramUsername: session.username,
         role: session.role,
+        preferredLanguage: session.preferredLanguage,
         onboardingCompleted: session.onboardingCompleted,
         firstMatchExplained: session.firstMatchExplained,
       });

@@ -39,6 +39,8 @@ export interface InterviewBootstrapResult {
 
 export interface InterviewAnswerInput {
   answerText: string;
+  originalText?: string;
+  detectedLanguage?: "en" | "ru" | "uk" | "other";
   inputType: "text" | "voice";
   telegramVoiceFileId?: string;
   voiceDurationSec?: number;
@@ -50,6 +52,7 @@ export type InterviewAnswerResult =
       kind: "next_question";
       questionIndex: number;
       questionText: string;
+      isFollowUp?: boolean;
     }
   | {
       kind: "completed";
@@ -174,6 +177,7 @@ export class InterviewEngine {
     }
 
     const normalizedAnswer = answer.answerText.trim();
+    const originalAnswer = (answer.originalText ?? answer.answerText).trim();
     if (!normalizedAnswer) {
       throw new Error("Please reply with text.");
     }
@@ -207,6 +211,9 @@ export class InterviewEngine {
       questionId: question.id,
       questionText: currentQuestionText,
       answerText: normalizedAnswer,
+      originalText: originalAnswer,
+      normalizedEnglishText: normalizedAnswer,
+      detectedLanguage: answer.detectedLanguage,
       inputType: answer.inputType,
       telegramVoiceFileId: answer.telegramVoiceFileId,
       voiceDurationSec: answer.voiceDurationSec,
@@ -247,6 +254,7 @@ export class InterviewEngine {
         kind: "next_question",
         questionIndex: currentIndex,
         questionText: followUpQuestionText,
+        isFollowUp: true,
       };
     }
     this.stateService.clearPendingFollowUp(session.userId);
@@ -281,6 +289,7 @@ export class InterviewEngine {
       kind: "next_question",
       questionIndex: nextQuestionIndex,
       questionText: plan.questions[nextQuestionIndex].question,
+      isFollowUp: false,
     };
   }
 
@@ -682,17 +691,12 @@ function buildFollowUpQuestion(
   role: "candidate" | "manager",
 ): string {
   const normalizedFocus = focus.trim();
-  if (role === "manager") {
-    if (!normalizedFocus) {
-      return "To make this concrete, please clarify: the exact task, challenge, and required ownership.";
-    }
-    return `To make this concrete, please clarify: ${normalizedFocus}.`;
-  }
-
-  if (!normalizedFocus) {
-    return "To make this concrete, please explain: the exact technical decision and your direct contribution.";
-  }
-  return `To make this concrete, please explain: ${normalizedFocus}.`;
+  const defaultFocus =
+    role === "manager"
+      ? "the real task, challenge, and required ownership"
+      : "the exact technical decision and your direct contribution";
+  const effectiveFocus = normalizedFocus || defaultFocus;
+  return `Please clarify ${effectiveFocus} with one concrete example, what you did, and what trade offs you considered.`;
 }
 
 function isCandidateProfile(profile: CandidateProfile | JobProfile): profile is CandidateProfile {
