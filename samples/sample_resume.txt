@@ -1,0 +1,9 @@
+John Doe
+Senior Backend Engineer
+
+Skills: Node.js, TypeScript, PostgreSQL, Redis, Docker
+Experience: 6 years backend development
+Domain: Fintech, SaaS
+Salary expectation: 140000 USD gross yearly
+Availability: 1 month notice
+Location: UTC+2

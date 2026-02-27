@@ -1,0 +1,8 @@
+Senior Backend Engineer
+
+Must have: Node.js, TypeScript, PostgreSQL
+Nice to have: AWS, Kafka
+Domain: Fintech
+Budget: 120000-150000 USD yearly
+Location: Remote, Europe preferred
+Urgency: Hire in 3 weeks

@@ -1,0 +1,25 @@
+export function buildCandidateResultPrompt(payloadJson: string): string {
+  return [
+    "You are summarizing a completed candidate interview.",
+    "Return STRICT JSON only, no markdown, no extra text.",
+    "Keep output compact and practical.",
+    "",
+    "Required JSON shape:",
+    "{",
+    '  "title": "Interview Summary",',
+    '  "profileSnapshot": "string",',
+    '  "strengths": ["string"],',
+    '  "gaps": ["string"],',
+    '  "nextStep": "string"',
+    "}",
+    "",
+    "Rules:",
+    "- profileSnapshot: max 220 chars",
+    "- strengths: 1..4 items, each max 120 chars",
+    "- gaps: 1..4 items, each max 120 chars",
+    "- nextStep: max 120 chars",
+    "- be faithful to provided data; avoid speculation",
+    "",
+    `Input payload JSON:\n${payloadJson}`,
+  ].join("\n");
+}
