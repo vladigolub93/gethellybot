@@ -103,7 +103,7 @@ export class TelegramClient {
       chat_id: chatId,
       text: clampTelegramText(finalText),
     };
-    if (TELEGRAM_PARSE_MODE) {
+    if (TELEGRAM_PARSE_MODE && isHardSystemSource(source)) {
       payload.parse_mode = TELEGRAM_PARSE_MODE;
     }
 

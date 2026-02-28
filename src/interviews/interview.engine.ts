@@ -619,9 +619,12 @@ export class InterviewEngine {
               });
             }
           }
-          const aiAssistedLikely =
-            profileUpdateV2.authenticity_label === "likely_ai_assisted" ||
-            profileUpdateV2.authenticity_score <= 0.35;
+          const aiAssistedLikely = shouldTreatCandidateAnswerAsAiAssisted(
+            profileUpdateV2.authenticity_label,
+            profileUpdateV2.authenticity_score,
+            profileUpdateV2.authenticity_signals,
+            answerRecord.answerText,
+          );
           if (aiAssistedLikely) {
             const nextStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
             this.stateService.setCandidateAiAssistedStreak(session.userId, nextStreak);
@@ -691,9 +694,12 @@ export class InterviewEngine {
 
         followUpRequired = managerProfileUpdate.follow_up_required;
         followUpFocus = managerProfileUpdate.follow_up_focus ?? "";
-        const managerAiAssistedLikely =
-          managerProfileUpdate.authenticity_label === "likely_ai_assisted" ||
-          managerProfileUpdate.authenticity_score <= 0.35;
+        const managerAiAssistedLikely = shouldTreatManagerAnswerAsAiAssisted(
+          managerProfileUpdate.authenticity_label,
+          managerProfileUpdate.authenticity_score,
+          managerProfileUpdate.authenticity_signals,
+          answerRecord.answerText,
+        );
         if (managerProfileUpdate.answer_quality === "low") {
           const recentAnswers = this.stateService.getAnswers(session.userId).slice(-3);
           const lowSignal = recentAnswers.filter((item) => item.isFollowUp).length >= 2;
@@ -951,6 +957,102 @@ function buildManagerAiAssistedWarningMessage(streak: number): string {
     return "This still looks AI-generated and generic. Please do not paste AI text, share real hiring context from your team, voice is preferred.";
   }
   return "This looks AI-assisted and generic. Please answer in your own words with one real role example from your team, voice is preferred.";
+}
+
+function shouldTreatCandidateAnswerAsAiAssisted(
+  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
+  authenticityScore: number,
+  authenticitySignals: ReadonlyArray<string>,
+  answerText: string,
+): boolean {
+  if (authenticityLabel === "likely_ai_assisted" || authenticityScore <= 0.35) {
+    return true;
+  }
+
+  if (containsFabricationAdmission(answerText)) {
+    return true;
+  }
+
+  const signalsLookAi = hasAiAuthenticitySignals(authenticitySignals);
+  if (signalsLookAi) {
+    return true;
+  }
+
+  const templatedNarrative = looksTemplatedNarrative(answerText);
+  if (authenticityLabel === "uncertain" && authenticityScore <= 0.6 && templatedNarrative) {
+    return true;
+  }
+
+  return false;
+}
+
+function shouldTreatManagerAnswerAsAiAssisted(
+  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
+  authenticityScore: number,
+  authenticitySignals: ReadonlyArray<string>,
+  answerText: string,
+): boolean {
+  if (authenticityLabel === "likely_ai_assisted" || authenticityScore <= 0.35) {
+    return true;
+  }
+
+  if (containsFabricationAdmission(answerText)) {
+    return true;
+  }
+
+  const signalsLookAi = hasAiAuthenticitySignals(authenticitySignals);
+  if (signalsLookAi) {
+    return true;
+  }
+
+  const templatedNarrative = looksTemplatedNarrative(answerText);
+  if (authenticityLabel === "uncertain" && authenticityScore <= 0.6 && templatedNarrative) {
+    return true;
+  }
+
+  return false;
+}
+
+function hasAiAuthenticitySignals(authenticitySignals: ReadonlyArray<string>): boolean {
+  if (authenticitySignals.length === 0) {
+    return false;
+  }
+  const joined = authenticitySignals.join(" ").toLowerCase();
+  return /generic|template|boilerplate|polished but generic|hypothetical|not personal|non-responsive|fabricat|invented|copied|ai-assisted|ai generated|no concrete/.test(
+    joined,
+  );
+}
+
+function containsFabricationAdmission(answerText: string): boolean {
+  const text = answerText.trim().toLowerCase();
+  if (!text) {
+    return false;
+  }
+
+  return (
+    /\bi made (it )?up\b/.test(text) ||
+    /\bi invented (it|this)\b/.test(text) ||
+    /\bi do not have (that|this|real) experience\b/.test(text) ||
+    /\bno real experience\b/.test(text) ||
+    /я придумал/.test(text) ||
+    /нет у меня такого опыта/.test(text) ||
+    /не маю такого досвіду/.test(text)
+  );
+}
+
+function looksTemplatedNarrative(answerText: string): boolean {
+  const text = answerText.trim();
+  if (text.length < 550) {
+    return false;
+  }
+
+  const sectionMarkers = text.match(
+    /(^|\n)\s*(ui|api|backend|database|db|response|flow|step\s*\d+|frontend|service)\s*[.:]/gim,
+  );
+  const markerCount = sectionMarkers?.length ?? 0;
+
+  const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
+  return markerCount >= 3 || paragraphCount >= 4;
 }
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {
