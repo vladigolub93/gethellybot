@@ -701,6 +701,29 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_job") {
+      if (session.jobDescriptionText?.trim()) {
+        if (isRetryProcessingSignal(rawText, normalizedEnglishText)) {
+          await this.sendRouterReplyWithLoopGuard(
+            session,
+            update.chatId,
+            "I already have your job description. Restarting processing now.",
+          );
+          await this.handlePastedDocumentText(update, {
+            sourceTextOriginal: session.jobDescriptionText,
+            sourceTextEnglish: session.jobDescriptionText,
+          });
+          return;
+        }
+        if (decision.meta_type === "timing") {
+          await this.sendRouterReplyWithLoopGuard(
+            session,
+            update.chatId,
+            "I already have your job description. If the interview did not start, type retry processing and I will continue without reupload.",
+          );
+          return;
+        }
+      }
+
       if (decision.route === "CONTROL") {
         await this.handleControlRoute({
           update,
@@ -785,6 +808,29 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_resume") {
+      if (session.candidateResumeText?.trim()) {
+        if (isRetryProcessingSignal(rawText, normalizedEnglishText)) {
+          await this.sendRouterReplyWithLoopGuard(
+            session,
+            update.chatId,
+            "I already have your resume. Restarting processing now.",
+          );
+          await this.handlePastedDocumentText(update, {
+            sourceTextOriginal: session.candidateResumeText,
+            sourceTextEnglish: session.candidateResumeText,
+          });
+          return;
+        }
+        if (decision.meta_type === "timing") {
+          await this.sendRouterReplyWithLoopGuard(
+            session,
+            update.chatId,
+            "I already have your resume. If the interview did not start, type retry processing and I will continue without reupload.",
+          );
+          return;
+        }
+      }
+
       if (decision.route === "CONTROL") {
         await this.handleControlRoute({
           update,
@@ -1173,6 +1219,12 @@ export class StateRouter {
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
+      if (intakeState === "waiting_resume") {
+        this.stateService.setCandidateResumeText(update.userId, input.sourceTextEnglish);
+      }
+      if (intakeState === "waiting_job") {
+        this.stateService.setJobDescriptionText(update.userId, input.sourceTextEnglish);
+      }
       this.logger.info("document.extracted", {
         userId: update.userId,
         sourceType: "text",
@@ -2066,6 +2118,12 @@ export class StateRouter {
         update.mimeType,
       );
       const normalizedExtractedText = await this.normalizeGeneralText(extractedText);
+      if (isCandidateResumeIntake) {
+        this.stateService.setCandidateResumeText(update.userId, normalizedExtractedText);
+      }
+      if (isManagerJdIntake) {
+        this.stateService.setJobDescriptionText(update.userId, normalizedExtractedText);
+      }
       if (isCandidateResumeIntake) {
         await this.persistCandidateNameFromResumeText(update.userId, normalizedExtractedText);
       }
@@ -3038,6 +3096,27 @@ function parseManagerWorkFormatCallback(callbackData: string): JobWorkFormat | n
 function isYesConfirmation(textEnglish: string): boolean {
   const normalized = textEnglish.trim().toLowerCase();
   return normalized === "yes" || normalized === "y" || normalized === "confirm" || normalized === "ok";
+}
+
+function isRetryProcessingSignal(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("retry processing") ||
+    english.includes("retry") ||
+    english.includes("already sent") ||
+    english.includes("i already sent") ||
+    english.includes("already uploaded") ||
+    raw.includes("повтори обработку") ||
+    raw.includes("перезапусти обработку") ||
+    raw.includes("я уже прислал") ||
+    raw.includes("я уже отправил") ||
+    raw.includes("я уже надіслав") ||
+    raw.includes("я вже надіслав") ||
+    raw.includes("я уже скинул") ||
+    raw.includes("я уже отправлял") ||
+    raw.includes("вище")
+  );
 }
 
 function detectRoleSelectionFromText(
