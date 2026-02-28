@@ -35,4 +35,30 @@ export class DataDeletionRepository {
       telegramUserId: input.telegramUserId,
     });
   }
+
+  async purgeUserData(telegramUserId: number): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    const deletions: Array<{ table: string; filters: Record<string, string | number> }> = [
+      { table: "user_states", filters: { telegram_user_id: telegramUserId } },
+      { table: "profiles", filters: { telegram_user_id: telegramUserId } },
+      { table: "interview_runs", filters: { telegram_user_id: telegramUserId } },
+      { table: "jobs", filters: { manager_telegram_user_id: telegramUserId } },
+      { table: "matches", filters: { candidate_telegram_user_id: telegramUserId } },
+      { table: "matches", filters: { manager_telegram_user_id: telegramUserId } },
+      { table: "notification_limits", filters: { telegram_user_id: telegramUserId } },
+      { table: "telegram_updates", filters: { telegram_user_id: telegramUserId } },
+      { table: "users", filters: { telegram_user_id: telegramUserId } },
+    ];
+
+    for (const item of deletions) {
+      await this.supabaseClient.deleteMany(item.table, item.filters);
+    }
+
+    this.logger.info("User data purged from Supabase", {
+      telegramUserId,
+    });
+  }
 }

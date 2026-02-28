@@ -263,9 +263,18 @@ export class InterviewEngine {
     };
 
     this.stateService.upsertAnswer(session.userId, answerRecord);
+    const answersAfterCurrent = this.stateService.getAnswers(session.userId);
+    const skippedAfterCurrent = this.stateService.getSkippedQuestionIndexes(session.userId);
+    const interviewTurnCapReached = hasReachedInterviewTurnCap(
+      answersAfterCurrent,
+      skippedAfterCurrent,
+    );
+
     const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
     if (updateResult.followUpRequired) {
-      const answersAfterCurrent = this.stateService.getAnswers(session.userId);
+      if (interviewTurnCapReached) {
+        this.stateService.clearPendingFollowUp(session.userId);
+      } else {
       const followUpsForQuestion = answersAfterCurrent.filter(
         (item) => item.questionIndex === currentIndex && item.isFollowUp,
       ).length;
@@ -299,12 +308,22 @@ export class InterviewEngine {
           isFollowUp: true,
         };
       }
+      }
     }
     this.stateService.clearPendingFollowUp(session.userId);
 
     const answersAfter = this.stateService.getAnswers(session.userId);
-
     const skippedAfter = this.stateService.getSkippedQuestionIndexes(session.userId);
+    if (hasReachedInterviewTurnCap(answersAfter, skippedAfter)) {
+      this.stateService.clearCurrentQuestionIndex(session.userId);
+      const completion = await this.completeInterview(session);
+      return {
+        kind: "completed",
+        completedState: completion.completedState,
+        completionMessage: completion.message,
+        followupMessage: completion.followupMessage,
+      };
+    }
     if (isInterviewComplete(plan, answersAfter, skippedAfter)) {
       this.stateService.clearCurrentQuestionIndex(session.userId);
       const completion = await this.completeInterview(session);
@@ -369,6 +388,16 @@ export class InterviewEngine {
     this.stateService.clearPendingFollowUp(session.userId);
     this.stateService.markQuestionSkipped(session.userId, currentIndex);
     const skippedAfter = this.stateService.getSkippedQuestionIndexes(session.userId);
+    if (hasReachedInterviewTurnCap(answers, skippedAfter)) {
+      this.stateService.clearCurrentQuestionIndex(session.userId);
+      const completion = await this.completeInterview(session);
+      return {
+        kind: "completed",
+        completedState: completion.completedState,
+        completionMessage: completion.message,
+        followupMessage: completion.followupMessage,
+      };
+    }
     const nextQuestionIndex = getNextQuestionIndex(plan, answers, skippedAfter);
     if (nextQuestionIndex === null) {
       this.stateService.clearCurrentQuestionIndex(session.userId);
@@ -811,6 +840,13 @@ function buildManagerFallbackOneLiner(analysis: JobDescriptionAnalysisV1): strin
   const coreTech = analysis.technology_signal_map.likely_core.slice(0, 3).join(", ");
   const techPart = coreTech ? ` with likely core tech ${coreTech}` : "";
   return `I parsed this as a ${roleTitle}${techPart}, next I will clarify real tasks, constraints, and expectations.`;
+}
+
+function hasReachedInterviewTurnCap(
+  answers: ReadonlyArray<InterviewAnswer>,
+  skippedQuestionIndexes: ReadonlyArray<number>,
+): boolean {
+  return answers.length + skippedQuestionIndexes.length >= 10;
 }
 
 function isCandidateProfile(profile: CandidateProfile | JobProfile): profile is CandidateProfile {

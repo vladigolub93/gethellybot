@@ -221,6 +221,30 @@ async function testOnboardingSkipAliasAndRepeatStart(): Promise<void> {
   assert.equal(session?.awaitingContactChoice, true);
 }
 
+async function testDeleteAllDataResetsToStart(): Promise<void> {
+  const { router, stateService, telegram } = buildRouterHarness();
+  const userId = 91004;
+  const chatId = 91004;
+
+  await router.route(textUpdate(31, userId, chatId, "/start"));
+  await router.route(textUpdate(32, userId, chatId, "Skip for now"));
+  await router.route(textUpdate(33, userId, chatId, "I am a Candidate"));
+
+  let session = stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_resume");
+
+  await router.route(textUpdate(34, userId, chatId, "Delete all my data"));
+  session = stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "role_selection");
+  assert.equal(session?.awaitingContactChoice, true);
+  assert.equal(
+    telegram.sent.some((item) => item.text.includes("Before we begin, please share your Telegram contact.")),
+    true,
+  );
+}
+
 function textUpdate(
   updateId: number,
   userId: number,
@@ -257,6 +281,7 @@ async function run(): Promise<void> {
   await testOnboardingSkipRoleAndRestart();
   await testOnboardingContactThenRole();
   await testOnboardingSkipAliasAndRepeatStart();
+  await testDeleteAllDataResetsToStart();
   process.stdout.write("Onboarding e2e tests passed.\n");
 }
 

@@ -1,9 +1,9 @@
 import { InterviewPlan, InterviewQuestion } from "../shared/types/domain.types";
 import { UserRole } from "../shared/types/state.types";
 
-export const MAX_INTERVIEW_QUESTIONS = 5;
-export const MAX_CANDIDATE_INTERVIEW_QUESTIONS = 8;
-export const MAX_MANAGER_INTERVIEW_QUESTIONS = 9;
+export const MAX_INTERVIEW_QUESTIONS = 10;
+export const MAX_CANDIDATE_INTERVIEW_QUESTIONS = 10;
+export const MAX_MANAGER_INTERVIEW_QUESTIONS = 10;
 
 export function fallbackQuestionByRole(role: UserRole): string {
   if (role === "candidate") {

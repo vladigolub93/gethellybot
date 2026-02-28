@@ -516,15 +516,7 @@ export class StateRouter {
     }
 
     if (isDataDeletionCommand(rawText, normalizedEnglishText)) {
-      const result = await this.dataDeletionService.requestDeletion({
-        telegramUserId: session.userId,
-        telegramUsername: session.username,
-        reason: "user_text_command",
-      });
-      this.stateService.clearContactInfo(session.userId);
-      await this.sendBotMessage(session.userId, update.chatId, result.confirmationMessage, {
-        replyMarkup: buildRemoveReplyKeyboard(),
-      });
+      await this.handleDataDeletionAndRestart(update, session);
       return;
     }
 
@@ -1178,6 +1170,24 @@ export class StateRouter {
     await this.sendBotMessage(session.userId, update.chatId, contactRequestMessage(), {
       replyMarkup: buildContactRequestKeyboard(),
     });
+  }
+
+  private async handleDataDeletionAndRestart(
+    update: Extract<NormalizedUpdate, { kind: "text" }>,
+    session: UserSessionState,
+  ): Promise<void> {
+    const result = await this.dataDeletionService.requestDeletion({
+      telegramUserId: session.userId,
+      telegramUsername: session.username,
+      reason: "user_text_command",
+    });
+
+    this.stateService.clearContactInfo(session.userId);
+    await this.sendBotMessage(session.userId, update.chatId, result.confirmationMessage, {
+      replyMarkup: buildRemoveReplyKeyboard(),
+      source: "state_router.system.data_deletion",
+    });
+    await this.restartFlow(update);
   }
 
   private buildDeterministicRouteFallback(update: NormalizedUpdate): AlwaysOnRouterDecision | null {
@@ -2985,13 +2995,22 @@ function isDataDeletionCommand(rawText: string, normalizedEnglishText: string): 
   const english = normalizedEnglishText.trim().toLowerCase();
   return (
     english.includes("delete my data") ||
+    english.includes("delete all my data") ||
+    english.includes("remove all my data") ||
+    english.includes("erase all my data") ||
+    english.includes("wipe my data") ||
     english.includes("remove my contact") ||
     english.includes("delete my contact") ||
     english === "delete data" ||
     english === "delete contact" ||
+    english === "delete everything" ||
     raw.includes("удали мои данные") ||
+    raw.includes("удали все мои данные") ||
+    raw.includes("удали все данные") ||
     raw.includes("удали мой контакт") ||
     raw.includes("видали мої дані") ||
+    raw.includes("видали всі мої дані") ||
+    raw.includes("видали всі дані") ||
     raw.includes("видали мій контакт")
   );
 }

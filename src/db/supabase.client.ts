@@ -98,6 +98,31 @@ export class SupabaseRestClient {
     return Array.isArray(rows) ? rows : [];
   }
 
+  async deleteMany(
+    table: string,
+    filters: Record<string, string | number>,
+  ): Promise<void> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      query.set(key, `eq.${value}`);
+    }
+
+    const response = await fetch(
+      `${this.config.url}/rest/v1/${table}?${query.toString()}`,
+      {
+        method: "DELETE",
+        headers: this.baseHeaders({
+          prefer: "return=minimal",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Supabase delete failed: HTTP ${response.status} - ${body}`);
+    }
+  }
+
   private async requestVoid(
     method: "POST",
     path: string,
