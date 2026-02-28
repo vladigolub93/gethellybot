@@ -36,6 +36,7 @@ import {
   JobBudgetPeriod,
   JobWorkFormat,
   ManagerMandatoryStep,
+  UserRole,
   UserSessionState,
 } from "../shared/types/state.types";
 import {
@@ -65,6 +66,7 @@ import {
   buildRoleSelectionKeyboard,
 } from "../telegram/ui/keyboards";
 import {
+  candidateOnboardingMessage,
   candidateMatchingActionsReadyMessage,
   candidateMandatoryCompletedMessage,
   candidateMandatoryIntroMessage,
@@ -95,6 +97,7 @@ import {
   managerMandatoryCountriesRetryMessage,
   managerMandatoryIntroMessage,
   managerMandatoryWorkFormatQuestionMessage,
+  managerOnboardingMessage,
   managerMatchingActionsReadyMessage,
   managerMatchingBlockedByMandatoryMessage,
   managerCandidateSuggestionMessage,
@@ -103,6 +106,9 @@ import {
   missingInterviewContextMessage,
   processingDocumentMessage,
   questionMessage,
+  onboardingPrivacyNoteMessage,
+  candidateResumePrompt,
+  managerJobPrompt,
   welcomeMessage,
   textOnlyReplyMessage,
   transcriptionFailedMessage,
@@ -485,6 +491,21 @@ export class StateRouter {
       await this.sendBotMessage(session.userId, update.chatId, result.confirmationMessage, {
         replyMarkup: buildRemoveReplyKeyboard(),
       });
+      return;
+    }
+
+    if (session.state === "role_selection") {
+      const selectedRole = detectRoleSelectionFromText(rawText, normalizedEnglishText);
+      if (selectedRole) {
+        await this.startRoleFlowFromText(session, update.chatId, selectedRole);
+        return;
+      }
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        "Please choose your role first, I am a Candidate or I am Hiring.",
+        { replyMarkup: buildRoleSelectionKeyboard() },
+      );
       return;
     }
 
@@ -1728,6 +1749,16 @@ export class StateRouter {
       return;
     }
 
+    if (session.state === "role_selection") {
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        "Please choose your role first, then send your file.",
+        { replyMarkup: buildRoleSelectionKeyboard() },
+      );
+      return;
+    }
+
     if (!isDocumentUploadAllowedState(session.state)) {
       await this.sendBotMessage(session.userId, update.chatId, documentUploadNotAllowedMessage());
       return;
@@ -2186,6 +2217,30 @@ export class StateRouter {
     }
   }
 
+  private async startRoleFlowFromText(
+    session: UserSessionState,
+    chatId: number,
+    role: UserRole,
+  ): Promise<void> {
+    this.stateService.setRole(session.userId, role);
+    if (role === "candidate") {
+      this.stateService.transition(session.userId, "onboarding_candidate");
+      await this.sendBotMessage(session.userId, chatId, candidateOnboardingMessage());
+      await this.sendBotMessage(session.userId, chatId, onboardingPrivacyNoteMessage());
+      this.stateService.transition(session.userId, "waiting_resume");
+      this.stateService.setOnboardingCompleted(session.userId, true);
+      await this.sendBotMessage(session.userId, chatId, candidateResumePrompt());
+      return;
+    }
+
+    this.stateService.transition(session.userId, "onboarding_manager");
+    await this.sendBotMessage(session.userId, chatId, managerOnboardingMessage());
+    await this.sendBotMessage(session.userId, chatId, onboardingPrivacyNoteMessage());
+    this.stateService.transition(session.userId, "waiting_job");
+    this.stateService.setOnboardingCompleted(session.userId, true);
+    await this.sendBotMessage(session.userId, chatId, managerJobPrompt());
+  }
+
   private async showTopMatchesWithActions(session: UserSessionState, chatId: number): Promise<boolean> {
     const all = await this.matchStorageService.listAll();
     if (session.role === "manager") {
@@ -2591,6 +2646,48 @@ function parseManagerWorkFormatCallback(callbackData: string): JobWorkFormat | n
 function isYesConfirmation(textEnglish: string): boolean {
   const normalized = textEnglish.trim().toLowerCase();
   return normalized === "yes" || normalized === "y" || normalized === "confirm" || normalized === "ok";
+}
+
+function detectRoleSelectionFromText(
+  rawText: string,
+  normalizedEnglishText: string,
+): UserRole | null {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+
+  const candidateSignals = [
+    "i am candidate",
+    "candidate",
+    "job seeker",
+    "looking for a job",
+    "find me roles",
+    "я кандидат",
+    "я соискатель",
+    "ищу работу",
+    "шукаю роботу",
+    "я кандидатка",
+  ];
+  if (candidateSignals.some((signal) => raw.includes(signal) || english.includes(signal))) {
+    return "candidate";
+  }
+
+  const managerSignals = [
+    "i am hiring",
+    "hiring manager",
+    "find candidates",
+    "recruiter",
+    "manager",
+    "я нанимаю",
+    "я hiring manager",
+    "ищу кандидатов",
+    "шукаю кандидатів",
+    "я роботодавець",
+  ];
+  if (managerSignals.some((signal) => raw.includes(signal) || english.includes(signal))) {
+    return "manager";
+  }
+
+  return null;
 }
 
 function localizeInterviewMetaReply(
