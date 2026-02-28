@@ -20,6 +20,7 @@ import { StatePersistenceService } from "../state/state-persistence.service";
 import { TelegramClient } from "../telegram/telegram.client";
 import {
   buildContactRequestKeyboard,
+  buildRemoveReplyKeyboard,
   buildRoleLearnMoreKeyboard,
   buildRoleSelectionKeyboard,
 } from "../telegram/ui/keyboards";
@@ -30,8 +31,7 @@ import {
   candidateRejectedAcknowledgement,
   contactRequestMessage,
   onboardingLearnHowItWorksMessage,
-  onboardingPrivacyNoteMessage,
-  welcomeMessage,
+  roleSelectionMessage,
   managerAcceptedAcknowledgement,
   managerOnboardingMessage,
   managerRejectedAcknowledgement,
@@ -110,10 +110,14 @@ export class CallbackRouter {
       this.stateService.transition(update.userId, "onboarding_candidate");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Candidate flow selected");
       await this.sendBotMessage(update.chatId, candidateOnboardingMessage(), "callback_router.role_candidate.onboarding");
-      await this.sendBotMessage(update.chatId, onboardingPrivacyNoteMessage(), "callback_router.role_candidate.privacy");
       this.stateService.transition(update.userId, "waiting_resume");
       this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.sendBotMessage(update.chatId, candidateResumePrompt(), "callback_router.role_candidate.resume_prompt");
+      await this.sendBotMessage(
+        update.chatId,
+        candidateResumePrompt(),
+        "callback_router.role_candidate.resume_prompt",
+        buildRemoveReplyKeyboard(),
+      );
       return;
     }
 
@@ -142,10 +146,14 @@ export class CallbackRouter {
       this.stateService.transition(update.userId, "onboarding_manager");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Hiring flow selected");
       await this.sendBotMessage(update.chatId, managerOnboardingMessage(), "callback_router.role_manager.onboarding");
-      await this.sendBotMessage(update.chatId, onboardingPrivacyNoteMessage(), "callback_router.role_manager.privacy");
       this.stateService.transition(update.userId, "waiting_job");
       this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.sendBotMessage(update.chatId, managerJobPrompt(), "callback_router.role_manager.job_prompt");
+      await this.sendBotMessage(
+        update.chatId,
+        managerJobPrompt(),
+        "callback_router.role_manager.job_prompt",
+        buildRemoveReplyKeyboard(),
+      );
       return;
     }
 
@@ -184,7 +192,7 @@ export class CallbackRouter {
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Back");
       await this.sendBotMessage(
         update.chatId,
-        welcomeMessage(),
+        roleSelectionMessage(),
         "callback_router.back_to_role_selection",
         buildRoleSelectionKeyboard(),
       );

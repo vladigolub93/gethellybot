@@ -1,17 +1,15 @@
 export function welcomeMessage(): string {
   return [
     "Hi, I am Helly.",
-    "",
-    "I help technical candidates find the right roles and help hiring managers find the right engineers.",
+    "I help technical candidates and hiring managers match faster, with less uncertainty.",
   ].join("\n");
 }
 
 export function contactRequestMessage(): string {
   return [
     "Before we begin, please share your Telegram contact.",
-    "This helps us connect you with the right person after mutual approval.",
-    "Your contact is never shared unless both sides approve.",
-    "Tap Share my contact below, or send your phone number in text, example +380991112233.",
+    "I only share contacts after mutual approval.",
+    "Tap Share my contact below, or send a phone number in text, example +380991112233.",
     "If you want to continue now, tap or type Skip for now.",
   ].join("\n");
 }
@@ -19,7 +17,7 @@ export function contactRequestMessage(): string {
 export function roleSelectionMessage(): string {
   return [
     "Choose your role to begin.",
-    "You can tap a button below or type, I am a Candidate or I am Hiring.",
+    "Tap a button below, or type, I am a Candidate or I am Hiring.",
   ].join("\n");
 }
 
@@ -50,11 +48,17 @@ export function managerContactRequiredForExchangeMessage(): string {
 }
 
 export function candidateResumePrompt(): string {
-  return "Send your resume as a PDF or DOCX file, or paste the text here. You can also forward a file from another chat.";
+  return [
+    "Send your resume as a PDF or DOCX file, or paste the full text here.",
+    "You can also forward a file from another chat.",
+  ].join("\n");
 }
 
 export function managerJobPrompt(): string {
-  return "Send the job description as a PDF or DOCX file, or paste the text here. You can also forward a file from another chat.";
+  return [
+    "Send the job description as a PDF or DOCX file, or paste the full text here.",
+    "You can also forward a file from another chat.",
+  ].join("\n");
 }
 
 export function onboardingLearnHowItWorksMessage(): string {
@@ -69,26 +73,17 @@ export function onboardingLearnHowItWorksMessage(): string {
 
 export function candidateOnboardingMessage(): string {
   return [
-    "Thanks for choosing to get started.",
-    "",
-    "Finding the right role is not just about keywords.",
-    "I will ask a few focused questions to better understand your real experience and strengths.",
-    "",
-    "You can answer in text or by sending a voice message.",
-    "Take your time and be specific.",
-    "",
-    "Your profile will only be shared with a hiring manager if you decide to apply.",
+    "Thanks for getting started.",
+    "I will ask focused technical questions to understand your real experience and strengths.",
+    "You can answer in text or voice. Your profile is shared only if you apply.",
   ].join("\n");
 }
 
 export function managerOnboardingMessage(): string {
   return [
     "Thanks for getting started.",
-    "",
-    "Job descriptions are often incomplete.",
-    "I will ask a few clarification questions to understand the real product, challenges, and expectations.",
-    "",
-    "The more concrete your answers, the better the matching will be.",
+    "I will ask focused clarification questions to understand the real product, challenges, and expectations.",
+    "The more concrete your answers, the more accurate matching will be.",
   ].join("\n");
 }
 
@@ -102,16 +97,13 @@ export function onboardingPrivacyNoteMessage(): string {
 export function candidateInterviewPreparationMessage(): string {
   return [
     "I want to understand your real experience, not just what is written in the resume.",
-    "",
-    "There are no trick questions.",
-    "Please be detailed and concrete.",
+    "No trick questions, practical examples are enough.",
   ].join("\n");
 }
 
 export function managerInterviewPreparationMessage(): string {
   return [
     "I want to understand the real needs behind this role.",
-    "",
     "Clear context helps avoid mismatches later.",
   ].join("\n");
 }
@@ -255,7 +247,7 @@ export function firstManagerMatchExplanationMessage(): string {
 }
 
 export function processingDocumentMessage(): string {
-  return "Document received. Extracting text and preparing interview questions...";
+  return "Document received. Processing now, this usually takes up to a minute.";
 }
 
 export function stillProcessingDocumentMessage(): string {

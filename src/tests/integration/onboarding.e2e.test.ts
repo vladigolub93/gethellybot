@@ -160,8 +160,8 @@ async function testOnboardingSkipRoleAndRestart(): Promise<void> {
   assert.equal(telegram.sent.some((item) => item.text.includes("Choose your role to begin.")), true);
   const rolePrompt = telegram.sent.find((item) => item.text.includes("Choose your role to begin."));
   assert.equal(Boolean(rolePrompt?.replyMarkup), true);
-  assert.equal(hasInlineKeyboardButton(rolePrompt?.replyMarkup, "I am a Candidate"), true);
-  assert.equal(hasInlineKeyboardButton(rolePrompt?.replyMarkup, "I am Hiring"), true);
+  assert.equal(hasReplyKeyboardButton(rolePrompt?.replyMarkup, "I am a Candidate"), true);
+  assert.equal(hasReplyKeyboardButton(rolePrompt?.replyMarkup, "I am Hiring"), true);
 
   await router.route(textUpdate(3, userId, chatId, "I am a Candidate"));
   session = stateService.getSession(userId);
@@ -295,18 +295,6 @@ function hasReplyKeyboardButton(
     return false;
   }
   return replyMarkup.keyboard.some((row) =>
-    Array.isArray(row) && row.some((button) => button.text === buttonText),
-  );
-}
-
-function hasInlineKeyboardButton(
-  replyMarkup: TelegramReplyMarkup | undefined,
-  buttonText: string,
-): boolean {
-  if (!replyMarkup || !("inline_keyboard" in replyMarkup) || !Array.isArray(replyMarkup.inline_keyboard)) {
-    return false;
-  }
-  return replyMarkup.inline_keyboard.some((row) =>
     Array.isArray(row) && row.some((button) => button.text === buttonText),
   );
 }

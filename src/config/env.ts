@@ -39,7 +39,20 @@ function getRequiredString(name: string): string {
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
-  return value;
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return trimmed;
+}
+
+function getOptionalTrimmed(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function loadEnv(): EnvConfig {
@@ -94,12 +107,12 @@ export function loadEnv(): EnvConfig {
     telegramLogsLevel,
     telegramLogsRatePerMin: telegramLogsRatePerMin,
     telegramLogsBatchMs: telegramLogsBatchMs,
-    adminSecret: process.env.ADMIN_SECRET,
+    adminSecret: getOptionalTrimmed("ADMIN_SECRET"),
     port,
     telegramBotToken: getRequiredString("TELEGRAM_BOT_TOKEN"),
     telegramWebhookPath,
-    telegramWebhookUrl: process.env.TELEGRAM_WEBHOOK_URL,
-    telegramSecretToken: process.env.TELEGRAM_SECRET_TOKEN,
+    telegramWebhookUrl: getOptionalTrimmed("TELEGRAM_WEBHOOK_URL"),
+    telegramSecretToken: getOptionalTrimmed("TELEGRAM_SECRET_TOKEN"),
     openaiApiKey: getRequiredString("OPENAI_API_KEY"),
     openaiChatModel: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.2",
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDINGS_MODEL ?? process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-large",
@@ -108,13 +121,13 @@ export function loadEnv(): EnvConfig {
     telegramReactionsEnabled,
     telegramReactionsProbability,
     telegramButtonsEnabled,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    supabaseApiKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY,
-    qdrantUrl: process.env.QDRANT_URL,
-    qdrantApiKey: process.env.QDRANT_API_KEY,
-    qdrantCandidateCollection: process.env.QDRANT_CANDIDATE_COLLECTION ?? "helly_candidates_v1",
+    supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),
+    supabasePublishableKey: getOptionalTrimmed("SUPABASE_PUBLISHABLE_KEY"),
+    supabaseServiceRoleKey: getOptionalTrimmed("SUPABASE_SERVICE_ROLE_KEY"),
+    supabaseApiKey: getOptionalTrimmed("SUPABASE_SERVICE_ROLE_KEY") ?? getOptionalTrimmed("SUPABASE_PUBLISHABLE_KEY"),
+    qdrantUrl: getOptionalTrimmed("QDRANT_URL"),
+    qdrantApiKey: getOptionalTrimmed("QDRANT_API_KEY"),
+    qdrantCandidateCollection: getOptionalTrimmed("QDRANT_CANDIDATE_COLLECTION") ?? "helly_candidates_v1",
     qdrantBackfillOnStart,
   };
 }

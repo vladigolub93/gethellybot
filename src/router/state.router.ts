@@ -104,13 +104,13 @@ import {
   managerMatchingBlockedByMandatoryMessage,
   managerCandidateSuggestionMessage,
   managerInterviewPreparationMessage,
+  onboardingLearnHowItWorksMessage,
   ownContactRequiredMessage,
   missingInterviewContextMessage,
   processingDocumentMessage,
   stillProcessingDocumentMessage,
   stillProcessingAnswerMessage,
   questionMessage,
-  onboardingPrivacyNoteMessage,
   candidateResumePrompt,
   managerJobPrompt,
   roleSelectionMessage,
@@ -522,11 +522,23 @@ export class StateRouter {
 
     if (session.state === "role_selection") {
       if (isAwaitingContactChoice(session)) {
+        const reminder = contactRequestMessage();
+        if ((session.lastBotMessage ?? "").trim() !== reminder.trim()) {
+          await this.sendBotMessage(
+            session.userId,
+            update.chatId,
+            reminder,
+            { replyMarkup: buildContactRequestKeyboard() },
+          );
+        }
+        return;
+      }
+      if (isRoleLearnHowItWorksText(rawText, normalizedEnglishText)) {
         await this.sendBotMessage(
           session.userId,
           update.chatId,
-          contactRequestMessage(),
-          { replyMarkup: buildContactRequestKeyboard() },
+          onboardingLearnHowItWorksMessage(),
+          { replyMarkup: buildRoleSelectionKeyboard() },
         );
         return;
       }
@@ -1269,7 +1281,7 @@ export class StateRouter {
         stillProcessingDocumentMessage(),
         { source: "state_router.progress.document" },
       );
-    }, 15_000);
+    }, 10_000);
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
@@ -2188,7 +2200,7 @@ export class StateRouter {
         stillProcessingDocumentMessage(),
         { source: "state_router.progress.document" },
       );
-    }, 15_000);
+    }, 10_000);
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
@@ -2708,19 +2720,21 @@ export class StateRouter {
     if (role === "candidate") {
       this.stateService.transition(session.userId, "onboarding_candidate");
       await this.sendBotMessage(session.userId, chatId, candidateOnboardingMessage());
-      await this.sendBotMessage(session.userId, chatId, onboardingPrivacyNoteMessage());
       this.stateService.transition(session.userId, "waiting_resume");
       this.stateService.setOnboardingCompleted(session.userId, true);
-      await this.sendBotMessage(session.userId, chatId, candidateResumePrompt());
+      await this.sendBotMessage(session.userId, chatId, candidateResumePrompt(), {
+        replyMarkup: buildRemoveReplyKeyboard(),
+      });
       return;
     }
 
     this.stateService.transition(session.userId, "onboarding_manager");
     await this.sendBotMessage(session.userId, chatId, managerOnboardingMessage());
-    await this.sendBotMessage(session.userId, chatId, onboardingPrivacyNoteMessage());
     this.stateService.transition(session.userId, "waiting_job");
     this.stateService.setOnboardingCompleted(session.userId, true);
-    await this.sendBotMessage(session.userId, chatId, managerJobPrompt());
+    await this.sendBotMessage(session.userId, chatId, managerJobPrompt(), {
+      replyMarkup: buildRemoveReplyKeyboard(),
+    });
   }
 
   private async showTopMatchesWithActions(session: UserSessionState, chatId: number): Promise<boolean> {
@@ -2843,6 +2857,7 @@ function formatCandidateJobSummary(
 
 function isSkipContactForNow(text: string): boolean {
   const normalized = text.trim().toLowerCase();
+  const compact = normalized.replace(/[^\p{L}\p{N}+]+/gu, " ").trim();
   return (
     normalized === "skip" ||
     normalized === "skip for now" ||
@@ -2861,7 +2876,11 @@ function isSkipContactForNow(text: string): boolean {
     normalized.includes("не хочу поки") ||
     normalized.includes("поки не хочу") ||
     normalized.includes("не хочу надсилати") ||
-    normalized.includes("пізніше")
+    normalized.includes("пізніше") ||
+    compact === "skip" ||
+    compact === "skip for now" ||
+    compact === "пропустить" ||
+    compact === "скип"
   );
 }
 
@@ -3375,6 +3394,19 @@ function detectRoleSelectionFromText(
   }
 
   return null;
+}
+
+function isRoleLearnHowItWorksText(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("learn how this works") ||
+    english.includes("how this works") ||
+    english.includes("how it works") ||
+    raw.includes("learn how this works") ||
+    raw.includes("как это работает") ||
+    raw.includes("як це працює")
+  );
 }
 
 function localizeInterviewMetaReply(

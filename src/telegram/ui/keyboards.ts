@@ -17,13 +17,12 @@ import { TelegramReplyMarkup } from "../../shared/types/telegram.types";
 
 export function buildRoleSelectionKeyboard(): TelegramReplyMarkup {
   return {
-    inline_keyboard: [
-      [
-        { text: "I am a Candidate", callback_data: CALLBACK_ROLE_CANDIDATE },
-        { text: "I am Hiring", callback_data: CALLBACK_ROLE_MANAGER },
-      ],
-      [{ text: "Learn how this works", callback_data: CALLBACK_ROLE_LEARN_MORE }],
+    keyboard: [
+      [{ text: "I am a Candidate" }, { text: "I am Hiring" }],
+      [{ text: "Learn how this works" }],
     ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
 }
 
