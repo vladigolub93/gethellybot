@@ -173,6 +173,24 @@ function fallbackDecision(
   }
 
   if (
+    normalized.includes("can you ask in russian") ||
+    normalized.includes("can you ask in ukrainian") ||
+    normalized.includes("ask in russian") ||
+    normalized.includes("ask in ukrainian") ||
+    normalized.includes("на русском вопрос") ||
+    normalized.includes("на русском задать вопрос") ||
+    normalized.includes("українською поставити питання")
+  ) {
+    return {
+      intent: "META",
+      meta_type: "language",
+      control_type: null,
+      reply: "Yes. I can ask questions in your preferred language. Please answer the current question and I will continue accordingly.",
+      should_advance: false,
+    };
+  }
+
+  if (
     normalized.includes("what is my name") ||
     normalized.includes("my name") ||
     normalized.includes("как меня зовут") ||

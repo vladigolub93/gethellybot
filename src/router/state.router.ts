@@ -662,6 +662,19 @@ export class StateRouter {
         userRagContext: interviewRag.ragContext,
       });
 
+      if (
+        intentDecision.intent === "META" &&
+        intentDecision.meta_type === "language" &&
+        isAskBotQuestionInPreferredLanguage(rawText, normalizedEnglishText)
+      ) {
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          buildAskBotQuestionInPreferredLanguageReply(detectedLanguage),
+        );
+        return;
+      }
+
       if (isRemainingQuestionsMetaQuery(rawText, normalizedEnglishText)) {
         await this.sendBotMessage(
           session.userId,
@@ -1429,6 +1442,7 @@ export class StateRouter {
   ): Promise<void> {
     const baseSource = options?.source ?? "state_router.dialogue";
     const source = resolveMessageSource(baseSource, text, options?.replyMarkup);
+    const sanitizedText = sanitizeUserFacingText(text);
     this.logger.debug("user.reply.sent", {
       telegram_user_id: userId,
       chat_id: chatId,
@@ -1438,10 +1452,10 @@ export class StateRouter {
     await this.telegramClient.sendUserMessage({
       source,
       chatId,
-      text,
+      text: sanitizedText,
       replyMarkup: options?.replyMarkup,
     });
-    this.stateService.setLastBotMessage(userId, text);
+    this.stateService.setLastBotMessage(userId, sanitizedText);
   }
 
   private async handleContactUpdate(
@@ -3346,6 +3360,15 @@ function localizeInterviewMetaReply(
   metaType: "timing" | "language" | "format" | "privacy" | "other" | null,
   detectedLanguage: "en" | "ru" | "uk" | "other",
 ): string {
+  const trimmedReply = defaultReply.trim();
+  if (detectedLanguage !== "ru" && detectedLanguage !== "uk") {
+    return trimmedReply || defaultReply;
+  }
+
+  if (trimmedReply && !isGenericMetaReplyTemplate(trimmedReply, metaType)) {
+    return trimmedReply;
+  }
+
   if (detectedLanguage === "ru") {
     if (metaType === "timing") {
       return "Обычно это занимает пару минут. Я продолжу сразу после вашего ответа.";
@@ -3376,7 +3399,71 @@ function localizeInterviewMetaReply(
     }
   }
 
-  return defaultReply;
+  return trimmedReply || defaultReply;
+}
+
+function isGenericMetaReplyTemplate(
+  reply: string,
+  metaType: "timing" | "language" | "format" | "privacy" | "other" | null,
+): boolean {
+  const normalized = reply.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (metaType === "timing") {
+    return (
+      normalized.includes("usually this takes a couple of minutes") ||
+      normalized.includes("i will continue right after your answer")
+    );
+  }
+  if (metaType === "language") {
+    return (
+      normalized.includes("you can answer by voice in russian or ukrainian") ||
+      normalized.includes("i will transcribe") ||
+      normalized.includes("i will understand")
+    );
+  }
+  if (metaType === "format") {
+    return (
+      normalized.includes("you can answer in text or voice") ||
+      normalized.includes("please answer the current interview question")
+    );
+  }
+  if (metaType === "privacy") {
+    return normalized.includes("contacts are shared only after mutual approval");
+  }
+  return false;
+}
+
+function isAskBotQuestionInPreferredLanguage(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("can you ask in russian") ||
+    english.includes("can you ask in ukrainian") ||
+    english.includes("ask the question in russian") ||
+    english.includes("ask the question in ukrainian") ||
+    raw.includes("можешь на русском написать вопрос") ||
+    raw.includes("можешь на русском задать вопрос") ||
+    raw.includes("можешь вопрос на русском") ||
+    raw.includes("пиши вопрос на русском") ||
+    raw.includes("можеш українською поставити питання") ||
+    raw.includes("можеш українською задати питання") ||
+    raw.includes("пиши питання українською")
+  );
+}
+
+function buildAskBotQuestionInPreferredLanguageReply(
+  detectedLanguage: "en" | "ru" | "uk" | "other",
+): string {
+  if (detectedLanguage === "ru") {
+    return "Да, могу задавать вопросы на русском. Отвечайте на текущий вопрос, и дальше продолжу на русском.";
+  }
+  if (detectedLanguage === "uk") {
+    return "Так, можу ставити питання українською. Дайте відповідь на поточне питання, і далі продовжу українською.";
+  }
+  return "Yes. I can ask questions in Russian or Ukrainian. Please answer the current question, and I will continue in your preferred language.";
 }
 
 function isJdIntakeMetaFormatQuestion(rawText: string, normalizedEnglishText: string): boolean {
@@ -3654,4 +3741,12 @@ function sanitizeUserName(value: string | null | undefined): string | null {
     return null;
   }
   return firstToken.slice(0, 24);
+}
+
+function sanitizeUserFacingText(text: string): string {
+  return text
+    .replace(/[—–]/g, ", ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
