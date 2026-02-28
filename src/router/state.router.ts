@@ -60,6 +60,7 @@ import {
   buildCandidateMatchingActionsKeyboard,
   buildCandidateMandatoryLocationKeyboard,
   buildCandidateWorkModeKeyboard,
+  buildContactRequestKeyboard,
   buildManagerDecisionKeyboard,
   buildManagerMatchingActionsKeyboard,
   buildManagerWorkFormatKeyboard,
@@ -110,6 +111,7 @@ import {
   onboardingPrivacyNoteMessage,
   candidateResumePrompt,
   managerJobPrompt,
+  roleSelectionMessage,
   welcomeMessage,
   textOnlyReplyMessage,
   transcriptionFailedMessage,
@@ -461,12 +463,13 @@ export class StateRouter {
     session: UserSessionState,
   ): Promise<void> {
     this.stateService.clearContactInfo(session.userId);
+    this.stateService.setAwaitingContactChoice(session.userId, false);
     await this.usersRepository.setContactShared(session.userId, false);
     await this.sendBotMessage(session.userId, update.chatId, contactSkippedMessage(), {
       replyMarkup: buildRemoveReplyKeyboard(),
     });
     if (session.state === "role_selection") {
-      await this.sendBotMessage(session.userId, update.chatId, "Choose your role to begin.", {
+      await this.sendBotMessage(session.userId, update.chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
       });
     }
@@ -505,6 +508,7 @@ export class StateRouter {
         session.userId,
         update.chatId,
         "Please send your phone number in one message. Example, +380991112233. Or type Skip for now.",
+        { replyMarkup: buildContactRequestKeyboard() },
       );
       return;
     }
@@ -523,6 +527,15 @@ export class StateRouter {
     }
 
     if (session.state === "role_selection") {
+      if (isAwaitingContactChoice(session)) {
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          contactRequestMessage(),
+          { replyMarkup: buildContactRequestKeyboard() },
+        );
+        return;
+      }
       const selectedRole = detectRoleSelectionFromText(rawText, normalizedEnglishText);
       if (selectedRole) {
         await this.startRoleFlowFromText(session, update.chatId, selectedRole);
@@ -1136,11 +1149,10 @@ export class StateRouter {
     update: Extract<NormalizedUpdate, { kind: "text" }>,
   ): Promise<void> {
     const session = this.stateService.reset(update.userId, update.chatId, update.username);
-    await this.sendBotMessage(session.userId, update.chatId, welcomeMessage(), {
-      replyMarkup: buildRoleSelectionKeyboard(),
-    });
+    this.stateService.setAwaitingContactChoice(session.userId, true);
+    await this.sendBotMessage(session.userId, update.chatId, welcomeMessage());
     await this.sendBotMessage(session.userId, update.chatId, contactRequestMessage(), {
-      replyMarkup: buildRemoveReplyKeyboard(),
+      replyMarkup: buildContactRequestKeyboard(),
     });
   }
 
@@ -1410,7 +1422,7 @@ export class StateRouter {
   ): Promise<void> {
     if (typeof update.contactUserId === "number" && update.contactUserId !== update.userId) {
       await this.sendBotMessage(session.userId, update.chatId, ownContactRequiredMessage(), {
-        replyMarkup: buildRemoveReplyKeyboard(),
+        replyMarkup: buildContactRequestKeyboard(),
       });
       return;
     }
@@ -1432,11 +1444,12 @@ export class StateRouter {
       contactSharedAt: sharedAt,
     });
 
+    this.stateService.setAwaitingContactChoice(update.userId, false);
     await this.sendBotMessage(session.userId, update.chatId, contactSavedMessage(), {
       replyMarkup: buildRemoveReplyKeyboard(),
     });
     if (session.state === "role_selection") {
-      await this.sendBotMessage(session.userId, update.chatId, "Choose your role to begin.", {
+      await this.sendBotMessage(session.userId, update.chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
       });
     }
@@ -1470,12 +1483,13 @@ export class StateRouter {
       contactSharedAt: sharedAt,
     });
 
+    this.stateService.setAwaitingContactChoice(session.userId, false);
     await this.sendBotMessage(session.userId, chatId, contactSavedMessage(), {
       replyMarkup: buildRemoveReplyKeyboard(),
     });
 
     if (session.state === "role_selection") {
-      await this.sendBotMessage(session.userId, chatId, "Choose your role to begin.", {
+      await this.sendBotMessage(session.userId, chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
       });
     }
@@ -2076,6 +2090,15 @@ export class StateRouter {
     }
 
     if (session.state === "role_selection") {
+      if (isAwaitingContactChoice(session)) {
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          "Please share your contact first, or type Skip for now.",
+          { replyMarkup: buildContactRequestKeyboard() },
+        );
+        return;
+      }
       await this.sendBotMessage(
         session.userId,
         update.chatId,
@@ -2754,6 +2777,10 @@ function isSkipContactForNow(text: string): boolean {
     normalized.includes("не хочу надсилати") ||
     normalized.includes("пізніше")
   );
+}
+
+function isAwaitingContactChoice(session: UserSessionState): boolean {
+  return session.state === "role_selection" && session.awaitingContactChoice === true;
 }
 
 function isContactShareTextIntent(rawText: string, normalizedEnglishText: string): boolean {

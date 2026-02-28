@@ -45,6 +45,7 @@ export class StateService {
       chatId,
       username,
       state: "role_selection",
+      awaitingContactChoice: false,
       preferredLanguage: "unknown",
       candidateProfileComplete: false,
       jobProfileComplete: false,
@@ -69,6 +70,7 @@ export class StateService {
       chatId,
       username,
       state: "role_selection",
+      awaitingContactChoice: true,
       preferredLanguage: existing?.preferredLanguage ?? "unknown",
       firstMatchExplained: existing?.firstMatchExplained,
       onboardingCompleted: existing?.onboardingCompleted,
@@ -152,6 +154,12 @@ export class StateService {
   setOnboardingCompleted(userId: number, completed: boolean): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.onboardingCompleted = completed;
+    return session;
+  }
+
+  setAwaitingContactChoice(userId: number, awaiting: boolean): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.awaitingContactChoice = awaiting;
     return session;
   }
 

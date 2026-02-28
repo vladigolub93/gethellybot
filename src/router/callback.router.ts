@@ -14,11 +14,12 @@ import { ContactExchangeService } from "../decisions/contact-exchange.service";
 import { DecisionService } from "../decisions/decision.service";
 import { NotificationEngine } from "../notifications/notification.engine";
 import { UserSessionState } from "../shared/types/state.types";
-import { NormalizedUpdate } from "../shared/types/telegram.types";
+import { NormalizedUpdate, TelegramReplyMarkup } from "../shared/types/telegram.types";
 import { StateService } from "../state/state.service";
 import { StatePersistenceService } from "../state/state-persistence.service";
 import { TelegramClient } from "../telegram/telegram.client";
 import {
+  buildContactRequestKeyboard,
   buildRoleLearnMoreKeyboard,
   buildRoleSelectionKeyboard,
 } from "../telegram/ui/keyboards";
@@ -27,6 +28,7 @@ import {
   candidateOnboardingMessage,
   candidateAppliedAcknowledgement,
   candidateRejectedAcknowledgement,
+  contactRequestMessage,
   onboardingLearnHowItWorksMessage,
   onboardingPrivacyNoteMessage,
   welcomeMessage,
@@ -91,6 +93,19 @@ export class CallbackRouter {
         );
         return;
       }
+      if (session.awaitingContactChoice) {
+        await this.telegramClient.answerCallbackQuery(
+          update.callbackQueryId,
+          "Please share or skip contact first",
+        );
+        await this.sendBotMessage(
+          update.chatId,
+          contactRequestMessage(),
+          "callback_router.contact_required_before_role",
+          buildContactRequestKeyboard(),
+        );
+        return;
+      }
       this.stateService.setRole(update.userId, "candidate");
       this.stateService.transition(update.userId, "onboarding_candidate");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Candidate flow selected");
@@ -110,6 +125,19 @@ export class CallbackRouter {
         );
         return;
       }
+      if (session.awaitingContactChoice) {
+        await this.telegramClient.answerCallbackQuery(
+          update.callbackQueryId,
+          "Please share or skip contact first",
+        );
+        await this.sendBotMessage(
+          update.chatId,
+          contactRequestMessage(),
+          "callback_router.contact_required_before_role",
+          buildContactRequestKeyboard(),
+        );
+        return;
+      }
       this.stateService.setRole(update.userId, "manager");
       this.stateService.transition(update.userId, "onboarding_manager");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Hiring flow selected");
@@ -122,6 +150,16 @@ export class CallbackRouter {
     }
 
     if (update.data === CALLBACK_ROLE_LEARN_MORE) {
+      if (session.awaitingContactChoice) {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Share or skip contact first");
+        await this.sendBotMessage(
+          update.chatId,
+          contactRequestMessage(),
+          "callback_router.contact_required_before_learn_more",
+          buildContactRequestKeyboard(),
+        );
+        return;
+      }
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Overview");
       await this.sendBotMessage(
         update.chatId,
@@ -133,6 +171,16 @@ export class CallbackRouter {
     }
 
     if (update.data === CALLBACK_ROLE_BACK) {
+      if (session.awaitingContactChoice) {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Share or skip contact first");
+        await this.sendBotMessage(
+          update.chatId,
+          contactRequestMessage(),
+          "callback_router.contact_required_before_back",
+          buildContactRequestKeyboard(),
+        );
+        return;
+      }
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Back");
       await this.sendBotMessage(
         update.chatId,
@@ -256,7 +304,7 @@ export class CallbackRouter {
     chatId: number,
     text: string,
     source: string,
-    replyMarkup?: ReturnType<typeof buildRoleSelectionKeyboard> | ReturnType<typeof buildRoleLearnMoreKeyboard>,
+    replyMarkup?: TelegramReplyMarkup,
   ): Promise<void> {
     await this.telegramClient.sendUserMessage({
       source,

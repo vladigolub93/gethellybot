@@ -49,6 +49,7 @@ export interface UserSessionState {
   languageSampleCount?: number;
   username?: string;
   onboardingCompleted?: boolean;
+  awaitingContactChoice?: boolean;
   firstMatchExplained?: boolean;
   contactShared?: boolean;
   contactSharedAt?: string;

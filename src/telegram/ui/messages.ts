@@ -3,20 +3,23 @@ export function welcomeMessage(): string {
     "Hi, I am Helly.",
     "",
     "I help technical candidates find the right roles and help hiring managers find the right engineers.",
-    "",
-    "To begin, tell me your role by text or voice.",
-    "Example, I am a candidate.",
-    "Example, I am hiring.",
   ].join("\n");
 }
 
 export function contactRequestMessage(): string {
   return [
-    "Before we begin, you can share your contact in text.",
+    "Before we begin, please share your Telegram contact.",
     "This helps us connect you with the right person after mutual approval.",
     "Your contact is never shared unless both sides approve.",
-    "Send phone number, example +380991112233.",
-    "If you want to continue now, type Skip for now.",
+    "Tap Share my contact below, or send your phone number in text, example +380991112233.",
+    "If you want to continue now, tap or type Skip for now.",
+  ].join("\n");
+}
+
+export function roleSelectionMessage(): string {
+  return [
+    "Choose your role to begin.",
+    "You can tap a button below or type, I am a Candidate or I am Hiring.",
   ].join("\n");
 }
 
