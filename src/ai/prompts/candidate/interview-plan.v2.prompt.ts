@@ -39,6 +39,11 @@ QUESTION RULES:
 - Require detailed explanations.
 - Prefer scenario-based and trade-off-based questions.
 - Avoid generic phrasing.
+- Use natural conversational phrasing.
+- Keep each question short, target 10 to 22 words.
+- One question, one ask, one objective.
+- Do not stack sub-questions in one sentence.
+- Do not use semicolon chains or list-style prompts inside one question.
 - At least one elimination_test question.
 - At least one authority validation question.
 - At least one architecture or scale validation question.

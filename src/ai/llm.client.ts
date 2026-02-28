@@ -7,6 +7,17 @@ export const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-5.2";
 export const EMBEDDINGS_MODEL = process.env.OPENAI_EMBEDDINGS_MODEL || "text-embedding-3-large";
 export const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1";
 
+const HELLY_EXECUTION_SYSTEM_PROMPT = [
+  "Universal execution rules.",
+  "Keep responses human-like, concise, and natural.",
+  "Avoid robotic phrasing and repetitive templates.",
+  "If output requires strict JSON, return JSON only and follow schema exactly.",
+  "If generating interview questions, keep each question short and focused.",
+  "Use one objective per question.",
+  "Do not generate long multi-part questions.",
+  "Prefer progressive follow-ups in later turns.",
+].join(" ");
+
 export interface ChatCompletionsRequestBody {
   model: string;
   temperature: number;
@@ -135,6 +146,10 @@ export class LlmClient {
         {
           role: "system",
           content: HELLY_SYSTEM_PROMPT,
+        },
+        {
+          role: "system",
+          content: HELLY_EXECUTION_SYSTEM_PROMPT,
         },
         {
           role: "user",

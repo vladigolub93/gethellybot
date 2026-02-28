@@ -219,7 +219,7 @@ export class InterviewPlanService {
       summary: "Manager interview plan v1 generated.",
       questions: planV1.questions.map((question, index) => ({
         id: question.question_id || `M${index + 1}`,
-        question: question.question_text,
+        question: shapeInterviewQuestionForDialogue(question.question_text),
         goal: question.target_validation,
         gapToClarify: question.based_on_field,
       })),
@@ -231,7 +231,7 @@ export class InterviewPlanService {
       summary: planV2.interview_strategy.primary_uncertainty || "Candidate interview plan v2 generated.",
       questions: planV2.questions.map((question, index) => ({
         id: question.question_id || `Q${index + 1}`,
-        question: question.question_text,
+        question: shapeInterviewQuestionForDialogue(question.question_text),
         goal: question.target_validation,
         gapToClarify: question.based_on_field,
       })),
@@ -538,7 +538,7 @@ function normalizeQuestions(raw: unknown): CandidateInterviewQuestionV2[] {
     const questionType = normalizeQuestionType(source.question_type);
     normalized.push({
       question_id: toText(source.question_id) || `Q${index + 1}`,
-      question_text: questionText,
+      question_text: shapeInterviewQuestionForDialogue(questionText),
       question_type: questionType,
       target_validation: toText(source.target_validation),
       based_on_field: toText(source.based_on_field),
@@ -579,46 +579,42 @@ function buildFallbackCandidatePlanV2(
     questions: [
       {
         question_id: "Q1",
-        question_text: `Please describe a recent project where you used ${firstCoreSkill}, including key technical decisions and outcomes.`,
+        question_text: `Please describe one recent project where you used ${firstCoreSkill}.`,
         question_type: "depth_test",
         target_validation: "Validate depth of core technology usage",
         based_on_field: "core_technologies",
       },
       {
         question_id: "Q2",
-        question_text:
-          "Walk me through a difficult production issue you handled, how you diagnosed it, and what trade-offs you made.",
+        question_text: "Tell me about one difficult production issue you handled and how you diagnosed it.",
         question_type: "elimination_test",
         target_validation: "Validate practical production problem solving",
         based_on_field: "ownership_signals.production_responsibility",
       },
       {
         question_id: "Q3",
-        question_text:
-          "Describe a system architecture decision you owned, what alternatives you considered, and why you chose the final approach.",
+        question_text: "Describe one system architecture decision you owned and why you chose that approach.",
         question_type: "architecture_test",
         target_validation: "Validate architecture ownership and reasoning",
         based_on_field: "architecture_signals",
       },
       {
         question_id: "Q4",
-        question_text:
-          "Tell me about the scale your system handled, including load patterns, bottlenecks, and how you improved reliability.",
+        question_text: "What production scale did your system handle, and what bottleneck did you fix first?",
         question_type: "architecture_test",
         target_validation: "Validate system complexity and scale claims",
         based_on_field: "scale_indicators",
       },
       {
         question_id: "Q5",
-        question_text:
-          "Which decisions did you make independently versus with team approval, and how did those decisions affect delivery?",
+        question_text: "Which technical decisions did you make independently in your last project?",
         question_type: "authority_test",
         target_validation: "Validate authority level and ownership boundaries",
         based_on_field: "decision_authority_level",
       },
       {
         question_id: "Q6",
-        question_text: `Please clarify ${firstMissing} with a concrete example, specific constraints, and measurable impact.`,
+        question_text: `Please clarify ${firstMissing} with one concrete example.`,
         question_type: "domain_test",
         target_validation: "Clarify missing critical information",
         based_on_field: "missing_critical_information",
@@ -699,40 +695,37 @@ function buildFallbackManagerInterviewPlanV1(
     questions: [
       {
         question_id: "M1",
-        question_text: `Please describe ${productFocus}, who the users are, and what outcome this role must deliver in the next 3 months.`,
+        question_text: `Please describe ${productFocus} and the main outcome this role must deliver in 3 months.`,
         target_validation: "Clarify product context and near-term outcomes",
         based_on_field: "product_context",
       },
       {
         question_id: "M2",
-        question_text:
-          "What are the most important day-to-day tasks for this role, and which current challenges should this person solve first?",
+        question_text: "What are the most important day-to-day tasks for this role?",
         target_validation: "Clarify real work scope and immediate challenges",
         based_on_field: "work_scope",
       },
       {
         question_id: "M3",
-        question_text:
-          "Can you share one recent technical problem your team faced and what a successful hire would do differently?",
+        question_text: "What current challenge should this person solve first?",
         target_validation: "Clarify challenge ownership and practical expectations",
         based_on_field: "work_scope.current_challenges",
       },
       {
         question_id: "M4",
-        question_text: `Which parts of ${coreTech} are truly required from day one, and what depth do you expect in those areas?`,
+        question_text: `Which parts of ${coreTech} are truly required from day one?`,
         target_validation: "Separate core technologies from optional stack items",
         based_on_field: "technology_signal_map",
       },
       {
         question_id: "M5",
-        question_text: `How critical is experience in ${domain}, and where can strong engineering ability compensate for domain gaps?`,
+        question_text: `How critical is prior experience in ${domain} for this role?`,
         target_validation: "Clarify domain criticality and flexibility",
         based_on_field: "domain_inference",
       },
       {
         question_id: "M6",
-        question_text:
-          "What technical decisions should this role make independently, and which decisions require broader team alignment?",
+        question_text: "Which technical decisions should this role make independently?",
         target_validation: "Clarify expected ownership and authority",
         based_on_field: "ownership_expectation_guess",
       },
@@ -750,12 +743,87 @@ function normalizeManagerPlanQuestions(
     .filter((item): item is Record<string, unknown> => isRecord(item))
     .map((item, index) => ({
       question_id: toText(item.question_id) || `M${index + 1}`,
-      question_text: toText(item.question_text),
+      question_text: shapeInterviewQuestionForDialogue(toText(item.question_text)),
       target_validation: toText(item.target_validation),
       based_on_field: toText(item.based_on_field),
     }))
     .filter((item) => Boolean(item.question_text))
     .slice(0, 9);
+}
+
+function shapeInterviewQuestionForDialogue(rawQuestion: string): string {
+  let text = rawQuestion
+    .replace(/^question\s*\d+\s*[:.)-]\s*/i, "")
+    .replace(/^\d+\s*[:.)-]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) {
+    return "";
+  }
+
+  const isDense =
+    text.length > 190 ||
+    countMatches(text, /\?/g) > 1 ||
+    (text.includes(":") && countMatches(text, /,/g) >= 4);
+
+  if (isDense) {
+    const firstSentence = extractFirstSentence(text);
+    if (firstSentence.length >= 24) {
+      text = firstSentence;
+    }
+  }
+
+  text = text
+    .split(/\s+(?:include|also include|please include)\b/i)[0]
+    .trim();
+
+  if (text.includes(":")) {
+    const beforeColon = text.split(":")[0]?.trim() ?? text;
+    if (beforeColon.length >= 24) {
+      text = beforeColon;
+    }
+  }
+
+  if (text.length > 170) {
+    text = truncateAtWordBoundary(text, 170);
+  }
+
+  if (!/[?.!]$/.test(text)) {
+    if (/^(what|how|which|can|is|are|do|did|will|would|could)\b/i.test(text)) {
+      text = `${text}?`;
+    } else {
+      text = `${text}.`;
+    }
+  }
+
+  return text;
+}
+
+function extractFirstSentence(text: string): string {
+  const match = text.match(/^(.{1,220}?[?.!])(?:\s|$)/);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  const split = text.split(/[:;]\s+/)[0] ?? text;
+  return split.trim();
+}
+
+function truncateAtWordBoundary(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const chunk = text.slice(0, maxLength + 1);
+  const lastSpace = chunk.lastIndexOf(" ");
+  if (lastSpace > Math.floor(maxLength * 0.6)) {
+    return chunk.slice(0, lastSpace).trim();
+  }
+  return text.slice(0, maxLength).trim();
+}
+
+function countMatches(text: string, pattern: RegExp): number {
+  const matches = text.match(pattern);
+  return matches ? matches.length : 0;
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> {

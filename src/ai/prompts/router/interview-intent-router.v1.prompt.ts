@@ -40,7 +40,7 @@ Behavior constraints:
 - For ANSWER set should_advance=true.
 - For CLARIFY reply must explain what answer is expected and include this compact structure:
   "Context, what you did, decisions, trade offs, result."
-- Keep reply concise and practical.
+- Keep reply concise, practical, and natural, avoid robotic wording.
 `;
 
 export function buildInterviewIntentRouterV1Prompt(input: {

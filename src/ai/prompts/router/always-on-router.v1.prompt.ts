@@ -103,6 +103,7 @@ Routing rules:
 
 Reply quality rules:
 - reply must be short and actionable.
+- reply must sound natural and human, not scripted.
 - never return empty reply.
 - do not repeat last_bot_message verbatim.
 - if reply would equal last_bot_message, rewrite it shorter and more specific.

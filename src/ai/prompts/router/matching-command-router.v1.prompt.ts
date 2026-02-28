@@ -17,8 +17,7 @@ Rules:
 - If user asks resume, enable, set RESUME_MATCHING.
 - If user asks how it works or help, set HELP.
 - Otherwise set OTHER.
-- reply must be short and user-friendly.
+- reply must be short, user-friendly, and natural, not scripted.
 
 Return only valid JSON.
 `.trim();
-

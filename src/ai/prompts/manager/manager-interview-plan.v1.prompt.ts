@@ -34,6 +34,11 @@ QUESTION RULES:
 - Require concrete answers and examples.
 - Avoid long multi part questions.
 - Questions must be understandable for a hiring manager.
+- Use natural conversational phrasing.
+- Keep each question short, target 10 to 22 words.
+- One question, one ask, one objective.
+- Do not stack sub-questions in one sentence.
+- Do not use semicolon chains or list-style prompts inside one question.
 
 Include an instruction that manager can answer in text or voice, and should be detailed.
 
