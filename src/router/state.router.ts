@@ -515,7 +515,10 @@ export class StateRouter {
       return;
     }
 
-    if (isDataDeletionCommand(rawText, normalizedEnglishText)) {
+    if (
+      isDataDeletionCommand(rawText, normalizedEnglishText) ||
+      isDataDeletionConfirmation(rawText, normalizedEnglishText, session.lastBotMessage ?? "")
+    ) {
       await this.handleDataDeletionAndRestart(update, session);
       return;
     }
@@ -3017,17 +3020,19 @@ function isStartCommand(text: string): boolean {
 function isDataDeletionCommand(rawText: string, normalizedEnglishText: string): boolean {
   const raw = rawText.trim().toLowerCase();
   const english = normalizedEnglishText.trim().toLowerCase();
+  const compactEnglish = english.replace(/\s+/g, " ").trim();
   return (
-    english.includes("delete my data") ||
-    english.includes("delete all my data") ||
-    english.includes("remove all my data") ||
-    english.includes("erase all my data") ||
-    english.includes("wipe my data") ||
-    english.includes("remove my contact") ||
-    english.includes("delete my contact") ||
-    english === "delete data" ||
-    english === "delete contact" ||
-    english === "delete everything" ||
+    /\bdelet(e)?\s+(all\s+)?my\s+data\b/.test(compactEnglish) ||
+    compactEnglish.includes("delete my data") ||
+    compactEnglish.includes("delete all my data") ||
+    compactEnglish.includes("remove all my data") ||
+    compactEnglish.includes("erase all my data") ||
+    compactEnglish.includes("wipe my data") ||
+    compactEnglish.includes("remove my contact") ||
+    compactEnglish.includes("delete my contact") ||
+    compactEnglish === "delete data" ||
+    compactEnglish === "delete contact" ||
+    compactEnglish === "delete everything" ||
     raw.includes("удали мои данные") ||
     raw.includes("удали все мои данные") ||
     raw.includes("удали все данные") ||
@@ -3036,6 +3041,44 @@ function isDataDeletionCommand(rawText: string, normalizedEnglishText: string): 
     raw.includes("видали всі мої дані") ||
     raw.includes("видали всі дані") ||
     raw.includes("видали мій контакт")
+  );
+}
+
+function isDataDeletionConfirmation(
+  rawText: string,
+  normalizedEnglishText: string,
+  lastBotMessage: string,
+): boolean {
+  const confirmationContext = lastBotMessage.trim().toLowerCase();
+  if (!confirmationContext) {
+    return false;
+  }
+
+  const looksLikeDeleteConfirmationPrompt =
+    confirmationContext.includes("what you want deleted") ||
+    confirmationContext.includes("what should i delete") ||
+    confirmationContext.includes("once you confirm") ||
+    confirmationContext.includes("delete it and stop") ||
+    confirmationContext.includes("including your name") ||
+    confirmationContext.includes("що видалити") ||
+    confirmationContext.includes("что удалить");
+
+  if (!looksLikeDeleteConfirmationPrompt) {
+    return false;
+  }
+
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase().replace(/\s+/g, " ");
+  return (
+    english === "everything" ||
+    english === "all" ||
+    english.includes("delete everything") ||
+    english.includes("all data") ||
+    english.includes("everything, delete") ||
+    raw === "все" ||
+    raw === "всё" ||
+    raw.includes("удали все") ||
+    raw.includes("видали все")
   );
 }
 

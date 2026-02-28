@@ -245,6 +245,47 @@ async function testDeleteAllDataResetsToStart(): Promise<void> {
   );
 }
 
+async function testDeleteTypoResetsToStart(): Promise<void> {
+  const { router, stateService } = buildRouterHarness();
+  const userId = 91005;
+  const chatId = 91005;
+
+  await router.route(textUpdate(41, userId, chatId, "/start"));
+  await router.route(textUpdate(42, userId, chatId, "Skip for now"));
+  await router.route(textUpdate(43, userId, chatId, "I am a Candidate"));
+
+  let session = stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_resume");
+
+  await router.route(textUpdate(44, userId, chatId, "delet my data"));
+  session = stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "role_selection");
+  assert.equal(session?.awaitingContactChoice, true);
+}
+
+async function testDeleteConfirmationEverythingResetsToStart(): Promise<void> {
+  const { router, stateService } = buildRouterHarness();
+  const userId = 91006;
+  const chatId = 91006;
+
+  await router.route(textUpdate(51, userId, chatId, "/start"));
+  await router.route(textUpdate(52, userId, chatId, "Skip for now"));
+  await router.route(textUpdate(53, userId, chatId, "I am a Candidate"));
+
+  stateService.setLastBotMessage(
+    userId,
+    "Tell me what you want deleted: messages, profile details, or everything. Once you confirm, I will delete it and stop the interview flow.",
+  );
+
+  await router.route(textUpdate(54, userId, chatId, "everything"));
+  const session = stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "role_selection");
+  assert.equal(session?.awaitingContactChoice, true);
+}
+
 function textUpdate(
   updateId: number,
   userId: number,
@@ -282,6 +323,8 @@ async function run(): Promise<void> {
   await testOnboardingContactThenRole();
   await testOnboardingSkipAliasAndRepeatStart();
   await testDeleteAllDataResetsToStart();
+  await testDeleteTypoResetsToStart();
+  await testDeleteConfirmationEverythingResetsToStart();
   process.stdout.write("Onboarding e2e tests passed.\n");
 }
 

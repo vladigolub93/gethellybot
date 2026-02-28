@@ -29,7 +29,7 @@ export class CandidateProfileBuilder {
       const safe = await callJsonPromptSafe<Record<string, unknown>>({
         llmClient: this.llmClient,
         prompt,
-        maxTokens: 520,
+        maxTokens: 900,
         promptName: "candidate_profile_builder_v1",
         schemaHint: "Candidate profile JSON schema.",
       });
