@@ -61,6 +61,7 @@ import {
   buildCandidateMandatoryLocationKeyboard,
   buildCandidateWorkModeKeyboard,
   buildContactRequestKeyboard,
+  buildDataDeletionConfirmKeyboard,
   buildManagerDecisionKeyboard,
   buildManagerMatchingActionsKeyboard,
   buildManagerWorkFormatKeyboard,
@@ -86,6 +87,8 @@ import {
   contactRequestMessage,
   contactSavedMessage,
   contactSkippedMessage,
+  dataDeletionCanceledMessage,
+  dataDeletionConfirmPromptMessage,
   documentUploadNotAllowedMessage,
   interviewAlreadyStartedMessage,
   interviewLanguageSupportMessage,
@@ -494,6 +497,11 @@ export class StateRouter {
       return;
     }
 
+    if (session.pendingDataDeletionConfirmation) {
+      await this.handlePendingDataDeletionConfirmation(update, session, rawText, normalizedEnglishText);
+      return;
+    }
+
     if (isSkipContactForNow(rawText)) {
       await this.handleSkipContact(update, session);
       return;
@@ -515,11 +523,8 @@ export class StateRouter {
       return;
     }
 
-    if (
-      isDataDeletionCommand(rawText, normalizedEnglishText) ||
-      isDataDeletionConfirmation(rawText, normalizedEnglishText, session.lastBotMessage ?? "")
-    ) {
-      await this.handleDataDeletionAndRestart(update, session);
+    if (isDataDeletionCommand(rawText, normalizedEnglishText)) {
+      await this.requestDataDeletionConfirmation(update, session);
       return;
     }
 
@@ -1187,6 +1192,43 @@ export class StateRouter {
     });
   }
 
+  private async requestDataDeletionConfirmation(
+    update: Extract<NormalizedUpdate, { kind: "text" }>,
+    session: UserSessionState,
+  ): Promise<void> {
+    this.stateService.setPendingDataDeletionConfirmation(session.userId, true);
+    await this.sendBotMessage(session.userId, update.chatId, dataDeletionConfirmPromptMessage(), {
+      source: "state_router.system.data_deletion_confirm",
+      replyMarkup: buildDataDeletionConfirmKeyboard(),
+    });
+  }
+
+  private async handlePendingDataDeletionConfirmation(
+    update: Extract<NormalizedUpdate, { kind: "text" }>,
+    session: UserSessionState,
+    rawText: string,
+    normalizedEnglishText: string,
+  ): Promise<void> {
+    if (isDataDeletionConfirmIntent(rawText, normalizedEnglishText)) {
+      await this.handleDataDeletionAndRestart(update, session);
+      return;
+    }
+
+    if (isDataDeletionCancelIntent(rawText, normalizedEnglishText)) {
+      this.stateService.setPendingDataDeletionConfirmation(session.userId, false);
+      await this.sendBotMessage(session.userId, update.chatId, dataDeletionCanceledMessage(), {
+        source: "state_router.system.data_deletion_cancel",
+        replyMarkup: buildRemoveReplyKeyboard(),
+      });
+      return;
+    }
+
+    await this.sendBotMessage(session.userId, update.chatId, dataDeletionConfirmPromptMessage(), {
+      source: "state_router.system.data_deletion_confirm_repeat",
+      replyMarkup: buildDataDeletionConfirmKeyboard(),
+    });
+  }
+
   private async handleDataDeletionAndRestart(
     update: Extract<NormalizedUpdate, { kind: "text" }>,
     session: UserSessionState,
@@ -1197,6 +1239,7 @@ export class StateRouter {
       reason: "user_text_command",
     });
 
+    this.stateService.setPendingDataDeletionConfirmation(session.userId, false);
     this.stateService.clearContactInfo(session.userId);
     await this.sendBotMessage(session.userId, update.chatId, result.confirmationMessage, {
       replyMarkup: buildRemoveReplyKeyboard(),
@@ -3044,41 +3087,42 @@ function isDataDeletionCommand(rawText: string, normalizedEnglishText: string): 
   );
 }
 
-function isDataDeletionConfirmation(
-  rawText: string,
-  normalizedEnglishText: string,
-  lastBotMessage: string,
-): boolean {
-  const confirmationContext = lastBotMessage.trim().toLowerCase();
-  if (!confirmationContext) {
-    return false;
-  }
-
-  const looksLikeDeleteConfirmationPrompt =
-    confirmationContext.includes("what you want deleted") ||
-    confirmationContext.includes("what should i delete") ||
-    confirmationContext.includes("once you confirm") ||
-    confirmationContext.includes("delete it and stop") ||
-    confirmationContext.includes("including your name") ||
-    confirmationContext.includes("що видалити") ||
-    confirmationContext.includes("что удалить");
-
-  if (!looksLikeDeleteConfirmationPrompt) {
-    return false;
-  }
-
+function isDataDeletionConfirmIntent(rawText: string, normalizedEnglishText: string): boolean {
   const raw = rawText.trim().toLowerCase();
   const english = normalizedEnglishText.trim().toLowerCase().replace(/\s+/g, " ");
   return (
+    english === "delete everything" ||
     english === "everything" ||
-    english === "all" ||
-    english.includes("delete everything") ||
-    english.includes("all data") ||
-    english.includes("everything, delete") ||
+    english === "confirm delete" ||
+    english === "yes delete" ||
+    english === "yes, delete everything" ||
+    english.includes("delete all my data") ||
+    english.includes("delete everything now") ||
     raw === "все" ||
     raw === "всё" ||
-    raw.includes("удали все") ||
-    raw.includes("видали все")
+    raw === "удали все" ||
+    raw === "удали всё" ||
+    raw === "видали все" ||
+    raw === "видали все дані" ||
+    raw === "да удалить"
+  );
+}
+
+function isDataDeletionCancelIntent(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase().replace(/\s+/g, " ");
+  return (
+    english === "cancel" ||
+    english === "keep data" ||
+    english === "do not delete" ||
+    english === "no" ||
+    english === "keep it" ||
+    raw === "отмена" ||
+    raw === "скасувати" ||
+    raw === "отменить" ||
+    raw === "не удаляй" ||
+    raw === "не видаляй" ||
+    raw === "нет"
   );
 }
 

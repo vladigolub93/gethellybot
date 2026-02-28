@@ -73,6 +73,17 @@ export function buildRemoveReplyKeyboard(): TelegramReplyMarkup {
   };
 }
 
+export function buildDataDeletionConfirmKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "Delete everything" }],
+      [{ text: "Cancel" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
 export function buildCandidateMandatoryLocationKeyboard(): TelegramReplyMarkup {
   return {
     keyboard: [

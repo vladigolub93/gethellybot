@@ -56,6 +56,8 @@ export interface UserSessionState {
   contactPhoneNumber?: string;
   contactFirstName?: string;
   contactLastName?: string;
+  pendingDataDeletionConfirmation?: boolean;
+  pendingDataDeletionRequestedAt?: string;
   lastBotMessage?: string;
   lastEmpathyLine?: string;
   reactionMessagesSinceLast?: number;

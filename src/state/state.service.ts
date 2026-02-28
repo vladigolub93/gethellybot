@@ -46,6 +46,7 @@ export class StateService {
       username,
       state: "role_selection",
       awaitingContactChoice: false,
+      pendingDataDeletionConfirmation: false,
       preferredLanguage: "unknown",
       candidateProfileComplete: false,
       jobProfileComplete: false,
@@ -92,6 +93,8 @@ export class StateService {
       waitingShortTextState: existing?.waitingShortTextState,
       waitingShortTextCount: existing?.waitingShortTextCount,
       answersSinceConfirm: 0,
+      pendingDataDeletionConfirmation: false,
+      pendingDataDeletionRequestedAt: undefined,
     };
     this.sessions.set(userId, session);
     return session;
@@ -361,6 +364,17 @@ export class StateService {
     session.contactLastName = undefined;
     session.contactShared = false;
     session.contactSharedAt = undefined;
+    return session;
+  }
+
+  setPendingDataDeletionConfirmation(
+    userId: number,
+    pending: boolean,
+    requestedAt?: string,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.pendingDataDeletionConfirmation = pending;
+    session.pendingDataDeletionRequestedAt = pending ? requestedAt ?? new Date().toISOString() : undefined;
     return session;
   }
 

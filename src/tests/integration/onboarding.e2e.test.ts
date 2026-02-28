@@ -237,8 +237,19 @@ async function testDeleteAllDataResetsToStart(): Promise<void> {
   await router.route(textUpdate(34, userId, chatId, "Delete all my data"));
   session = stateService.getSession(userId);
   assert(session);
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(session?.pendingDataDeletionConfirmation, true);
+  assert.equal(
+    telegram.sent.some((item) => item.text.includes("This action permanently deletes your stored data and resets your session.")),
+    true,
+  );
+
+  await router.route(textUpdate(35, userId, chatId, "Delete everything"));
+  session = stateService.getSession(userId);
+  assert(session);
   assert.equal(session?.state, "role_selection");
   assert.equal(session?.awaitingContactChoice, true);
+  assert.equal(session?.pendingDataDeletionConfirmation, false);
   assert.equal(
     telegram.sent.some((item) => item.text.includes("Before we begin, please share your Telegram contact.")),
     true,
@@ -261,8 +272,15 @@ async function testDeleteTypoResetsToStart(): Promise<void> {
   await router.route(textUpdate(44, userId, chatId, "delet my data"));
   session = stateService.getSession(userId);
   assert(session);
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(session?.pendingDataDeletionConfirmation, true);
+
+  await router.route(textUpdate(45, userId, chatId, "everything"));
+  session = stateService.getSession(userId);
+  assert(session);
   assert.equal(session?.state, "role_selection");
   assert.equal(session?.awaitingContactChoice, true);
+  assert.equal(session?.pendingDataDeletionConfirmation, false);
 }
 
 async function testDeleteConfirmationEverythingResetsToStart(): Promise<void> {
@@ -274,16 +292,12 @@ async function testDeleteConfirmationEverythingResetsToStart(): Promise<void> {
   await router.route(textUpdate(52, userId, chatId, "Skip for now"));
   await router.route(textUpdate(53, userId, chatId, "I am a Candidate"));
 
-  stateService.setLastBotMessage(
-    userId,
-    "Tell me what you want deleted: messages, profile details, or everything. Once you confirm, I will delete it and stop the interview flow.",
-  );
-
-  await router.route(textUpdate(54, userId, chatId, "everything"));
+  await router.route(textUpdate(54, userId, chatId, "delete my data"));
+  await router.route(textUpdate(55, userId, chatId, "cancel"));
   const session = stateService.getSession(userId);
   assert(session);
-  assert.equal(session?.state, "role_selection");
-  assert.equal(session?.awaitingContactChoice, true);
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(session?.pendingDataDeletionConfirmation, false);
 }
 
 function textUpdate(

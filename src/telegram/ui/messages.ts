@@ -29,6 +29,18 @@ export function contactSkippedMessage(): string {
   return "No problem, you can continue now. You can share contact later at any time.";
 }
 
+export function dataDeletionConfirmPromptMessage(): string {
+  return [
+    "This action permanently deletes your stored data and resets your session.",
+    "If you are sure, tap Delete everything or type Delete everything.",
+    "If not, tap Cancel or type Cancel.",
+  ].join("\n");
+}
+
+export function dataDeletionCanceledMessage(): string {
+  return "Okay, I will keep your data and continue from the current step.";
+}
+
 export function ownContactRequiredMessage(): string {
   return "Please share your own Telegram contact so I can verify consent correctly.";
 }
