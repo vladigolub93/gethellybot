@@ -70,6 +70,12 @@ Routing rules:
 
 11.1) If text asks to delete personal data or remove stored contact, route CONTROL with control_type stop and a short confirmation-style reply.
 
+11.2) If current_state is extracting_resume or extracting_job:
+- if user asks timing or status, route META with meta_type timing and this exact reply:
+"Usually this takes a couple of minutes. I already received your document and processing is in progress."
+- otherwise route OTHER with this exact reply:
+"I already received your document and I am processing it now. I will send the next step shortly."
+
 12) If off topic, route OFFTOPIC with short redirect to hiring context.
 
 13) Otherwise route OTHER with useful next step for current_state.
@@ -97,7 +103,9 @@ Reply quality rules:
 
 State hints:
 - waiting_resume expects resume file or pasted resume text.
+- extracting_resume means resume is already received and being processed.
 - waiting_job expects job description file or pasted job text.
+- extracting_job means job description is already received and being processed.
 - interviewing_candidate and interviewing_manager expect answer to current_question.
 - candidate_mandatory_fields expects practical candidate profile details, location, work mode, and salary.
 

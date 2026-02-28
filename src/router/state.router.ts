@@ -258,19 +258,9 @@ export class StateRouter {
         );
         break;
       case "document":
-        await this.sendRouterReplyWithLoopGuard(
-          session,
-          update.chatId,
-          routed.decision.reply,
-        );
         await this.handleDocumentUpdate(update);
         break;
       case "voice":
-        await this.sendRouterReplyWithLoopGuard(
-          session,
-          update.chatId,
-          routed.decision.reply,
-        );
         await this.handleVoiceUpdate(update, session);
         break;
       case "callback":
@@ -538,6 +528,20 @@ export class StateRouter {
       return;
     }
 
+    if (session.state === "extracting_resume" || session.state === "extracting_job") {
+      if (decision.route === "CONTROL") {
+        await this.handleControlRoute({
+          update,
+          session,
+          decision,
+        });
+        return;
+      }
+      const statusReply = getExtractingStatusReply(session.state, decision.meta_type);
+      await this.sendRouterReplyWithLoopGuard(session, update.chatId, statusReply);
+      return;
+    }
+
     if (
       session.role === "candidate" &&
       mandatoryUpdateCommand &&
@@ -676,6 +680,39 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_job") {
+      if (decision.route === "CONTROL") {
+        await this.handleControlRoute({
+          update,
+          session,
+          decision,
+        });
+        return;
+      }
+
+      if (decision.route === "META") {
+        await this.sendRouterReplyWithLoopGuard(session, update.chatId, decision.reply);
+        return;
+      }
+
+      if (decision.route === "MATCHING_COMMAND") {
+        await this.handleMatchingIntentRoute({
+          session,
+          chatId: update.chatId,
+          matchingIntent: decision.matching_intent,
+          reply: decision.reply,
+        });
+        return;
+      }
+
+      if (decision.route === "JD_TEXT" && decision.should_process_text_as_document) {
+        await this.sendRouterReplyWithLoopGuard(session, update.chatId, decision.reply);
+        await this.handlePastedDocumentText(update, {
+          sourceTextOriginal: rawText,
+          sourceTextEnglish: normalizedEnglishText,
+        });
+        return;
+      }
+
       if (isJdIntakeMetaFormatQuestion(rawText, normalizedEnglishText)) {
         await this.sendRouterReplyWithLoopGuard(
           session,
@@ -727,6 +764,39 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_resume") {
+      if (decision.route === "CONTROL") {
+        await this.handleControlRoute({
+          update,
+          session,
+          decision,
+        });
+        return;
+      }
+
+      if (decision.route === "META") {
+        await this.sendRouterReplyWithLoopGuard(session, update.chatId, decision.reply);
+        return;
+      }
+
+      if (decision.route === "MATCHING_COMMAND") {
+        await this.handleMatchingIntentRoute({
+          session,
+          chatId: update.chatId,
+          matchingIntent: decision.matching_intent,
+          reply: decision.reply,
+        });
+        return;
+      }
+
+      if (decision.route === "RESUME_TEXT" && decision.should_process_text_as_document) {
+        await this.sendRouterReplyWithLoopGuard(session, update.chatId, decision.reply);
+        await this.handlePastedDocumentText(update, {
+          sourceTextOriginal: rawText,
+          sourceTextEnglish: normalizedEnglishText,
+        });
+        return;
+      }
+
       if (isResumeIntakeMetaFormatQuestion(rawText, normalizedEnglishText)) {
         await this.sendRouterReplyWithLoopGuard(
           session,
@@ -1074,11 +1144,15 @@ export class StateRouter {
       return;
     }
 
+    const intakeState = session.state;
+    const extractingState = intakeState === "waiting_resume" ? "extracting_resume" : "extracting_job";
+    this.stateService.transition(update.userId, extractingState);
+
     await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
-      if (session.state === "waiting_job") {
+      if (intakeState === "waiting_job") {
         await this.jobsRepository.saveJobIntakeSource({
           managerTelegramUserId: update.userId,
           sourceType: "text",
@@ -1087,7 +1161,7 @@ export class StateRouter {
           telegramFileId: null,
         });
       }
-      if (session.state === "waiting_resume") {
+      if (intakeState === "waiting_resume") {
         await this.profilesRepository.saveCandidateResumeIntakeSource({
           telegramUserId: update.userId,
           sourceType: "text",
@@ -1097,7 +1171,11 @@ export class StateRouter {
         });
       }
 
-      const bootstrap = await this.interviewEngine.bootstrapInterview(session, input.sourceTextEnglish);
+      const bootstrapSession: UserSessionState = {
+        ...session,
+        state: intakeState,
+      };
+      const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, input.sourceTextEnglish);
       if (bootstrap.intakeOneLiner) {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
       }
@@ -1119,6 +1197,10 @@ export class StateRouter {
       this.stateService.markInterviewStarted(update.userId, "unknown", new Date().toISOString());
       this.stateService.transition(update.userId, bootstrap.nextState);
     } catch (error) {
+      const latestSession = this.stateService.getSession(update.userId);
+      if (latestSession?.state === extractingState) {
+        this.stateService.transition(update.userId, intakeState);
+      }
       this.logger.error("Failed to process pasted document text", {
         userId: update.userId,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -1140,7 +1222,7 @@ export class StateRouter {
     const previous = session.lastBotMessage?.trim();
     const finalReply =
       trimmed && previous && trimmed === previous
-        ? "Please send a PDF or DOCX file, or paste the full text here."
+        ? getNonRepeatingFallbackByState(session.state)
         : trimmed || "Please continue with your hiring flow.";
     await this.sendBotMessage(session.userId, chatId, finalReply);
   }
@@ -1812,6 +1894,15 @@ export class StateRouter {
   ): Promise<void> {
     const session = this.stateService.getOrCreate(update.userId, update.chatId, update.username);
 
+    if (session.state === "extracting_resume" || session.state === "extracting_job") {
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        "I already received your document and processing is in progress. I will send the next step shortly.",
+      );
+      return;
+    }
+
     if (isInterviewingState(session.state)) {
       await this.sendBotMessage(session.userId, update.chatId, interviewAlreadyStartedMessage());
       return;
@@ -1843,12 +1934,16 @@ export class StateRouter {
       return;
     }
 
+    const intakeState = session.state;
+    const extractingState = intakeState === "waiting_resume" ? "extracting_resume" : "extracting_job";
+    this.stateService.transition(update.userId, extractingState);
+
     await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
-      const isManagerJdIntake = session.state === "waiting_job";
-      const isCandidateResumeIntake = session.state === "waiting_resume";
+      const isManagerJdIntake = intakeState === "waiting_job";
+      const isCandidateResumeIntake = intakeState === "waiting_resume";
       const fileBuffer = await this.telegramFileService.downloadFile(update.fileId);
       const extractedText = await this.documentService.extractText(
         fileBuffer,
@@ -1876,7 +1971,11 @@ export class StateRouter {
         });
       }
 
-      const bootstrap = await this.interviewEngine.bootstrapInterview(session, normalizedExtractedText);
+      const bootstrapSession: UserSessionState = {
+        ...session,
+        state: intakeState,
+      };
+      const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, normalizedExtractedText);
       if (bootstrap.intakeOneLiner) {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
       }
@@ -1902,6 +2001,10 @@ export class StateRouter {
       );
       this.stateService.transition(update.userId, bootstrap.nextState);
     } catch (error) {
+      const latestSession = this.stateService.getSession(update.userId);
+      if (latestSession?.state === extractingState) {
+        this.stateService.transition(update.userId, intakeState);
+      }
       this.logger.error("Failed to process document", {
         userId: update.userId,
         fileName: update.fileName,
@@ -2421,7 +2524,19 @@ function formatCandidateJobSummary(
 
 function isSkipContactForNow(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  return normalized === "skip for now";
+  return (
+    normalized === "skip for now" ||
+    normalized === "not now" ||
+    normalized === "later" ||
+    normalized.includes("не хочу отправлять номер") ||
+    normalized.includes("не хочу отправлять контакт") ||
+    normalized.includes("не сейчас") ||
+    normalized.includes("позже") ||
+    normalized.includes("не хочу поки") ||
+    normalized.includes("поки не хочу") ||
+    normalized.includes("не хочу надсилати") ||
+    normalized.includes("пізніше")
+  );
 }
 
 function isContactShareTextIntent(rawText: string, normalizedEnglishText: string): boolean {
@@ -3029,4 +3144,45 @@ function isClearlyTooShortForResume(textEnglish: string): boolean {
     .split(/\s+/)
     .filter(Boolean);
   return words.length > 0 && words.length < 8;
+}
+
+function getExtractingStatusReply(
+  state: UserSessionState["state"],
+  metaType: "timing" | "language" | "format" | "privacy" | "other" | null,
+): string {
+  if (metaType === "timing") {
+    return "Usually this takes a couple of minutes. I already received your document and processing is in progress.";
+  }
+  if (metaType === "format") {
+    return "No action is needed now. I already received your document and I am processing it.";
+  }
+  if (metaType === "language") {
+    return "Yes. You can answer in Russian or Ukrainian. I will normalize it to continue the interview.";
+  }
+  if (metaType === "privacy") {
+    return "Your profile is only shared after you apply, and contacts are shared only after mutual approval.";
+  }
+  if (state === "extracting_job") {
+    return "I already received your job description and I am processing it now. I will send the next step shortly.";
+  }
+  return "I already received your resume and I am processing it now. I will send the next step shortly.";
+}
+
+function getNonRepeatingFallbackByState(state: UserSessionState["state"]): string {
+  if (state === "waiting_resume") {
+    return "Please send a PDF or DOCX file, or paste the full resume text here.";
+  }
+  if (state === "waiting_job") {
+    return "Please send a PDF or DOCX file, or paste the full job description text here.";
+  }
+  if (state === "extracting_resume" || state === "extracting_job") {
+    return "I already received your document and processing is in progress.";
+  }
+  if (state === "interviewing_candidate" || state === "interviewing_manager") {
+    return "Please answer the current interview question. You can reply in text or voice.";
+  }
+  if (state === "role_selection") {
+    return "Please tell me your role by text or voice, candidate or hiring.";
+  }
+  return "Please continue with the current step.";
 }
