@@ -1,6 +1,7 @@
 import { LlmClient } from "./llm.client";
 import { callTextPromptSafe } from "./llm.safe";
 import { Logger } from "../config/logger";
+import { buildOutboundComposeV1Prompt } from "./prompts/outbound/outbound-compose.v1.prompt";
 
 interface ComposeInput {
   source: string;
@@ -20,28 +21,11 @@ export class OutboundMessageComposerService {
       return input.text;
     }
 
-    const prompt = [
-      "Rewrite the assistant message into a natural conversational message.",
-      "Keep the same meaning, same action, and same constraints.",
-      "Do not remove critical details like numbers, phone numbers, links, commands, or button labels.",
-      "Do not add new promises.",
-      "Do not add emojis.",
-      "Keep it concise.",
-      "If the message is already natural, return it with minimal changes.",
-      "",
-      "Output only the final assistant message text.",
-      "",
-      "Input JSON:",
-      JSON.stringify(
-        {
-          source: input.source,
-          chat_id: input.chatId,
-          message: trimmed,
-        },
-        null,
-        2,
-      ),
-    ].join("\n");
+    const prompt = buildOutboundComposeV1Prompt({
+      source: input.source,
+      message: trimmed,
+      nonce: `${Date.now()}_${Math.abs(input.chatId) % 97}`,
+    });
 
     const safe = await callTextPromptSafe({
       llmClient: this.llmClient,
@@ -68,4 +52,3 @@ export class OutboundMessageComposerService {
     return candidate;
   }
 }
-
