@@ -898,9 +898,45 @@ function resolveCandidateQuestionMetadata(
 }
 
 function buildFollowUpQuestion(focus: string): string {
-  const normalizedFocus = focus.trim();
-  const effectiveFocus = normalizedFocus || "the relevant decision and its impact";
-  return `Quick follow up. Please clarify ${effectiveFocus} using one concrete example. Say what you did, what you chose, and why.`;
+  const effectiveFocus = simplifyFollowUpFocus(focus);
+  return `Quick follow up. Please give one concrete example about ${effectiveFocus}, what you did and why.`;
+}
+
+function simplifyFollowUpFocus(focus: string): string {
+  const fallback = "the key decision and the outcome";
+  const normalized = focus
+    .replace(/\s+/g, " ")
+    .replace(/[“”"']/g, "")
+    .replace(/[—–]/g, ", ")
+    .trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  let candidate = normalized;
+  const colonIndex = candidate.indexOf(":");
+  if (colonIndex >= 0 && colonIndex < candidate.length - 1) {
+    const afterColon = candidate.slice(colonIndex + 1).trim();
+    if (afterColon.length >= 12) {
+      candidate = afterColon;
+    }
+  }
+
+  candidate = candidate
+    .replace(/^(can you|could you|please|to make this concrete|quick follow up)[,:]?\s*/i, "")
+    .replace(/^(confirm whether|confirm if)\s+/i, "")
+    .replace(/\b(then|and then|plus)\b.*$/i, "")
+    .replace(/[.?!;].*$/, "")
+    .replace(/,\s*(with|using)\b.*$/i, "")
+    .trim();
+
+  if (!candidate) {
+    return fallback;
+  }
+
+  const words = candidate.split(/\s+/).filter(Boolean).slice(0, 16);
+  const compact = words.join(" ").replace(/[,:]+$/g, "").trim();
+  return compact.length >= 6 ? compact : fallback;
 }
 
 function buildAiAssistedWarningMessage(streak: number): string {

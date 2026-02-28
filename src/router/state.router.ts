@@ -2376,7 +2376,7 @@ export class StateRouter {
         if (result.preQuestionMessage) {
           await this.sendBotMessage(session.userId, session.chatId, result.preQuestionMessage);
         }
-        const shouldSendProgressConfirmation = this.shouldSendProgressConfirmation(
+        const shouldSendProgressConfirmation = !result.isFollowUp && this.shouldSendProgressConfirmation(
           latestSession,
           normalizedInput.answerText,
         );
@@ -2389,7 +2389,9 @@ export class StateRouter {
         }
 
         await this.maybeSendInterviewReaction(session, originalText, sourceMessageId);
-        await this.maybeSendCandidateEmpathyLine(session);
+        if (!result.isFollowUp) {
+          await this.maybeSendCandidateEmpathyLine(session);
+        }
         const nextQuestionText = await this.formatInterviewQuestionForDelivery(
           latestSession,
           result.questionText,
