@@ -8,6 +8,8 @@ export type QualityFlagName =
   | "excessive_follow_ups_loop_detected"
   | "follow_up_loop_prevented"
   | "too_many_low_answer_quality_in_row"
+  | "candidate_ai_assisted_answer_likely"
+  | "manager_ai_assisted_answer_likely"
   | "matching_score_high_but_confidence_low"
   | "jd_analysis_high_ambiguity"
   | "guardrails_parse_failed"

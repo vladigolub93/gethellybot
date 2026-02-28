@@ -2361,6 +2361,9 @@ export class StateRouter {
 
       if (result.kind === "next_question") {
         const latestSession = this.stateService.getSession(session.userId) ?? session;
+        if (result.preQuestionMessage) {
+          await this.sendBotMessage(session.userId, session.chatId, result.preQuestionMessage);
+        }
         const shouldSendProgressConfirmation = this.shouldSendProgressConfirmation(
           latestSession,
           normalizedInput.answerText,

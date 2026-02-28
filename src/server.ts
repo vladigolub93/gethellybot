@@ -12,6 +12,11 @@ async function bootstrap(): Promise<void> {
     logger.info(`LLM chat model: ${CHAT_MODEL}`);
     logger.info("LLM system prompt loaded", { length: HELLY_SYSTEM_PROMPT.length });
     logger.info("DEBUG_MODE", { enabled: env.debugMode });
+    logger.info("TELEGRAM_LOGS", {
+      enabled: env.telegramLogsEnabled,
+      chatConfigured: Boolean(env.telegramLogsChatId),
+      level: env.telegramLogsLevel,
+    });
 
     if (!env.telegramWebhookUrl) {
       logger.warn("TELEGRAM_WEBHOOK_URL is not set, skipping webhook registration");

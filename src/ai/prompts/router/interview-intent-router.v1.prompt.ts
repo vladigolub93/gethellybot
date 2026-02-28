@@ -29,7 +29,8 @@ Rules:
 - META if user asks about timing, language, how to answer, privacy, or process.
 - META if user asks "what is my name" and reply must use known_user_name when available.
 - CLARIFY if user asks what you mean, asks for expected depth, asks for an example, asks which project to use, or asks scope of the current question.
-- ANSWER only if message contains substantive information addressing the current question.
+- ANSWER if message addresses the current question, even when concise.
+- Only classify as META format when the message is a filler without content, for example ok, yes, next.
 - CONTROL if user asks to pause, stop, restart, or help.
 - OFFTOPIC if unrelated to hiring and interview context.
 - Never repeat last_bot_message verbatim.
@@ -40,6 +41,7 @@ Behavior constraints:
 - For ANSWER set should_advance=true.
 - For CLARIFY reply must explain what answer is expected and include this compact structure:
   "Context, what you did, decisions, trade offs, result."
+- Do not pressure the user for long responses, concise practical answers are acceptable.
 - Keep reply concise, practical, and natural, avoid robotic wording.
 `;
 

@@ -56,6 +56,7 @@ export type InterviewAnswerResult =
       questionIndex: number;
       questionText: string;
       isFollowUp?: boolean;
+      preQuestionMessage?: string;
     }
   | {
       kind: "completed";
@@ -279,7 +280,7 @@ export class InterviewEngine {
         (item) => item.questionIndex === currentIndex && item.isFollowUp,
       ).length;
       const totalFollowUps = answersAfterCurrent.filter((item) => item.isFollowUp).length;
-      const followUpLimitReached = followUpsForQuestion >= 1 || totalFollowUps >= 2;
+      const followUpLimitReached = followUpsForQuestion >= 1 || totalFollowUps >= 1;
 
       if (followUpLimitReached) {
         await this.qualityFlagsService?.raise({
@@ -306,6 +307,7 @@ export class InterviewEngine {
           questionIndex: currentIndex,
           questionText: followUpQuestionText,
           isFollowUp: true,
+          preQuestionMessage: updateResult.preQuestionMessage,
         };
       }
       }
@@ -353,6 +355,7 @@ export class InterviewEngine {
       questionIndex: nextQuestionIndex,
       questionText: plan.questions[nextQuestionIndex].question,
       isFollowUp: false,
+      preQuestionMessage: updateResult.preQuestionMessage,
     };
   }
 
@@ -573,9 +576,10 @@ export class InterviewEngine {
     session: UserSessionState,
     question: InterviewPlan["questions"][number],
     answerRecord: InterviewAnswer,
-  ): Promise<{ followUpRequired: boolean; followUpFocus: string }> {
+  ): Promise<{ followUpRequired: boolean; followUpFocus: string; preQuestionMessage?: string }> {
     let followUpRequired = false;
     let followUpFocus = "";
+    let preQuestionMessage: string | undefined;
 
     try {
       if (session.state === "interviewing_candidate") {
@@ -615,6 +619,44 @@ export class InterviewEngine {
               });
             }
           }
+          const aiAssistedLikely =
+            profileUpdateV2.authenticity_label === "likely_ai_assisted" ||
+            profileUpdateV2.authenticity_score <= 0.35;
+          if (aiAssistedLikely) {
+            const nextStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
+            this.stateService.setCandidateAiAssistedStreak(session.userId, nextStreak);
+            followUpRequired = true;
+            if (!followUpFocus) {
+              followUpFocus =
+                "one concrete personal example from your real project, including your own decisions and trade offs";
+            }
+            preQuestionMessage = buildAiAssistedWarningMessage(nextStreak);
+            await this.qualityFlagsService?.raise({
+              entityType: "candidate",
+              entityId: String(session.userId),
+              flag: "candidate_ai_assisted_answer_likely",
+              details: {
+                questionIndex: answerRecord.questionIndex,
+                authenticityScore: profileUpdateV2.authenticity_score,
+                authenticitySignals: profileUpdateV2.authenticity_signals,
+                streak: nextStreak,
+              },
+            });
+            if (nextStreak >= 2) {
+              this.stateService.setCandidateNeedsLiveValidation(session.userId, true);
+              this.stateService.addCandidateConfidenceUpdates(session.userId, [
+                {
+                  field: "interview_authenticity_confidence",
+                  previous_value: "medium",
+                  new_value: "low",
+                  reason:
+                    "Multiple answers look AI-assisted and need live validation with concrete personal evidence.",
+                },
+              ]);
+            }
+          } else {
+            this.stateService.setCandidateAiAssistedStreak(session.userId, 0);
+          }
         }
 
         const updated = await this.candidateProfileBuilder.update({
@@ -625,7 +667,7 @@ export class InterviewEngine {
           extractedText: session.candidateResumeText ?? "",
         });
         this.stateService.setCandidateProfile(session.userId, updated);
-        return { followUpRequired, followUpFocus };
+        return { followUpRequired, followUpFocus, preQuestionMessage };
       }
 
       if (session.state === "interviewing_manager") {
@@ -649,6 +691,9 @@ export class InterviewEngine {
 
         followUpRequired = managerProfileUpdate.follow_up_required;
         followUpFocus = managerProfileUpdate.follow_up_focus ?? "";
+        const managerAiAssistedLikely =
+          managerProfileUpdate.authenticity_label === "likely_ai_assisted" ||
+          managerProfileUpdate.authenticity_score <= 0.35;
         if (managerProfileUpdate.answer_quality === "low") {
           const recentAnswers = this.stateService.getAnswers(session.userId).slice(-3);
           const lowSignal = recentAnswers.filter((item) => item.isFollowUp).length >= 2;
@@ -663,6 +708,41 @@ export class InterviewEngine {
             });
           }
         }
+        if (managerAiAssistedLikely) {
+          const nextStreak = (session.managerAiAssistedStreak ?? 0) + 1;
+          this.stateService.setManagerAiAssistedStreak(session.userId, nextStreak);
+          followUpRequired = true;
+          if (!followUpFocus) {
+            followUpFocus =
+              "one concrete role context with actual constraints, responsibilities, and expected outcomes in the first three months";
+          }
+          preQuestionMessage = buildManagerAiAssistedWarningMessage(nextStreak);
+          await this.qualityFlagsService?.raise({
+            entityType: "job",
+            entityId: String(session.userId),
+            flag: "manager_ai_assisted_answer_likely",
+            details: {
+              questionIndex: answerRecord.questionIndex,
+              authenticityScore: managerProfileUpdate.authenticity_score,
+              authenticitySignals: managerProfileUpdate.authenticity_signals,
+              streak: nextStreak,
+            },
+          });
+          if (nextStreak >= 2) {
+            this.stateService.setManagerNeedsLiveValidation(session.userId, true);
+            this.stateService.addManagerProfileUpdates(session.userId, [
+              {
+                field: "intake_authenticity_confidence",
+                previous_value: "medium",
+                new_value: "low",
+                reason:
+                  "Multiple manager answers look AI-assisted and require concrete operational examples.",
+              },
+            ]);
+          }
+        } else {
+          this.stateService.setManagerAiAssistedStreak(session.userId, 0);
+        }
 
         const updated = await this.jobProfileBuilder.update({
           jobId: String(session.userId),
@@ -672,7 +752,7 @@ export class InterviewEngine {
           extractedText: session.jobDescriptionText ?? "",
         });
         this.stateService.setJobProfile(session.userId, updated);
-        return { followUpRequired, followUpFocus };
+        return { followUpRequired, followUpFocus, preQuestionMessage };
       }
     } catch (error) {
       this.logger.warn("Profile update failed after answer", {
@@ -682,7 +762,7 @@ export class InterviewEngine {
       });
     }
 
-    return { followUpRequired: false, followUpFocus: "" };
+    return { followUpRequired: false, followUpFocus: "", preQuestionMessage };
   }
 
   async generateCandidateTechnicalSummary(
@@ -821,6 +901,20 @@ function buildFollowUpQuestion(focus: string): string {
   const normalizedFocus = focus.trim();
   const effectiveFocus = normalizedFocus || "the relevant decision and its impact";
   return `Quick follow up. Please clarify ${effectiveFocus} using one concrete example. Say what you did, what you chose, and why.`;
+}
+
+function buildAiAssistedWarningMessage(streak: number): string {
+  if (streak >= 2) {
+    return "This still looks like AI-assisted text. To match you with the right role, please answer from your own real project experience, with concrete decisions and outcomes.";
+  }
+  return "This answer looks a bit AI-assisted and too generic. To get better matching, please answer with your own concrete project example, what you did, constraints, and result.";
+}
+
+function buildManagerAiAssistedWarningMessage(streak: number): string {
+  if (streak >= 2) {
+    return "This still looks like AI-assisted and too generic. To find suitable candidates, please answer from your real role context with concrete responsibilities, constraints, and outcomes.";
+  }
+  return "This answer looks a bit AI-assisted and too generic. For accurate matching, please share one concrete role example from your team, with context, constraints, and expected result.";
 }
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {

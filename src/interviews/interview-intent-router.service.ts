@@ -15,7 +15,7 @@ interface InterviewIntentInput {
 }
 
 const FORMAT_FALLBACK_REPLY =
-  "Please answer the current question with context, what you did, decisions, trade offs, and result.";
+  "Please answer the current question. A short practical answer is enough, text or voice.";
 const OFFTOPIC_FALLBACK_REPLY =
   "Let us keep this focused on your interview. Please answer the current question to continue.";
 
@@ -104,16 +104,9 @@ function normalizeSubstantiveAnswerGuard(
   if (decision.intent !== "ANSWER") {
     return decision;
   }
-
-  const words = userMessage
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const hasSubstantiveLength = userMessage.trim().length >= 20 || words.length >= 5;
-  if (hasSubstantiveLength) {
+  if (!isNonAnswerFiller(userMessage)) {
     return decision;
   }
-
   return {
     intent: "META",
     meta_type: "format",
@@ -234,8 +227,7 @@ function fallbackDecision(
     };
   }
 
-  const words = normalized.split(/\s+/).filter(Boolean);
-  if (words.length < 4) {
+  if (isNonAnswerFiller(normalized)) {
     return {
       intent: "META",
       meta_type: "format",
@@ -252,6 +244,39 @@ function fallbackDecision(
     reply: OFFTOPIC_FALLBACK_REPLY,
     should_advance: true,
   };
+}
+
+function isNonAnswerFiller(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  const directMatches = new Set([
+    "ok",
+    "okay",
+    "sure",
+    "yes",
+    "yep",
+    "no",
+    "next",
+    "continue",
+    "go on",
+    "k",
+    "kk",
+    "понятно",
+    "ок",
+    "да",
+    "нет",
+    "дальше",
+    "продолжай",
+  ]);
+  if (directMatches.has(normalized)) {
+    return true;
+  }
+  if (normalized.length <= 3 && /^[\d.,]+$/.test(normalized)) {
+    return true;
+  }
+  return false;
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> {

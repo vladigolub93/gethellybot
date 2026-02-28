@@ -68,7 +68,16 @@ export interface AppContext {
 }
 
 export function createApp(env: EnvConfig): AppContext {
-  const logger = createLogger();
+  const logger = createLogger({
+    telegram: {
+      enabled: env.telegramLogsEnabled,
+      token: env.telegramBotToken,
+      chatId: env.telegramLogsChatId,
+      minLevel: env.telegramLogsLevel,
+      ratePerMinute: env.telegramLogsRatePerMin,
+      batchMs: env.telegramLogsBatchMs,
+    },
+  });
   const app = express();
 
   app.use(express.json({ limit: "2mb" }));

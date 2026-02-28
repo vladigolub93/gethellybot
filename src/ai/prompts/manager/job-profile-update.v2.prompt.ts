@@ -23,6 +23,7 @@ OBJECTIVES:
 8. Detect contradictions between earlier answers and new info.
 9. Add or remove risk flags based on clarity.
 10. Decide if follow-up is required to remove ambiguity.
+11. Estimate if the answer is likely AI-assisted instead of operationally grounded.
 
 OUTPUT STRICT JSON:
 
@@ -78,6 +79,9 @@ OUTPUT STRICT JSON:
   ],
   "contradiction_flags": ["string"],
   "answer_quality": "low | medium | high",
+  "authenticity_score": 0-1,
+  "authenticity_label": "likely_human | uncertain | likely_ai_assisted",
+  "authenticity_signals": ["string"],
   "follow_up_required": boolean,
   "follow_up_focus": "string or null"
 }
@@ -87,12 +91,14 @@ RULES:
 - Only update fields supported by the manager answer.
 - Preserve existing fields if not addressed.
 - If answer remains vague, set answer_quality to low and require follow up.
+- If answer is polished but generic without concrete role context, set authenticity_label to likely_ai_assisted.
 - follow_up_required must be true if:
   - key requirement is still ambiguous
   - core vs secondary tech is unclear
   - tasks and challenges are still unclear
   - domain criticality is unclear
   - contradictions are detected
+  - authenticity_label is likely_ai_assisted
 
 Return ONLY valid JSON.
 No markdown.

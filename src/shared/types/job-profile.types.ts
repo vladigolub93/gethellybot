@@ -54,6 +54,9 @@ export interface JobProfileUpdateV2 {
   }>;
   contradiction_flags: string[];
   answer_quality: "low" | "medium" | "high";
+  authenticity_score: number;
+  authenticity_label: "likely_human" | "uncertain" | "likely_ai_assisted";
+  authenticity_signals: string[];
   follow_up_required: boolean;
   follow_up_focus: string | null;
 }

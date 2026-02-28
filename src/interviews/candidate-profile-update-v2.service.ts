@@ -95,7 +95,7 @@ export class CandidateProfileUpdateV2Service {
         timeoutMs: timeouts[attempt - 1] ?? 70_000,
         promptName: "candidate_profile_update_v2",
         schemaHint:
-          "Candidate profile update v2 JSON with updated_resume_analysis, confidence_updates, contradiction_flags, answer_quality, depth_change_detected, follow_up_required, follow_up_focus.",
+          "Candidate profile update v2 JSON with updated_resume_analysis, confidence_updates, contradiction_flags, answer_quality, authenticity_score, authenticity_label, authenticity_signals, depth_change_detected, follow_up_required, follow_up_focus.",
       });
       if (safe.ok) {
         return parseCandidateProfileUpdate(JSON.stringify(safe.data));
@@ -158,6 +158,18 @@ function parseCandidateProfileUpdate(raw: string): CandidateProfileUpdateV2 {
       ? answerQualityRaw
       : "medium";
 
+  const authenticityScore = toNumberInRange(parsed.authenticity_score, 0, 1, 0.5);
+  const authenticityLabelRaw = toText(parsed.authenticity_label).toLowerCase();
+  const authenticityLabel: CandidateProfileUpdateV2["authenticity_label"] =
+    authenticityLabelRaw === "likely_human" ||
+    authenticityLabelRaw === "uncertain" ||
+    authenticityLabelRaw === "likely_ai_assisted"
+      ? authenticityLabelRaw
+      : "uncertain";
+  const authenticitySignals = Array.isArray(parsed.authenticity_signals)
+    ? parsed.authenticity_signals.map((item) => toText(item)).filter(Boolean).slice(0, 6)
+    : [];
+
   if (typeof parsed.depth_change_detected !== "boolean") {
     throw new Error("Candidate profile update v2 output is invalid: depth_change_detected must be boolean.");
   }
@@ -170,6 +182,9 @@ function parseCandidateProfileUpdate(raw: string): CandidateProfileUpdateV2 {
     confidence_updates: confidenceUpdates,
     contradiction_flags: contradictionFlags,
     answer_quality: answerQuality,
+    authenticity_score: authenticityScore,
+    authenticity_label: authenticityLabel,
+    authenticity_signals: authenticitySignals,
     depth_change_detected: parsed.depth_change_detected,
     follow_up_required: parsed.follow_up_required,
     follow_up_focus: parsed.follow_up_focus === null ? null : toText(parsed.follow_up_focus) || null,
@@ -188,6 +203,25 @@ function parseJsonObject(raw: string): Record<string, unknown> {
 
 function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function toNumberInRange(value: unknown, min: number, max: number, fallback: number): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  if (numeric < min) {
+    return min;
+  }
+  if (numeric > max) {
+    return max;
+  }
+  return numeric;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

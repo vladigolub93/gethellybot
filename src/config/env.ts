@@ -5,6 +5,11 @@ dotenv.config();
 export interface EnvConfig {
   nodeEnv: string;
   debugMode: boolean;
+  telegramLogsEnabled: boolean;
+  telegramLogsChatId?: string;
+  telegramLogsLevel: "debug" | "info" | "warn" | "error";
+  telegramLogsRatePerMin: number;
+  telegramLogsBatchMs: number;
   adminSecret?: string;
   port: number;
   telegramBotToken: string;
@@ -48,11 +53,20 @@ export function loadEnv(): EnvConfig {
   const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
+  const telegramLogsEnabledRaw =
+    process.env.TELEGRAM_LOGS_ENABLED ?? ((process.env.NODE_ENV ?? "development") === "production" ? "true" : "false");
+  const telegramLogsLevelRaw = (process.env.TELEGRAM_LOG_LEVEL ?? "warn").trim().toLowerCase();
+  const telegramLogsRatePerMinRaw = process.env.TELEGRAM_LOG_RATE_PER_MIN ?? "20";
+  const telegramLogsBatchMsRaw = process.env.TELEGRAM_LOG_BATCH_MS ?? "2500";
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
   const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
   const debugMode = parseBoolean(debugModeRaw);
+  const telegramLogsEnabled = parseBoolean(telegramLogsEnabledRaw);
+  const telegramLogsRatePerMin = Number(telegramLogsRatePerMinRaw);
+  const telegramLogsBatchMs = Number(telegramLogsBatchMsRaw);
+  const telegramLogsLevel = parseLogLevel(telegramLogsLevelRaw);
 
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error(`Invalid PORT value: ${portRaw}`);
@@ -65,10 +79,21 @@ export function loadEnv(): EnvConfig {
       `Invalid TELEGRAM_REACTIONS_PROBABILITY value: ${reactionsProbabilityRaw}. Expected number between 0 and 1.`,
     );
   }
+  if (!Number.isFinite(telegramLogsRatePerMin) || telegramLogsRatePerMin < 1) {
+    throw new Error(`Invalid TELEGRAM_LOG_RATE_PER_MIN value: ${telegramLogsRatePerMinRaw}`);
+  }
+  if (!Number.isFinite(telegramLogsBatchMs) || telegramLogsBatchMs < 250) {
+    throw new Error(`Invalid TELEGRAM_LOG_BATCH_MS value: ${telegramLogsBatchMsRaw}`);
+  }
 
   return {
     nodeEnv: process.env.NODE_ENV ?? "development",
     debugMode,
+    telegramLogsEnabled,
+    telegramLogsChatId: process.env.TELEGRAM_LOG_CHAT_ID ?? "-1003451429547",
+    telegramLogsLevel,
+    telegramLogsRatePerMin: telegramLogsRatePerMin,
+    telegramLogsBatchMs: telegramLogsBatchMs,
     adminSecret: process.env.ADMIN_SECRET,
     port,
     telegramBotToken: getRequiredString("TELEGRAM_BOT_TOKEN"),
@@ -103,4 +128,11 @@ function parseBoolean(value: string): boolean {
     return false;
   }
   throw new Error(`Invalid boolean value: ${value}`);
+}
+
+function parseLogLevel(value: string): "debug" | "info" | "warn" | "error" {
+  if (value === "debug" || value === "info" || value === "warn" || value === "error") {
+    return value;
+  }
+  throw new Error(`Invalid TELEGRAM_LOG_LEVEL value: ${value}`);
 }

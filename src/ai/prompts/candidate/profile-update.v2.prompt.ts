@@ -23,6 +23,7 @@ OBJECTIVES:
 8. Add new risk flags if answer reveals weakness.
 9. Remove risk flags if resolved.
 10. Determine if follow-up question is required.
+11. Estimate if the answer is likely AI-assisted instead of personal hands-on evidence.
 
 EVALUATION RULES:
 
@@ -52,6 +53,11 @@ If answer is short and vague:
 If answer includes real metrics:
 - Add to impact_indicators.
 
+If answer looks polished but generic, lacks concrete ownership, and avoids specific trade offs:
+- Lower authenticity_score.
+- Set authenticity_label to likely_ai_assisted.
+- Add clear authenticity_signals.
+
 OUTPUT STRICT JSON:
 
 {
@@ -68,6 +74,9 @@ OUTPUT STRICT JSON:
     "string"
   ],
   "answer_quality": "low | medium | high",
+  "authenticity_score": 0-1,
+  "authenticity_label": "likely_human | uncertain | likely_ai_assisted",
+  "authenticity_signals": ["string"],
   "depth_change_detected": boolean,
   "follow_up_required": boolean,
   "follow_up_focus": "string or null"
@@ -83,6 +92,7 @@ RULES:
   - contradiction detected
   - insufficient_depth
   - major ambiguity remains
+  - authenticity_label is likely_ai_assisted
 
 Return ONLY valid JSON.
 No markdown.

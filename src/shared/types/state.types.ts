@@ -68,10 +68,14 @@ export interface UserSessionState {
   candidateInterviewPlanV2?: CandidateInterviewPlanV2;
   candidateConfidenceUpdates?: CandidateConfidenceUpdate[];
   candidateContradictionFlags?: string[];
+  candidateAiAssistedStreak?: number;
+  candidateNeedsLiveValidation?: boolean;
   candidateTechnicalSummary?: CandidateTechnicalSummaryV1;
   managerJobProfileV2?: JobProfileV2;
   managerProfileUpdates?: ManagerProfileUpdate[];
   managerContradictionFlags?: string[];
+  managerAiAssistedStreak?: number;
+  managerNeedsLiveValidation?: boolean;
   managerTechnicalSummary?: JobTechnicalSummaryV2;
   jobWorkFormat?: JobWorkFormat;
   jobRemoteCountries?: string[];

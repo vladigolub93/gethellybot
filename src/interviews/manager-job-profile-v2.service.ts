@@ -45,7 +45,7 @@ export class ManagerJobProfileV2Service {
         maxTokens: 2600,
         promptName: "manager_job_profile_update_v2",
         schemaHint:
-          "Job profile update v2 JSON with updated_job_profile, profile_updates, contradiction_flags, answer_quality, follow_up_required, follow_up_focus.",
+          "Job profile update v2 JSON with updated_job_profile, profile_updates, contradiction_flags, answer_quality, authenticity_score, authenticity_label, authenticity_signals, follow_up_required, follow_up_focus.",
       });
       if (!safe.ok) {
         throw new Error(`manager_job_profile_update_v2_failed:${safe.error_code}`);
@@ -113,6 +113,15 @@ function parseJobProfileUpdateV2(raw: string, fallbackProfile: JobProfileV2): Jo
     qualityRaw === "low" || qualityRaw === "medium" || qualityRaw === "high"
       ? qualityRaw
       : "medium";
+  const authenticityScore = toNumberInRange(parsed.authenticity_score, 0, 1, 0.5);
+  const authenticityLabelRaw = toText(parsed.authenticity_label).toLowerCase();
+  const authenticityLabel: JobProfileUpdateV2["authenticity_label"] =
+    authenticityLabelRaw === "likely_human" ||
+    authenticityLabelRaw === "uncertain" ||
+    authenticityLabelRaw === "likely_ai_assisted"
+      ? authenticityLabelRaw
+      : "uncertain";
+  const authenticitySignals = toStringArray(parsed.authenticity_signals).slice(0, 6);
   const followUpRequired = typeof parsed.follow_up_required === "boolean" ? parsed.follow_up_required : false;
   const followUpFocus = parsed.follow_up_focus === null ? null : toText(parsed.follow_up_focus) || null;
 
@@ -121,6 +130,9 @@ function parseJobProfileUpdateV2(raw: string, fallbackProfile: JobProfileV2): Jo
     profile_updates: profileUpdates,
     contradiction_flags: contradictionFlags,
     answer_quality: answerQuality,
+    authenticity_score: authenticityScore,
+    authenticity_label: authenticityLabel,
+    authenticity_signals: authenticitySignals,
     follow_up_required: followUpRequired,
     follow_up_focus: followUpFocus,
   };
@@ -383,6 +395,25 @@ function normalizeEnum(value: unknown, allowed: string[]): string {
     return normalized;
   }
   return "unknown";
+}
+
+function toNumberInRange(value: unknown, min: number, max: number, fallback: number): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  if (numeric < min) {
+    return min;
+  }
+  if (numeric > max) {
+    return max;
+  }
+  return numeric;
 }
 
 export function mapJobAnalysisToProfileV2(

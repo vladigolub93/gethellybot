@@ -436,10 +436,14 @@ export class StateService {
     session.pendingFollowUp = undefined;
     session.candidateConfidenceUpdates = [];
     session.candidateContradictionFlags = [];
+    session.candidateAiAssistedStreak = 0;
+    session.candidateNeedsLiveValidation = false;
     session.candidateTechnicalSummary = undefined;
     session.managerJobProfileV2 = undefined;
     session.managerProfileUpdates = [];
     session.managerContradictionFlags = [];
+    session.managerAiAssistedStreak = 0;
+    session.managerNeedsLiveValidation = false;
     session.managerTechnicalSummary = undefined;
     session.answers = [];
     session.skippedQuestionIndexes = [];
@@ -630,6 +634,24 @@ export class StateService {
     return session;
   }
 
+  setCandidateAiAssistedStreak(userId: number, streak: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateAiAssistedStreak = Math.max(0, Math.floor(streak));
+    return session;
+  }
+
+  incrementCandidateAiAssistedStreak(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateAiAssistedStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
+    return session;
+  }
+
+  setCandidateNeedsLiveValidation(userId: number, required: boolean): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateNeedsLiveValidation = required;
+    return session;
+  }
+
   setCandidateTechnicalSummary(
     userId: number,
     summary: CandidateTechnicalSummaryV1,
@@ -671,6 +693,24 @@ export class StateService {
     }
     const set = new Set([...existing, ...normalized]);
     session.managerContradictionFlags = Array.from(set);
+    return session;
+  }
+
+  setManagerAiAssistedStreak(userId: number, streak: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.managerAiAssistedStreak = Math.max(0, Math.floor(streak));
+    return session;
+  }
+
+  incrementManagerAiAssistedStreak(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.managerAiAssistedStreak = (session.managerAiAssistedStreak ?? 0) + 1;
+    return session;
+  }
+
+  setManagerNeedsLiveValidation(userId: number, required: boolean): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.managerNeedsLiveValidation = required;
     return session;
   }
 
