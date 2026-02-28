@@ -258,6 +258,14 @@ export function processingDocumentMessage(): string {
   return "Document received. Extracting text and preparing interview questions...";
 }
 
+export function stillProcessingDocumentMessage(): string {
+  return "Still processing your document. I will send the next step as soon as it is ready.";
+}
+
+export function stillProcessingAnswerMessage(): string {
+  return "Still processing your last answer. I will send the next step shortly.";
+}
+
 export function questionMessage(questionIndex: number, questionText: string): string {
   void questionIndex;
   return questionText.trim();

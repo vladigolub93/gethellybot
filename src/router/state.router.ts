@@ -107,6 +107,8 @@ import {
   ownContactRequiredMessage,
   missingInterviewContextMessage,
   processingDocumentMessage,
+  stillProcessingDocumentMessage,
+  stillProcessingAnswerMessage,
   questionMessage,
   onboardingPrivacyNoteMessage,
   candidateResumePrompt,
@@ -1237,6 +1239,14 @@ export class StateRouter {
     this.stateService.transition(update.userId, extractingState);
 
     await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
+    const stillProcessingTimer = setTimeout(() => {
+      void this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        stillProcessingDocumentMessage(),
+        { source: "state_router.progress.document" },
+      );
+    }, 15_000);
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
@@ -1329,6 +1339,8 @@ export class StateRouter {
           intakeState === "waiting_job" ? "waiting_job" : "waiting_resume",
         ),
       );
+    } finally {
+      clearTimeout(stillProcessingTimer);
     }
   }
 
@@ -1415,14 +1427,16 @@ export class StateRouter {
       replyMarkup?: TelegramReplyMarkup;
     },
   ): Promise<void> {
+    const baseSource = options?.source ?? "state_router.dialogue";
+    const source = resolveMessageSource(baseSource, text, options?.replyMarkup);
     this.logger.debug("user.reply.sent", {
       telegram_user_id: userId,
       chat_id: chatId,
-      source: options?.source ?? "state_router",
+      source,
       reply_sent: true,
     });
     await this.telegramClient.sendUserMessage({
-      source: options?.source ?? "state_router",
+      source,
       chatId,
       text,
       replyMarkup: options?.replyMarkup,
@@ -2143,6 +2157,14 @@ export class StateRouter {
     this.stateService.transition(update.userId, extractingState);
 
     await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
+    const stillProcessingTimer = setTimeout(() => {
+      void this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        stillProcessingDocumentMessage(),
+        { source: "state_router.progress.document" },
+      );
+    }, 15_000);
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
@@ -2254,6 +2276,8 @@ export class StateRouter {
           intakeState === "waiting_job" ? "waiting_job" : "waiting_resume",
         ),
       );
+    } finally {
+      clearTimeout(stillProcessingTimer);
     }
   }
 
@@ -2292,6 +2316,15 @@ export class StateRouter {
       await this.sendBotMessage(session.userId, session.chatId, missingInterviewContextMessage());
       return;
     }
+
+    const stillProcessingTimer = setTimeout(() => {
+      void this.sendBotMessage(
+        session.userId,
+        session.chatId,
+        stillProcessingAnswerMessage(),
+        { source: "state_router.progress.answer" },
+      );
+    }, 12_000);
 
     try {
       const normalizedInput = {
@@ -2364,6 +2397,8 @@ export class StateRouter {
         session.chatId,
         "I had trouble processing that. Please resend your last message, text or voice.",
       );
+    } finally {
+      clearTimeout(stillProcessingTimer);
     }
   }
 
@@ -3566,6 +3601,40 @@ function getNonRepeatingFallbackByState(state: UserSessionState["state"]): strin
     return "Please tell me your role by text or voice, candidate or hiring.";
   }
   return "Please continue with the current step.";
+}
+
+function resolveMessageSource(
+  source: string,
+  text: string,
+  replyMarkup?: TelegramReplyMarkup,
+): string {
+  const normalized = source.trim().toLowerCase();
+  if (normalized.startsWith("system_") || normalized.startsWith("state_router.system")) {
+    return source;
+  }
+  if (replyMarkup) {
+    return `state_router.system.keyboard.${source}`;
+  }
+  if (isHardSystemMessageText(text)) {
+    return `state_router.system.control.${source}`;
+  }
+  return source;
+}
+
+function isHardSystemMessageText(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized.includes("/start") ||
+    normalized.includes("share my contact") ||
+    normalized.includes("skip for now") ||
+    normalized.includes("i am a candidate") ||
+    normalized.includes("i am hiring") ||
+    normalized.includes("pdf or docx") ||
+    normalized.includes("choose your role")
+  );
 }
 
 function shouldUsePersonalName(userId: number, marker: number): boolean {

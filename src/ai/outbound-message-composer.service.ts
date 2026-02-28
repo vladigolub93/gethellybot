@@ -2,6 +2,7 @@ import { LlmClient } from "./llm.client";
 import { callTextPromptSafe } from "./llm.safe";
 import { Logger } from "../config/logger";
 import { buildOutboundComposeV1Prompt } from "./prompts/outbound/outbound-compose.v1.prompt";
+import { isHardSystemSource } from "../shared/utils/message-source";
 
 interface ComposeInput {
   source: string;
@@ -18,6 +19,9 @@ export class OutboundMessageComposerService {
   async compose(input: ComposeInput): Promise<string> {
     const trimmed = input.text.trim();
     if (!trimmed) {
+      return input.text;
+    }
+    if (isHardSystemSource(input.source)) {
       return input.text;
     }
 

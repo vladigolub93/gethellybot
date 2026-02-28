@@ -29,6 +29,7 @@ import { JobDescriptionAnalysisV1 } from "../shared/types/job-analysis.types";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
 import { QualityFlagsService } from "../qa/quality-flags.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
+import { QdrantBackfillService } from "../matching/qdrant-backfill.service";
 
 export interface InterviewBootstrapResult {
   nextState: UserState;
@@ -83,6 +84,7 @@ export class InterviewEngine {
     private readonly interviewConfirmationService: InterviewConfirmationService,
     private readonly logger: Logger,
     private readonly qualityFlagsService?: QualityFlagsService,
+    private readonly qdrantBackfillService?: QdrantBackfillService,
   ) {}
 
   async bootstrapInterview(
@@ -696,6 +698,9 @@ export class InterviewEngine {
           profile: finalProfile,
           embedding,
         });
+        if (this.qdrantBackfillService?.isEnabled()) {
+          await this.qdrantBackfillService.upsertCandidate(telegramUserId);
+        }
         return;
       }
 

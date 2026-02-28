@@ -35,6 +35,7 @@ import { HiringScopeGuardrailsService } from "./guardrails/hiring-scope-guardrai
 import { NormalizationService } from "./i18n/normalization.service";
 import { MatchingEngine } from "./matching/matching.engine";
 import { QdrantClient } from "./matching/qdrant.client";
+import { QdrantBackfillService } from "./matching/qdrant-backfill.service";
 import { VectorSearchRepository } from "./matching/vector-search.repo";
 import { CandidateNotifier } from "./notifications/candidate-notifier";
 import { ManagerNotifier } from "./notifications/manager-notifier";
@@ -200,6 +201,12 @@ export function createApp(env: EnvConfig): AppContext {
     qdrantClient,
     qualityFlagsService,
   );
+  const qdrantBackfillService = new QdrantBackfillService(
+    profilesRepository,
+    embeddingsClient,
+    qdrantClient,
+    logger,
+  );
   const decisionService = new DecisionService(matchStorageService, jobsRepository);
   const contactExchangeService = new ContactExchangeService(
     stateService,
@@ -239,7 +246,20 @@ export function createApp(env: EnvConfig): AppContext {
     interviewConfirmationService,
     logger,
     qualityFlagsService,
+    qdrantBackfillService,
   );
+  if (env.qdrantBackfillOnStart && qdrantBackfillService.isEnabled()) {
+    void qdrantBackfillService
+      .backfillExistingCandidates(500)
+      .then((result) => {
+        logger.info("Qdrant backfill on start finished", result);
+      })
+      .catch((error) => {
+        logger.warn("Qdrant backfill on start failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      });
+  }
   const stateRouter = new StateRouter(
     stateService,
     statePersistenceService,

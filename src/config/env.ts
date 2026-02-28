@@ -26,6 +26,7 @@ export interface EnvConfig {
   qdrantUrl?: string;
   qdrantApiKey?: string;
   qdrantCandidateCollection: string;
+  qdrantBackfillOnStart: boolean;
 }
 
 function getRequiredString(name: string): string {
@@ -45,10 +46,12 @@ export function loadEnv(): EnvConfig {
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
   const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
+  const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
   const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
+  const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
   const debugMode = parseBoolean(debugModeRaw);
 
   if (!Number.isInteger(port) || port <= 0) {
@@ -87,6 +90,7 @@ export function loadEnv(): EnvConfig {
     qdrantUrl: process.env.QDRANT_URL,
     qdrantApiKey: process.env.QDRANT_API_KEY,
     qdrantCandidateCollection: process.env.QDRANT_CANDIDATE_COLLECTION ?? "helly_candidates_v1",
+    qdrantBackfillOnStart,
   };
 }
 

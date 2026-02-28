@@ -1,6 +1,7 @@
 import { Logger } from "../config/logger";
 import { TELEGRAM_PARSE_MODE } from "../shared/constants";
 import { TelegramApiResponse, TelegramReplyMarkup } from "../shared/types/telegram.types";
+import { isHardSystemSource } from "../shared/utils/message-source";
 import fetch from "node-fetch";
 
 interface SetWebhookPayload {
@@ -87,11 +88,15 @@ export class TelegramClient {
     options?: { replyMarkup?: TelegramReplyMarkup; source?: string; skipCompose?: boolean },
   ): Promise<void> {
     const source = options?.source ?? "telegram_send_message";
+    const hasReplyMarkup = Boolean(options?.replyMarkup);
     const finalText = await this.composeOutgoingText({
       source,
       chatId,
       text,
-      skipCompose: options?.skipCompose,
+      skipCompose:
+        options?.skipCompose ||
+        hasReplyMarkup ||
+        isHardSystemSource(source),
     });
 
     const payload: SendMessagePayload = {

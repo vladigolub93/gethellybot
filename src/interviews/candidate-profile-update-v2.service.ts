@@ -58,20 +58,7 @@ export class CandidateProfileUpdateV2Service {
 
     let parsed: CandidateProfileUpdateV2;
     try {
-      const safe = await callJsonPromptSafe<Record<string, unknown>>({
-        llmClient: this.llmClient,
-        logger: this.logger,
-        prompt,
-        maxTokens: 2600,
-        promptName: "candidate_profile_update_v2",
-        schemaHint:
-          "Candidate profile update v2 JSON with updated_resume_analysis, confidence_updates, contradiction_flags, answer_quality, depth_change_detected, follow_up_required, follow_up_focus.",
-      });
-      if (!safe.ok) {
-        throw new Error(`candidate_profile_update_v2_failed:${safe.error_code}`);
-      }
-      const raw = JSON.stringify(safe.data);
-      parsed = parseCandidateProfileUpdate(raw);
+      parsed = await this.generateWithRetry(prompt);
     } catch (error) {
       await this.qualityFlagsService?.raise({
         entityType: "candidate",
@@ -92,6 +79,41 @@ export class CandidateProfileUpdateV2Service {
     });
 
     return parsed;
+  }
+
+  private async generateWithRetry(prompt: string): Promise<CandidateProfileUpdateV2> {
+    const maxAttempts = 3;
+    const timeouts = [40_000, 55_000, 70_000];
+    let lastErrorCode = "unknown";
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 2600,
+        timeoutMs: timeouts[attempt - 1] ?? 70_000,
+        promptName: "candidate_profile_update_v2",
+        schemaHint:
+          "Candidate profile update v2 JSON with updated_resume_analysis, confidence_updates, contradiction_flags, answer_quality, depth_change_detected, follow_up_required, follow_up_focus.",
+      });
+      if (safe.ok) {
+        return parseCandidateProfileUpdate(JSON.stringify(safe.data));
+      }
+
+      lastErrorCode = safe.error_code;
+      this.logger.warn("candidate.profile.update.retry", {
+        promptName: "candidate_profile_update_v2",
+        attempt,
+        errorCode: safe.error_code,
+      });
+      if (!isRetryableProfileUpdateError(safe.error_code) || attempt >= maxAttempts) {
+        break;
+      }
+      await sleepWithJitter(300, 900);
+    }
+
+    throw new Error(`candidate_profile_update_v2_failed:${lastErrorCode}`);
   }
 
   private async loadTechnicalAnalysis(telegramUserId: number): Promise<CandidateResumeAnalysisV2 | null> {
@@ -170,4 +192,23 @@ function toText(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isRetryableProfileUpdateError(
+  errorCode:
+    | "missing_system_prompt"
+    | "timeout"
+    | "transient_failure"
+    | "llm_failure"
+    | "json_parse_failed"
+    | "schema_invalid",
+): boolean {
+  return errorCode === "timeout" || errorCode === "transient_failure" || errorCode === "llm_failure";
+}
+
+async function sleepWithJitter(minMs: number, maxMs: number): Promise<void> {
+  const min = Math.max(0, Math.floor(minMs));
+  const max = Math.max(min, Math.floor(maxMs));
+  const delay = min + Math.floor(Math.random() * (max - min + 1));
+  await new Promise<void>((resolve) => setTimeout(resolve, delay));
 }

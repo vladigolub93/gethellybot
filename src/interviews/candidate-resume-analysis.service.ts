@@ -23,19 +23,7 @@ export class CandidateResumeAnalysisService {
     const prompt = `${CANDIDATE_RESUME_ANALYSIS_V2_PROMPT}\n\n${trimmedResumeText}`;
     let parsed: Record<string, unknown>;
     try {
-      const safe = await callJsonPromptSafe<Record<string, unknown>>({
-        llmClient: this.llmClient,
-        prompt,
-        maxTokens: 2200,
-        timeoutMs: 70_000,
-        promptName: "candidate_resume_analysis_v2",
-        schemaHint: "Candidate resume analysis v2 JSON schema.",
-      });
-      if (!safe.ok) {
-        throw new Error(`candidate_resume_analysis_v2_failed:${safe.error_code}`);
-      }
-      const raw = JSON.stringify(safe.data);
-      parsed = parseResumeAnalysis(raw);
+      parsed = await this.generateWithRetry(prompt);
     } catch (error) {
       await this.qualityFlagsService?.raise({
         entityType: "candidate",
@@ -80,6 +68,34 @@ export class CandidateResumeAnalysisService {
     });
     return technical;
   }
+
+  private async generateWithRetry(prompt: string): Promise<Record<string, unknown>> {
+    const maxAttempts = 3;
+    const timeouts = [70_000, 90_000, 110_000];
+    let lastErrorCode = "unknown";
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        prompt,
+        maxTokens: 2200,
+        timeoutMs: timeouts[attempt - 1] ?? 110_000,
+        promptName: "candidate_resume_analysis_v2",
+        schemaHint: "Candidate resume analysis v2 JSON schema.",
+      });
+      if (safe.ok) {
+        return parseResumeAnalysis(JSON.stringify(safe.data));
+      }
+
+      lastErrorCode = safe.error_code;
+      if (!isRetryableResumeAnalysisError(safe.error_code) || attempt >= maxAttempts) {
+        break;
+      }
+      await sleepWithJitter(350, 950);
+    }
+
+    throw new Error(`candidate_resume_analysis_v2_failed:${lastErrorCode}`);
+  }
 }
 
 function parseResumeAnalysis(raw: string): Record<string, unknown> {
@@ -90,4 +106,23 @@ function parseResumeAnalysis(raw: string): Record<string, unknown> {
     throw new Error("Resume analysis output is not valid JSON.");
   }
   return JSON.parse(text.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>;
+}
+
+function isRetryableResumeAnalysisError(
+  errorCode:
+    | "missing_system_prompt"
+    | "timeout"
+    | "transient_failure"
+    | "llm_failure"
+    | "json_parse_failed"
+    | "schema_invalid",
+): boolean {
+  return errorCode === "timeout" || errorCode === "transient_failure" || errorCode === "llm_failure";
+}
+
+async function sleepWithJitter(minMs: number, maxMs: number): Promise<void> {
+  const min = Math.max(0, Math.floor(minMs));
+  const max = Math.max(min, Math.floor(maxMs));
+  const delay = min + Math.floor(Math.random() * (max - min + 1));
+  await new Promise<void>((resolve) => setTimeout(resolve, delay));
 }

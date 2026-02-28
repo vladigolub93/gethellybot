@@ -6,7 +6,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "ts-node src/server.ts",
     "start": "node dist/server.js",
-    "test": "ts-node src/tests/integration/smoke.test.ts",
+    "test": "npm run test:integration",
+    "test:integration": "ts-node src/tests/integration/smoke.test.ts && ts-node src/tests/integration/onboarding.e2e.test.ts",
     "simulate:flow": "ts-node scripts/simulate-flow.ts",
     "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts",
     "test:normalization": "ts-node src/tests/unit/normalization.service.smoke.ts"
