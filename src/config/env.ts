@@ -44,7 +44,7 @@ export function loadEnv(): EnvConfig {
   const voiceMaxDurationSec = Number(voiceLimitRaw);
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
-  const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "false";
+  const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);

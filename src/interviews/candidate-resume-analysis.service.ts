@@ -19,13 +19,15 @@ export class CandidateResumeAnalysisService {
     telegramUserId: number,
     resumeText: string,
   ): Promise<CandidateResumeAnalysisV2Result> {
-    const prompt = `${CANDIDATE_RESUME_ANALYSIS_V2_PROMPT}\n\n${resumeText}`;
+    const trimmedResumeText = resumeText.slice(0, 16_000);
+    const prompt = `${CANDIDATE_RESUME_ANALYSIS_V2_PROMPT}\n\n${trimmedResumeText}`;
     let parsed: Record<string, unknown>;
     try {
       const safe = await callJsonPromptSafe<Record<string, unknown>>({
         llmClient: this.llmClient,
         prompt,
         maxTokens: 2200,
+        timeoutMs: 70_000,
         promptName: "candidate_resume_analysis_v2",
         schemaHint: "Candidate resume analysis v2 JSON schema.",
       });
@@ -64,7 +66,7 @@ export class CandidateResumeAnalysisService {
         telegramUserId,
         rawResumeAnalysisJson: nonTechnical,
         profileStatus: "rejected_non_technical",
-        extractedText: resumeText,
+        extractedText: trimmedResumeText,
       });
       return nonTechnical;
     }
@@ -74,7 +76,7 @@ export class CandidateResumeAnalysisService {
       telegramUserId,
       rawResumeAnalysisJson: technical,
       profileStatus: "analysis_ready",
-      extractedText: resumeText,
+      extractedText: trimmedResumeText,
     });
     return technical;
   }

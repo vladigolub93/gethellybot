@@ -43,7 +43,7 @@ export class TelegramClient {
   ) {
     this.apiBase = `https://api.telegram.org/bot${this.token}`;
     if (!this.buttonsEnabled) {
-      this.logger.info("Telegram buttons are disabled, text and voice only mode is active");
+      this.logger.info("TELEGRAM_BUTTONS_ENABLED is false, but reply_markup is still sent for onboarding safety.");
     }
   }
 
@@ -175,8 +175,7 @@ function shouldSendReplyMarkup(
   replyMarkup: TelegramReplyMarkup,
   buttonsEnabled: boolean,
 ): boolean {
-  if (buttonsEnabled) {
-    return true;
-  }
-  return "remove_keyboard" in replyMarkup;
+  void replyMarkup;
+  void buttonsEnabled;
+  return true;
 }

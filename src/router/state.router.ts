@@ -1315,7 +1315,10 @@ export class StateRouter {
       await this.sendBotMessage(
         session.userId,
         update.chatId,
-        error instanceof Error ? error.message : "Failed to process text.",
+        mapDocumentProcessingErrorToUserMessage(
+          error,
+          intakeState === "waiting_job" ? "waiting_job" : "waiting_resume",
+        ),
       );
     }
   }
@@ -2235,7 +2238,10 @@ export class StateRouter {
       await this.sendBotMessage(
         session.userId,
         update.chatId,
-        error instanceof Error ? error.message : "Failed to process document.",
+        mapDocumentProcessingErrorToUserMessage(
+          error,
+          intakeState === "waiting_job" ? "waiting_job" : "waiting_resume",
+        ),
       );
     }
   }
@@ -2765,9 +2771,16 @@ function formatCandidateJobSummary(
 function isSkipContactForNow(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   return (
+    normalized === "skip" ||
     normalized === "skip for now" ||
+    normalized === "skip now" ||
     normalized === "not now" ||
     normalized === "later" ||
+    normalized === "пропустить" ||
+    normalized === "скип" ||
+    normalized === "пропуск" ||
+    normalized === "пропустити" ||
+    normalized === "пропускати" ||
     normalized.includes("не хочу отправлять номер") ||
     normalized.includes("не хочу отправлять контакт") ||
     normalized.includes("не сейчас") ||
@@ -2781,6 +2794,29 @@ function isSkipContactForNow(text: string): boolean {
 
 function isAwaitingContactChoice(session: UserSessionState): boolean {
   return session.state === "role_selection" && session.awaitingContactChoice === true;
+}
+
+function mapDocumentProcessingErrorToUserMessage(
+  error: unknown,
+  intakeState: "waiting_resume" | "waiting_job",
+): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+
+  if (message.includes("timeout")) {
+    if (intakeState === "waiting_resume") {
+      return "I could not finish resume analysis in time. Please send the same PDF or DOCX once more, or paste your resume text.";
+    }
+    return "I could not finish job description analysis in time. Please send the same PDF or DOCX once more, or paste the full text.";
+  }
+
+  if (message.includes("outside helly scope")) {
+    return "This looks outside technical hiring scope. Please send a technical resume or technical job description.";
+  }
+
+  if (intakeState === "waiting_resume") {
+    return "I could not process this resume. Please try another PDF or DOCX, or paste the full resume text.";
+  }
+  return "I could not process this job description. Please try another PDF or DOCX, or paste the full text.";
 }
 
 function isContactShareTextIntent(rawText: string, normalizedEnglishText: string): boolean {

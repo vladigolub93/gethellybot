@@ -101,26 +101,39 @@ export class InterviewEngine {
     let plan: InterviewPlan;
 
     if (bootstrap.role === "candidate") {
-      const analysis = await this.candidateResumeAnalysisService.analyzeAndPersist(userId, sourceText);
-      if (!analysis.is_technical) {
-        throw new Error(
-          "This profile is outside Helly scope. Only hands-on technical engineering resumes are supported.",
-        );
-      }
+      try {
+        const analysis = await this.candidateResumeAnalysisService.analyzeAndPersist(userId, sourceText);
+        if (!analysis.is_technical) {
+          throw new Error(
+            "This profile is outside Helly scope. Only hands-on technical engineering resumes are supported.",
+          );
+        }
 
-      candidatePlanV2 = await this.interviewPlanService.buildCandidateInterviewPlanV2(analysis, {
-        telegramUserId: userId,
-      });
-      plan = this.interviewPlanService.mapCandidateInterviewPlanV2ToInterviewPlan(candidatePlanV2);
-      answerInstruction = candidatePlanV2.answer_instruction;
-      intakeOneLiner =
-        (await this.interviewConfirmationService.generateCandidateIntakeOneLiner({
+        candidatePlanV2 = await this.interviewPlanService.buildCandidateInterviewPlanV2(analysis, {
           telegramUserId: userId,
-          resumeAnalysisJson: analysis,
-          currentProfileJson: session.candidateProfile ?? {},
-        })) ?? undefined;
-      if (!intakeOneLiner) {
-        intakeOneLiner = buildCandidateFallbackOneLiner(analysis);
+        });
+        plan = this.interviewPlanService.mapCandidateInterviewPlanV2ToInterviewPlan(candidatePlanV2);
+        answerInstruction = candidatePlanV2.answer_instruction;
+        intakeOneLiner =
+          (await this.interviewConfirmationService.generateCandidateIntakeOneLiner({
+            telegramUserId: userId,
+            resumeAnalysisJson: analysis,
+            currentProfileJson: session.candidateProfile ?? {},
+          })) ?? undefined;
+        if (!intakeOneLiner) {
+          intakeOneLiner = buildCandidateFallbackOneLiner(analysis);
+        }
+      } catch (error) {
+        this.logger.warn("Candidate resume analysis v2 failed, fallback interview plan will be used", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        plan = await this.interviewPlanService.buildPlan(bootstrap.role, sourceText, {
+          telegramUserId: userId,
+        });
+        answerInstruction =
+          "Please provide a detailed answer with concrete examples. You may respond in text or by sending a voice message.";
+        intakeOneLiner = "I reviewed your resume and I will ask focused questions to validate real hands-on experience.";
       }
     } else {
       const jobAnalysis = await this.interviewPlanService.buildJobDescriptionAnalysisV1(
