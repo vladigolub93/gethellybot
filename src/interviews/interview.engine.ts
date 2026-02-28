@@ -941,16 +941,16 @@ function simplifyFollowUpFocus(focus: string): string {
 
 function buildAiAssistedWarningMessage(streak: number): string {
   if (streak >= 2) {
-    return "This still looks like AI-assisted text. To match you with the right role, please answer from your own real project experience, with concrete decisions and outcomes.";
+    return "This still looks AI-generated. Please do not paste AI text, answer from your own real experience. A short voice reply is preferred.";
   }
-  return "This answer looks a bit AI-assisted and too generic. To get better matching, please answer with your own concrete project example, what you did, constraints, and result.";
+  return "This looks AI-assisted and too generic. Please reply from your real project experience in your own words, voice is preferred.";
 }
 
 function buildManagerAiAssistedWarningMessage(streak: number): string {
   if (streak >= 2) {
-    return "This still looks like AI-assisted and too generic. To find suitable candidates, please answer from your real role context with concrete responsibilities, constraints, and outcomes.";
+    return "This still looks AI-generated and generic. Please do not paste AI text, share real hiring context from your team, voice is preferred.";
   }
-  return "This answer looks a bit AI-assisted and too generic. For accurate matching, please share one concrete role example from your team, with context, constraints, and expected result.";
+  return "This looks AI-assisted and generic. Please answer in your own words with one real role example from your team, voice is preferred.";
 }
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {

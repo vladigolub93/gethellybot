@@ -101,15 +101,32 @@ export class TelegramClient {
 
     const payload: SendMessagePayload = {
       chat_id: chatId,
-      text: finalText,
-      parse_mode: TELEGRAM_PARSE_MODE,
+      text: clampTelegramText(finalText),
     };
+    if (TELEGRAM_PARSE_MODE) {
+      payload.parse_mode = TELEGRAM_PARSE_MODE;
+    }
 
     if (options?.replyMarkup && shouldSendReplyMarkup(options.replyMarkup, this.buttonsEnabled)) {
       payload.reply_markup = options.replyMarkup;
     }
 
-    await this.request("sendMessage", payload);
+    try {
+      await this.request("sendMessage", payload);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      if (message.includes("sendMessage") && message.includes("HTTP 400") && payload.parse_mode) {
+        this.logger.warn("sendMessage failed with parse_mode, retrying without parse_mode", {
+          chatId,
+          source,
+        });
+        const retryPayload: SendMessagePayload = { ...payload };
+        delete retryPayload.parse_mode;
+        await this.request("sendMessage", retryPayload);
+        return;
+      }
+      throw error;
+    }
   }
 
   async answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
@@ -215,6 +232,14 @@ export class TelegramClient {
 
     return body.result;
   }
+}
+
+function clampTelegramText(text: string): string {
+  const MAX_TEXT_LENGTH = 3900;
+  if (text.length <= MAX_TEXT_LENGTH) {
+    return text;
+  }
+  return `${text.slice(0, MAX_TEXT_LENGTH - 3)}...`;
 }
 
 function shouldSendReplyMarkup(

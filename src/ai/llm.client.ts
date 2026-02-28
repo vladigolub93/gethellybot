@@ -31,8 +31,10 @@ export interface ChatCompletionsRequestBody {
 
 interface ChatCompletionsResponse {
   choices: Array<{
+    finish_reason?: string | null;
     message: {
-      content?: string | null;
+      content?: string | Array<string | { type?: string; text?: string; [key: string]: unknown }> | null;
+      refusal?: string | null;
     };
   }>;
 }
@@ -104,9 +106,13 @@ export class LlmClient {
       }
 
       const body = (await response.json()) as ChatCompletionsResponse;
-      const content = body.choices[0]?.message?.content;
+      const content = extractContentFromResponse(body);
       if (!content) {
-        throw new Error("OpenAI response does not contain message content");
+        const finishReason = body.choices[0]?.finish_reason ?? "unknown";
+        const hasRefusal = Boolean(body.choices[0]?.message?.refusal);
+        throw new Error(
+          `OpenAI response does not contain message content (finish_reason=${finishReason},has_refusal=${hasRefusal})`,
+        );
       }
 
       const trimmed = content.trim();
@@ -188,9 +194,13 @@ export class LlmClient {
       }
 
       const body = (await response.json()) as ChatCompletionsResponse;
-      const content = body.choices[0]?.message?.content;
+      const content = extractContentFromResponse(body);
       if (!content) {
-        throw new Error("OpenAI response does not contain message content");
+        const finishReason = body.choices[0]?.finish_reason ?? "unknown";
+        const hasRefusal = Boolean(body.choices[0]?.message?.refusal);
+        throw new Error(
+          `OpenAI response does not contain message content (finish_reason=${finishReason},has_refusal=${hasRefusal})`,
+        );
       }
 
       this.logger.info("llm.call.completed", {
@@ -246,4 +256,40 @@ function estimateTokenCount(prompt: string, output: string): number {
 function usesMaxCompletionTokens(model: string): boolean {
   const normalized = model.trim().toLowerCase();
   return normalized.startsWith("gpt-5");
+}
+
+function extractContentFromResponse(body: ChatCompletionsResponse): string | null {
+  const first = body.choices[0]?.message?.content;
+  if (typeof first === "string") {
+    const trimmed = first.trim();
+    return trimmed || null;
+  }
+  if (!Array.isArray(first)) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  for (const item of first) {
+    if (!item) {
+      continue;
+    }
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (trimmed) {
+        parts.push(trimmed);
+      }
+      continue;
+    }
+    if (typeof item.text === "string") {
+      const trimmed = item.text.trim();
+      if (trimmed) {
+        parts.push(trimmed);
+      }
+    }
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+  return parts.join("\n");
 }
