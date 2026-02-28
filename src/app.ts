@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from "express";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
+import { OutboundMessageComposerService } from "./ai/outbound-message-composer.service";
 import { createLogger, Logger } from "./config/logger";
 import { EmbeddingsClient } from "./ai/embeddings.client";
 import { CHAT_MODEL, EMBEDDINGS_MODEL, LlmClient, TRANSCRIPTION_MODEL } from "./ai/llm.client";
@@ -71,14 +72,16 @@ export function createApp(env: EnvConfig): AppContext {
 
   app.use(express.json({ limit: "2mb" }));
 
+  const llmClient = new LlmClient(env.openaiApiKey, logger, CHAT_MODEL);
+  const outboundMessageComposer = new OutboundMessageComposerService(llmClient, logger);
   const telegramClient = new TelegramClient(
     env.telegramBotToken,
     logger,
     env.telegramButtonsEnabled,
+    (input) => outboundMessageComposer.compose(input),
   );
   const telegramFileService = new TelegramFileService(telegramClient);
   const documentService = new DocumentService(logger);
-  const llmClient = new LlmClient(env.openaiApiKey, logger, CHAT_MODEL);
   const transcriptionClient = new TranscriptionClient(
     env.openaiApiKey,
     TRANSCRIPTION_MODEL || env.openaiTranscriptionModel,

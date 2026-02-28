@@ -15,6 +15,12 @@ interface SendMessagePayload {
   reply_markup?: TelegramReplyMarkup;
 }
 
+interface MessageComposeInput {
+  source: string;
+  chatId: number;
+  text: string;
+}
+
 interface AnswerCallbackQueryPayload {
   callback_query_id: string;
   text?: string;
@@ -40,6 +46,7 @@ export class TelegramClient {
     private readonly token: string,
     private readonly logger: Logger,
     private readonly buttonsEnabled = true,
+    private readonly composeMessage?: (input: MessageComposeInput) => Promise<string>,
   ) {
     this.apiBase = `https://api.telegram.org/bot${this.token}`;
     if (!this.buttonsEnabled) {
@@ -69,6 +76,7 @@ export class TelegramClient {
     });
     await this.sendMessage(input.chatId, input.text, {
       replyMarkup: input.replyMarkup,
+      source: input.source,
     });
   }
 
@@ -76,11 +84,19 @@ export class TelegramClient {
   async sendMessage(
     chatId: number,
     text: string,
-    options?: { replyMarkup?: TelegramReplyMarkup },
+    options?: { replyMarkup?: TelegramReplyMarkup; source?: string; skipCompose?: boolean },
   ): Promise<void> {
+    const source = options?.source ?? "telegram_send_message";
+    const finalText = await this.composeOutgoingText({
+      source,
+      chatId,
+      text,
+      skipCompose: options?.skipCompose,
+    });
+
     const payload: SendMessagePayload = {
       chat_id: chatId,
-      text,
+      text: finalText,
       parse_mode: TELEGRAM_PARSE_MODE,
     };
 
@@ -141,6 +157,31 @@ export class TelegramClient {
     }
 
     return response.buffer();
+  }
+
+  private async composeOutgoingText(input: {
+    source: string;
+    chatId: number;
+    text: string;
+    skipCompose?: boolean;
+  }): Promise<string> {
+    if (!this.composeMessage || input.skipCompose) {
+      return input.text;
+    }
+    try {
+      return await this.composeMessage({
+        source: input.source,
+        chatId: input.chatId,
+        text: input.text,
+      });
+    } catch (error) {
+      this.logger.warn("outbound.message.compose.exception", {
+        source: input.source,
+        chatId: input.chatId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return input.text;
+    }
   }
 
   private async request<TResponse>(method: string, payload: unknown): Promise<TResponse> {
