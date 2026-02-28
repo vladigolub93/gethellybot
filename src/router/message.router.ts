@@ -1,6 +1,7 @@
 import { buildConversationReplyPrompt } from "../ai/prompts/conversation-reply.prompt";
 import { buildRouterPrompt } from "../ai/prompts/router.prompt";
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe, callTextPromptSafe } from "../ai/llm.safe";
 import { Logger } from "../config/logger";
 import { HiringScopeGuardrailsService } from "../guardrails/hiring-scope-guardrails.service";
 import { DataDeletionService } from "../privacy/data-deletion.service";
@@ -10,8 +11,9 @@ import { NormalizedUpdate } from "../shared/types/telegram.types";
 import { parseRouterDecision, RouterDecision } from "./router-decision";
 import { StateService } from "../state/state.service";
 import { TelegramClient } from "../telegram/telegram.client";
-import { buildRoleSelectionKeyboard } from "../telegram/ui/keyboards";
+import { buildContactRequestKeyboard, buildRoleSelectionKeyboard } from "../telegram/ui/keyboards";
 import {
+  contactRequestMessage,
   candidateOnboardingMessage,
   candidateInterviewCompletedMessage,
   candidateResumePrompt,
@@ -163,9 +165,19 @@ export class MessageRouter {
     });
 
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 260, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 260,
         promptName: "router_decision",
+        schemaHint:
+          "Router decision JSON with intent, next_action, confidence, reason_short, needs_clarification, clarifying_question.",
       });
+      if (!safe.ok) {
+        throw new Error(`router_decision_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       const parsed = parseRouterDecision(raw);
       this.logger.debug("Router decision produced", {
         userId: session.userId,
@@ -234,6 +246,9 @@ export class MessageRouter {
     await this.telegramClient.sendMessage(update.chatId, welcomeMessage(), {
       replyMarkup: buildRoleSelectionKeyboard(),
     });
+    await this.telegramClient.sendMessage(update.chatId, contactRequestMessage(), {
+      replyMarkup: buildContactRequestKeyboard(),
+    });
   }
 
   private async sendProfileSummaryOrFallback(
@@ -282,9 +297,14 @@ export class MessageRouter {
     });
 
     try {
-      const reply = await this.llmClient.generateAssistantReply(prompt, 180, {
+      const safe = await callTextPromptSafe({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 180,
         promptName: "conversation_reply",
       });
+      const reply = safe.ok ? safe.text : fallback;
       await this.telegramClient.sendMessage(update.chatId, reply || fallback);
     } catch (error) {
       this.logger.warn("State-aware chat reply failed, fallback used", {

@@ -20,6 +20,11 @@ interface ProfileRow {
   raw_resume_analysis_json?: unknown;
   technical_summary_json?: unknown;
   profile_status?: string | null;
+  source_type?: unknown;
+  source_text_original?: unknown;
+  source_text_english?: unknown;
+  telegram_file_id?: unknown;
+  last_confirmation_one_liner?: unknown;
 }
 
 interface CandidateVectorSearchRow {
@@ -409,6 +414,95 @@ export class ProfilesRepository {
       );
   }
 
+  async saveCandidateResumeIntakeSource(input: {
+    telegramUserId: number;
+    sourceType: "file" | "text";
+    sourceTextOriginal?: string | null;
+    sourceTextEnglish?: string | null;
+    telegramFileId?: string | null;
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,raw_resume_analysis_json,technical_summary_json,profile_status",
+    );
+
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+        profile_json: existing?.profile_json ?? {},
+        searchable_text: existing?.searchable_text ?? "",
+        raw_resume_analysis_json: existing?.raw_resume_analysis_json ?? null,
+        technical_summary_json: existing?.technical_summary_json ?? null,
+        profile_status: existing?.profile_status ?? "analysis_ready",
+        source_type: input.sourceType,
+        source_text_original: normalizeNullableText(input.sourceTextOriginal),
+        source_text_english: normalizeNullableText(input.sourceTextEnglish),
+        telegram_file_id: normalizeNullableText(input.telegramFileId),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
+
+    this.logger.info("Candidate resume intake source persisted to Supabase", {
+      telegramUserId: input.telegramUserId,
+      sourceType: input.sourceType,
+      hasTelegramFileId: Boolean(input.telegramFileId),
+      hasTextOriginal: Boolean(input.sourceTextOriginal?.trim()),
+      hasTextEnglish: Boolean(input.sourceTextEnglish?.trim()),
+    });
+  }
+
+  async saveLastConfirmationOneLiner(input: {
+    telegramUserId: number;
+    oneLiner: string;
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,raw_resume_analysis_json,technical_summary_json,profile_status,source_type,source_text_original,source_text_english,telegram_file_id",
+    );
+    if (!existing) {
+      return;
+    }
+
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+        profile_json: existing.profile_json ?? {},
+        searchable_text: existing.searchable_text ?? "",
+        raw_resume_analysis_json: existing.raw_resume_analysis_json ?? null,
+        technical_summary_json: existing.technical_summary_json ?? null,
+        profile_status: existing.profile_status ?? "analysis_ready",
+        source_type: existing.source_type ?? null,
+        source_text_original: existing.source_text_original ?? null,
+        source_text_english: existing.source_text_english ?? null,
+        telegram_file_id: existing.telegram_file_id ?? null,
+        last_confirmation_one_liner: input.oneLiner,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
+  }
+
   private async upsertProfile(input: {
     telegramUserId: number;
     kind: "candidate" | "job";
@@ -479,4 +573,12 @@ function normalizeConfidence(value: unknown): CandidateTechnicalSummaryV1["inter
     return normalized;
   }
   return "medium";
+}
+
+function normalizeNullableText(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }

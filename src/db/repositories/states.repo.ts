@@ -11,6 +11,7 @@ interface UserStateRow {
   role: string | null;
   state: string;
   state_payload: Record<string, unknown> | null;
+  last_bot_message: string | null;
   updated_at: string;
 }
 
@@ -28,7 +29,7 @@ export class StatesRepository {
     const row = await this.supabaseClient.selectOne<UserStateRow>(
       USER_STATES_TABLE,
       { telegram_user_id: telegramUserId },
-      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,updated_at",
+      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,last_bot_message,updated_at",
     );
     if (!row) {
       return null;
@@ -43,6 +44,7 @@ export class StatesRepository {
       role: normalizeRole(row.role),
       state: row.state as UserSessionState["state"],
       ...payload,
+      lastBotMessage: row.last_bot_message ?? undefined,
     };
 
     return session;
@@ -59,6 +61,7 @@ export class StatesRepository {
     delete payload.username;
     delete payload.role;
     delete payload.state;
+    delete payload.lastBotMessage;
 
     await this.supabaseClient.upsert(
       USER_STATES_TABLE,
@@ -69,6 +72,7 @@ export class StatesRepository {
         role: session.role ?? null,
         state: session.state,
         state_payload: payload,
+        last_bot_message: session.lastBotMessage ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "telegram_user_id" },

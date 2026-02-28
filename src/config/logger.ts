@@ -7,6 +7,20 @@ export interface Logger {
   error(message: string, meta?: Record<string, unknown>): void;
 }
 
+export interface LoggerContext {
+  update_id?: number;
+  telegram_user_id?: number;
+  role?: string;
+  current_state?: string;
+  route?: string;
+  action?: string;
+  prompt_name?: string;
+  model_name?: string;
+  latency_ms?: number;
+  ok?: boolean;
+  error_code?: string;
+}
+
 function log(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
   const payload: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
@@ -36,4 +50,31 @@ export function createLogger(): Logger {
       log("error", message, meta);
     },
   };
+}
+
+export function logContext(
+  logger: Logger,
+  level: LogLevel,
+  message: string,
+  context: LoggerContext,
+  fields?: Record<string, unknown>,
+): void {
+  const meta: Record<string, unknown> = {
+    ...context,
+    ...(fields ?? {}),
+  };
+
+  if (level === "debug") {
+    logger.debug(message, meta);
+    return;
+  }
+  if (level === "warn") {
+    logger.warn(message, meta);
+    return;
+  }
+  if (level === "error") {
+    logger.error(message, meta);
+    return;
+  }
+  logger.info(message, meta);
 }

@@ -1,8 +1,9 @@
 import express, { Express, Request, Response } from "express";
+import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
 import { createLogger, Logger } from "./config/logger";
 import { EmbeddingsClient } from "./ai/embeddings.client";
-import { LlmClient } from "./ai/llm.client";
+import { CHAT_MODEL, EMBEDDINGS_MODEL, LlmClient, TRANSCRIPTION_MODEL } from "./ai/llm.client";
 import { TranscriptionClient } from "./ai/transcription.client";
 import { DocumentService } from "./documents/document.service";
 import { TelegramFileService } from "./documents/storage/telegram-file.service";
@@ -14,6 +15,7 @@ import { NotificationLimitsRepository } from "./db/repositories/notification-lim
 import { ProfilesRepository } from "./db/repositories/profiles.repo";
 import { QualityFlagsRepository } from "./db/repositories/quality-flags.repo";
 import { StatesRepository } from "./db/repositories/states.repo";
+import { TelegramUpdatesRepository } from "./db/repositories/telegram-updates.repo";
 import { UsersRepository } from "./db/repositories/users.repo";
 import { SupabaseRestClient } from "./db/supabase.client";
 import { ContactExchangeService } from "./decisions/contact-exchange.service";
@@ -39,12 +41,17 @@ import { DataDeletionService } from "./privacy/data-deletion.service";
 import { CandidateProfileBuilder } from "./profiles/candidate-profile.builder";
 import { JobProfileBuilder } from "./profiles/job-profile.builder";
 import { ProfileSummaryService } from "./profiles/profile-summary.service";
+import { CandidateMandatoryFieldsService } from "./profiles/candidate-mandatory-fields.service";
+import { JobMandatoryFieldsService } from "./jobs/job-mandatory-fields.service";
+import { InterviewConfirmationService } from "./confirmations/interview-confirmation.service";
 import { QualityFlagsService } from "./qa/quality-flags.service";
 import { StateRouter } from "./router/state.router";
+import { AlwaysOnRouterService } from "./router/always-on-router.service";
 import { InterviewStorageService } from "./storage/interview-storage.service";
 import { MatchStorageService } from "./storage/match-storage.service";
 import { StateService } from "./state/state.service";
 import { StatePersistenceService } from "./state/state-persistence.service";
+import { configureTelegramIdempotency } from "./shared/utils/telegram-idempotency";
 import { TelegramClient } from "./telegram/telegram.client";
 import { buildWebhookController } from "./telegram/webhook.controller";
 
@@ -63,12 +70,15 @@ export function createApp(env: EnvConfig): AppContext {
   const telegramClient = new TelegramClient(env.telegramBotToken, logger);
   const telegramFileService = new TelegramFileService(telegramClient);
   const documentService = new DocumentService(logger);
-  const llmClient = new LlmClient(env.openaiApiKey, env.openaiChatModel, logger);
+  const llmClient = new LlmClient(env.openaiApiKey, logger, CHAT_MODEL);
   const transcriptionClient = new TranscriptionClient(
     env.openaiApiKey,
-    env.openaiTranscriptionModel,
+    TRANSCRIPTION_MODEL || env.openaiTranscriptionModel,
   );
-  const embeddingsClient = new EmbeddingsClient(env.openaiApiKey, env.openaiEmbeddingModel);
+  const embeddingsClient = new EmbeddingsClient(
+    env.openaiApiKey,
+    EMBEDDINGS_MODEL || env.openaiEmbeddingModel,
+  );
   const interviewResultService = new InterviewResultService(llmClient);
   const candidateProfileBuilder = new CandidateProfileBuilder(llmClient);
   const jobProfileBuilder = new JobProfileBuilder(llmClient);
@@ -89,7 +99,28 @@ export function createApp(env: EnvConfig): AppContext {
   const dataDeletionRepository = new DataDeletionRepository(logger, supabaseClient);
   const notificationLimitsRepository = new NotificationLimitsRepository(logger, supabaseClient);
   const qualityFlagsRepository = new QualityFlagsRepository(logger, supabaseClient);
-  const dataDeletionService = new DataDeletionService(dataDeletionRepository, logger);
+  const usersRepository = new UsersRepository(logger, supabaseClient);
+  const candidateMandatoryFieldsService = new CandidateMandatoryFieldsService(usersRepository);
+  const jobMandatoryFieldsService = new JobMandatoryFieldsService(jobsRepository);
+  const interviewConfirmationService = new InterviewConfirmationService(
+    llmClient,
+    profilesRepository,
+    jobsRepository,
+    logger,
+  );
+  const statesRepository = new StatesRepository(logger, supabaseClient);
+  const telegramUpdatesRepository = new TelegramUpdatesRepository(logger, supabaseClient);
+  configureTelegramIdempotency({
+    repository: telegramUpdatesRepository,
+    logger,
+  });
+  const stateService = new StateService();
+  const statePersistenceService = new StatePersistenceService(
+    logger,
+    usersRepository,
+    statesRepository,
+  );
+  const dataDeletionService = new DataDeletionService(dataDeletionRepository, usersRepository, logger);
   const qualityFlagsService = new QualityFlagsService(qualityFlagsRepository, logger);
   const guardrailsService = new HiringScopeGuardrailsService(
     llmClient,
@@ -116,6 +147,7 @@ export function createApp(env: EnvConfig): AppContext {
     qualityFlagsService,
   );
   const candidateTechnicalSummaryService = new CandidateTechnicalSummaryService(llmClient);
+  const alwaysOnRouterService = new AlwaysOnRouterService(llmClient, logger);
   const interviewIntentRouterService = new InterviewIntentRouterService(llmClient, logger);
   const normalizationService = new NormalizationService(llmClient);
   const managerJobProfileV2Service = new ManagerJobProfileV2Service(
@@ -131,21 +163,19 @@ export function createApp(env: EnvConfig): AppContext {
     vectorSearchRepository,
     profilesRepository,
     jobsRepository,
+    usersRepository,
     matchStorageService,
     llmClient,
     logger,
     qualityFlagsService,
   );
-  const usersRepository = new UsersRepository(logger, supabaseClient);
-  const statesRepository = new StatesRepository(logger, supabaseClient);
-  const stateService = new StateService();
-  const statePersistenceService = new StatePersistenceService(
-    logger,
-    usersRepository,
-    statesRepository,
-  );
   const decisionService = new DecisionService(matchStorageService, jobsRepository);
-  const contactExchangeService = new ContactExchangeService(stateService);
+  const contactExchangeService = new ContactExchangeService(
+    stateService,
+    usersRepository,
+    telegramClient,
+    logger,
+  );
   const candidateNotifier = new CandidateNotifier(telegramClient);
   const managerNotifier = new ManagerNotifier(telegramClient);
   const notificationEngine = new NotificationEngine(
@@ -175,6 +205,7 @@ export function createApp(env: EnvConfig): AppContext {
     candidateTechnicalSummaryService,
     managerJobProfileV2Service,
     managerJobTechnicalSummaryService,
+    interviewConfirmationService,
     logger,
     qualityFlagsService,
   );
@@ -192,15 +223,21 @@ export function createApp(env: EnvConfig): AppContext {
     matchingEngine,
     matchStorageService,
     notificationEngine,
+    candidateMandatoryFieldsService,
+    jobMandatoryFieldsService,
     decisionService,
     contactExchangeService,
     profileSummaryService,
     guardrailsService,
     dataDeletionService,
+    usersRepository,
     jobsRepository,
+    profilesRepository,
     llmClient,
+    alwaysOnRouterService,
     interviewIntentRouterService,
     normalizationService,
+    interviewConfirmationService,
     logger,
   );
   const webhookController = buildWebhookController({
@@ -211,6 +248,30 @@ export function createApp(env: EnvConfig): AppContext {
 
   app.get("/health", (_request: Request, response: Response) => {
     response.status(200).json({ ok: true });
+  });
+
+  const dbStatusService = new DbStatusService(logger, supabaseClient);
+  app.get("/admin/db-status", async (request: Request, response: Response) => {
+    if (!env.adminSecret) {
+      response.status(503).json({
+        ok: false,
+        missing_tables: [],
+        missing_columns: [],
+        applied_migrations_count: 0,
+      });
+      return;
+    }
+
+    const providedSecret =
+      request.header("x-admin-secret") ??
+      (typeof request.query.secret === "string" ? request.query.secret : "");
+    if (!providedSecret || providedSecret !== env.adminSecret) {
+      response.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+
+    const report = await dbStatusService.getStatus();
+    response.status(report.ok ? 200 : 503).json(report);
   });
 
   app.use(env.telegramWebhookPath, webhookController);

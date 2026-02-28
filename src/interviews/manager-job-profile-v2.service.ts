@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { JOB_PROFILE_UPDATE_V2_PROMPT } from "../ai/prompts/manager/job-profile-update.v2.prompt";
 import { JobsRepository } from "../db/repositories/jobs.repo";
 import { QualityFlagsService } from "../qa/quality-flags.service";
@@ -38,9 +39,18 @@ export class ManagerJobProfileV2Service {
 
     let parsed: JobProfileUpdateV2;
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 2600, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        prompt,
+        maxTokens: 2600,
         promptName: "manager_job_profile_update_v2",
+        schemaHint:
+          "Job profile update v2 JSON with updated_job_profile, profile_updates, contradiction_flags, answer_quality, follow_up_required, follow_up_focus.",
       });
+      if (!safe.ok) {
+        throw new Error(`manager_job_profile_update_v2_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       parsed = parseJobProfileUpdateV2(raw, currentProfile);
     } catch (error) {
       await this.qualityFlagsService?.raise({

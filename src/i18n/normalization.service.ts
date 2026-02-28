@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { NORMALIZE_TO_ENGLISH_V1_PROMPT } from "../ai/prompts/i18n/normalize-to-english.v1.prompt";
 
 export type NormalizedDetectedLanguage = "en" | "ru" | "uk" | "other";
@@ -10,12 +11,13 @@ export interface NormalizedEnglishResult {
 
 interface NormalizationLlmClient {
   generateStructuredJson(prompt: string, maxTokens: number, options?: { promptName?: string }): Promise<string>;
+  getModelName?(): string;
 }
 
 export class NormalizationService {
   constructor(private readonly llmClient: NormalizationLlmClient) {}
 
-  async normalizeUserTextToEnglish(inputText: string): Promise<NormalizedEnglishResult> {
+  async normalizeToEnglish(inputText: string): Promise<NormalizedEnglishResult> {
     const trimmed = inputText.trim();
     if (!trimmed) {
       return {
@@ -24,11 +26,30 @@ export class NormalizationService {
       };
     }
 
-    const prompt = buildNormalizationPrompt(trimmed);
-    const raw = await this.llmClient.generateStructuredJson(prompt, 260, {
-      promptName: "normalize_to_english_v1",
-    });
-    return parseNormalizationResult(raw, trimmed);
+    try {
+      const prompt = buildNormalizationPrompt(trimmed);
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        prompt,
+        maxTokens: estimateNormalizationMaxTokens(trimmed),
+        promptName: "normalize_to_english_v1",
+        schemaHint: "Normalization JSON with detected_language, needs_translation, english_text.",
+      });
+      if (!safe.ok) {
+        throw new Error(`normalize_to_english_v1_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
+      return parseNormalizationResult(raw, trimmed);
+    } catch {
+      return {
+        detected_language: "other",
+        english_text: inputText,
+      };
+    }
+  }
+
+  async normalizeUserTextToEnglish(inputText: string): Promise<NormalizedEnglishResult> {
+    return this.normalizeToEnglish(inputText);
   }
 }
 
@@ -43,7 +64,7 @@ export function buildNormalizationPrompt(inputText: string): string {
 
 export function parseNormalizationResult(
   raw: string,
-  fallbackOriginalText: string,
+  _fallbackOriginalText: string,
 ): NormalizedEnglishResult {
   const parsed = parseJsonObject(raw);
   const detectedLanguage = normalizeDetectedLanguage(parsed.detected_language);
@@ -109,7 +130,11 @@ function toText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function estimateNormalizationMaxTokens(text: string): number {
+  const estimated = Math.ceil(text.length / 3);
+  return Math.max(260, Math.min(3200, estimated));
+}
+
 export function createNormalizationService(llmClient: LlmClient): NormalizationService {
   return new NormalizationService(llmClient);
 }
-

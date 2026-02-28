@@ -18,6 +18,18 @@ export interface TelegramVoice {
   duration: number;
 }
 
+export interface TelegramContact {
+  phone_number: string;
+  first_name: string;
+  last_name?: string;
+  user_id?: number;
+}
+
+export interface TelegramLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export interface TelegramMessage {
   message_id: number;
   chat: TelegramChat;
@@ -25,6 +37,8 @@ export interface TelegramMessage {
   text?: string;
   document?: TelegramDocument;
   voice?: TelegramVoice;
+  contact?: TelegramContact;
+  location?: TelegramLocation;
 }
 
 export interface TelegramCallbackQuery {
@@ -45,9 +59,30 @@ export interface TelegramInlineKeyboardButton {
   callback_data: string;
 }
 
-export interface TelegramReplyMarkup {
+export interface TelegramReplyKeyboardButton {
+  text: string;
+  request_contact?: boolean;
+  request_location?: boolean;
+}
+
+export interface TelegramInlineKeyboardMarkup {
   inline_keyboard: TelegramInlineKeyboardButton[][];
 }
+
+export interface TelegramReplyKeyboardMarkup {
+  keyboard: TelegramReplyKeyboardButton[][];
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+}
+
+export interface TelegramReplyKeyboardRemove {
+  remove_keyboard: true;
+}
+
+export type TelegramReplyMarkup =
+  | TelegramInlineKeyboardMarkup
+  | TelegramReplyKeyboardMarkup
+  | TelegramReplyKeyboardRemove;
 
 interface TelegramApiSuccess<T> {
   ok: true;
@@ -92,6 +127,28 @@ export type NormalizedUpdate =
       username?: string;
       fileId: string;
       durationSec: number;
+    }
+  | {
+      kind: "contact";
+      updateId: number;
+      messageId?: number;
+      chatId: number;
+      userId: number;
+      username?: string;
+      phoneNumber: string;
+      firstName: string;
+      lastName?: string;
+      contactUserId?: number;
+    }
+  | {
+      kind: "location";
+      updateId: number;
+      messageId?: number;
+      chatId: number;
+      userId: number;
+      username?: string;
+      latitude: number;
+      longitude: number;
     }
   | {
       kind: "callback";

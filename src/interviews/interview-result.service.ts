@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { buildCandidateResultPrompt } from "../prompts/candidate-result.prompt";
 import { buildHiringResultPrompt } from "../prompts/hiring-result.prompt";
 import {
@@ -29,7 +30,17 @@ export class InterviewResultService {
         ? buildCandidateResultPrompt(JSON.stringify(payload))
         : buildHiringResultPrompt(JSON.stringify(payload));
 
-    const raw = await this.llmClient.generateStructuredJson(prompt, 320);
+    const safe = await callJsonPromptSafe<Record<string, unknown>>({
+      llmClient: this.llmClient,
+      prompt,
+      maxTokens: 320,
+      promptName: input.role === "candidate" ? "candidate_result_summary_v1" : "hiring_result_summary_v1",
+      schemaHint: "Interview result summary JSON for candidate or manager with strict shape.",
+    });
+    if (!safe.ok) {
+      throw new Error(`interview_result_failed:${safe.error_code}`);
+    }
+    const raw = JSON.stringify(safe.data);
     const parsed = parseJsonObject(raw);
 
     if (input.role === "candidate") {

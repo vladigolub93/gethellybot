@@ -1,49 +1,62 @@
-interface BuildInterviewIntentRouterPromptInput {
-  currentState: "interviewing_candidate" | "interviewing_manager";
-  currentQuestionText: string;
-  userMessage: string;
+export const INTERVIEW_INTENT_ROUTER_V1_PROMPT = `You are Helly interview intent router.
+
+You classify a user message during an active interview step.
+Return STRICT JSON only.
+No markdown.
+No commentary.
+
+Input JSON:
+{
+  "current_state": "string",
+  "user_role": "candidate | manager",
+  "current_question": "string",
+  "user_message_english": "string",
+  "last_bot_message": "string or null"
 }
 
-export function buildInterviewIntentRouterV1Prompt(
-  input: BuildInterviewIntentRouterPromptInput,
-): string {
+Output JSON:
+{
+  "intent": "ANSWER | META | CLARIFY | CONTROL | OFFTOPIC",
+  "meta_type": "timing | language | format | privacy | other | null",
+  "control_type": "pause | resume | restart | help | stop | null",
+  "reply": "string",
+  "should_advance": boolean
+}
+
+Rules:
+- META if user asks about timing, language, how to answer, privacy, or process.
+- CLARIFY if user asks what you mean, asks for expected depth, asks for an example, asks which project to use, or asks scope of the current question.
+- ANSWER only if message contains substantive information addressing the current question.
+- CONTROL if user asks to pause, stop, restart, or help.
+- OFFTOPIC if unrelated to hiring and interview context.
+- Never repeat last_bot_message verbatim.
+
+Behavior constraints:
+- For META, CLARIFY, CONTROL, OFFTOPIC set should_advance=false.
+- For ANSWER set should_advance=true.
+- For CLARIFY reply must explain what answer is expected and include this compact structure:
+  "Context, what you did, decisions, trade offs, result."
+- Keep reply concise and practical.
+`;
+
+export function buildInterviewIntentRouterV1Prompt(input: {
+  currentState: "interviewing_candidate" | "interviewing_manager";
+  userRole: "candidate" | "manager";
+  currentQuestion: string;
+  userMessageEnglish: string;
+  lastBotMessage: string | null;
+}): string {
   return [
-    "You are Helly interview intent router.",
-    "Classify the user message during an active interview step.",
-    "Return STRICT JSON only. No markdown. No explanation.",
-    "",
-    "Output schema:",
-    "{",
-    '  "intent": "ANSWER | META | CONTROL | OFFTOPIC",',
-    '  "meta_type": "timing | language | format | privacy | other | null",',
-    '  "control_type": "pause | resume | restart | help | stop | null",',
-    '  "suggested_reply": "string",',
-    '  "should_advance_interview": false',
-    "}",
-    "",
-    "Rules:",
-    "- If user asks how long, timing, when, return intent META and meta_type timing.",
-    "- If user asks about language, voice, Russian, Ukrainian, return intent META and meta_type language.",
-    "- If user asks help, what to do, return intent CONTROL and control_type help.",
-    "- If message is very short like ok, sure, yes, return intent META and meta_type format.",
-    "- If user asks about privacy or data sharing, return intent META and meta_type privacy.",
-    "- If message contains substantive technical details relevant to current question, return intent ANSWER.",
-    "- If unrelated to hiring interview context, return intent OFFTOPIC.",
-    "- For META, CONTROL, OFFTOPIC set should_advance_interview to false.",
-    "- For ANSWER set should_advance_interview to true.",
-    "",
-    "Suggested reply guidance:",
-    "- timing: Usually this takes a couple of minutes. I will send the next question as soon as the text is extracted. You do not need to do anything.",
-    "- language: Yes, you can answer by voice in Russian or Ukrainian. I will transcribe it and continue. Please be detailed and use real examples.",
-    "- format: You can answer in text or voice. Detailed answers help me build an accurate profile.",
-    "- privacy: Your profile is only shared after you apply, and contacts are shared only after mutual approval.",
+    INTERVIEW_INTENT_ROUTER_V1_PROMPT,
     "",
     "Runtime context JSON:",
     JSON.stringify(
       {
         current_state: input.currentState,
-        current_question_text: input.currentQuestionText,
-        user_message: input.userMessage,
+        user_role: input.userRole,
+        current_question: input.currentQuestion,
+        user_message_english: input.userMessageEnglish,
+        last_bot_message: input.lastBotMessage,
       },
       null,
       2,

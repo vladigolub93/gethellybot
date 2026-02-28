@@ -59,6 +59,13 @@ export class NotificationEngine {
     }
 
     const userFlags = await this.usersRepository.getUserFlags(match.candidateUserId);
+    if (!userFlags.autoNotifyEnabled) {
+      this.logger.info("Candidate notification skipped because auto notifications are disabled", {
+        candidateUserId: match.candidateUserId,
+        matchId: match.id,
+      });
+      return;
+    }
     const firstMatchAlreadyExplained =
       Boolean(candidateSession.firstMatchExplained) || userFlags.firstMatchExplained;
     if (!firstMatchAlreadyExplained) {
@@ -113,6 +120,13 @@ export class NotificationEngine {
     }
 
     const userFlags = await this.usersRepository.getUserFlags(match.managerUserId);
+    if (!userFlags.autoNotifyEnabled) {
+      this.logger.info("Manager notification skipped because auto notifications are disabled", {
+        managerUserId: match.managerUserId,
+        matchId: match.id,
+      });
+      return;
+    }
     const firstMatchAlreadyExplained =
       Boolean(managerSession.firstMatchExplained) || userFlags.firstMatchExplained;
     if (!firstMatchAlreadyExplained) {

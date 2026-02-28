@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { CANDIDATE_RESUME_ANALYSIS_V2_PROMPT } from "../ai/prompts/candidate/resume-analysis.v2.prompt";
 import { ProfilesRepository } from "../db/repositories/profiles.repo";
 import { QualityFlagsService } from "../qa/quality-flags.service";
@@ -21,9 +22,17 @@ export class CandidateResumeAnalysisService {
     const prompt = `${CANDIDATE_RESUME_ANALYSIS_V2_PROMPT}\n\n${resumeText}`;
     let parsed: Record<string, unknown>;
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 2200, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        prompt,
+        maxTokens: 2200,
         promptName: "candidate_resume_analysis_v2",
+        schemaHint: "Candidate resume analysis v2 JSON schema.",
       });
+      if (!safe.ok) {
+        throw new Error(`candidate_resume_analysis_v2_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       parsed = parseResumeAnalysis(raw);
     } catch (error) {
       await this.qualityFlagsService?.raise({

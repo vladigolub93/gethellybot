@@ -4,6 +4,8 @@ dotenv.config();
 
 export interface EnvConfig {
   nodeEnv: string;
+  debugMode: boolean;
+  adminSecret?: string;
   port: number;
   telegramBotToken: string;
   telegramWebhookPath: string;
@@ -38,8 +40,10 @@ export function loadEnv(): EnvConfig {
   const voiceMaxDurationSec = Number(voiceLimitRaw);
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
+  const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
+  const debugMode = parseBoolean(debugModeRaw);
 
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error(`Invalid PORT value: ${portRaw}`);
@@ -55,6 +59,8 @@ export function loadEnv(): EnvConfig {
 
   return {
     nodeEnv: process.env.NODE_ENV ?? "development",
+    debugMode,
+    adminSecret: process.env.ADMIN_SECRET,
     port,
     telegramBotToken: getRequiredString("TELEGRAM_BOT_TOKEN"),
     telegramWebhookPath,

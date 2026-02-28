@@ -2,6 +2,7 @@ import { Request, Response, Router } from "express";
 import { Logger } from "../config/logger";
 import { StateRouter } from "../router/state.router";
 import { TelegramUpdate } from "../shared/types/telegram.types";
+import { shouldProcessUpdate } from "../shared/utils/telegram-idempotency";
 import { normalizeUpdate } from "./update-normalizer";
 
 interface WebhookControllerDeps {
@@ -43,6 +44,15 @@ export function buildWebhookController(deps: WebhookControllerDeps): Router {
     }
 
     try {
+      const shouldProcess = await shouldProcessUpdate(normalized.updateId, normalized.userId);
+      if (!shouldProcess) {
+        deps.logger.debug("Duplicate update ignored by webhook idempotency", {
+          updateId: normalized.updateId,
+          telegramUserId: normalized.userId,
+        });
+        response.status(200).json({ ok: true });
+        return;
+      }
       await deps.stateRouter.route(normalized);
       response.status(200).json({ ok: true });
     } catch (error) {

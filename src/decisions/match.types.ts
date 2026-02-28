@@ -13,6 +13,7 @@ export type MatchStatus =
   | "suggested"
   | "candidate_pending"
   | "manager_pending"
+  | "manager_accepted"
   | "contact_shared"
   | "closed";
 

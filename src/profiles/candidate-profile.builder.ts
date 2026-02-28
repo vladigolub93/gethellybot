@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { buildProfileUpdatePrompt } from "../ai/prompts/profile-update.prompt";
 import { CandidateProfile, InterviewQuestion } from "../shared/types/domain.types";
 import { createEmptyCandidateProfile, normalizeCandidateProfile } from "./profile.schemas";
@@ -25,7 +26,17 @@ export class CandidateProfileBuilder {
     });
 
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 520);
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        prompt,
+        maxTokens: 520,
+        promptName: "candidate_profile_builder_v1",
+        schemaHint: "Candidate profile JSON schema.",
+      });
+      if (!safe.ok) {
+        throw new Error(`candidate_profile_builder_v1_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       const parsed = parseJson(raw);
       return normalizeCandidateProfile(input.candidateId, parsed);
     } catch {

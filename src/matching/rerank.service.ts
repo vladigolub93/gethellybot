@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { buildRerankPrompt } from "../ai/prompts/rerank.prompt";
 
 export interface InitialRankedCandidate {
@@ -38,7 +39,17 @@ export class RerankService {
       })),
     );
 
-    const raw = await this.llmClient.generateStructuredJson(prompt, 360);
+    const safe = await callJsonPromptSafe<Record<string, unknown>>({
+      llmClient: this.llmClient,
+      prompt,
+      maxTokens: 360,
+      promptName: "matching_rerank_v1",
+      schemaHint: "Rerank JSON with ranked[] containing candidateUserId, score, explanation.",
+    });
+    if (!safe.ok) {
+      throw new Error(`matching_rerank_v1_failed:${safe.error_code}`);
+    }
+    const raw = JSON.stringify(safe.data);
     const parsed = parseRerankResponse(raw);
     if (parsed.length === 0) {
       throw new Error("Rerank response did not contain candidates.");

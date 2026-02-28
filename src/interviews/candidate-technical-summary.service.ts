@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { CANDIDATE_TECHNICAL_SUMMARY_V1_PROMPT } from "../ai/prompts/candidate/candidate-summary.v1.prompt";
 import { CandidateResumeAnalysisV2 } from "../shared/types/candidate-analysis.types";
 import { CandidateTechnicalSummaryV1 } from "../shared/types/candidate-summary.types";
@@ -32,7 +33,18 @@ export class CandidateTechnicalSummaryService {
       ),
     ].join("\n");
 
-    const raw = await this.llmClient.generateStructuredJson(prompt, 1200);
+    const safe = await callJsonPromptSafe<Record<string, unknown>>({
+      llmClient: this.llmClient,
+      prompt,
+      maxTokens: 1200,
+      promptName: "candidate_technical_summary_v1",
+      schemaHint:
+        "Candidate technical summary JSON with headline, technical_depth_summary, architecture_and_scale, domain_expertise, ownership_and_authority, strength_highlights, risk_flags, interview_confidence_level, overall_assessment.",
+    });
+    if (!safe.ok) {
+      throw new Error(`candidate_technical_summary_v1_failed:${safe.error_code}`);
+    }
+    const raw = JSON.stringify(safe.data);
     return parseCandidateTechnicalSummary(raw);
   }
 }

@@ -89,13 +89,19 @@ export class MatchStorageService {
     if (decision === "accepted") {
       return this.updateDecision(matchId, {
         managerDecision: "accepted",
-        status: "contact_shared",
+        status: "manager_accepted",
       });
     }
 
     return this.updateDecision(matchId, {
       managerDecision: "rejected",
       status: "closed",
+    });
+  }
+
+  async markContactShared(matchId: string): Promise<MatchRecord | null> {
+    return this.updateDecision(matchId, {
+      status: "contact_shared",
     });
   }
 

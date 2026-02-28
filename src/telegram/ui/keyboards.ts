@@ -5,8 +5,9 @@ import {
   CALLBACK_MANAGER_ACCEPT_PREFIX,
   CALLBACK_MANAGER_ASK_PREFIX,
   CALLBACK_MANAGER_REJECT_PREFIX,
-  CALLBACK_ONBOARDING_UPLOAD_JOB,
-  CALLBACK_ONBOARDING_UPLOAD_RESUME,
+  CALLBACK_MANAGER_WORK_FORMAT_HYBRID,
+  CALLBACK_MANAGER_WORK_FORMAT_ONSITE,
+  CALLBACK_MANAGER_WORK_FORMAT_REMOTE,
   CALLBACK_ROLE_BACK,
   CALLBACK_ROLE_CANDIDATE,
   CALLBACK_ROLE_LEARN_MORE,
@@ -32,18 +33,6 @@ export function buildRoleLearnMoreKeyboard(): TelegramReplyMarkup {
   };
 }
 
-export function buildCandidateOnboardingKeyboard(): TelegramReplyMarkup {
-  return {
-    inline_keyboard: [[{ text: "Upload Resume", callback_data: CALLBACK_ONBOARDING_UPLOAD_RESUME }]],
-  };
-}
-
-export function buildManagerOnboardingKeyboard(): TelegramReplyMarkup {
-  return {
-    inline_keyboard: [[{ text: "Upload Job Description", callback_data: CALLBACK_ONBOARDING_UPLOAD_JOB }]],
-  };
-}
-
 export function buildCandidateDecisionKeyboard(matchId: string): TelegramReplyMarkup {
   return {
     inline_keyboard: [
@@ -65,5 +54,76 @@ export function buildManagerDecisionKeyboard(matchId: string): TelegramReplyMark
         { text: "Ask question", callback_data: `${CALLBACK_MANAGER_ASK_PREFIX}${matchId}` },
       ],
     ],
+  };
+}
+
+export function buildContactRequestKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "Share my contact", request_contact: true }],
+      [{ text: "Skip for now" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+export function buildRemoveReplyKeyboard(): TelegramReplyMarkup {
+  return {
+    remove_keyboard: true,
+  };
+}
+
+export function buildCandidateMandatoryLocationKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "Share location", request_location: true }],
+      [{ text: "Type country and city" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+export function buildCandidateWorkModeKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "remote" }, { text: "hybrid" }],
+      [{ text: "onsite" }, { text: "flexible" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+export function buildManagerWorkFormatKeyboard(): TelegramReplyMarkup {
+  return {
+    inline_keyboard: [[
+      { text: "Remote", callback_data: CALLBACK_MANAGER_WORK_FORMAT_REMOTE },
+      { text: "Hybrid", callback_data: CALLBACK_MANAGER_WORK_FORMAT_HYBRID },
+      { text: "Onsite", callback_data: CALLBACK_MANAGER_WORK_FORMAT_ONSITE },
+    ]],
+  };
+}
+
+export function buildCandidateMatchingActionsKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "Find roles" }, { text: "Show matches" }],
+      [{ text: "Pause matching" }, { text: "Resume matching" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
+  };
+}
+
+export function buildManagerMatchingActionsKeyboard(): TelegramReplyMarkup {
+  return {
+    keyboard: [
+      [{ text: "Find candidates" }, { text: "Show matches" }],
+      [{ text: "Pause matching" }, { text: "Resume matching" }],
+    ],
+    resize_keyboard: true,
+    one_time_keyboard: false,
   };
 }

@@ -1,4 +1,6 @@
 import { createApp } from "./app";
+import { HELLY_SYSTEM_PROMPT } from "./ai/system/helly.system";
+import { CHAT_MODEL } from "./ai/llm.client";
 import { loadEnv } from "./config/env";
 
 async function bootstrap(): Promise<void> {
@@ -7,7 +9,9 @@ async function bootstrap(): Promise<void> {
 
   app.listen(env.port, async () => {
     logger.info("Server started", { port: env.port, path: env.telegramWebhookPath });
-    logger.info(`LLM chat model: ${env.openaiChatModel}`);
+    logger.info(`LLM chat model: ${CHAT_MODEL}`);
+    logger.info("LLM system prompt loaded", { length: HELLY_SYSTEM_PROMPT.length });
+    logger.info("DEBUG_MODE", { enabled: env.debugMode });
 
     if (!env.telegramWebhookUrl) {
       logger.warn("TELEGRAM_WEBHOOK_URL is not set, skipping webhook registration");

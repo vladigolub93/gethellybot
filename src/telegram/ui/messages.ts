@@ -8,12 +8,40 @@ export function welcomeMessage(): string {
   ].join("\n");
 }
 
+export function contactRequestMessage(): string {
+  return [
+    "Before we begin, please share your Telegram contact.",
+    "This helps us connect you with the right person after mutual approval.",
+    "Your contact is never shared unless both sides approve.",
+  ].join("\n");
+}
+
+export function contactSavedMessage(): string {
+  return "Thanks, your contact is saved. You can continue now.";
+}
+
+export function contactSkippedMessage(): string {
+  return "No problem, you can continue now. You can share contact later at any time.";
+}
+
+export function ownContactRequiredMessage(): string {
+  return "Please share your own Telegram contact so I can verify consent correctly.";
+}
+
+export function candidateContactRequiredForExchangeMessage(): string {
+  return "To share your contact with the hiring manager, please share your Telegram contact first.";
+}
+
+export function managerContactRequiredForExchangeMessage(): string {
+  return "To share your contact with the candidate, please share your Telegram contact first.";
+}
+
 export function candidateResumePrompt(): string {
-  return "Please upload your resume as a PDF or DOCX file to continue.";
+  return "Send your resume as a PDF or DOCX file, or paste the text here. You can also forward a file from another chat.";
 }
 
 export function managerJobPrompt(): string {
-  return "Please upload the job description as a PDF or DOCX file to continue.";
+  return "Send the job description as a PDF or DOCX file, or paste the text here. You can also forward a file from another chat.";
 }
 
 export function onboardingLearnHowItWorksMessage(): string {
@@ -77,6 +105,122 @@ export function managerInterviewPreparationMessage(): string {
 
 export function interviewLanguageSupportMessage(): string {
   return "You can answer in Russian or Ukrainian, I will understand.";
+}
+
+export function candidateMandatoryIntroMessage(): string {
+  return "Before I start matching, I need a few practical details to avoid mismatches.";
+}
+
+export function candidateMandatoryLocationQuestionMessage(): string {
+  return [
+    "Where are you currently located? Please include country and city.",
+    "You can also share your Telegram location.",
+  ].join("\n");
+}
+
+export function candidateMandatoryLocationRetryMessage(): string {
+  return "Please reply with Country, City. Example: Ukraine, Dnipro.";
+}
+
+export function candidateMandatoryLocationPinReceivedMessage(): string {
+  return "Location pin received. Please also type Country, City so I can store both fields.";
+}
+
+export function candidateMandatoryWorkModeQuestionMessage(): string {
+  return "Are you looking for remote, hybrid, onsite, or flexible?";
+}
+
+export function candidateMandatoryWorkModeRetryMessage(): string {
+  return "Please choose one option, remote, hybrid, onsite, or flexible.";
+}
+
+export function candidateMandatorySalaryQuestionMessage(): string {
+  return [
+    "What are your salary expectations? Please include amount, currency, and whether it is per month or per year.",
+    "Example: 6500 USD per month.",
+  ].join("\n");
+}
+
+export function candidateMandatorySalaryRetryMessage(): string {
+  return "Please send salary as amount, currency, and period. Example: 6500 USD per month.";
+}
+
+export function candidateMandatorySalaryCurrencyConfirmMessage(input: {
+  amount: number;
+  period: "month" | "year";
+}): string {
+  return `I can save this as ${input.amount} USD per ${input.period}. Reply yes to confirm, or resend with currency.`;
+}
+
+export function candidateMandatoryCompletedMessage(): string {
+  return "Great, details saved. Matching is now available.";
+}
+
+export function candidateMatchingBlockedByMandatoryMessage(): string {
+  return "I can start matching after we fill the details above.";
+}
+
+export function candidateMatchingActionsReadyMessage(): string {
+  return "You can run matching now. Use Find roles, Show matches, or Pause matching.";
+}
+
+export function managerMandatoryIntroMessage(): string {
+  return "Before I start matching candidates, I need a few practical details to avoid mismatches.";
+}
+
+export function managerMandatoryWorkFormatQuestionMessage(): string {
+  return "Is this role remote, hybrid, or onsite?";
+}
+
+export function managerMandatoryCountriesQuestionMessage(): string {
+  return [
+    "Which countries can you consider for this remote role?",
+    "Reply with a list of countries, or say worldwide.",
+  ].join("\n");
+}
+
+export function managerMandatoryCountriesRetryMessage(): string {
+  return "Please reply with countries separated by commas, or say worldwide. Example: Israel, Poland.";
+}
+
+export function managerMandatoryBudgetQuestionMessage(): string {
+  return [
+    "What is the budget for this role?",
+    "Please include a range if possible, currency, and whether it is per month or per year.",
+    "Example: 8000 to 10000 USD per month.",
+  ].join("\n");
+}
+
+export function managerMandatoryBudgetRetryMessage(): string {
+  return "Please provide budget with amount or range, currency, and period. Example: 8000-10000 USD per month.";
+}
+
+export function managerMandatoryBudgetCurrencyRetryMessage(): string {
+  return "Please include currency explicitly, for example USD, EUR, ILS, or GBP.";
+}
+
+export function managerMandatoryBudgetPeriodRetryMessage(): string {
+  return "Please include period, per month or per year.";
+}
+
+export function managerMandatoryBudgetCurrencyConfirmMessage(input: {
+  min: number;
+  max: number;
+  period: "month" | "year";
+}): string {
+  return `I can save this as ${input.min}-${input.max} USD per ${input.period}. Reply yes to confirm, or resend with currency.`;
+}
+
+export function managerMandatoryCompletedMessage(): string {
+  return "Great, details saved. Matching is now available.";
+}
+
+export function managerMatchingBlockedByMandatoryMessage(): string {
+  return "I can start matching after we fill the details above.";
+}
+
+export function managerMatchingActionsReadyMessage(): string {
+  return "You can run matching now. Use Find candidates, Show matches, or Pause matching.";
 }
 
 export function interviewOngoingReminderMessage(): string {
@@ -215,6 +359,40 @@ export function managerCandidateAppliedMessage(params: {
   ].join("\n");
 }
 
+export function managerCandidateSuggestionMessage(params: {
+  candidateUserId: number;
+  score: number;
+  candidateSummary: string;
+  candidateTechnicalSummary?: {
+    headline: string;
+    technical_depth_summary: string;
+    ownership_and_authority: string;
+    risk_flags: string[];
+    interview_confidence_level: "low" | "medium" | "high";
+  } | null;
+  explanationMessage: string;
+}): string {
+  const displayScore = params.score > 1 ? Math.round(params.score) : Math.round(params.score * 100);
+  const technicalSummary = params.candidateTechnicalSummary;
+  const riskFlags =
+    technicalSummary && technicalSummary.risk_flags.length > 0
+      ? technicalSummary.risk_flags.slice(0, 3).join("; ")
+      : "None reported";
+
+  return [
+    "Candidate match suggestion",
+    "",
+    `Candidate: #${params.candidateUserId}`,
+    `Score: ${displayScore}%`,
+    `Headline: ${technicalSummary?.headline || "Not available"}`,
+    `Technical depth: ${technicalSummary?.technical_depth_summary || params.candidateSummary}`,
+    `Ownership: ${technicalSummary?.ownership_and_authority || "Not available"}`,
+    `Risk flags: ${riskFlags}`,
+    `Interview confidence: ${technicalSummary?.interview_confidence_level || "medium"}`,
+    params.explanationMessage,
+  ].join("\n");
+}
+
 export function candidateAppliedAcknowledgement(): string {
   return "Application sent to hiring manager.";
 }
@@ -239,10 +417,16 @@ export function candidateManagerRejectedMessage(): string {
   return "Hiring manager rejected your application for this role.";
 }
 
-export function contactsSharedToCandidateMessage(managerUsername: string): string {
-  return `Mutual interest confirmed. Contact hiring manager: ${managerUsername}.`;
+export function contactsSharedToCandidateMessage(managerContactDetails: string): string {
+  return [
+    "The hiring manager agreed to connect. Here are their details:",
+    managerContactDetails,
+  ].join("\n");
 }
 
-export function contactsSharedToManagerMessage(candidateUsername: string): string {
-  return `Mutual interest confirmed. Contact candidate: ${candidateUsername}.`;
+export function contactsSharedToManagerMessage(candidateContactDetails: string): string {
+  return [
+    "The candidate agreed to connect. Here are their details:",
+    candidateContactDetails,
+  ].join("\n");
 }

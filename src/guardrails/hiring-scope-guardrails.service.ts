@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { HIRING_SCOPE_GUARDRAILS_V1_PROMPT } from "../ai/prompts/guardrails/hiring-scope-guardrails.v1.prompt";
 import { Logger } from "../config/logger";
 import { QualityFlagsService } from "../qa/quality-flags.service";
@@ -33,9 +34,18 @@ export class HiringScopeGuardrailsService {
     ].join("\n");
 
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 240, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 240,
         promptName: "hiring_scope_guardrails_v1",
+        schemaHint: "Guardrails JSON with allowed, response_style, safe_reply, action.",
       });
+      if (!safe.ok) {
+        throw new Error(`hiring_scope_guardrails_v1_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       const parsed = parseDecision(raw);
       this.logger.info("Guardrails decision generated", {
         userId: input.userId,

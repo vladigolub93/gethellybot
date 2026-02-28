@@ -6,6 +6,7 @@ export type QualityFlagName =
   | "interview_plan_parse_failed"
   | "profile_update_parse_failed"
   | "excessive_follow_ups_loop_detected"
+  | "follow_up_loop_prevented"
   | "too_many_low_answer_quality_in_row"
   | "matching_score_high_but_confidence_low"
   | "jd_analysis_high_ambiguity"

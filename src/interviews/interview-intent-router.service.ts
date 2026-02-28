@@ -1,20 +1,25 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { buildInterviewIntentRouterV1Prompt } from "../ai/prompts/router/interview-intent-router.v1.prompt";
 import { Logger } from "../config/logger";
 import { InterviewIntentDecisionV1 } from "../shared/types/interview-intent.types";
 
 interface InterviewIntentInput {
   currentState: "interviewing_candidate" | "interviewing_manager";
-  currentQuestionText: string;
-  userMessage: string;
+  userRole: "candidate" | "manager";
+  currentQuestion: string;
+  userMessageEnglish: string;
+  lastBotMessage: string | null;
 }
 
 const FORMAT_FALLBACK_REPLY =
-  "You can answer in text or voice. Detailed answers help me build an accurate profile.";
+  "Please answer the current question with context, what you did, decisions, trade offs, and result.";
 const OFFTOPIC_FALLBACK_REPLY =
   "Let us keep this focused on your interview. Please answer the current question to continue.";
 
 export class InterviewIntentRouterService {
+  private readonly debugMode = (process.env.DEBUG_MODE ?? "false").toLowerCase() === "true";
+
   constructor(
     private readonly llmClient: LlmClient,
     private readonly logger: Logger,
@@ -23,17 +28,34 @@ export class InterviewIntentRouterService {
   async classify(input: InterviewIntentInput): Promise<InterviewIntentDecisionV1> {
     const prompt = buildInterviewIntentRouterV1Prompt(input);
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 280, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 280,
         promptName: "interview_intent_router_v1",
+        schemaHint:
+          "Interview intent JSON with intent, meta_type, control_type, reply, should_advance.",
       });
+      if (!safe.ok) {
+        throw new Error(`interview_intent_router_v1_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       const parsed = parseDecision(raw);
-      return normalizeSubstantiveAnswerGuard(parsed, input.userMessage);
+      if (this.debugMode) {
+        this.logger.debug("router.output.interview_intent", {
+          state: input.currentState,
+          role: input.userRole,
+          output: parsed,
+        });
+      }
+      return normalizeSubstantiveAnswerGuard(parsed, input.userMessageEnglish);
     } catch (error) {
       this.logger.warn("Interview intent router failed, using fallback", {
         state: input.currentState,
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      return fallbackDecision(input.userMessage);
+      return fallbackDecision(input.userMessageEnglish);
     }
   }
 }
@@ -41,18 +63,24 @@ export class InterviewIntentRouterService {
 function parseDecision(raw: string): InterviewIntentDecisionV1 {
   const parsed = parseJsonObject(raw);
   const intent = toText(parsed.intent).toUpperCase();
-  if (intent !== "ANSWER" && intent !== "META" && intent !== "CONTROL" && intent !== "OFFTOPIC") {
+  if (
+    intent !== "ANSWER" &&
+    intent !== "META" &&
+    intent !== "CLARIFY" &&
+    intent !== "CONTROL" &&
+    intent !== "OFFTOPIC"
+  ) {
     throw new Error("Invalid interview intent.");
   }
 
   const metaTypeRaw = parsed.meta_type;
   const controlTypeRaw = parsed.control_type;
-  const suggestedReply = toText(parsed.suggested_reply);
-  if (!suggestedReply) {
-    throw new Error("Invalid interview intent: suggested_reply is required.");
+  const reply = toText(parsed.reply);
+  if (!reply) {
+    throw new Error("Invalid interview intent: reply is required.");
   }
-  if (typeof parsed.should_advance_interview !== "boolean") {
-    throw new Error("Invalid interview intent: should_advance_interview must be boolean.");
+  if (typeof parsed.should_advance !== "boolean") {
+    throw new Error("Invalid interview intent: should_advance must be boolean.");
   }
 
   const metaType = normalizeMetaType(metaTypeRaw);
@@ -62,8 +90,8 @@ function parseDecision(raw: string): InterviewIntentDecisionV1 {
     intent,
     meta_type: metaType,
     control_type: controlType,
-    suggested_reply: suggestedReply,
-    should_advance_interview: parsed.should_advance_interview,
+    reply,
+    should_advance: parsed.should_advance,
   };
 }
 
@@ -88,8 +116,8 @@ function normalizeSubstantiveAnswerGuard(
     intent: "META",
     meta_type: "format",
     control_type: null,
-    suggested_reply: FORMAT_FALLBACK_REPLY,
-    should_advance_interview: false,
+    reply: FORMAT_FALLBACK_REPLY,
+    should_advance: false,
   };
 }
 
@@ -100,8 +128,8 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       intent: "META",
       meta_type: "format",
       control_type: null,
-      suggested_reply: FORMAT_FALLBACK_REPLY,
-      should_advance_interview: false,
+      reply: FORMAT_FALLBACK_REPLY,
+      should_advance: false,
     };
   }
 
@@ -115,9 +143,9 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       intent: "META",
       meta_type: "timing",
       control_type: null,
-      suggested_reply:
+      reply:
         "Usually this takes a couple of minutes. I will send the next question as soon as the text is extracted. You do not need to do anything.",
-      should_advance_interview: false,
+      should_advance: false,
     };
   }
 
@@ -133,9 +161,26 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       intent: "META",
       meta_type: "language",
       control_type: null,
-      suggested_reply:
+      reply:
         "Yes, you can answer by voice in Russian or Ukrainian. I will transcribe it and continue. Please be detailed and use real examples.",
-      should_advance_interview: false,
+      should_advance: false,
+    };
+  }
+
+  if (
+    normalized.includes("what do you mean") ||
+    normalized.includes("which project") ||
+    normalized.includes("give me an example") ||
+    normalized.includes("what level of detail") ||
+    normalized.includes("clarify")
+  ) {
+    return {
+      intent: "CLARIFY",
+      meta_type: null,
+      control_type: null,
+      reply:
+        "By this, I need one concrete example. Use: context, what you did, decisions, trade offs, and result.",
+      should_advance: false,
     };
   }
 
@@ -144,8 +189,8 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       intent: "CONTROL",
       meta_type: null,
       control_type: "help",
-      suggested_reply: FORMAT_FALLBACK_REPLY,
-      should_advance_interview: false,
+      reply: FORMAT_FALLBACK_REPLY,
+      should_advance: false,
     };
   }
 
@@ -155,8 +200,8 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       intent: "META",
       meta_type: "format",
       control_type: null,
-      suggested_reply: FORMAT_FALLBACK_REPLY,
-      should_advance_interview: false,
+      reply: FORMAT_FALLBACK_REPLY,
+      should_advance: false,
     };
   }
 
@@ -164,8 +209,8 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
     intent: "ANSWER",
     meta_type: null,
     control_type: null,
-    suggested_reply: OFFTOPIC_FALLBACK_REPLY,
-    should_advance_interview: true,
+    reply: OFFTOPIC_FALLBACK_REPLY,
+    should_advance: true,
   };
 }
 

@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { MATCHING_EXPLANATION_V1_PROMPT } from "../ai/prompts/matching/matching-explanation.v1.prompt";
 import { CandidateTechnicalSummaryV1 } from "../shared/types/candidate-summary.types";
 import { JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
@@ -30,7 +31,18 @@ export class MatchingExplanationService {
       ),
     ].join("\n");
 
-    const raw = await this.llmClient.generateStructuredJson(prompt, 700);
+    const safe = await callJsonPromptSafe<Record<string, unknown>>({
+      llmClient: this.llmClient,
+      prompt,
+      maxTokens: 700,
+      promptName: "matching_explanation_v1",
+      schemaHint:
+        "Matching explanation JSON with message_for_candidate, message_for_manager, one_suggested_live_question.",
+    });
+    if (!safe.ok) {
+      throw new Error(`matching_explanation_v1_failed:${safe.error_code}`);
+    }
+    const raw = JSON.stringify(safe.data);
     return parseExplanation(raw);
   }
 }

@@ -5,8 +5,6 @@ import {
   CALLBACK_MANAGER_ACCEPT_PREFIX,
   CALLBACK_MANAGER_ASK_PREFIX,
   CALLBACK_MANAGER_REJECT_PREFIX,
-  CALLBACK_ONBOARDING_UPLOAD_JOB,
-  CALLBACK_ONBOARDING_UPLOAD_RESUME,
   CALLBACK_ROLE_BACK,
   CALLBACK_ROLE_CANDIDATE,
   CALLBACK_ROLE_LEARN_MORE,
@@ -21,8 +19,6 @@ import { StateService } from "../state/state.service";
 import { StatePersistenceService } from "../state/state-persistence.service";
 import { TelegramClient } from "../telegram/telegram.client";
 import {
-  buildCandidateOnboardingKeyboard,
-  buildManagerOnboardingKeyboard,
   buildRoleLearnMoreKeyboard,
   buildRoleSelectionKeyboard,
 } from "../telegram/ui/keyboards";
@@ -98,10 +94,11 @@ export class CallbackRouter {
       this.stateService.setRole(update.userId, "candidate");
       this.stateService.transition(update.userId, "onboarding_candidate");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Candidate flow selected");
-      await this.telegramClient.sendMessage(update.chatId, candidateOnboardingMessage(), {
-        replyMarkup: buildCandidateOnboardingKeyboard(),
-      });
+      await this.telegramClient.sendMessage(update.chatId, candidateOnboardingMessage());
       await this.telegramClient.sendMessage(update.chatId, onboardingPrivacyNoteMessage());
+      this.stateService.transition(update.userId, "waiting_resume");
+      this.stateService.setOnboardingCompleted(update.userId, true);
+      await this.telegramClient.sendMessage(update.chatId, candidateResumePrompt());
       return;
     }
 
@@ -116,10 +113,11 @@ export class CallbackRouter {
       this.stateService.setRole(update.userId, "manager");
       this.stateService.transition(update.userId, "onboarding_manager");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Hiring flow selected");
-      await this.telegramClient.sendMessage(update.chatId, managerOnboardingMessage(), {
-        replyMarkup: buildManagerOnboardingKeyboard(),
-      });
+      await this.telegramClient.sendMessage(update.chatId, managerOnboardingMessage());
       await this.telegramClient.sendMessage(update.chatId, onboardingPrivacyNoteMessage());
+      this.stateService.transition(update.userId, "waiting_job");
+      this.stateService.setOnboardingCompleted(update.userId, true);
+      await this.telegramClient.sendMessage(update.chatId, managerJobPrompt());
       return;
     }
 
@@ -136,36 +134,6 @@ export class CallbackRouter {
       await this.telegramClient.sendMessage(update.chatId, welcomeMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
       });
-      return;
-    }
-
-    if (update.data === CALLBACK_ONBOARDING_UPLOAD_RESUME) {
-      if (session.state !== "onboarding_candidate") {
-        await this.telegramClient.answerCallbackQuery(
-          update.callbackQueryId,
-          "Please use /start to begin a new flow.",
-        );
-        return;
-      }
-      this.stateService.transition(update.userId, "waiting_resume");
-      this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Upload resume");
-      await this.telegramClient.sendMessage(update.chatId, candidateResumePrompt());
-      return;
-    }
-
-    if (update.data === CALLBACK_ONBOARDING_UPLOAD_JOB) {
-      if (session.state !== "onboarding_manager") {
-        await this.telegramClient.answerCallbackQuery(
-          update.callbackQueryId,
-          "Please use /start to begin a new flow.",
-        );
-        return;
-      }
-      this.stateService.transition(update.userId, "waiting_job");
-      this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Upload job description");
-      await this.telegramClient.sendMessage(update.chatId, managerJobPrompt());
       return;
     }
 
@@ -206,12 +174,20 @@ export class CallbackRouter {
     const matchId = update.data.slice(CALLBACK_MANAGER_ACCEPT_PREFIX.length);
     try {
       const match = await this.decisionService.managerAccept(matchId, update.userId);
-      const contacts = this.contactExchangeService.buildContacts(match);
+      const contacts = await this.contactExchangeService.prepareExchange(match);
+      if (!contacts.ready) {
+        await this.telegramClient.answerCallbackQuery(
+          update.callbackQueryId,
+          "Contact sharing is pending",
+        );
+        return;
+      }
       await this.notificationEngine.notifyContactsShared(
         match,
         contacts.managerContact,
         contacts.candidateContact,
       );
+      await this.decisionService.markContactShared(match.id, update.userId);
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Accepted");
       await this.telegramClient.sendMessage(update.chatId, managerAcceptedAcknowledgement());
     } catch (error) {

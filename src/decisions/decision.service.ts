@@ -85,6 +85,25 @@ export class DecisionService {
     return updated;
   }
 
+  async markContactShared(
+    matchId: string,
+    managerUserId: number,
+  ): Promise<MatchRecord> {
+    const match = await this.requireMatchForManager(matchId, managerUserId);
+    if (match.managerDecision !== "accepted") {
+      throw new Error("Manager has not accepted this match yet.");
+    }
+    if (match.status === "contact_shared") {
+      return match;
+    }
+
+    const updated = await this.matchStorageService.markContactShared(matchId);
+    if (!updated) {
+      throw new Error("Failed to mark contact exchange.");
+    }
+    return updated;
+  }
+
   private async requireMatchForCandidate(
     matchId: string,
     candidateUserId: number,

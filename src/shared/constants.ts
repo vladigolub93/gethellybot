@@ -10,5 +10,8 @@ export const CALLBACK_CANDIDATE_ASK_PREFIX = "cand:ask:";
 export const CALLBACK_MANAGER_ACCEPT_PREFIX = "mgr:accept:";
 export const CALLBACK_MANAGER_REJECT_PREFIX = "mgr:reject:";
 export const CALLBACK_MANAGER_ASK_PREFIX = "mgr:ask:";
+export const CALLBACK_MANAGER_WORK_FORMAT_REMOTE = "mgr:work_format:remote";
+export const CALLBACK_MANAGER_WORK_FORMAT_HYBRID = "mgr:work_format:hybrid";
+export const CALLBACK_MANAGER_WORK_FORMAT_ONSITE = "mgr:work_format:onsite";
 
 export const TELEGRAM_PARSE_MODE = "Markdown";

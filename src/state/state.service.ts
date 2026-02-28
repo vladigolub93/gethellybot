@@ -1,4 +1,12 @@
 import {
+  CandidateMandatoryStep,
+  CandidateSalaryCurrency,
+  CandidateSalaryPeriod,
+  CandidateWorkMode,
+  JobBudgetCurrency,
+  JobBudgetPeriod,
+  JobWorkFormat,
+  ManagerMandatoryStep,
   CandidateConfidenceUpdate,
   InterviewAnswer,
   ManagerProfileUpdate,
@@ -38,6 +46,8 @@ export class StateService {
       username,
       state: "role_selection",
       preferredLanguage: "unknown",
+      candidateProfileComplete: false,
+      jobProfileComplete: false,
     };
     this.sessions.set(userId, created);
     return created;
@@ -62,6 +72,24 @@ export class StateService {
       preferredLanguage: existing?.preferredLanguage ?? "unknown",
       firstMatchExplained: existing?.firstMatchExplained,
       onboardingCompleted: existing?.onboardingCompleted,
+      candidateCountry: existing?.candidateCountry,
+      candidateCity: existing?.candidateCity,
+      candidateWorkMode: existing?.candidateWorkMode,
+      candidateSalaryAmount: existing?.candidateSalaryAmount,
+      candidateSalaryCurrency: existing?.candidateSalaryCurrency,
+      candidateSalaryPeriod: existing?.candidateSalaryPeriod,
+      candidateProfileComplete: existing?.candidateProfileComplete ?? false,
+      jobWorkFormat: existing?.jobWorkFormat,
+      jobRemoteCountries: existing?.jobRemoteCountries,
+      jobRemoteWorldwide: existing?.jobRemoteWorldwide,
+      jobBudgetMin: existing?.jobBudgetMin,
+      jobBudgetMax: existing?.jobBudgetMax,
+      jobBudgetCurrency: existing?.jobBudgetCurrency,
+      jobBudgetPeriod: existing?.jobBudgetPeriod,
+      jobProfileComplete: existing?.jobProfileComplete ?? false,
+      waitingShortTextState: existing?.waitingShortTextState,
+      waitingShortTextCount: existing?.waitingShortTextCount,
+      answersSinceConfirm: 0,
     };
     this.sessions.set(userId, session);
     return session;
@@ -133,9 +161,210 @@ export class StateService {
     return session;
   }
 
+  setCandidateMandatoryStep(
+    userId: number,
+    step?: CandidateMandatoryStep,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateMandatoryStep = step;
+    return session;
+  }
+
+  setCandidateLocation(
+    userId: number,
+    location: {
+      country: string;
+      city: string;
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateCountry = location.country;
+    session.candidateCity = location.city;
+    return session;
+  }
+
+  setCandidateWorkMode(
+    userId: number,
+    workMode: CandidateWorkMode,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateWorkMode = workMode;
+    return session;
+  }
+
+  setCandidateSalary(
+    userId: number,
+    salary: {
+      amount: number;
+      currency: CandidateSalaryCurrency;
+      period: CandidateSalaryPeriod;
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateSalaryAmount = salary.amount;
+    session.candidateSalaryCurrency = salary.currency;
+    session.candidateSalaryPeriod = salary.period;
+    return session;
+  }
+
+  setCandidateProfileComplete(userId: number, complete: boolean): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidateProfileComplete = complete;
+    return session;
+  }
+
+  setCandidatePendingSalary(
+    userId: number,
+    pending?: {
+      amount: number;
+      currency: CandidateSalaryCurrency;
+      period: CandidateSalaryPeriod;
+      needsCurrencyConfirmation: boolean;
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.candidatePendingSalary = pending;
+    return session;
+  }
+
+  isCandidateProfileComplete(userId: number): boolean {
+    const session = this.getRequiredSession(userId);
+    return Boolean(
+      session.candidateCountry?.trim() &&
+      session.candidateCity?.trim() &&
+      session.candidateWorkMode &&
+      typeof session.candidateSalaryAmount === "number" &&
+      Number.isFinite(session.candidateSalaryAmount) &&
+      session.candidateSalaryAmount > 0 &&
+      session.candidateSalaryCurrency &&
+      session.candidateSalaryPeriod,
+    );
+  }
+
+  setManagerMandatoryStep(
+    userId: number,
+    step?: ManagerMandatoryStep,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.managerMandatoryStep = step;
+    return session;
+  }
+
+  setJobWorkFormat(
+    userId: number,
+    workFormat: JobWorkFormat,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobWorkFormat = workFormat;
+    return session;
+  }
+
+  setJobRemotePolicy(
+    userId: number,
+    input: {
+      worldwide: boolean;
+      countries: string[];
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobRemoteWorldwide = input.worldwide;
+    session.jobRemoteCountries = input.countries;
+    return session;
+  }
+
+  setJobBudget(
+    userId: number,
+    input: {
+      min: number;
+      max: number;
+      currency: JobBudgetCurrency;
+      period: JobBudgetPeriod;
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobBudgetMin = input.min;
+    session.jobBudgetMax = input.max;
+    session.jobBudgetCurrency = input.currency;
+    session.jobBudgetPeriod = input.period;
+    return session;
+  }
+
+  setJobProfileComplete(userId: number, complete: boolean): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobProfileComplete = complete;
+    return session;
+  }
+
+  setManagerPendingBudget(
+    userId: number,
+    pending?: {
+      min: number;
+      max: number;
+      currency: JobBudgetCurrency;
+      period: JobBudgetPeriod;
+      needsCurrencyConfirmation: boolean;
+    },
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.managerPendingBudget = pending;
+    return session;
+  }
+
+  isJobProfileComplete(userId: number): boolean {
+    const session = this.getRequiredSession(userId);
+    const workFormat = session.jobWorkFormat;
+    const countries = session.jobRemoteCountries ?? [];
+    const remotePolicyValid =
+      workFormat !== "remote" ||
+      session.jobRemoteWorldwide === true ||
+      countries.length > 0;
+    return Boolean(
+      workFormat &&
+      remotePolicyValid &&
+      typeof session.jobBudgetMin === "number" &&
+      typeof session.jobBudgetMax === "number" &&
+      session.jobBudgetMin > 0 &&
+      session.jobBudgetMax >= session.jobBudgetMin &&
+      session.jobBudgetCurrency &&
+      session.jobBudgetPeriod,
+    );
+  }
+
+  setContactInfo(input: {
+    userId: number;
+    phoneNumber: string;
+    firstName: string;
+    lastName?: string;
+    sharedAt?: string;
+  }): UserSessionState {
+    const session = this.getRequiredSession(input.userId);
+    session.contactPhoneNumber = input.phoneNumber;
+    session.contactFirstName = input.firstName;
+    session.contactLastName = input.lastName;
+    session.contactShared = true;
+    session.contactSharedAt = input.sharedAt ?? new Date().toISOString();
+    return session;
+  }
+
+  clearContactInfo(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.contactPhoneNumber = undefined;
+    session.contactFirstName = undefined;
+    session.contactLastName = undefined;
+    session.contactShared = false;
+    session.contactSharedAt = undefined;
+    return session;
+  }
+
   setLastEmpathyLine(userId: number, line?: string): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.lastEmpathyLine = line;
+    return session;
+  }
+
+  setLastBotMessage(userId: number, message?: string): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.lastBotMessage = message;
     return session;
   }
 
@@ -205,6 +434,10 @@ export class StateService {
     session.managerContradictionFlags = [];
     session.managerTechnicalSummary = undefined;
     session.answers = [];
+    session.skippedQuestionIndexes = [];
+    session.interviewMessageWithoutAnswerCount = 0;
+    session.interviewMessageWithoutAnswerQuestionIndex = undefined;
+    session.answersSinceConfirm = 0;
     return session;
   }
 
@@ -231,6 +464,7 @@ export class StateService {
   ): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.interviewCompletedAt = completedAt;
+    session.answersSinceConfirm = 0;
     if (finalArtifact) {
       session.finalArtifact = finalArtifact;
     }
@@ -252,12 +486,95 @@ export class StateService {
   setCurrentQuestionIndex(userId: number, index: number): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.currentQuestionIndex = index;
+    if (session.interviewMessageWithoutAnswerQuestionIndex !== index) {
+      session.interviewMessageWithoutAnswerQuestionIndex = index;
+      session.interviewMessageWithoutAnswerCount = 0;
+    }
     return session;
   }
 
   clearCurrentQuestionIndex(userId: number): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.currentQuestionIndex = undefined;
+    session.interviewMessageWithoutAnswerCount = 0;
+    session.interviewMessageWithoutAnswerQuestionIndex = undefined;
+    return session;
+  }
+
+  getSkippedQuestionIndexes(userId: number): number[] {
+    const session = this.getRequiredSession(userId);
+    return session.skippedQuestionIndexes ?? [];
+  }
+
+  markQuestionSkipped(userId: number, questionIndex: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const current = session.skippedQuestionIndexes ?? [];
+    if (!current.includes(questionIndex)) {
+      session.skippedQuestionIndexes = [...current, questionIndex];
+    } else {
+      session.skippedQuestionIndexes = current;
+    }
+    return session;
+  }
+
+  clearSkippedQuestions(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.skippedQuestionIndexes = [];
+    return session;
+  }
+
+  clearWaitingShortTextCounter(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.waitingShortTextState = undefined;
+    session.waitingShortTextCount = 0;
+    return session;
+  }
+
+  incrementWaitingShortTextCounter(
+    userId: number,
+    state: "waiting_resume" | "waiting_job",
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    if (session.waitingShortTextState !== state) {
+      session.waitingShortTextState = state;
+      session.waitingShortTextCount = 1;
+      return session;
+    }
+    session.waitingShortTextCount = (session.waitingShortTextCount ?? 0) + 1;
+    return session;
+  }
+
+  resetInterviewNoAnswerCounter(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.interviewMessageWithoutAnswerCount = 0;
+    session.interviewMessageWithoutAnswerQuestionIndex = session.currentQuestionIndex;
+    return session;
+  }
+
+  incrementAnswersSinceConfirm(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.answersSinceConfirm = (session.answersSinceConfirm ?? 0) + 1;
+    return session;
+  }
+
+  resetAnswersSinceConfirm(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.answersSinceConfirm = 0;
+    return session;
+  }
+
+  incrementInterviewNoAnswerCounter(
+    userId: number,
+    questionIndex: number,
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    if (session.interviewMessageWithoutAnswerQuestionIndex !== questionIndex) {
+      session.interviewMessageWithoutAnswerQuestionIndex = questionIndex;
+      session.interviewMessageWithoutAnswerCount = 1;
+      return session;
+    }
+    session.interviewMessageWithoutAnswerCount =
+      (session.interviewMessageWithoutAnswerCount ?? 0) + 1;
     return session;
   }
 

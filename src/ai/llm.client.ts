@@ -1,7 +1,11 @@
 import fetch from "node-fetch";
 import { Logger } from "../config/logger";
 import { InterviewPlan } from "../shared/types/domain.types";
-import { HELLY_SYSTEM_PROMPT } from "./prompts/system.prompt";
+import { HELLY_SYSTEM_PROMPT } from "./system/helly.system";
+
+export const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-5.2";
+export const EMBEDDINGS_MODEL = process.env.OPENAI_EMBEDDINGS_MODEL || "text-embedding-3-large";
+export const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1";
 
 export interface ChatCompletionsRequestBody {
   model: string;
@@ -26,11 +30,23 @@ interface LlmCallOptions {
 }
 
 export class LlmClient {
+  private readonly chatModel: string;
+
   constructor(
     private readonly apiKey: string,
-    private readonly model: string,
     private readonly logger: Logger,
-  ) {}
+    modelOverride?: string,
+  ) {
+    this.chatModel = modelOverride || CHAT_MODEL;
+    const isProd = (process.env.NODE_ENV ?? "development") === "production";
+    if (!HELLY_SYSTEM_PROMPT.trim() && !isProd) {
+      throw new Error("HELLY_SYSTEM_PROMPT is empty. Refusing to start in non-production mode.");
+    }
+  }
+
+  getModelName(): string {
+    return this.chatModel;
+  }
 
   async generateInterviewPlan(prompt: string): Promise<InterviewPlan> {
     const content = await this.generateJsonContent(prompt, 600, {
@@ -112,7 +128,7 @@ export class LlmClient {
     temperature: number,
   ): ChatCompletionsRequestBody {
     return {
-      model: this.model,
+      model: this.chatModel,
       temperature,
       messages: [
         {

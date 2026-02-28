@@ -6,6 +6,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "ts-node src/server.ts",
     "start": "node dist/server.js",
+    "test": "ts-node src/tests/integration/smoke.test.ts",
     "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts",
     "test:normalization": "ts-node src/tests/unit/normalization.service.smoke.ts"
   },

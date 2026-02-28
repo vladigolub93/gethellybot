@@ -18,14 +18,25 @@ export type UserState =
   | "waiting_resume"
   | "interviewing_candidate"
   | "candidate_profile_ready"
+  | "candidate_mandatory_fields"
   | "onboarding_manager"
   | "waiting_job"
   | "interviewing_manager"
   | "job_profile_ready"
+  | "manager_mandatory_fields"
   | "job_published"
   | "waiting_candidate_decision"
   | "waiting_manager_decision"
   | "contact_shared";
+
+export type CandidateWorkMode = "remote" | "hybrid" | "onsite" | "flexible";
+export type CandidateSalaryPeriod = "month" | "year";
+export type CandidateSalaryCurrency = "USD" | "EUR" | "ILS" | "GBP" | "other";
+export type CandidateMandatoryStep = "location" | "work_mode" | "salary";
+export type JobWorkFormat = "remote" | "hybrid" | "onsite";
+export type JobBudgetPeriod = "month" | "year";
+export type JobBudgetCurrency = "USD" | "EUR" | "ILS" | "GBP" | "other";
+export type ManagerMandatoryStep = "work_format" | "countries" | "budget";
 
 export interface UserSessionState {
   userId: number;
@@ -37,6 +48,12 @@ export interface UserSessionState {
   username?: string;
   onboardingCompleted?: boolean;
   firstMatchExplained?: boolean;
+  contactShared?: boolean;
+  contactSharedAt?: string;
+  contactPhoneNumber?: string;
+  contactFirstName?: string;
+  contactLastName?: string;
+  lastBotMessage?: string;
   lastEmpathyLine?: string;
   reactionMessagesSinceLast?: number;
   lastReactionAt?: string;
@@ -53,7 +70,29 @@ export interface UserSessionState {
   managerProfileUpdates?: ManagerProfileUpdate[];
   managerContradictionFlags?: string[];
   managerTechnicalSummary?: JobTechnicalSummaryV2;
+  jobWorkFormat?: JobWorkFormat;
+  jobRemoteCountries?: string[];
+  jobRemoteWorldwide?: boolean;
+  jobBudgetMin?: number;
+  jobBudgetMax?: number;
+  jobBudgetCurrency?: JobBudgetCurrency;
+  jobBudgetPeriod?: JobBudgetPeriod;
+  jobProfileComplete?: boolean;
+  managerMandatoryStep?: ManagerMandatoryStep;
+  managerPendingBudget?: {
+    min: number;
+    max: number;
+    currency: JobBudgetCurrency;
+    period: JobBudgetPeriod;
+    needsCurrencyConfirmation: boolean;
+  };
   currentQuestionIndex?: number;
+  skippedQuestionIndexes?: number[];
+  waitingShortTextState?: "waiting_resume" | "waiting_job";
+  waitingShortTextCount?: number;
+  interviewMessageWithoutAnswerQuestionIndex?: number;
+  interviewMessageWithoutAnswerCount?: number;
+  answersSinceConfirm?: number;
   pendingFollowUp?: InterviewFollowUpState;
   answers?: InterviewAnswer[];
   interviewStartedAt?: string;
@@ -61,6 +100,20 @@ export interface UserSessionState {
   finalArtifact?: InterviewResultArtifact;
   candidateProfile?: CandidateProfile;
   jobProfile?: JobProfile;
+  candidateCountry?: string;
+  candidateCity?: string;
+  candidateWorkMode?: CandidateWorkMode;
+  candidateSalaryAmount?: number;
+  candidateSalaryCurrency?: CandidateSalaryCurrency;
+  candidateSalaryPeriod?: CandidateSalaryPeriod;
+  candidateProfileComplete?: boolean;
+  candidateMandatoryStep?: CandidateMandatoryStep;
+  candidatePendingSalary?: {
+    amount: number;
+    currency: CandidateSalaryCurrency;
+    period: CandidateSalaryPeriod;
+    needsCurrencyConfirmation: boolean;
+  };
   processedUpdateIds?: number[];
 }
 

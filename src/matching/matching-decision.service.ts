@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { MATCHING_DECISION_V1_PROMPT } from "../ai/prompts/matching/matching-decision.v1.prompt";
 import { Logger } from "../config/logger";
 import { QualityFlagsService } from "../qa/quality-flags.service";
@@ -52,9 +53,19 @@ export class MatchingDecisionService {
     ].join("\n");
 
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 320, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 320,
         promptName: "matching_decision_v1",
+        schemaHint:
+          "Matching decision JSON with notify_candidate, notify_manager, priority, message_length, cooldown_hours_candidate, cooldown_hours_manager, reason.",
       });
+      if (!safe.ok) {
+        throw new Error(`matching_decision_v1_failed:${safe.error_code}`);
+      }
+      const raw = JSON.stringify(safe.data);
       const parsed = parseDecision(raw);
       this.logger.info("Matching decision generated", {
         managerUserId: input.managerUserId,

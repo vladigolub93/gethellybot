@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { buildCandidateInterviewPlanPrompt } from "../ai/prompts/candidate-interview.prompt";
 import { CANDIDATE_INTERVIEW_PLAN_V2_PROMPT } from "../ai/prompts/candidate/interview-plan.v2.prompt";
 import { JOB_DESCRIPTION_ANALYSIS_V1_PROMPT } from "../ai/prompts/manager/job-description-analysis.v1.prompt";
@@ -247,9 +248,19 @@ export class InterviewPlanService {
 
   private async tryGenerateCandidatePlanV2(prompt: string): Promise<CandidateInterviewPlanV2 | null> {
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 1800, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 1800,
         promptName: "candidate_interview_plan_v2",
+        schemaHint:
+          "Candidate interview plan v2 JSON with interview_strategy, answer_instruction, questions[].",
       });
+      if (!safe.ok) {
+        return null;
+      }
+      const raw = JSON.stringify(safe.data);
       return parseCandidateInterviewPlanV2(raw);
     } catch {
       return null;
@@ -260,9 +271,18 @@ export class InterviewPlanService {
     prompt: string,
   ): Promise<JobDescriptionAnalysisV1Result | null> {
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 2200, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 2200,
         promptName: "job_description_analysis_v1",
+        schemaHint: "Job description analysis v1 JSON schema.",
       });
+      if (!safe.ok) {
+        return null;
+      }
+      const raw = JSON.stringify(safe.data);
       return parseJobDescriptionAnalysisV1(raw);
     } catch {
       return null;
@@ -271,9 +291,18 @@ export class InterviewPlanService {
 
   private async tryGenerateManagerInterviewPlanV1(prompt: string): Promise<ManagerInterviewPlanV1 | null> {
     try {
-      const raw = await this.llmClient.generateStructuredJson(prompt, 1800, {
+      const safe = await callJsonPromptSafe<Record<string, unknown>>({
+        llmClient: this.llmClient,
+        logger: this.logger,
+        prompt,
+        maxTokens: 1800,
         promptName: "manager_interview_plan_v1",
+        schemaHint: "Manager interview plan v1 JSON with answer_instruction and questions[].",
       });
+      if (!safe.ok) {
+        return null;
+      }
+      const raw = JSON.stringify(safe.data);
       return parseManagerInterviewPlanV1(raw);
     } catch {
       return null;

@@ -28,6 +28,7 @@ import { CandidateTechnicalSummaryV1 } from "../shared/types/candidate-summary.t
 import { JobDescriptionAnalysisV1 } from "../shared/types/job-analysis.types";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
 import { QualityFlagsService } from "../qa/quality-flags.service";
+import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 
 export interface InterviewBootstrapResult {
   nextState: UserState;
@@ -35,6 +36,7 @@ export interface InterviewBootstrapResult {
   plan: InterviewPlan;
   answerInstruction?: string;
   candidatePlanV2?: CandidateInterviewPlanV2;
+  intakeOneLiner?: string;
 }
 
 export interface InterviewAnswerInput {
@@ -78,6 +80,7 @@ export class InterviewEngine {
     private readonly candidateTechnicalSummaryService: CandidateTechnicalSummaryService,
     private readonly managerJobProfileV2Service: ManagerJobProfileV2Service,
     private readonly managerJobTechnicalSummaryService: ManagerJobTechnicalSummaryService,
+    private readonly interviewConfirmationService: InterviewConfirmationService,
     private readonly logger: Logger,
     private readonly qualityFlagsService?: QualityFlagsService,
   ) {}
@@ -94,6 +97,7 @@ export class InterviewEngine {
     const userId = session.userId;
     let answerInstruction: string | undefined;
     let candidatePlanV2: CandidateInterviewPlanV2 | undefined;
+    let intakeOneLiner: string | undefined;
     let plan: InterviewPlan;
 
     if (bootstrap.role === "candidate") {
@@ -109,6 +113,12 @@ export class InterviewEngine {
       });
       plan = this.interviewPlanService.mapCandidateInterviewPlanV2ToInterviewPlan(candidatePlanV2);
       answerInstruction = candidatePlanV2.answer_instruction;
+      intakeOneLiner =
+        (await this.interviewConfirmationService.generateCandidateIntakeOneLiner({
+          telegramUserId: userId,
+          resumeAnalysisJson: analysis,
+          currentProfileJson: session.candidateProfile ?? {},
+        })) ?? undefined;
     } else {
       const jobAnalysis = await this.interviewPlanService.buildJobDescriptionAnalysisV1(
         userId,
@@ -129,6 +139,12 @@ export class InterviewEngine {
       );
       plan = this.interviewPlanService.mapManagerInterviewPlanV1ToInterviewPlan(managerPlanV1);
       answerInstruction = managerPlanV1.answer_instruction;
+      intakeOneLiner =
+        (await this.interviewConfirmationService.generateJobIntakeOneLiner({
+          managerTelegramUserId: userId,
+          jobAnalysisJson: analysisForPlan,
+          currentJobProfileJson: session.managerJobProfileV2 ?? session.jobProfile ?? {},
+        })) ?? undefined;
 
       // Keep backward path for unexpected failures to avoid breaking manager onboarding.
       if (!plan.questions.length) {
@@ -160,6 +176,7 @@ export class InterviewEngine {
       plan,
       answerInstruction,
       candidatePlanV2,
+      intakeOneLiner,
     };
   }
 
@@ -183,9 +200,11 @@ export class InterviewEngine {
     }
 
     const answersBefore = this.stateService.getAnswers(session.userId);
+    const skippedBefore = this.stateService.getSkippedQuestionIndexes(session.userId);
     const currentIndex = resolveCurrentQuestionIndex(
       plan,
       answersBefore,
+      skippedBefore,
       session.currentQuestionIndex,
       session.pendingFollowUp?.questionIndex,
     );
@@ -225,43 +244,47 @@ export class InterviewEngine {
     this.stateService.upsertAnswer(session.userId, answerRecord);
     const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
     if (updateResult.followUpRequired) {
-      const followUpsForQuestion = this.stateService
-        .getAnswers(session.userId)
-        .filter((item) => item.questionIndex === currentIndex && item.isFollowUp).length;
-      if (followUpsForQuestion >= 3) {
+      const answersAfterCurrent = this.stateService.getAnswers(session.userId);
+      const followUpsForQuestion = answersAfterCurrent.filter(
+        (item) => item.questionIndex === currentIndex && item.isFollowUp,
+      ).length;
+      const totalFollowUps = answersAfterCurrent.filter((item) => item.isFollowUp).length;
+      const followUpLimitReached = followUpsForQuestion >= 1 || totalFollowUps >= 2;
+
+      if (followUpLimitReached) {
         await this.qualityFlagsService?.raise({
           entityType: session.state === "interviewing_candidate" ? "candidate" : "job",
           entityId: String(session.userId),
-          flag: "excessive_follow_ups_loop_detected",
+          flag: "follow_up_loop_prevented",
           details: {
             questionIndex: currentIndex,
             followUpsForQuestion,
+            totalFollowUps,
           },
         });
+      } else {
+        const followUpQuestionText = buildFollowUpQuestion(updateResult.followUpFocus);
+        this.stateService.setPendingFollowUp(session.userId, {
+          questionIndex: currentIndex,
+          questionId: question.id,
+          questionText: followUpQuestionText,
+          focus: updateResult.followUpFocus,
+        });
+        this.stateService.setCurrentQuestionIndex(session.userId, currentIndex);
+        return {
+          kind: "next_question",
+          questionIndex: currentIndex,
+          questionText: followUpQuestionText,
+          isFollowUp: true,
+        };
       }
-      const followUpQuestionText = buildFollowUpQuestion(
-        updateResult.followUpFocus,
-        session.state === "interviewing_manager" ? "manager" : "candidate",
-      );
-      this.stateService.setPendingFollowUp(session.userId, {
-        questionIndex: currentIndex,
-        questionId: question.id,
-        questionText: followUpQuestionText,
-        focus: updateResult.followUpFocus,
-      });
-      this.stateService.setCurrentQuestionIndex(session.userId, currentIndex);
-      return {
-        kind: "next_question",
-        questionIndex: currentIndex,
-        questionText: followUpQuestionText,
-        isFollowUp: true,
-      };
     }
     this.stateService.clearPendingFollowUp(session.userId);
 
     const answersAfter = this.stateService.getAnswers(session.userId);
 
-    if (isInterviewComplete(plan, answersAfter)) {
+    const skippedAfter = this.stateService.getSkippedQuestionIndexes(session.userId);
+    if (isInterviewComplete(plan, answersAfter, skippedAfter)) {
       this.stateService.clearCurrentQuestionIndex(session.userId);
       const completion = await this.completeInterview(session);
       return {
@@ -272,7 +295,60 @@ export class InterviewEngine {
       };
     }
 
-    const nextQuestionIndex = getNextQuestionIndex(plan, answersAfter);
+    const nextQuestionIndex = getNextQuestionIndex(plan, answersAfter, skippedAfter);
+    if (nextQuestionIndex === null) {
+      this.stateService.clearCurrentQuestionIndex(session.userId);
+      const completion = await this.completeInterview(session);
+      return {
+        kind: "completed",
+        completedState: completion.completedState,
+        completionMessage: completion.message,
+        followupMessage: completion.followupMessage,
+      };
+    }
+
+    this.stateService.setCurrentQuestionIndex(session.userId, nextQuestionIndex);
+    return {
+      kind: "next_question",
+      questionIndex: nextQuestionIndex,
+      questionText: plan.questions[nextQuestionIndex].question,
+      isFollowUp: false,
+    };
+  }
+
+  async skipCurrentQuestion(session: UserSessionState): Promise<InterviewAnswerResult> {
+    if (session.state !== "interviewing_candidate" && session.state !== "interviewing_manager") {
+      throw new Error("Interview is not active.");
+    }
+
+    const plan = session.interviewPlan;
+    if (!plan) {
+      throw new Error("Interview context is missing.");
+    }
+
+    const answers = this.stateService.getAnswers(session.userId);
+    const skipped = this.stateService.getSkippedQuestionIndexes(session.userId);
+    const currentIndex = resolveCurrentQuestionIndex(
+      plan,
+      answers,
+      skipped,
+      session.currentQuestionIndex,
+      session.pendingFollowUp?.questionIndex,
+    );
+    if (currentIndex === null) {
+      const completion = await this.completeInterview(session);
+      return {
+        kind: "completed",
+        completedState: completion.completedState,
+        completionMessage: completion.message,
+        followupMessage: completion.followupMessage,
+      };
+    }
+
+    this.stateService.clearPendingFollowUp(session.userId);
+    this.stateService.markQuestionSkipped(session.userId, currentIndex);
+    const skippedAfter = this.stateService.getSkippedQuestionIndexes(session.userId);
+    const nextQuestionIndex = getNextQuestionIndex(plan, answers, skippedAfter);
     if (nextQuestionIndex === null) {
       this.stateService.clearCurrentQuestionIndex(session.userId);
       const completion = await this.completeInterview(session);
@@ -634,6 +710,7 @@ function getCompletedState(state: UserState): UserState {
 function resolveCurrentQuestionIndex(
   plan: InterviewPlan,
   answers: ReadonlyArray<InterviewAnswer>,
+  skippedQuestionIndexes: ReadonlyArray<number>,
   currentQuestionIndex?: number,
   pendingFollowUpQuestionIndex?: number,
 ): number | null {
@@ -649,12 +726,13 @@ function resolveCurrentQuestionIndex(
     typeof currentQuestionIndex === "number" &&
     currentQuestionIndex >= 0 &&
     currentQuestionIndex < plan.questions.length &&
-    !answers.some((item) => item.questionIndex === currentQuestionIndex)
+    !answers.some((item) => item.questionIndex === currentQuestionIndex) &&
+    !skippedQuestionIndexes.includes(currentQuestionIndex)
   ) {
     return currentQuestionIndex;
   }
 
-  return getNextQuestionIndex(plan, answers);
+  return getNextQuestionIndex(plan, answers, skippedQuestionIndexes);
 }
 
 function resolveCandidateQuestionMetadata(
@@ -686,17 +764,10 @@ function resolveCandidateQuestionMetadata(
   };
 }
 
-function buildFollowUpQuestion(
-  focus: string,
-  role: "candidate" | "manager",
-): string {
+function buildFollowUpQuestion(focus: string): string {
   const normalizedFocus = focus.trim();
-  const defaultFocus =
-    role === "manager"
-      ? "the real task, challenge, and required ownership"
-      : "the exact technical decision and your direct contribution";
-  const effectiveFocus = normalizedFocus || defaultFocus;
-  return `Please clarify ${effectiveFocus} with one concrete example, what you did, and what trade offs you considered.`;
+  const effectiveFocus = normalizedFocus || "the relevant decision and its impact";
+  return `Quick follow up. Please clarify ${effectiveFocus} using one concrete example. Say what you did, what you chose, and why.`;
 }
 
 function isCandidateProfile(profile: CandidateProfile | JobProfile): profile is CandidateProfile {

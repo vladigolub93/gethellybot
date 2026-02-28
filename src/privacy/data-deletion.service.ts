@@ -1,5 +1,6 @@
 import { Logger } from "../config/logger";
 import { DataDeletionRepository } from "../db/repositories/data-deletion.repo";
+import { UsersRepository } from "../db/repositories/users.repo";
 
 export interface DataDeletionResult {
   requested: boolean;
@@ -9,6 +10,7 @@ export interface DataDeletionResult {
 export class DataDeletionService {
   constructor(
     private readonly repository: DataDeletionRepository,
+    private readonly usersRepository: UsersRepository,
     private readonly logger: Logger,
   ) {}
 
@@ -19,6 +21,10 @@ export class DataDeletionService {
   }): Promise<DataDeletionResult> {
     try {
       await this.repository.markRequested(input);
+      await this.usersRepository.clearSensitivePersonalData(input.telegramUserId);
+      this.logger.info("privacy.contact_data_cleared", {
+        telegramUserId: input.telegramUserId,
+      });
       return {
         requested: true,
         confirmationMessage:

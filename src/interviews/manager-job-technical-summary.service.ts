@@ -1,4 +1,5 @@
 import { LlmClient } from "../ai/llm.client";
+import { callJsonPromptSafe } from "../ai/llm.safe";
 import { JOB_TECHNICAL_SUMMARY_V2_PROMPT } from "../ai/prompts/manager/job-technical-summary.v2.prompt";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
 
@@ -18,7 +19,18 @@ export class ManagerJobTechnicalSummaryService {
       ),
     ].join("\n");
 
-    const raw = await this.llmClient.generateStructuredJson(prompt, 1000);
+    const safe = await callJsonPromptSafe<Record<string, unknown>>({
+      llmClient: this.llmClient,
+      prompt,
+      maxTokens: 1000,
+      promptName: "job_technical_summary_v2",
+      schemaHint:
+        "Job technical summary v2 JSON with headline, product_context, current_tasks, current_challenges, core_tech, key_requirements, domain_need, ownership_expectation, notes_for_matching.",
+    });
+    if (!safe.ok) {
+      throw new Error(`job_technical_summary_v2_failed:${safe.error_code}`);
+    }
+    const raw = JSON.stringify(safe.data);
     return parseJobTechnicalSummary(raw);
   }
 }

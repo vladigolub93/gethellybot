@@ -40,6 +40,34 @@ export function normalizeUpdate(update: TelegramUpdate): NormalizedUpdate | null
     };
   }
 
+  if (update.message?.contact && update.message.from) {
+    return {
+      kind: "contact",
+      updateId: update.update_id,
+      messageId: update.message.message_id,
+      chatId: update.message.chat.id,
+      userId: update.message.from.id,
+      username: update.message.from.username,
+      phoneNumber: update.message.contact.phone_number,
+      firstName: update.message.contact.first_name,
+      lastName: update.message.contact.last_name,
+      contactUserId: update.message.contact.user_id,
+    };
+  }
+
+  if (update.message?.location && update.message.from) {
+    return {
+      kind: "location",
+      updateId: update.update_id,
+      messageId: update.message.message_id,
+      chatId: update.message.chat.id,
+      userId: update.message.from.id,
+      username: update.message.from.username,
+      latitude: update.message.location.latitude,
+      longitude: update.message.location.longitude,
+    };
+  }
+
   if (update.callback_query?.data && update.callback_query.message) {
     return {
       kind: "callback",

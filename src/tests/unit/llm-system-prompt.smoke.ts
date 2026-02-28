@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { LlmClient } from "../../ai/llm.client";
 import { Logger } from "../../config/logger";
-import { HELLY_SYSTEM_PROMPT } from "../../ai/prompts/system.prompt";
+import { HELLY_SYSTEM_PROMPT } from "../../ai/system/helly.system";
 
 const noopLogger: Logger = {
   debug() {},
@@ -11,7 +11,7 @@ const noopLogger: Logger = {
 };
 
 function main(): void {
-  const client = new LlmClient("test-key", "gpt-test", noopLogger);
+  const client = new LlmClient("test-key", noopLogger, "gpt-test");
   const payload = client.buildJsonRequestBody("{}", 123);
 
   assert.equal(payload.messages[0]?.role, "system");

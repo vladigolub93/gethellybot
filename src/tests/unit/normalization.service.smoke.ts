@@ -12,11 +12,10 @@ async function run(): Promise<void> {
         detected_language: "ru",
         needs_translation: true,
         english_text: "I have 5 years of Node.js experience.",
-        notes: null,
       });
     },
   });
-  const ru = await ruService.normalizeUserTextToEnglish("У меня 5 лет опыта с Node.js.");
+  const ru = await ruService.normalizeToEnglish("У меня 5 лет опыта с Node.js.");
   assert.equal(ru.detected_language, "ru");
   assert.equal(ru.english_text, "I have 5 years of Node.js experience.");
 
@@ -26,11 +25,10 @@ async function run(): Promise<void> {
         detected_language: "uk",
         needs_translation: true,
         english_text: "I built microservices in Go and PostgreSQL.",
-        notes: null,
       });
     },
   });
-  const uk = await ukService.normalizeUserTextToEnglish("Я будував мікросервіси на Go та PostgreSQL.");
+  const uk = await ukService.normalizeToEnglish("Я будував мікросервіси на Go та PostgreSQL.");
   assert.equal(uk.detected_language, "uk");
   assert.equal(uk.english_text, "I built microservices in Go and PostgreSQL.");
 
@@ -39,7 +37,6 @@ async function run(): Promise<void> {
       detected_language: "ru",
       needs_translation: true,
       english_text: "I led CI/CD for AWS and improved SLO.",
-      notes: null,
     }),
     "Вел CI/CD в AWS и улучшил SLO.",
   );
@@ -55,11 +52,10 @@ async function run(): Promise<void> {
         detected_language: "en",
         needs_translation: false,
         english_text: englishSource,
-        notes: null,
       });
     },
   });
-  const en = await enService.normalizeUserTextToEnglish(englishSource);
+  const en = await enService.normalizeToEnglish(englishSource);
   assert.equal(en.detected_language, "en");
   assert.equal(en.english_text, englishSource);
   assert.equal(detectLanguageQuick(englishSource), "en");
@@ -68,4 +64,3 @@ async function run(): Promise<void> {
 }
 
 void run();
-

@@ -73,6 +73,18 @@ export class StatePersistenceService {
         preferredLanguage: session.preferredLanguage,
         onboardingCompleted: session.onboardingCompleted,
         firstMatchExplained: session.firstMatchExplained,
+        phoneNumber: session.contactPhoneNumber,
+        firstName: session.contactFirstName,
+        lastName: session.contactLastName,
+        contactShared: session.contactShared,
+        contactSharedAt: session.contactSharedAt,
+        candidateCountry: session.candidateCountry,
+        candidateCity: session.candidateCity,
+        candidateWorkMode: session.candidateWorkMode ?? null,
+        candidateSalaryAmount: session.candidateSalaryAmount ?? null,
+        candidateSalaryCurrency: session.candidateSalaryCurrency ?? null,
+        candidateSalaryPeriod: session.candidateSalaryPeriod ?? null,
+        candidateProfileComplete: session.candidateProfileComplete ?? false,
       });
       await this.statesRepository.saveSession(snapshot);
     } catch (error) {
