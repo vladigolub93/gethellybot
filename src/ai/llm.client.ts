@@ -14,7 +14,8 @@ export interface ChatCompletionsRequestBody {
     role: "system" | "user";
     content: string;
   }>;
-  max_tokens: number;
+  max_tokens?: number;
+  max_completion_tokens?: number;
 }
 
 interface ChatCompletionsResponse {
@@ -127,7 +128,7 @@ export class LlmClient {
     maxTokens: number,
     temperature: number,
   ): ChatCompletionsRequestBody {
-    return {
+    const body: ChatCompletionsRequestBody = {
       model: this.chatModel,
       temperature,
       messages: [
@@ -140,8 +141,13 @@ export class LlmClient {
           content: prompt,
         },
       ],
-      max_tokens: maxTokens,
     };
+    if (usesMaxCompletionTokens(this.chatModel)) {
+      body.max_completion_tokens = maxTokens;
+    } else {
+      body.max_tokens = maxTokens;
+    }
+    return body;
   }
 
   private async generateJsonContent(
@@ -220,4 +226,9 @@ export class LlmClient {
 function estimateTokenCount(prompt: string, output: string): number {
   const totalChars = prompt.length + output.length;
   return Math.max(1, Math.round(totalChars / 4));
+}
+
+function usesMaxCompletionTokens(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return normalized.startsWith("gpt-5");
 }
