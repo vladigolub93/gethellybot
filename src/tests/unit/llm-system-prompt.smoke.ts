@@ -16,7 +16,9 @@ function main(): void {
 
   assert.equal(payload.messages[0]?.role, "system");
   assert.equal(payload.messages[0]?.content, HELLY_SYSTEM_PROMPT);
-  assert.equal(payload.messages[1]?.role, "user");
+  assert.equal(payload.messages[1]?.role, "system");
+  assert.ok((payload.messages[1]?.content ?? "").length > 0);
+  assert.equal(payload.messages[2]?.role, "user");
 
   process.stdout.write("OK, HELLY_SYSTEM_PROMPT is attached to LLM payload.\n");
 }

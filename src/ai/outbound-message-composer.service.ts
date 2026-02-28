@@ -49,6 +49,70 @@ export class OutboundMessageComposerService {
     if (!candidate) {
       return input.text;
     }
+    if (!isComposedMessageSafe(trimmed, candidate)) {
+      this.logger.debug("outbound.message.compose.rejected_by_guard", {
+        source: input.source,
+        chatId: input.chatId,
+      });
+      return input.text;
+    }
     return candidate;
   }
+}
+
+const KEYWORD_ANCHORS = [
+  "pdf",
+  "docx",
+  "resume",
+  "job description",
+  "contact",
+  "share my contact",
+  "skip for now",
+  "candidate",
+  "hiring",
+  "apply",
+  "reject",
+];
+
+const COMMAND_ANCHORS = ["/start", "/help", "/delete"];
+
+function isComposedMessageSafe(original: string, candidate: string): boolean {
+  const o = normalizeForGuard(original);
+  const c = normalizeForGuard(candidate);
+  if (!c) {
+    return false;
+  }
+
+  for (const command of COMMAND_ANCHORS) {
+    if (o.includes(command) && !c.includes(command)) {
+      return false;
+    }
+  }
+
+  for (const keyword of KEYWORD_ANCHORS) {
+    if (o.includes(keyword) && !c.includes(keyword)) {
+      return false;
+    }
+  }
+
+  if (containsLikelyPhone(original) && !containsLikelyPhone(candidate)) {
+    return false;
+  }
+
+  if (original.length >= 80) {
+    const minLength = Math.floor(original.length * 0.5);
+    if (candidate.length < minLength) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizeForGuard(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function containsLikelyPhone(text: string): boolean {
+  return /(\+?\d[\d\s\-()]{7,}\d)/.test(text);
 }
