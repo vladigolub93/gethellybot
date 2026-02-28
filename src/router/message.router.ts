@@ -406,10 +406,10 @@ function getStateFallbackMessage(state: UserState): string {
 
 function getStateNextStep(state: UserState): string {
   if (state === "onboarding_candidate") {
-    return "Ask user to press Upload Resume.";
+    return "Ask user to send resume as PDF or DOCX, or paste full text.";
   }
   if (state === "onboarding_manager") {
-    return "Ask user to press Upload Job Description.";
+    return "Ask user to send job description as PDF or DOCX, or paste full text.";
   }
   if (state === "waiting_resume") {
     return "Ask user to upload resume as PDF or DOCX now.";

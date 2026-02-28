@@ -18,6 +18,7 @@ export interface EnvConfig {
   voiceMaxDurationSec: number;
   telegramReactionsEnabled: boolean;
   telegramReactionsProbability: number;
+  telegramButtonsEnabled: boolean;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
   supabaseServiceRoleKey?: string;
@@ -40,9 +41,11 @@ export function loadEnv(): EnvConfig {
   const voiceMaxDurationSec = Number(voiceLimitRaw);
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
+  const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "false";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
+  const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
   const debugMode = parseBoolean(debugModeRaw);
 
   if (!Number.isInteger(port) || port <= 0) {
@@ -73,6 +76,7 @@ export function loadEnv(): EnvConfig {
     voiceMaxDurationSec,
     telegramReactionsEnabled,
     telegramReactionsProbability,
+    telegramButtonsEnabled,
     supabaseUrl: process.env.SUPABASE_URL,
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,

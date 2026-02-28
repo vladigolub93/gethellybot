@@ -39,8 +39,12 @@ export class TelegramClient {
   constructor(
     private readonly token: string,
     private readonly logger: Logger,
+    private readonly buttonsEnabled = true,
   ) {
     this.apiBase = `https://api.telegram.org/bot${this.token}`;
+    if (!this.buttonsEnabled) {
+      this.logger.info("Telegram buttons are disabled, text and voice only mode is active");
+    }
   }
 
   async setWebhook(url: string, secretToken?: string): Promise<void> {
@@ -63,7 +67,7 @@ export class TelegramClient {
       parse_mode: TELEGRAM_PARSE_MODE,
     };
 
-    if (options?.replyMarkup) {
+    if (options?.replyMarkup && shouldSendReplyMarkup(options.replyMarkup, this.buttonsEnabled)) {
       payload.reply_markup = options.replyMarkup;
     }
 
@@ -148,4 +152,14 @@ export class TelegramClient {
 
     return body.result;
   }
+}
+
+function shouldSendReplyMarkup(
+  replyMarkup: TelegramReplyMarkup,
+  buttonsEnabled: boolean,
+): boolean {
+  if (buttonsEnabled) {
+    return true;
+  }
+  return "remove_keyboard" in replyMarkup;
 }

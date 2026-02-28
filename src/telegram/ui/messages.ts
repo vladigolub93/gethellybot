@@ -4,15 +4,18 @@ export function welcomeMessage(): string {
     "",
     "I help technical candidates find the right roles and help hiring managers find the right engineers.",
     "",
-    "Choose your role to begin.",
+    "To begin, tell me your role by text or voice.",
+    "Example, I am a candidate.",
+    "Example, I am hiring.",
   ].join("\n");
 }
 
 export function contactRequestMessage(): string {
   return [
-    "Before we begin, please share your Telegram contact.",
+    "Before we begin, you can share your Telegram contact.",
     "This helps us connect you with the right person after mutual approval.",
     "Your contact is never shared unless both sides approve.",
+    "If you want to continue now, type Skip for now.",
   ].join("\n");
 }
 

@@ -67,7 +67,11 @@ export function createApp(env: EnvConfig): AppContext {
 
   app.use(express.json({ limit: "2mb" }));
 
-  const telegramClient = new TelegramClient(env.telegramBotToken, logger);
+  const telegramClient = new TelegramClient(
+    env.telegramBotToken,
+    logger,
+    env.telegramButtonsEnabled,
+  );
   const telegramFileService = new TelegramFileService(telegramClient);
   const documentService = new DocumentService(logger);
   const llmClient = new LlmClient(env.openaiApiKey, logger, CHAT_MODEL);
