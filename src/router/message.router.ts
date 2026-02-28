@@ -39,7 +39,7 @@ export class MessageRouter {
   async route(update: Extract<NormalizedUpdate, { kind: "text" }>, session: UserSessionState): Promise<void> {
     const text = update.text.trim();
 
-    if (text === "/start") {
+    if (isStartCommand(text)) {
       await this.restartFlow(update);
       return;
     }
@@ -352,6 +352,10 @@ export class MessageRouter {
 
     return false;
   }
+}
+
+function isStartCommand(text: string): boolean {
+  return /^\/start(?:\s|$)/i.test(text.trim());
 }
 
 function resolveCurrentQuestionContext(

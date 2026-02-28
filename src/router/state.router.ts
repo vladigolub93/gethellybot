@@ -420,6 +420,14 @@ export class StateRouter {
         state: session.state,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      const deterministicFallback = this.buildDeterministicRouteFallback(update);
+      if (deterministicFallback) {
+        return {
+          decision: deterministicFallback,
+          textEnglish: textEnglish?.trim() ? textEnglish.trim() : null,
+          detectedLanguage,
+        };
+      }
       await this.sendRouterReplyWithLoopGuard(
         session,
         update.chatId,
@@ -457,7 +465,7 @@ export class StateRouter {
     const mandatoryUpdateCommand = detectCandidateMandatoryUpdateCommand(normalizedLower);
     const managerMandatoryUpdateCommand = detectManagerMandatoryUpdateCommand(normalizedLower);
 
-    if (rawText === "/start" || decision.control_type === "restart") {
+    if (isStartCommand(rawText) || decision.control_type === "restart") {
       await this.restartFlow(update);
       return;
     }
@@ -947,6 +955,43 @@ export class StateRouter {
     await this.sendBotMessage(session.userId, update.chatId, contactRequestMessage(), {
       replyMarkup: buildContactRequestKeyboard(),
     });
+  }
+
+  private buildDeterministicRouteFallback(update: NormalizedUpdate): AlwaysOnRouterDecision | null {
+    if (update.kind === "document") {
+      return {
+        route: "DOC",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: "Document received. I will process it now.",
+        should_advance: false,
+        should_process_text_as_document: false,
+      };
+    }
+    if (update.kind === "voice") {
+      return {
+        route: "VOICE",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: "Voice message received. I will transcribe it now.",
+        should_advance: false,
+        should_process_text_as_document: false,
+      };
+    }
+    if (update.kind === "text" && isStartCommand(update.text.trim())) {
+      return {
+        route: "CONTROL",
+        meta_type: null,
+        control_type: "restart",
+        matching_intent: null,
+        reply: "Restarting.",
+        should_advance: false,
+        should_process_text_as_document: false,
+      };
+    }
+    return null;
   }
 
   private async handlePastedDocumentText(
@@ -2254,6 +2299,10 @@ function formatCandidateJobSummary(
 function isSkipContactForNow(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   return normalized === "skip for now";
+}
+
+function isStartCommand(text: string): boolean {
+  return /^\/start(?:\s|$)/i.test(text.trim());
 }
 
 function isDataDeletionCommand(rawText: string, normalizedEnglishText: string): boolean {
