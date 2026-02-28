@@ -16,6 +16,8 @@ interface AlwaysOnRouterInput {
   hasVoice: boolean;
   currentQuestion: string | null;
   lastBotMessage: string | null;
+  knownUserName?: string | null;
+  userRagContext?: string | null;
 }
 
 export class AlwaysOnRouterService {
@@ -45,6 +47,8 @@ export class AlwaysOnRouterService {
       hasVoice: input.hasVoice,
       currentQuestion: input.currentQuestion,
       lastBotMessage: input.lastBotMessage,
+      knownUserName: input.knownUserName ?? null,
+      userRagContext: input.userRagContext ?? null,
     });
 
     try {

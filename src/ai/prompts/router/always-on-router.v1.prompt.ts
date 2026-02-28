@@ -17,6 +17,8 @@ Input JSON fields:
 - has_voice
 - current_question
 - last_bot_message
+- known_user_name
+- user_rag_context
 
 Output JSON schema:
 {
@@ -95,6 +97,10 @@ Routing rules:
 18) If current_state expects resume and text is short and unclear, route OTHER with this exact reply:
 "Please paste the full resume text, or send a PDF or DOCX file."
 
+19) If user asks about their own name and known_user_name is available, route META with meta_type other and reply with the saved name.
+
+20) Use user_rag_context to keep replies consistent with known role, state, and previously extracted data.
+
 Reply quality rules:
 - reply must be short and actionable.
 - never return empty reply.
@@ -124,6 +130,8 @@ export function buildAlwaysOnRouterV1Prompt(input: {
   hasVoice: boolean;
   currentQuestion: string | null;
   lastBotMessage: string | null;
+  knownUserName?: string | null;
+  userRagContext?: string | null;
 }): string {
   return [
     ALWAYS_ON_ROUTER_V1_PROMPT,
@@ -139,6 +147,8 @@ export function buildAlwaysOnRouterV1Prompt(input: {
         has_voice: input.hasVoice,
         current_question: input.currentQuestion,
         last_bot_message: input.lastBotMessage,
+        known_user_name: input.knownUserName ?? null,
+        user_rag_context: input.userRagContext ?? null,
       },
       null,
       2,

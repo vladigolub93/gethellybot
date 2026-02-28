@@ -36,3 +36,9 @@ This script checks:
 - every mocked update goes through router classification,
 - no generic fallback phrase is used,
 - meta steps do not force interview advancement.
+
+## Vector search mode
+
+The project supports dual vector mode:
+- Primary, Qdrant candidate retrieval when `QDRANT_URL` and `QDRANT_API_KEY` are set.
+- Fallback, Supabase vector search and then local in-memory scoring when Qdrant is unavailable.

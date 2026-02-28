@@ -10,6 +10,8 @@ interface InterviewIntentInput {
   currentQuestion: string;
   userMessageEnglish: string;
   lastBotMessage: string | null;
+  knownUserName?: string | null;
+  userRagContext?: string | null;
 }
 
 const FORMAT_FALLBACK_REPLY =
@@ -55,7 +57,7 @@ export class InterviewIntentRouterService {
         state: input.currentState,
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      return fallbackDecision(input.userMessageEnglish);
+      return fallbackDecision(input.userMessageEnglish, input.knownUserName ?? null);
     }
   }
 }
@@ -121,7 +123,10 @@ function normalizeSubstantiveAnswerGuard(
   };
 }
 
-function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
+function fallbackDecision(
+  userMessage: string,
+  knownUserName: string | null,
+): InterviewIntentDecisionV1 {
   const normalized = userMessage.trim().toLowerCase();
   if (!normalized || normalized === "ok" || normalized === "sure" || normalized === "yes") {
     return {
@@ -163,6 +168,23 @@ function fallbackDecision(userMessage: string): InterviewIntentDecisionV1 {
       control_type: null,
       reply:
         "Yes, you can answer by voice in Russian or Ukrainian. I will transcribe it and continue. Please be detailed and use real examples.",
+      should_advance: false,
+    };
+  }
+
+  if (
+    normalized.includes("what is my name") ||
+    normalized.includes("my name") ||
+    normalized.includes("как меня зовут") ||
+    normalized.includes("як мене звати")
+  ) {
+    return {
+      intent: "META",
+      meta_type: "other",
+      control_type: null,
+      reply: knownUserName?.trim()
+        ? `I saved your name as ${knownUserName.trim()}.`
+        : "I do not have your name yet, but we can continue with the current interview question.",
       should_advance: false,
     };
   }

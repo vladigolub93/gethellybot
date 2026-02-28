@@ -11,7 +11,9 @@ Input JSON:
   "user_role": "candidate | manager",
   "current_question": "string",
   "user_message_english": "string",
-  "last_bot_message": "string or null"
+  "last_bot_message": "string or null",
+  "known_user_name": "string or null",
+  "user_rag_context": "string or null"
 }
 
 Output JSON:
@@ -25,11 +27,13 @@ Output JSON:
 
 Rules:
 - META if user asks about timing, language, how to answer, privacy, or process.
+- META if user asks "what is my name" and reply must use known_user_name when available.
 - CLARIFY if user asks what you mean, asks for expected depth, asks for an example, asks which project to use, or asks scope of the current question.
 - ANSWER only if message contains substantive information addressing the current question.
 - CONTROL if user asks to pause, stop, restart, or help.
 - OFFTOPIC if unrelated to hiring and interview context.
 - Never repeat last_bot_message verbatim.
+- Use user_rag_context to keep response consistent with known profile facts and current step.
 
 Behavior constraints:
 - For META, CLARIFY, CONTROL, OFFTOPIC set should_advance=false.
@@ -45,6 +49,8 @@ export function buildInterviewIntentRouterV1Prompt(input: {
   currentQuestion: string;
   userMessageEnglish: string;
   lastBotMessage: string | null;
+  knownUserName?: string | null;
+  userRagContext?: string | null;
 }): string {
   return [
     INTERVIEW_INTENT_ROUTER_V1_PROMPT,
@@ -57,6 +63,8 @@ export function buildInterviewIntentRouterV1Prompt(input: {
         current_question: input.currentQuestion,
         user_message_english: input.userMessageEnglish,
         last_bot_message: input.lastBotMessage,
+        known_user_name: input.knownUserName ?? null,
+        user_rag_context: input.userRagContext ?? null,
       },
       null,
       2,

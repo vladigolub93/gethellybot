@@ -18,6 +18,7 @@ import {
 } from "../interviews/interview-bootstrap.guard";
 import { InterviewEngine } from "../interviews/interview.engine";
 import { InterviewIntentRouterService } from "../interviews/interview-intent-router.service";
+import { CandidateNameExtractorService } from "../interviews/candidate-name-extractor.service";
 import { JobMandatoryFieldsService } from "../jobs/job-mandatory-fields.service";
 import { parseBudget } from "../jobs/parsers/budget.parser";
 import { parseCountries } from "../jobs/parsers/countries.parser";
@@ -119,6 +120,7 @@ import { maybeReact } from "../telegram/reactions/reaction.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 import { AlwaysOnRouterService } from "./always-on-router.service";
 import { CallbackRouter } from "./callback.router";
+import { UserRagContextService } from "./context/user-rag-context.service";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
@@ -152,6 +154,8 @@ export class StateRouter {
     private readonly interviewIntentRouterService: InterviewIntentRouterService,
     private readonly normalizationService: NormalizationService,
     private readonly interviewConfirmationService: InterviewConfirmationService,
+    private readonly userRagContextService: UserRagContextService,
+    private readonly candidateNameExtractorService: CandidateNameExtractorService,
     private readonly logger: Logger,
   ) {
     this.callbackRouter = new CallbackRouter(
@@ -363,6 +367,8 @@ export class StateRouter {
     decision: AlwaysOnRouterDecision;
     textEnglish: string | null;
     detectedLanguage?: "en" | "ru" | "uk" | "other";
+    knownUserName?: string | null;
+    ragContext?: string | null;
   } | null> {
     let textEnglish: string | null = null;
     let detectedLanguage: "en" | "ru" | "uk" | "other" | undefined;
@@ -383,6 +389,7 @@ export class StateRouter {
     }
 
     const currentQuestion = resolveCurrentInterviewQuestionText(session);
+    const rag = await this.userRagContextService.buildRouterContext(session);
 
     try {
       const decision = await this.alwaysOnRouterService.classify({
@@ -396,11 +403,15 @@ export class StateRouter {
         hasVoice: update.kind === "voice",
         currentQuestion,
         lastBotMessage: session.lastBotMessage ?? null,
+        knownUserName: rag.knownUserName,
+        userRagContext: rag.ragContext,
       });
       return {
         decision,
         textEnglish: textEnglish?.trim() ? textEnglish.trim() : null,
         detectedLanguage,
+        knownUserName: rag.knownUserName,
+        ragContext: rag.ragContext,
       };
     } catch (error) {
       this.logger.warn("always-on router failed, sending safe fallback", {
@@ -415,6 +426,8 @@ export class StateRouter {
           decision: deterministicFallback,
           textEnglish: textEnglish?.trim() ? textEnglish.trim() : null,
           detectedLanguage,
+          knownUserName: rag.knownUserName,
+          ragContext: rag.ragContext,
         };
       }
       if (update.kind === "text" || update.kind === "callback") {
@@ -430,6 +443,8 @@ export class StateRouter {
           },
           textEnglish: textEnglish?.trim() ? textEnglish.trim() : null,
           detectedLanguage,
+          knownUserName: rag.knownUserName,
+          ragContext: rag.ragContext,
         };
       }
       await this.sendRouterReplyWithLoopGuard(
@@ -577,10 +592,16 @@ export class StateRouter {
         const skipResult = await this.interviewEngine.skipCurrentQuestion(session);
         this.stateService.resetInterviewNoAnswerCounter(session.userId);
         if (skipResult.kind === "next_question") {
+          const nextQuestionText = await this.formatInterviewQuestionForDelivery(
+            session,
+            skipResult.questionText,
+            skipResult.questionIndex,
+            false,
+          );
           await this.sendBotMessage(
             session.userId,
             session.chatId,
-            questionMessage(skipResult.questionIndex, skipResult.questionText),
+            questionMessage(skipResult.questionIndex, nextQuestionText),
           );
           return;
         }
@@ -611,6 +632,10 @@ export class StateRouter {
         await this.sendBotMessage(session.userId, update.chatId, missingInterviewContextMessage());
         return;
       }
+      const interviewRag = await this.userRagContextService.buildInterviewContext(
+        session,
+        currentQuestion,
+      );
 
       const intentDecision = await this.interviewIntentRouterService.classify({
         currentState: session.state,
@@ -618,6 +643,8 @@ export class StateRouter {
         currentQuestion,
         userMessageEnglish: normalizedEnglishText,
         lastBotMessage: session.lastBotMessage ?? null,
+        knownUserName: interviewRag.knownUserName,
+        userRagContext: interviewRag.ragContext,
       });
 
       if (intentDecision.intent === "ANSWER" && intentDecision.should_advance) {
@@ -1152,6 +1179,9 @@ export class StateRouter {
         extractedChars: input.sourceTextOriginal.length,
         normalizedChars: input.sourceTextEnglish.length,
       });
+      if (intakeState === "waiting_resume") {
+        await this.persistCandidateNameFromResumeText(update.userId, input.sourceTextEnglish);
+      }
       if (intakeState === "waiting_job") {
         await this.jobsRepository.saveJobIntakeSource({
           managerTelegramUserId: update.userId,
@@ -1195,7 +1225,13 @@ export class StateRouter {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.answerInstruction);
       }
       await this.sendBotMessage(session.userId, update.chatId, interviewLanguageSupportMessage());
-      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, bootstrap.firstQuestion));
+      const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+        session,
+        bootstrap.firstQuestion,
+        0,
+        false,
+      );
+      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, firstQuestionText));
       this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
       if (bootstrap.candidatePlanV2) {
         this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
@@ -1232,6 +1268,64 @@ export class StateRouter {
         ? getNonRepeatingFallbackByState(session.state)
         : trimmed || "Please continue with your hiring flow.";
     await this.sendBotMessage(session.userId, chatId, finalReply);
+  }
+
+  private async persistCandidateNameFromResumeText(
+    telegramUserId: number,
+    resumeTextEnglish: string,
+  ): Promise<void> {
+    try {
+      const extracted = await this.candidateNameExtractorService.extractFromResume(resumeTextEnglish);
+      if (!extracted?.firstName || extracted.confidence < 0.55) {
+        return;
+      }
+      await this.usersRepository.upsertTelegramUser({
+        telegramUserId,
+        firstName: extracted.firstName,
+        lastName: extracted.lastName ?? null,
+      });
+      this.userRagContextService.invalidate(telegramUserId);
+      this.logger.info("candidate.name.persisted", {
+        telegramUserId,
+        confidence: extracted.confidence,
+      });
+    } catch (error) {
+      this.logger.debug("candidate.name.persist_failed", {
+        telegramUserId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  private async formatInterviewQuestionForDelivery(
+    session: UserSessionState,
+    questionText: string,
+    marker: number,
+    isFollowUp: boolean,
+  ): Promise<string> {
+    const baseText = questionText.trim();
+    if (!baseText) {
+      return questionText;
+    }
+    if (isFollowUp || session.role !== "candidate") {
+      return baseText;
+    }
+    if (!shouldUsePersonalName(session.userId, marker)) {
+      return baseText;
+    }
+    const knownName = await this.resolveKnownUserName(session);
+    if (!knownName) {
+      return baseText;
+    }
+    return `${knownName}, ${baseText}`;
+  }
+
+  private async resolveKnownUserName(session: UserSessionState): Promise<string | null> {
+    if (session.contactFirstName?.trim()) {
+      return sanitizeUserName(session.contactFirstName);
+    }
+    const rag = await this.userRagContextService.buildRouterContext(session);
+    return sanitizeUserName(rag.knownUserName);
   }
 
   private async sendBotMessage(
@@ -1972,6 +2066,9 @@ export class StateRouter {
         update.mimeType,
       );
       const normalizedExtractedText = await this.normalizeGeneralText(extractedText);
+      if (isCandidateResumeIntake) {
+        await this.persistCandidateNameFromResumeText(update.userId, normalizedExtractedText);
+      }
       this.logger.info("document.extracted", {
         userId: update.userId,
         sourceType: "file",
@@ -2024,7 +2121,13 @@ export class StateRouter {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.answerInstruction);
       }
       await this.sendBotMessage(session.userId, update.chatId, interviewLanguageSupportMessage());
-      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, bootstrap.firstQuestion));
+      const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+        session,
+        bootstrap.firstQuestion,
+        0,
+        false,
+      );
+      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, firstQuestionText));
       this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
       if (bootstrap.candidatePlanV2) {
         this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
@@ -2117,12 +2220,18 @@ export class StateRouter {
 
         await this.maybeSendInterviewReaction(session, originalText, sourceMessageId);
         await this.maybeSendCandidateEmpathyLine(session);
+        const nextQuestionText = await this.formatInterviewQuestionForDelivery(
+          latestSession,
+          result.questionText,
+          result.questionIndex,
+          Boolean(result.isFollowUp),
+        );
         await this.sendBotMessage(
           session.userId,
           session.chatId,
           result.isFollowUp
-            ? result.questionText
-            : questionMessage(result.questionIndex, result.questionText),
+            ? nextQuestionText
+            : questionMessage(result.questionIndex, nextQuestionText),
         );
         return;
       }
@@ -3246,4 +3355,23 @@ function getNonRepeatingFallbackByState(state: UserSessionState["state"]): strin
     return "Please tell me your role by text or voice, candidate or hiring.";
   }
   return "Please continue with the current step.";
+}
+
+function shouldUsePersonalName(userId: number, marker: number): boolean {
+  return Math.abs((userId * 31 + marker * 17) % 4) === 0;
+}
+
+function sanitizeUserName(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const firstToken = trimmed.split(/\s+/)[0];
+  if (!firstToken) {
+    return null;
+  }
+  return firstToken.slice(0, 24);
 }

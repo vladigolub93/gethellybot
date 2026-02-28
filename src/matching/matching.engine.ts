@@ -14,6 +14,7 @@ import { MatchStorageService } from "../storage/match-storage.service";
 import { QualityFlagsService } from "../qa/quality-flags.service";
 import { MatchingExplanationService } from "./matching-explanation.service";
 import { MatchingDecisionService } from "./matching-decision.service";
+import { QdrantClient } from "./qdrant.client";
 import { calculateMatchingScoreV2 } from "./scoring/matching-score.v2";
 import { VectorSearchRepository } from "./vector-search.repo";
 import { VectorSearchV2 } from "./vector-search.v2";
@@ -65,6 +66,7 @@ export class MatchingEngine {
     private readonly matchStorageService: MatchStorageService,
     private readonly llmClient: LlmClient,
     private readonly logger: Logger,
+    private readonly qdrantClient?: QdrantClient,
     private readonly qualityFlagsService?: QualityFlagsService,
   ) {
     this.vectorSearchV2 = new VectorSearchV2(
@@ -73,6 +75,7 @@ export class MatchingEngine {
       this.vectorSearchRepository,
       this.storage,
       this.logger,
+      this.qdrantClient,
     );
     this.explanationService = new MatchingExplanationService(this.llmClient);
     this.decisionService = new MatchingDecisionService(

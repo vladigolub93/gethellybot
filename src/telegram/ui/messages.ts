@@ -256,7 +256,8 @@ export function processingDocumentMessage(): string {
 }
 
 export function questionMessage(questionIndex: number, questionText: string): string {
-  return `Question ${questionIndex + 1}:\n${questionText}`;
+  void questionIndex;
+  return questionText.trim();
 }
 
 export function quickFollowUpMessage(followUpText: string): string {

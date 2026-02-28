@@ -27,11 +27,13 @@ import { CandidateResumeAnalysisService } from "./interviews/candidate-resume-an
 import { CandidateProfileUpdateV2Service } from "./interviews/candidate-profile-update-v2.service";
 import { CandidateTechnicalSummaryService } from "./interviews/candidate-technical-summary.service";
 import { InterviewIntentRouterService } from "./interviews/interview-intent-router.service";
+import { CandidateNameExtractorService } from "./interviews/candidate-name-extractor.service";
 import { ManagerJobProfileV2Service } from "./interviews/manager-job-profile-v2.service";
 import { ManagerJobTechnicalSummaryService } from "./interviews/manager-job-technical-summary.service";
 import { HiringScopeGuardrailsService } from "./guardrails/hiring-scope-guardrails.service";
 import { NormalizationService } from "./i18n/normalization.service";
 import { MatchingEngine } from "./matching/matching.engine";
+import { QdrantClient } from "./matching/qdrant.client";
 import { VectorSearchRepository } from "./matching/vector-search.repo";
 import { CandidateNotifier } from "./notifications/candidate-notifier";
 import { ManagerNotifier } from "./notifications/manager-notifier";
@@ -48,6 +50,7 @@ import { QualityFlagsService } from "./qa/quality-flags.service";
 import { StateRouter } from "./router/state.router";
 import { buildLlmGateDispatcher } from "./router/dispatch/llm-gate.dispatcher";
 import { AlwaysOnRouterService } from "./router/always-on-router.service";
+import { UserRagContextService } from "./router/context/user-rag-context.service";
 import { InterviewStorageService } from "./storage/interview-storage.service";
 import { MatchStorageService } from "./storage/match-storage.service";
 import { StateService } from "./state/state.service";
@@ -90,6 +93,18 @@ export function createApp(env: EnvConfig): AppContext {
   const profileSummaryService = new ProfileSummaryService();
   const interviewStorageService = new InterviewStorageService();
   const vectorSearchRepository = new VectorSearchRepository();
+  const qdrantClient = new QdrantClient(
+    {
+      baseUrl: env.qdrantUrl,
+      apiKey: env.qdrantApiKey,
+      candidateCollection: env.qdrantCandidateCollection,
+    },
+    logger,
+  );
+  logger.info("Qdrant vector search", {
+    enabled: qdrantClient.isEnabled(),
+    collection: env.qdrantCandidateCollection,
+  });
   const supabaseClient =
     env.supabaseUrl && env.supabaseApiKey
       ? new SupabaseRestClient({
@@ -154,7 +169,14 @@ export function createApp(env: EnvConfig): AppContext {
   const candidateTechnicalSummaryService = new CandidateTechnicalSummaryService(llmClient);
   const alwaysOnRouterService = new AlwaysOnRouterService(llmClient, logger);
   const interviewIntentRouterService = new InterviewIntentRouterService(llmClient, logger);
+  const candidateNameExtractorService = new CandidateNameExtractorService(llmClient, logger);
   const normalizationService = new NormalizationService(llmClient);
+  const userRagContextService = new UserRagContextService(
+    usersRepository,
+    profilesRepository,
+    jobsRepository,
+    logger,
+  );
   const managerJobProfileV2Service = new ManagerJobProfileV2Service(
     llmClient,
     jobsRepository,
@@ -172,6 +194,7 @@ export function createApp(env: EnvConfig): AppContext {
     matchStorageService,
     llmClient,
     logger,
+    qdrantClient,
     qualityFlagsService,
   );
   const decisionService = new DecisionService(matchStorageService, jobsRepository);
@@ -243,6 +266,8 @@ export function createApp(env: EnvConfig): AppContext {
     interviewIntentRouterService,
     normalizationService,
     interviewConfirmationService,
+    userRagContextService,
+    candidateNameExtractorService,
     logger,
   );
   const llmGateDispatcher = buildLlmGateDispatcher({

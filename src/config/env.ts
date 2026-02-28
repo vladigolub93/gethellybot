@@ -23,6 +23,9 @@ export interface EnvConfig {
   supabasePublishableKey?: string;
   supabaseServiceRoleKey?: string;
   supabaseApiKey?: string;
+  qdrantUrl?: string;
+  qdrantApiKey?: string;
+  qdrantCandidateCollection: string;
 }
 
 function getRequiredString(name: string): string {
@@ -81,6 +84,9 @@ export function loadEnv(): EnvConfig {
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseApiKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_PUBLISHABLE_KEY,
+    qdrantUrl: process.env.QDRANT_URL,
+    qdrantApiKey: process.env.QDRANT_API_KEY,
+    qdrantCandidateCollection: process.env.QDRANT_CANDIDATE_COLLECTION ?? "helly_candidates_v1",
   };
 }
 

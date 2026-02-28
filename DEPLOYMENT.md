@@ -18,6 +18,11 @@
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+Optional for external vector search:
+- `QDRANT_URL`
+- `QDRANT_API_KEY`
+- `QDRANT_CANDIDATE_COLLECTION=helly_candidates_v1`
+
 ## 2. Build and start
 1. `npm ci`
 2. `npm run build`
@@ -54,6 +59,7 @@ Body:
 Verify:
 - `GET /health` returns `{ "ok": true }`.
 - Webhook endpoint returns 200 for valid Telegram updates.
+- Logs include `Qdrant vector search` with `enabled: true` when Qdrant env is configured.
 
 ## 7. Post deploy smoke checks
 1. `/start` flow, role selection, contact capture.
