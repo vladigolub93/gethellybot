@@ -56,7 +56,6 @@ import { checkAndConsumeUserRateLimit } from "../shared/utils/rate-limit";
 import {
   buildCandidateDecisionKeyboard,
   buildCandidateMatchingActionsKeyboard,
-  buildContactRequestKeyboard,
   buildCandidateMandatoryLocationKeyboard,
   buildCandidateWorkModeKeyboard,
   buildManagerDecisionKeyboard,
@@ -493,6 +492,21 @@ export class StateRouter {
 
     if (isSkipContactForNow(rawText)) {
       await this.handleSkipContact(update, session);
+      return;
+    }
+
+    const explicitContactIntent = isContactShareTextIntent(rawText, normalizedEnglishText);
+    const extractedPhone = extractPhoneNumber(rawText);
+    if (extractedPhone && canAcceptTextContactByState(session.state)) {
+      await this.saveTextContact(session, update.chatId, extractedPhone);
+      return;
+    }
+    if (explicitContactIntent && !extractedPhone) {
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        "Please send your phone number in one message. Example, +380991112233. Or type Skip for now.",
+      );
       return;
     }
 
@@ -989,7 +1003,7 @@ export class StateRouter {
       replyMarkup: buildRoleSelectionKeyboard(),
     });
     await this.sendBotMessage(session.userId, update.chatId, contactRequestMessage(), {
-      replyMarkup: buildContactRequestKeyboard(),
+      replyMarkup: buildRemoveReplyKeyboard(),
     });
   }
 
@@ -1147,7 +1161,7 @@ export class StateRouter {
   ): Promise<void> {
     if (typeof update.contactUserId === "number" && update.contactUserId !== update.userId) {
       await this.sendBotMessage(session.userId, update.chatId, ownContactRequiredMessage(), {
-        replyMarkup: buildContactRequestKeyboard(),
+        replyMarkup: buildRemoveReplyKeyboard(),
       });
       return;
     }
@@ -1174,6 +1188,45 @@ export class StateRouter {
     });
     if (session.state === "role_selection") {
       await this.sendBotMessage(session.userId, update.chatId, "Choose your role to begin.", {
+        replyMarkup: buildRoleSelectionKeyboard(),
+      });
+    }
+  }
+
+  private async saveTextContact(
+    session: UserSessionState,
+    chatId: number,
+    phoneNumber: string,
+  ): Promise<void> {
+    const firstName =
+      session.contactFirstName?.trim() ||
+      session.username?.trim() ||
+      `user_${session.userId}`;
+    const lastName = session.contactLastName?.trim() || undefined;
+    const sharedAt = new Date().toISOString();
+
+    this.stateService.setContactInfo({
+      userId: session.userId,
+      phoneNumber,
+      firstName,
+      lastName,
+      sharedAt,
+    });
+    await this.usersRepository.saveContact({
+      telegramUserId: session.userId,
+      telegramUsername: session.username,
+      phoneNumber,
+      firstName,
+      lastName,
+      contactSharedAt: sharedAt,
+    });
+
+    await this.sendBotMessage(session.userId, chatId, contactSavedMessage(), {
+      replyMarkup: buildRemoveReplyKeyboard(),
+    });
+
+    if (session.state === "role_selection") {
+      await this.sendBotMessage(session.userId, chatId, "Choose your role to begin.", {
         replyMarkup: buildRoleSelectionKeyboard(),
       });
     }
@@ -2369,6 +2422,45 @@ function formatCandidateJobSummary(
 function isSkipContactForNow(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   return normalized === "skip for now";
+}
+
+function isContactShareTextIntent(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("share my contact") ||
+    english.includes("share contact") ||
+    english.includes("my phone number") ||
+    english.includes("save my phone") ||
+    raw.includes("поделиться контактом") ||
+    raw.includes("мой номер") ||
+    raw.includes("мій номер") ||
+    raw.includes("поділитися контактом")
+  );
+}
+
+function extractPhoneNumber(rawText: string): string | null {
+  const match = rawText.match(/(\+?\d[\d\s\-()]{7,}\d)/);
+  if (!match) {
+    return null;
+  }
+  const normalized = match[1].replace(/[^\d+]/g, "");
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length < 9) {
+    return null;
+  }
+  return normalized.startsWith("+") ? normalized : `+${digits}`;
+}
+
+function canAcceptTextContactByState(state: UserSessionState["state"]): boolean {
+  return (
+    state === "role_selection" ||
+    state === "waiting_candidate_decision" ||
+    state === "waiting_manager_decision" ||
+    state === "contact_shared" ||
+    state === "candidate_profile_ready" ||
+    state === "job_profile_ready"
+  );
 }
 
 function isStartCommand(text: string): boolean {

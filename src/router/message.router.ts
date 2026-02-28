@@ -11,7 +11,7 @@ import { NormalizedUpdate } from "../shared/types/telegram.types";
 import { parseRouterDecision, RouterDecision } from "./router-decision";
 import { StateService } from "../state/state.service";
 import { TelegramClient } from "../telegram/telegram.client";
-import { buildContactRequestKeyboard, buildRoleSelectionKeyboard } from "../telegram/ui/keyboards";
+import { buildRemoveReplyKeyboard, buildRoleSelectionKeyboard } from "../telegram/ui/keyboards";
 import {
   contactRequestMessage,
   candidateOnboardingMessage,
@@ -247,7 +247,7 @@ export class MessageRouter {
       replyMarkup: buildRoleSelectionKeyboard(),
     });
     await this.telegramClient.sendMessage(update.chatId, contactRequestMessage(), {
-      replyMarkup: buildContactRequestKeyboard(),
+      replyMarkup: buildRemoveReplyKeyboard(),
     });
   }
 

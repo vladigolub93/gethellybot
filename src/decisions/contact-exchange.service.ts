@@ -3,7 +3,6 @@ import { UsersRepository } from "../db/repositories/users.repo";
 import { MatchRecord } from "./match.types";
 import { StateService } from "../state/state.service";
 import { TelegramClient } from "../telegram/telegram.client";
-import { buildContactRequestKeyboard } from "../telegram/ui/keyboards";
 import {
   candidateContactRequiredForExchangeMessage,
   managerContactRequiredForExchangeMessage,
@@ -70,7 +69,6 @@ export class ContactExchangeService {
     await this.telegramClient.sendMessage(
       session.chatId,
       candidateContactRequiredForExchangeMessage(),
-      { replyMarkup: buildContactRequestKeyboard() },
     );
   }
 
@@ -82,7 +80,6 @@ export class ContactExchangeService {
     await this.telegramClient.sendMessage(
       session.chatId,
       managerContactRequiredForExchangeMessage(),
-      { replyMarkup: buildContactRequestKeyboard() },
     );
   }
 }

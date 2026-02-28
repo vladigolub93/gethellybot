@@ -12,9 +12,10 @@ export function welcomeMessage(): string {
 
 export function contactRequestMessage(): string {
   return [
-    "Before we begin, you can share your Telegram contact.",
+    "Before we begin, you can share your contact in text.",
     "This helps us connect you with the right person after mutual approval.",
     "Your contact is never shared unless both sides approve.",
+    "Send phone number, example +380991112233.",
     "If you want to continue now, type Skip for now.",
   ].join("\n");
 }
@@ -32,11 +33,17 @@ export function ownContactRequiredMessage(): string {
 }
 
 export function candidateContactRequiredForExchangeMessage(): string {
-  return "To share your contact with the hiring manager, please share your Telegram contact first.";
+  return [
+    "To share your contact with the hiring manager, please send your phone number first.",
+    "Example, +380991112233.",
+  ].join("\n");
 }
 
 export function managerContactRequiredForExchangeMessage(): string {
-  return "To share your contact with the candidate, please share your Telegram contact first.";
+  return [
+    "To share your contact with the candidate, please send your phone number first.",
+    "Example, +380991112233.",
+  ].join("\n");
 }
 
 export function candidateResumePrompt(): string {
