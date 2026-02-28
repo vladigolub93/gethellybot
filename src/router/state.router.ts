@@ -660,6 +660,15 @@ export class StateRouter {
         userRagContext: interviewRag.ragContext,
       });
 
+      if (isRemainingQuestionsMetaQuery(rawText, normalizedEnglishText)) {
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          buildInterviewRemainingQuestionsReply(session, detectedLanguage),
+        );
+        return;
+      }
+
       if (intentDecision.intent === "ANSWER" && intentDecision.should_advance) {
         this.stateService.resetInterviewNoAnswerCounter(session.userId);
         await this.handleInterviewAnswer(
@@ -1330,8 +1339,10 @@ export class StateRouter {
   ): Promise<void> {
     const trimmed = reply.trim();
     const previous = session.lastBotMessage?.trim();
+    const isInterviewState =
+      session.state === "interviewing_candidate" || session.state === "interviewing_manager";
     const finalReply =
-      trimmed && previous && trimmed === previous
+      trimmed && previous && trimmed === previous && !isInterviewState
         ? getNonRepeatingFallbackByState(session.state)
         : trimmed || "Please continue with your hiring flow.";
     await this.sendBotMessage(session.userId, chatId, finalReply);
@@ -2794,6 +2805,64 @@ function isSkipContactForNow(text: string): boolean {
 
 function isAwaitingContactChoice(session: UserSessionState): boolean {
   return session.state === "role_selection" && session.awaitingContactChoice === true;
+}
+
+function isRemainingQuestionsMetaQuery(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("how many questions") ||
+    english.includes("questions left") ||
+    english.includes("how many left") ||
+    english.includes("remaining questions") ||
+    raw.includes("сколько вопросов") ||
+    raw.includes("много еще вопросов") ||
+    raw.includes("сколько еще") ||
+    raw.includes("скільки питань") ||
+    raw.includes("багато ще питань")
+  );
+}
+
+function buildInterviewRemainingQuestionsReply(
+  session: UserSessionState,
+  detectedLanguage: "en" | "ru" | "uk" | "other",
+): string {
+  const plan = session.interviewPlan;
+  if (!plan) {
+    if (detectedLanguage === "ru") {
+      return "Сейчас не вижу план интервью. Отправьте ответ на текущий вопрос, и я продолжу.";
+    }
+    if (detectedLanguage === "uk") {
+      return "Зараз не бачу план інтерв'ю. Надішліть відповідь на поточне питання, і я продовжу.";
+    }
+    return "I do not see the interview plan right now. Please answer the current question and I will continue.";
+  }
+
+  const answered = new Set((session.answers ?? []).map((item) => item.questionIndex));
+  const skipped = new Set(session.skippedQuestionIndexes ?? []);
+  let remaining = 0;
+  for (let index = 0; index < plan.questions.length; index += 1) {
+    if (!answered.has(index) && !skipped.has(index)) {
+      remaining += 1;
+    }
+  }
+
+  if (detectedLanguage === "ru") {
+    if (remaining <= 1) {
+      return "Остался последний вопрос. После вашего ответа завершим интервью.";
+    }
+    return `Осталось ${remaining} вопросов, включая текущий. После каждого ответа я сразу продолжу.`;
+  }
+  if (detectedLanguage === "uk") {
+    if (remaining <= 1) {
+      return "Залишилося останнє питання. Після вашої відповіді завершимо інтерв'ю.";
+    }
+    return `Залишилося ${remaining} питань, включно з поточним. Після кожної відповіді я одразу продовжу.`;
+  }
+  if (remaining <= 1) {
+    return "One final question is left. After your answer, we will complete the interview.";
+  }
+  return `${remaining} questions are left, including the current one. After each answer I will continue immediately.`;
 }
 
 function mapDocumentProcessingErrorToUserMessage(
