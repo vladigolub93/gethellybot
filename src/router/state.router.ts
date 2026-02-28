@@ -434,6 +434,21 @@ export class StateRouter {
           detectedLanguage,
         };
       }
+      if (update.kind === "text" || update.kind === "callback") {
+        return {
+          decision: {
+            route: "OTHER",
+            meta_type: null,
+            control_type: null,
+            matching_intent: null,
+            reply: "Please continue with the current step.",
+            should_advance: false,
+            should_process_text_as_document: false,
+          },
+          textEnglish: textEnglish?.trim() ? textEnglish.trim() : null,
+          detectedLanguage,
+        };
+      }
       await this.sendRouterReplyWithLoopGuard(
         session,
         update.chatId,
@@ -2654,6 +2669,19 @@ function detectRoleSelectionFromText(
 ): UserRole | null {
   const raw = rawText.trim().toLowerCase();
   const english = normalizedEnglishText.trim().toLowerCase();
+
+  if (/\b(candidate|job seeker|looking for a job)\b/.test(english)) {
+    return "candidate";
+  }
+  if (/\b(hiring manager|recruiter|find candidates|i am hiring|manager)\b/.test(english)) {
+    return "manager";
+  }
+  if (/кандидат|соискател|шукаю роботу|шукаю ваканс/.test(raw)) {
+    return "candidate";
+  }
+  if (/нанима|ищу кандидат|роботодав|шукаю кандидат|підбираю/.test(raw)) {
+    return "manager";
+  }
 
   const candidateSignals = [
     "i am candidate",
