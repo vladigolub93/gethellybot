@@ -21,23 +21,32 @@ export class CandidateNotifier {
       core_tech: string[];
     } | null;
   }): Promise<void> {
-    await this.telegramClient.sendMessage(
-      params.chatId,
-      candidateOpportunityMessage({
+    await this.telegramClient.sendUserMessage({
+      source: "candidate_notifier.opportunity",
+      chatId: params.chatId,
+      text: candidateOpportunityMessage({
         score: params.score,
         jobSummary: params.jobSummary,
         explanationMessage: params.explanationMessage,
         jobTechnicalSummary: params.jobTechnicalSummary ?? null,
       }),
-      { replyMarkup: buildCandidateDecisionKeyboard(params.matchId) },
-    );
+      replyMarkup: buildCandidateDecisionKeyboard(params.matchId),
+    });
   }
 
   async notifyManagerRejected(chatId: number): Promise<void> {
-    await this.telegramClient.sendMessage(chatId, candidateManagerRejectedMessage());
+    await this.telegramClient.sendUserMessage({
+      source: "candidate_notifier.manager_rejected",
+      chatId,
+      text: candidateManagerRejectedMessage(),
+    });
   }
 
   async notifyContactsShared(chatId: number, managerContact: string): Promise<void> {
-    await this.telegramClient.sendMessage(chatId, contactsSharedToCandidateMessage(managerContact));
+    await this.telegramClient.sendUserMessage({
+      source: "candidate_notifier.contacts_shared",
+      chatId,
+      text: contactsSharedToCandidateMessage(managerContact),
+    });
   }
 }

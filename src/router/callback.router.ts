@@ -63,7 +63,7 @@ export class CallbackRouter {
 
     if (update.data.startsWith(CALLBACK_CANDIDATE_ASK_PREFIX)) {
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Not implemented yet");
-      await this.telegramClient.sendMessage(update.chatId, askQuestionNotImplementedMessage());
+      await this.sendBotMessage(update.chatId, askQuestionNotImplementedMessage(), "callback_router.ask_candidate");
       return;
     }
 
@@ -79,7 +79,7 @@ export class CallbackRouter {
 
     if (update.data.startsWith(CALLBACK_MANAGER_ASK_PREFIX)) {
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Not implemented yet");
-      await this.telegramClient.sendMessage(update.chatId, askQuestionNotImplementedMessage());
+      await this.sendBotMessage(update.chatId, askQuestionNotImplementedMessage(), "callback_router.ask_manager");
       return;
     }
 
@@ -94,11 +94,11 @@ export class CallbackRouter {
       this.stateService.setRole(update.userId, "candidate");
       this.stateService.transition(update.userId, "onboarding_candidate");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Candidate flow selected");
-      await this.telegramClient.sendMessage(update.chatId, candidateOnboardingMessage());
-      await this.telegramClient.sendMessage(update.chatId, onboardingPrivacyNoteMessage());
+      await this.sendBotMessage(update.chatId, candidateOnboardingMessage(), "callback_router.role_candidate.onboarding");
+      await this.sendBotMessage(update.chatId, onboardingPrivacyNoteMessage(), "callback_router.role_candidate.privacy");
       this.stateService.transition(update.userId, "waiting_resume");
       this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.telegramClient.sendMessage(update.chatId, candidateResumePrompt());
+      await this.sendBotMessage(update.chatId, candidateResumePrompt(), "callback_router.role_candidate.resume_prompt");
       return;
     }
 
@@ -113,27 +113,33 @@ export class CallbackRouter {
       this.stateService.setRole(update.userId, "manager");
       this.stateService.transition(update.userId, "onboarding_manager");
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Hiring flow selected");
-      await this.telegramClient.sendMessage(update.chatId, managerOnboardingMessage());
-      await this.telegramClient.sendMessage(update.chatId, onboardingPrivacyNoteMessage());
+      await this.sendBotMessage(update.chatId, managerOnboardingMessage(), "callback_router.role_manager.onboarding");
+      await this.sendBotMessage(update.chatId, onboardingPrivacyNoteMessage(), "callback_router.role_manager.privacy");
       this.stateService.transition(update.userId, "waiting_job");
       this.stateService.setOnboardingCompleted(update.userId, true);
-      await this.telegramClient.sendMessage(update.chatId, managerJobPrompt());
+      await this.sendBotMessage(update.chatId, managerJobPrompt(), "callback_router.role_manager.job_prompt");
       return;
     }
 
     if (update.data === CALLBACK_ROLE_LEARN_MORE) {
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Overview");
-      await this.telegramClient.sendMessage(update.chatId, onboardingLearnHowItWorksMessage(), {
-        replyMarkup: buildRoleLearnMoreKeyboard(),
-      });
+      await this.sendBotMessage(
+        update.chatId,
+        onboardingLearnHowItWorksMessage(),
+        "callback_router.learn_more",
+        buildRoleLearnMoreKeyboard(),
+      );
       return;
     }
 
     if (update.data === CALLBACK_ROLE_BACK) {
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Back");
-      await this.telegramClient.sendMessage(update.chatId, welcomeMessage(), {
-        replyMarkup: buildRoleSelectionKeyboard(),
-      });
+      await this.sendBotMessage(
+        update.chatId,
+        welcomeMessage(),
+        "callback_router.back_to_role_selection",
+        buildRoleSelectionKeyboard(),
+      );
       return;
     }
 
@@ -146,7 +152,7 @@ export class CallbackRouter {
       const match = await this.decisionService.candidateApply(matchId, update.userId);
       await this.notificationEngine.notifyManagerCandidateApplied(match);
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Applied");
-      await this.telegramClient.sendMessage(update.chatId, candidateAppliedAcknowledgement());
+      await this.sendBotMessage(update.chatId, candidateAppliedAcknowledgement(), "callback_router.candidate_apply");
     } catch (error) {
       await this.telegramClient.answerCallbackQuery(
         update.callbackQueryId,
@@ -161,7 +167,7 @@ export class CallbackRouter {
       await this.decisionService.candidateReject(matchId, update.userId);
       await this.safeTransitionToProfileReady(update.userId);
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Rejected");
-      await this.telegramClient.sendMessage(update.chatId, candidateRejectedAcknowledgement());
+      await this.sendBotMessage(update.chatId, candidateRejectedAcknowledgement(), "callback_router.candidate_reject");
     } catch (error) {
       await this.telegramClient.answerCallbackQuery(
         update.callbackQueryId,
@@ -189,7 +195,7 @@ export class CallbackRouter {
       );
       await this.decisionService.markContactShared(match.id, update.userId);
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Accepted");
-      await this.telegramClient.sendMessage(update.chatId, managerAcceptedAcknowledgement());
+      await this.sendBotMessage(update.chatId, managerAcceptedAcknowledgement(), "callback_router.manager_accept");
     } catch (error) {
       await this.telegramClient.answerCallbackQuery(
         update.callbackQueryId,
@@ -205,7 +211,7 @@ export class CallbackRouter {
       await this.notificationEngine.notifyManagerRejected(match);
       await this.safeTransitionManagerAfterReject(update.userId);
       await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Rejected");
-      await this.telegramClient.sendMessage(update.chatId, managerRejectedAcknowledgement());
+      await this.sendBotMessage(update.chatId, managerRejectedAcknowledgement(), "callback_router.manager_reject");
     } catch (error) {
       await this.telegramClient.answerCallbackQuery(
         update.callbackQueryId,
@@ -244,5 +250,19 @@ export class CallbackRouter {
     } catch {
       return;
     }
+  }
+
+  private async sendBotMessage(
+    chatId: number,
+    text: string,
+    source: string,
+    replyMarkup?: ReturnType<typeof buildRoleSelectionKeyboard> | ReturnType<typeof buildRoleLearnMoreKeyboard>,
+  ): Promise<void> {
+    await this.telegramClient.sendUserMessage({
+      source,
+      chatId,
+      text,
+      replyMarkup,
+    });
   }
 }

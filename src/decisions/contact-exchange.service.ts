@@ -66,10 +66,11 @@ export class ContactExchangeService {
     if (!session) {
       return;
     }
-    await this.telegramClient.sendMessage(
-      session.chatId,
-      candidateContactRequiredForExchangeMessage(),
-    );
+    await this.telegramClient.sendUserMessage({
+      source: "contact_exchange.prompt_candidate",
+      chatId: session.chatId,
+      text: candidateContactRequiredForExchangeMessage(),
+    });
   }
 
   private async promptManagerForContact(managerUserId: number): Promise<void> {
@@ -77,10 +78,11 @@ export class ContactExchangeService {
     if (!session) {
       return;
     }
-    await this.telegramClient.sendMessage(
-      session.chatId,
-      managerContactRequiredForExchangeMessage(),
-    );
+    await this.telegramClient.sendUserMessage({
+      source: "contact_exchange.prompt_manager",
+      chatId: session.chatId,
+      text: managerContactRequiredForExchangeMessage(),
+    });
   }
 }
 

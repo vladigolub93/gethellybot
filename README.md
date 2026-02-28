@@ -23,3 +23,16 @@ Response shape:
 ```
 
 If `ok` is `false`, apply missing migrations and recheck.
+
+## LLM gate simulation
+
+Run a local dispatcher simulation without Telegram network calls:
+
+```bash
+npm run simulate:flow
+```
+
+This script checks:
+- every mocked update goes through router classification,
+- no generic fallback phrase is used,
+- meta steps do not force interview advancement.

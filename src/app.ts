@@ -46,6 +46,7 @@ import { JobMandatoryFieldsService } from "./jobs/job-mandatory-fields.service";
 import { InterviewConfirmationService } from "./confirmations/interview-confirmation.service";
 import { QualityFlagsService } from "./qa/quality-flags.service";
 import { StateRouter } from "./router/state.router";
+import { buildLlmGateDispatcher } from "./router/dispatch/llm-gate.dispatcher";
 import { AlwaysOnRouterService } from "./router/always-on-router.service";
 import { InterviewStorageService } from "./storage/interview-storage.service";
 import { MatchStorageService } from "./storage/match-storage.service";
@@ -244,8 +245,12 @@ export function createApp(env: EnvConfig): AppContext {
     interviewConfirmationService,
     logger,
   );
-  const webhookController = buildWebhookController({
+  const llmGateDispatcher = buildLlmGateDispatcher({
     stateRouter,
+    logger,
+  });
+  const webhookController = buildWebhookController({
+    dispatcher: llmGateDispatcher,
     logger,
     secretToken: env.telegramSecretToken,
   });

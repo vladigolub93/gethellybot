@@ -53,6 +53,7 @@ import { TelegramClient } from "../telegram/telegram.client";
 import { JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
 import { getShortEmpathyLine } from "../shared/utils/empathy.util";
 import { checkAndConsumeUserRateLimit } from "../shared/utils/rate-limit";
+import { TelegramReplyMarkup } from "../shared/types/telegram.types";
 import {
   buildCandidateDecisionKeyboard,
   buildCandidateMatchingActionsKeyboard,
@@ -118,10 +119,8 @@ import { maybeReact } from "../telegram/reactions/reaction.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 import { AlwaysOnRouterService } from "./always-on-router.service";
 import { CallbackRouter } from "./callback.router";
-import { MessageRouter } from "./message.router";
 
 export class StateRouter {
-  private readonly messageRouter: MessageRouter;
   private readonly callbackRouter: CallbackRouter;
 
   constructor(
@@ -155,15 +154,6 @@ export class StateRouter {
     private readonly interviewConfirmationService: InterviewConfirmationService,
     private readonly logger: Logger,
   ) {
-    this.messageRouter = new MessageRouter(
-      this.stateService,
-      this.telegramClient,
-      this.profileSummaryService,
-      this.guardrailsService,
-      this.dataDeletionService,
-      this.llmClient,
-      this.logger,
-    );
     this.callbackRouter = new CallbackRouter(
       this.stateService,
       this.statePersistenceService,
@@ -298,6 +288,10 @@ export class StateRouter {
         current_state: session.state,
         route: routed.decision.route,
         action: mapRouteToActionLabel(routed.decision.route),
+        prompt_name: "always_on_router_v1",
+        model_name: this.llmClient.getModelName(),
+        did_call_llm_router: true,
+        did_call_task_prompt: didRouteLikelyCallTaskPrompt(routed.decision.route),
         ok: true,
       },
     );
@@ -1152,6 +1146,12 @@ export class StateRouter {
 
     try {
       this.stateService.clearWaitingShortTextCounter(update.userId);
+      this.logger.info("document.extracted", {
+        userId: update.userId,
+        sourceType: "text",
+        extractedChars: input.sourceTextOriginal.length,
+        normalizedChars: input.sourceTextEnglish.length,
+      });
       if (intakeState === "waiting_job") {
         await this.jobsRepository.saveJobIntakeSource({
           managerTelegramUserId: update.userId,
@@ -1176,6 +1176,13 @@ export class StateRouter {
         state: intakeState,
       };
       const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, input.sourceTextEnglish);
+      this.logger.info("interview.bootstrap.completed", {
+        userId: update.userId,
+        sourceType: "text",
+        nextState: bootstrap.nextState,
+        questions: bootstrap.plan.questions.length,
+        hasOneLiner: Boolean(bootstrap.intakeOneLiner),
+      });
       if (bootstrap.intakeOneLiner) {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
       }
@@ -1231,9 +1238,23 @@ export class StateRouter {
     userId: number,
     chatId: number,
     text: string,
-    options?: Parameters<TelegramClient["sendMessage"]>[2],
+    options?: {
+      source?: string;
+      replyMarkup?: TelegramReplyMarkup;
+    },
   ): Promise<void> {
-    await this.telegramClient.sendMessage(chatId, text, options);
+    this.logger.debug("user.reply.sent", {
+      telegram_user_id: userId,
+      chat_id: chatId,
+      source: options?.source ?? "state_router",
+      reply_sent: true,
+    });
+    await this.telegramClient.sendUserMessage({
+      source: options?.source ?? "state_router",
+      chatId,
+      text,
+      replyMarkup: options?.replyMarkup,
+    });
     this.stateService.setLastBotMessage(userId, text);
   }
 
@@ -1951,6 +1972,14 @@ export class StateRouter {
         update.mimeType,
       );
       const normalizedExtractedText = await this.normalizeGeneralText(extractedText);
+      this.logger.info("document.extracted", {
+        userId: update.userId,
+        sourceType: "file",
+        fileName: update.fileName ?? null,
+        mimeType: update.mimeType ?? null,
+        extractedChars: extractedText.length,
+        normalizedChars: normalizedExtractedText.length,
+      });
 
       if (isManagerJdIntake) {
         await this.jobsRepository.saveJobIntakeSource({
@@ -1976,6 +2005,13 @@ export class StateRouter {
         state: intakeState,
       };
       const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, normalizedExtractedText);
+      this.logger.info("interview.bootstrap.completed", {
+        userId: update.userId,
+        sourceType: "file",
+        nextState: bootstrap.nextState,
+        questions: bootstrap.plan.questions.length,
+        hasOneLiner: Boolean(bootstrap.intakeOneLiner),
+      });
       if (bootstrap.intakeOneLiner) {
         await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
       }
@@ -2289,16 +2325,20 @@ export class StateRouter {
     try {
       const run = await this.matchingEngine.runForManager(managerUserId);
       if (!run || run.matches.length === 0) {
-        await this.telegramClient.sendMessage(
+        await this.sendBotMessage(
+          managerSession.userId,
           managerSession.chatId,
           "No suitable candidates found yet.",
+          { source: "state_router.publish_manager_matches.empty" },
         );
         return;
       }
 
-      await this.telegramClient.sendMessage(
+      await this.sendBotMessage(
+        managerSession.userId,
         managerSession.chatId,
         "Matching run completed. Candidate notifications were sent where eligible.",
+        { source: "state_router.publish_manager_matches.done" },
       );
 
       const jobTechnicalSummary = await this.jobsRepository.getJobTechnicalSummary(managerUserId);
@@ -2334,9 +2374,11 @@ export class StateRouter {
         managerUserId,
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      await this.telegramClient.sendMessage(
+      await this.sendBotMessage(
+        managerSession.userId,
         managerSession.chatId,
         "Matching is temporarily unavailable.",
+        { source: "state_router.publish_manager_matches.error" },
       );
     }
   }
@@ -2424,7 +2466,8 @@ export class StateRouter {
       }
 
       for (const match of managerMatches) {
-        await this.telegramClient.sendMessage(
+        await this.sendBotMessage(
+          session.userId,
           chatId,
           managerCandidateSuggestionMessage({
             candidateUserId: match.candidateUserId,
@@ -2434,7 +2477,10 @@ export class StateRouter {
             explanationMessage:
               match.explanationJson?.message_for_manager ?? match.explanation,
           }),
-          { replyMarkup: buildManagerDecisionKeyboard(match.id) },
+          {
+            source: "state_router.show_matches.manager_card",
+            replyMarkup: buildManagerDecisionKeyboard(match.id),
+          },
         );
       }
       return true;
@@ -2449,7 +2495,8 @@ export class StateRouter {
     }
 
     for (const match of candidateMatches) {
-      await this.telegramClient.sendMessage(
+      await this.sendBotMessage(
+        session.userId,
         chatId,
         candidateOpportunityMessage({
           score: match.score,
@@ -2458,7 +2505,10 @@ export class StateRouter {
             match.explanationJson?.message_for_candidate ?? match.explanation,
           jobTechnicalSummary: match.jobTechnicalSummary ?? null,
         }),
-        { replyMarkup: buildCandidateDecisionKeyboard(match.id) },
+        {
+          source: "state_router.show_matches.candidate_card",
+          replyMarkup: buildCandidateDecisionKeyboard(match.id),
+        },
       );
     }
     return true;
@@ -2722,6 +2772,17 @@ function mapRouteToActionLabel(route: AlwaysOnRouterDecision["route"]): string {
     return "redirect_offtopic";
   }
   return "generic_reply";
+}
+
+function didRouteLikelyCallTaskPrompt(route: AlwaysOnRouterDecision["route"]): boolean {
+  return (
+    route === "DOC" ||
+    route === "VOICE" ||
+    route === "JD_TEXT" ||
+    route === "RESUME_TEXT" ||
+    route === "INTERVIEW_ANSWER" ||
+    route === "MATCHING_COMMAND"
+  );
 }
 
 function parseCandidateWorkMode(textEnglish: string): CandidateWorkMode | null {

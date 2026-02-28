@@ -56,6 +56,23 @@ export class TelegramClient {
     await this.request<boolean>("setWebhook", payload);
   }
 
+  async sendUserMessage(input: {
+    source: string;
+    chatId: number;
+    text: string;
+    replyMarkup?: TelegramReplyMarkup;
+  }): Promise<void> {
+    this.logger.debug("telegram.user_message", {
+      source: input.source,
+      chatId: input.chatId,
+      textPreview: input.text.slice(0, 140),
+    });
+    await this.sendMessage(input.chatId, input.text, {
+      replyMarkup: input.replyMarkup,
+    });
+  }
+
+  // Internal low-level sender. Prefer sendUserMessage in business logic.
   async sendMessage(
     chatId: number,
     text: string,

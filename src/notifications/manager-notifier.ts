@@ -18,20 +18,25 @@ export class ManagerNotifier {
     candidateTechnicalSummary?: CandidateTechnicalSummaryV1 | null;
     explanationMessage: string;
   }): Promise<void> {
-    await this.telegramClient.sendMessage(
-      params.chatId,
-      managerCandidateAppliedMessage({
+    await this.telegramClient.sendUserMessage({
+      source: "manager_notifier.candidate_applied",
+      chatId: params.chatId,
+      text: managerCandidateAppliedMessage({
         candidateUserId: params.candidateUserId,
         score: params.score,
         candidateSummary: params.candidateSummary,
         candidateTechnicalSummary: params.candidateTechnicalSummary ?? null,
         explanationMessage: params.explanationMessage,
       }),
-      { replyMarkup: buildManagerDecisionKeyboard(params.matchId) },
-    );
+      replyMarkup: buildManagerDecisionKeyboard(params.matchId),
+    });
   }
 
   async notifyContactsShared(chatId: number, candidateContact: string): Promise<void> {
-    await this.telegramClient.sendMessage(chatId, contactsSharedToManagerMessage(candidateContact));
+    await this.telegramClient.sendUserMessage({
+      source: "manager_notifier.contacts_shared",
+      chatId,
+      text: contactsSharedToManagerMessage(candidateContact),
+    });
   }
 }

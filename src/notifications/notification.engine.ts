@@ -69,7 +69,11 @@ export class NotificationEngine {
     const firstMatchAlreadyExplained =
       Boolean(candidateSession.firstMatchExplained) || userFlags.firstMatchExplained;
     if (!firstMatchAlreadyExplained) {
-      await this.telegramClient.sendMessage(candidateSession.chatId, firstMatchExplanationMessage());
+      await this.telegramClient.sendUserMessage({
+        source: "notification_engine.first_match_candidate",
+        chatId: candidateSession.chatId,
+        text: firstMatchExplanationMessage(),
+      });
       await this.usersRepository.markFirstMatchExplained(match.candidateUserId, true);
       this.stateService.setFirstMatchExplained(match.candidateUserId, true);
     }
@@ -130,7 +134,11 @@ export class NotificationEngine {
     const firstMatchAlreadyExplained =
       Boolean(managerSession.firstMatchExplained) || userFlags.firstMatchExplained;
     if (!firstMatchAlreadyExplained) {
-      await this.telegramClient.sendMessage(managerSession.chatId, firstManagerMatchExplanationMessage());
+      await this.telegramClient.sendUserMessage({
+        source: "notification_engine.first_match_manager",
+        chatId: managerSession.chatId,
+        text: firstManagerMatchExplanationMessage(),
+      });
       await this.usersRepository.markFirstMatchExplained(match.managerUserId, true);
       this.stateService.setFirstMatchExplained(match.managerUserId, true);
     }

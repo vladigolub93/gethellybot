@@ -17,6 +17,10 @@ export interface LoggerContext {
   prompt_name?: string;
   model_name?: string;
   latency_ms?: number;
+  did_call_llm_router?: boolean;
+  did_call_task_prompt?: boolean;
+  handler_selected?: string;
+  reply_sent?: boolean;
   ok?: boolean;
   error_code?: string;
 }

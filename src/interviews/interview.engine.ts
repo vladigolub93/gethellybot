@@ -119,6 +119,9 @@ export class InterviewEngine {
           resumeAnalysisJson: analysis,
           currentProfileJson: session.candidateProfile ?? {},
         })) ?? undefined;
+      if (!intakeOneLiner) {
+        intakeOneLiner = buildCandidateFallbackOneLiner(analysis);
+      }
     } else {
       const jobAnalysis = await this.interviewPlanService.buildJobDescriptionAnalysisV1(
         userId,
@@ -145,6 +148,9 @@ export class InterviewEngine {
           jobAnalysisJson: analysisForPlan,
           currentJobProfileJson: session.managerJobProfileV2 ?? session.jobProfile ?? {},
         })) ?? undefined;
+      if (!intakeOneLiner) {
+        intakeOneLiner = buildManagerFallbackOneLiner(analysisForPlan);
+      }
 
       // Keep backward path for unexpected failures to avoid breaking manager onboarding.
       if (!plan.questions.length) {
@@ -768,6 +774,25 @@ function buildFollowUpQuestion(focus: string): string {
   const normalizedFocus = focus.trim();
   const effectiveFocus = normalizedFocus || "the relevant decision and its impact";
   return `Quick follow up. Please clarify ${effectiveFocus} using one concrete example. Say what you did, what you chose, and why.`;
+}
+
+function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {
+  const direction = analysis.primary_direction === "unknown" ? "technical" : analysis.primary_direction;
+  const seniority = analysis.seniority_estimate === "unknown" ? "level not fully clear yet" : analysis.seniority_estimate;
+  const coreTech = analysis.core_technologies
+    .map((item) => item.name.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(", ");
+  const techPart = coreTech ? ` across ${coreTech}` : "";
+  return `I parsed your resume as a ${seniority} ${direction} profile${techPart}, now I will validate depth with focused questions.`;
+}
+
+function buildManagerFallbackOneLiner(analysis: JobDescriptionAnalysisV1): string {
+  const roleTitle = analysis.role_title_guess?.trim() || "technical role";
+  const coreTech = analysis.technology_signal_map.likely_core.slice(0, 3).join(", ");
+  const techPart = coreTech ? ` with likely core tech ${coreTech}` : "";
+  return `I parsed this as a ${roleTitle}${techPart}, next I will clarify real tasks, constraints, and expectations.`;
 }
 
 function isCandidateProfile(profile: CandidateProfile | JobProfile): profile is CandidateProfile {

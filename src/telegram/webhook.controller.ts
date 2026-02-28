@@ -1,12 +1,9 @@
 import { Request, Response, Router } from "express";
 import { Logger } from "../config/logger";
-import { StateRouter } from "../router/state.router";
-import { TelegramUpdate } from "../shared/types/telegram.types";
-import { shouldProcessUpdate } from "../shared/utils/telegram-idempotency";
-import { normalizeUpdate } from "./update-normalizer";
+import { LlmGateDispatcher } from "../router/dispatch/llm-gate.dispatcher";
 
 interface WebhookControllerDeps {
-  stateRouter: StateRouter;
+  dispatcher: LlmGateDispatcher;
   logger: Logger;
   secretToken?: string;
 }
@@ -34,30 +31,13 @@ export function buildWebhookController(deps: WebhookControllerDeps): Router {
       return;
     }
 
-    const update = request.body as TelegramUpdate;
-    const normalized = normalizeUpdate(update);
-
-    if (!normalized) {
-      deps.logger.debug("Unsupported Telegram update", { updateId: update.update_id });
-      response.status(200).json({ ok: true });
-      return;
-    }
-
     try {
-      const shouldProcess = await shouldProcessUpdate(normalized.updateId, normalized.userId);
-      if (!shouldProcess) {
-        deps.logger.debug("Duplicate update ignored by webhook idempotency", {
-          updateId: normalized.updateId,
-          telegramUserId: normalized.userId,
-        });
-        response.status(200).json({ ok: true });
-        return;
-      }
-      await deps.stateRouter.route(normalized);
+      await deps.dispatcher.handleIncomingUpdate(request.body);
       response.status(200).json({ ok: true });
     } catch (error) {
       deps.logger.error("Failed to process Telegram update", {
-        updateId: normalized.updateId,
+        updateId:
+          typeof request.body?.update_id === "number" ? request.body.update_id : undefined,
         error: error instanceof Error ? error.message : "Unknown error",
       });
       response.status(200).json({ ok: true });
