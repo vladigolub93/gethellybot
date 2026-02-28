@@ -144,7 +144,12 @@ export function createApp(env: EnvConfig): AppContext {
     usersRepository,
     statesRepository,
   );
-  const dataDeletionService = new DataDeletionService(dataDeletionRepository, usersRepository, logger);
+  const dataDeletionService = new DataDeletionService(
+    dataDeletionRepository,
+    usersRepository,
+    logger,
+    qdrantClient,
+  );
   const qualityFlagsService = new QualityFlagsService(qualityFlagsRepository, logger);
   const guardrailsService = new HiringScopeGuardrailsService(
     llmClient,

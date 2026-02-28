@@ -122,6 +122,24 @@ export class QdrantClient {
     );
   }
 
+  async deleteCandidateVector(candidateTelegramUserId: number): Promise<void> {
+    if (!this.isEnabled()) {
+      return;
+    }
+    if (!Number.isInteger(candidateTelegramUserId) || candidateTelegramUserId <= 0) {
+      return;
+    }
+
+    const collection = this.config.candidateCollection;
+    await this.requestVoid(
+      "POST",
+      `/collections/${encodeURIComponent(collection)}/points/delete?wait=true`,
+      {
+        points: [candidateTelegramUserId],
+      },
+    );
+  }
+
   async searchCandidateIds(input: { vector: number[]; limit: number }): Promise<number[]> {
     if (!this.isEnabled()) {
       return [];
@@ -208,7 +226,7 @@ export class QdrantClient {
   }
 
   private async requestVoid(
-    method: "PUT" | "DELETE",
+    method: "POST" | "PUT" | "DELETE",
     path: string,
     body?: Record<string, unknown>,
   ): Promise<void> {

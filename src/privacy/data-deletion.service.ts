@@ -1,6 +1,7 @@
 import { Logger } from "../config/logger";
 import { DataDeletionRepository } from "../db/repositories/data-deletion.repo";
 import { UsersRepository } from "../db/repositories/users.repo";
+import { QdrantClient } from "../matching/qdrant.client";
 
 export interface DataDeletionResult {
   requested: boolean;
@@ -12,6 +13,7 @@ export class DataDeletionService {
     private readonly repository: DataDeletionRepository,
     private readonly usersRepository: UsersRepository,
     private readonly logger: Logger,
+    private readonly qdrantClient?: QdrantClient,
   ) {}
 
   async requestDeletion(input: {
@@ -22,6 +24,9 @@ export class DataDeletionService {
     try {
       await this.repository.markRequested(input);
       await this.repository.purgeUserData(input.telegramUserId);
+      if (this.qdrantClient?.isEnabled()) {
+        await this.qdrantClient.deleteCandidateVector(input.telegramUserId);
+      }
       this.logger.info("privacy.contact_data_cleared", {
         telegramUserId: input.telegramUserId,
       });
