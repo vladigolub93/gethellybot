@@ -369,7 +369,9 @@ export function createApp(env: EnvConfig): AppContext {
     telegramUserId?: number;
     username?: string;
   } | null {
-    const token = extractCookie(request.header("cookie"), adminSessionCookieName);
+    const cookieToken = extractCookie(request.header("cookie"), adminSessionCookieName);
+    const bearerToken = extractBearerToken(request.header("authorization"));
+    const token = cookieToken || bearerToken;
     if (!token) {
       return null;
     }
@@ -452,6 +454,7 @@ export function createApp(env: EnvConfig): AppContext {
         );
         response.status(200).json({
           ok: true,
+          sessionToken,
           telegramUserId: verification.identity.telegramUserId,
           username: verification.identity.username ?? null,
         });
@@ -470,7 +473,7 @@ export function createApp(env: EnvConfig): AppContext {
       "Set-Cookie",
       buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
     );
-    response.status(200).json({ ok: true });
+    response.status(200).json({ ok: true, sessionToken });
     logger.info("Admin login succeeded with PIN-only fallback");
   });
 
@@ -581,4 +584,16 @@ function buildCookieHeader(
     parts.push("Secure");
   }
   return parts.join("; ");
+}
+
+function extractBearerToken(authorizationHeader: string | undefined): string | null {
+  if (!authorizationHeader) {
+    return null;
+  }
+  const trimmed = authorizationHeader.trim();
+  if (!trimmed.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+  const token = trimmed.slice(7).trim();
+  return token.length > 0 ? token : null;
 }

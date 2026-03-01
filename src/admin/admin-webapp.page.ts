@@ -513,6 +513,7 @@ export function renderAdminWebappPage(): string {
       initData: tg ? (tg.initData || "") : "",
       loggedIn: false,
       loginPending: false,
+      sessionToken: null,
       currentTab: "jobs",
       searchQuery: "",
       statusFilter: "",
@@ -546,10 +547,14 @@ export function renderAdminWebappPage(): string {
     async function request(path, options) {
       let response;
       try {
+        const headers = { "content-type": "application/json" };
+        if (state.sessionToken) {
+          headers["authorization"] = "Bearer " + state.sessionToken;
+        }
         response = await fetch(path, {
           credentials: "include",
           cache: "no-store",
-          headers: { "content-type": "application/json" },
+          headers,
           ...(options || {}),
         });
       } catch {
@@ -596,10 +601,16 @@ export function renderAdminWebappPage(): string {
       }
       setStatus("Signing in...", false);
       try {
-        await request("/admin/api/auth/login", {
+        const loginResult = await request("/admin/api/auth/login", {
           method: "POST",
           body: JSON.stringify({ pin, initData: state.initData || null }),
         });
+        if (loginResult && typeof loginResult.sessionToken === "string" && loginResult.sessionToken) {
+          state.sessionToken = loginResult.sessionToken;
+          try {
+            window.localStorage.setItem("helly_admin_session_token", loginResult.sessionToken);
+          } catch (error) {}
+        }
         state.loggedIn = true;
         loginCardEl.classList.add("hidden");
         dashboardEl.classList.remove("hidden");
@@ -615,6 +626,14 @@ export function renderAdminWebappPage(): string {
     }
 
     async function loadSession() {
+      if (!state.sessionToken) {
+        try {
+          const saved = window.localStorage.getItem("helly_admin_session_token");
+          if (saved) {
+            state.sessionToken = saved;
+          }
+        } catch (error) {}
+      }
       try {
         await request("/admin/api/session", { method: "GET" });
         state.loggedIn = true;
@@ -623,6 +642,8 @@ export function renderAdminWebappPage(): string {
         await loadDashboard();
       } catch {
         state.loggedIn = false;
+        dashboardEl.classList.add("hidden");
+        loginCardEl.classList.remove("hidden");
       }
     }
 
@@ -915,6 +936,10 @@ export function renderAdminWebappPage(): string {
     async function logout() {
       await request("/admin/api/auth/logout", { method: "POST" });
       state.loggedIn = false;
+      state.sessionToken = null;
+      try {
+        window.localStorage.removeItem("helly_admin_session_token");
+      } catch (error) {}
       dashboardEl.classList.add("hidden");
       loginCardEl.classList.remove("hidden");
       setStatus("Logged out", false);
