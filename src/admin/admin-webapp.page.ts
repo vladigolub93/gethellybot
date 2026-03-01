@@ -434,17 +434,13 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       <div id="tgInfo" class="muted" style="margin-top:8px;">Telegram context is loading...</div>
     </section>
 
-    <section id="loginCard" class="card hidden">
-      <h1 class="title">Admin sign in</h1>
-      <p class="subtitle">Login is disabled in open testing mode.</p>
-      <div class="row" style="margin-top:10px;">
-        <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
-        <button id="loginBtn" type="button" onclick="window.__hellyAdminLogin && window.__hellyAdminLogin()">Sign in</button>
-      </div>
+    <section id="loginCard" class="card">
+      <h1 class="title">Admin access</h1>
+      <p id="accessHint" class="subtitle">Checking Telegram identity...</p>
       <div id="loginStatus" class="status"></div>
     </section>
 
-    <section id="dashboard">
+    <section id="dashboard" class="hidden">
       <div class="card">
         <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
           <div>
@@ -551,7 +547,6 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
     const state = {
       initData: tg ? (tg.initData || "") : "",
       loggedIn: false,
-      loginPending: false,
       sessionToken: null,
       currentTab: "jobs",
       searchQuery: "",
@@ -633,48 +628,6 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       dashboardStatusEl.style.color = isError ? "#ff8383" : "#9ca0ad";
     }
 
-    async function login() {
-      if (state.loginPending) {
-        return;
-      }
-      const pinInput = document.getElementById("pinInput");
-      const pin = pinInput ? pinInput.value.trim() : "";
-      if (!pin) {
-        setStatus("Please enter PIN", true);
-        return;
-      }
-      state.loginPending = true;
-      const loginBtn = document.getElementById("loginBtn");
-      if (loginBtn) {
-        loginBtn.disabled = true;
-      }
-      setStatus("Signing in...", false);
-      try {
-        const loginResult = await request("/admin/api/auth/login", {
-          method: "POST",
-          body: JSON.stringify({ pin, initData: state.initData || null }),
-        });
-        if (loginResult && typeof loginResult.sessionToken === "string" && loginResult.sessionToken) {
-          state.sessionToken = loginResult.sessionToken;
-          try {
-            window.localStorage.setItem("helly_admin_session_token", loginResult.sessionToken);
-          } catch (error) {}
-        }
-        state.loggedIn = true;
-        loginCardEl.classList.add("hidden");
-        dashboardEl.classList.remove("hidden");
-        await loadDashboard();
-      } catch (error) {
-        setStatus(error.message || "Login failed", true);
-      } finally {
-        state.loginPending = false;
-        if (loginBtn) {
-          loginBtn.disabled = false;
-        }
-      }
-    }
-    window.__hellyAdminLogin = login;
-
     async function tryTelegramAutoLogin() {
       if (!state.initData || !state.initData.trim()) {
         return false;
@@ -691,29 +644,47 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
           } catch (error) {}
         }
         state.loggedIn = true;
-        loginCardEl.classList.add("hidden");
-        dashboardEl.classList.remove("hidden");
-        await loadDashboard();
         return true;
       } catch (error) {
+        const message = error && error.message ? error.message : "Access denied";
+        setStatus(message, true);
         return false;
       }
     }
 
+    function showAccessDenied(message) {
+      state.loggedIn = false;
+      dashboardEl.classList.add("hidden");
+      loginCardEl.classList.remove("hidden");
+      setStatus(message, true);
+      const hint = document.getElementById("accessHint");
+      if (hint) {
+        hint.textContent = "Извини, ты не админ, поэтому у тебя нет доступа.";
+      }
+    }
+
     async function loadSession() {
+      setStatus("Checking access...", false);
+      if (!state.initData || !state.initData.trim()) {
+        showAccessDenied("Открой Web App из Telegram-кнопки бота.");
+        return;
+      }
+      const autoLoggedIn = await tryTelegramAutoLogin();
+      if (!autoLoggedIn) {
+        showAccessDenied("Извини, ты не админ, поэтому у тебя нет доступа.");
+        return;
+      }
       try {
         if (__INITIAL_DASHBOARD__) {
           renderDashboard(__INITIAL_DASHBOARD__);
           setDashboardStatus("Loaded from server snapshot.", false);
         }
         await loadDashboard();
-        state.loggedIn = true;
         loginCardEl.classList.add("hidden");
         dashboardEl.classList.remove("hidden");
         setDashboardStatus("", false);
       } catch (error) {
-        state.loggedIn = false;
-        setDashboardStatus("Dashboard load failed. Tap Refresh, or reopen mini app.", true);
+        showAccessDenied("Access confirmed, but dashboard failed to load.");
       }
     }
 
@@ -1030,7 +1001,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       } catch (error) {}
       dashboardEl.classList.add("hidden");
       loginCardEl.classList.remove("hidden");
-      setStatus("Logged out", false);
+      setStatus("Session ended. Reopen mini app from bot.", false);
     }
 
     function clearMutationRefreshTimers() {
@@ -1242,19 +1213,9 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       return String(value || "").toLowerCase().replace(/\\s+/g, " ").trim();
     }
 
-    const loginBtnEl = document.getElementById("loginBtn");
     const refreshBtnEl = document.getElementById("refreshBtn");
     const logoutBtnEl = document.getElementById("logoutBtn");
     const clearFiltersBtnEl = document.getElementById("clearFiltersBtn");
-    const pinInputEl = document.getElementById("pinInput");
-
-    if (loginBtnEl) {
-      loginBtnEl.addEventListener("click", login);
-      loginBtnEl.addEventListener("touchend", (event) => {
-        event.preventDefault();
-        login();
-      });
-    }
     if (refreshBtnEl) {
       refreshBtnEl.addEventListener("click", loadDashboard);
     }
@@ -1284,13 +1245,6 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       statusFilterEl.addEventListener("change", (event) => {
         state.statusFilter = event.target.value || "";
         applyListFilters();
-      });
-    }
-    if (pinInputEl) {
-      pinInputEl.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          login();
-        }
       });
     }
 
@@ -1342,7 +1296,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       });
     });
 
-    setStatus("Open testing mode. Login is disabled.", false);
+    setStatus("Checking access...", false);
     loadSession();
   </script>
 </body>

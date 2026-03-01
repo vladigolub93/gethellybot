@@ -380,7 +380,6 @@ export function createApp(env: EnvConfig): AppContext {
       return null;
     }
     if (
-      env.adminWebappRequireTelegram &&
       env.adminUserIds.length > 0 &&
       (!payload.telegramUserId || !env.adminUserIds.includes(payload.telegramUserId))
     ) {
@@ -392,112 +391,95 @@ export function createApp(env: EnvConfig): AppContext {
     };
   }
 
-  app.get("/admin/webapp", async (_request: Request, response: Response) => {
+  app.get("/admin/webapp", async (request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
     let initialDashboard = null;
-    try {
-      initialDashboard = await adminWebappService.getDashboardData();
-    } catch (error) {
-      logger.warn("admin.webapp.initial_dashboard_failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+    const session = readAdminSession(request);
+    if (session) {
+      try {
+        initialDashboard = await adminWebappService.getDashboardData();
+      } catch (error) {
+        logger.warn("admin.webapp.initial_dashboard_failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
     response.status(200).type("html").send(renderAdminWebappPage(initialDashboard));
   });
 
-  app.get("/admin/webapp-open", async (_request: Request, response: Response) => {
+  app.get("/admin/webapp-open", async (request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
     let initialDashboard = null;
-    try {
-      initialDashboard = await adminWebappService.getDashboardData();
-    } catch (error) {
-      logger.warn("admin.webapp_open.initial_dashboard_failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+    const session = readAdminSession(request);
+    if (session) {
+      try {
+        initialDashboard = await adminWebappService.getDashboardData();
+      } catch (error) {
+        logger.warn("admin.webapp_open.initial_dashboard_failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
     }
     response.status(200).type("html").send(renderAdminWebappPage(initialDashboard));
   });
 
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {
-    const pin =
-      typeof request.body?.pin === "string" ? request.body.pin.trim() : "";
-    if (!pin || pin !== env.adminWebappPin) {
-      logger.warn("Admin login failed due to invalid pin", {
-        hasInitData: typeof request.body?.initData === "string" && request.body.initData.trim().length > 0,
-      });
-      response.status(401).json({ ok: false, error: "Invalid PIN" });
-      return;
-    }
-
     const initData =
       typeof request.body?.initData === "string"
         ? request.body.initData
         : "";
-    const hasInitData = initData.trim().length > 0;
-    if (hasInitData) {
-      const verification = verifyTelegramInitData(initData, env.telegramBotToken);
-      if (!verification.ok || !verification.identity) {
-        logger.warn("Admin login failed due to Telegram validation", {
-          error: verification.error ?? "unknown_error",
-        });
-        if (env.adminWebappRequireTelegram) {
-          response.status(401).json({
-            ok: false,
-            error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
-          });
-          return;
-        }
-      } else {
-        if (
-          env.adminWebappRequireTelegram &&
-          env.adminUserIds.length > 0 &&
-          !env.adminUserIds.includes(verification.identity.telegramUserId)
-        ) {
-          logger.warn("Admin login blocked by ADMIN_USER_IDS", {
-            telegramUserId: verification.identity.telegramUserId,
-          });
-          response.status(403).json({ ok: false, error: "Access denied" });
-          return;
-        }
+    if (!initData.trim()) {
+      response.status(400).json({ ok: false, error: "Missing Telegram initData" });
+      return;
+    }
 
-        const sessionToken = issueAdminSessionToken({
-          secret: adminSessionSecret,
-          ttlSeconds: env.adminWebappSessionTtlSec,
-          telegramUserId: verification.identity.telegramUserId,
-          username: verification.identity.username,
-        });
+    const verification = verifyTelegramInitData(initData, env.telegramBotToken);
+    if (!verification.ok || !verification.identity) {
+      logger.warn("Admin login failed due to Telegram validation", {
+        error: verification.error ?? "unknown_error",
+      });
+      response.status(401).json({
+        ok: false,
+        error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
+      });
+      return;
+    }
 
-        response.setHeader(
-          "Set-Cookie",
-          buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
-        );
-        response.status(200).json({
-          ok: true,
-          sessionToken,
-          telegramUserId: verification.identity.telegramUserId,
-          username: verification.identity.username ?? null,
-        });
-        logger.info("Admin login succeeded with Telegram initData", {
-          telegramUserId: verification.identity.telegramUserId,
-        });
-        return;
-      }
+    if (
+      env.adminUserIds.length > 0 &&
+      !env.adminUserIds.includes(verification.identity.telegramUserId)
+    ) {
+      logger.warn("Admin login blocked by ADMIN_USER_IDS", {
+        telegramUserId: verification.identity.telegramUserId,
+      });
+      response.status(403).json({ ok: false, error: "Access denied" });
+      return;
     }
 
     const sessionToken = issueAdminSessionToken({
       secret: adminSessionSecret,
       ttlSeconds: env.adminWebappSessionTtlSec,
+      telegramUserId: verification.identity.telegramUserId,
+      username: verification.identity.username,
     });
+
     response.setHeader(
       "Set-Cookie",
       buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
     );
-    response.status(200).json({ ok: true, sessionToken });
-    logger.info("Admin login succeeded with PIN-only fallback");
+    response.status(200).json({
+      ok: true,
+      sessionToken,
+      telegramUserId: verification.identity.telegramUserId,
+      username: verification.identity.username ?? null,
+    });
+    logger.info("Admin login succeeded with Telegram initData", {
+      telegramUserId: verification.identity.telegramUserId,
+    });
   });
 
   app.post("/admin/api/auth/telegram-login", (request: Request, response: Response) => {
@@ -572,7 +554,12 @@ export function createApp(env: EnvConfig): AppContext {
     response.status(200).json({ ok: true, session });
   });
 
-  app.get("/admin/api/dashboard", async (_request: Request, response: Response) => {
+  app.get("/admin/api/dashboard", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Access denied" });
+      return;
+    }
     try {
       const dashboard = await adminWebappService.getDashboardData();
       response.status(200).json(dashboard);
@@ -588,6 +575,11 @@ export function createApp(env: EnvConfig): AppContext {
   });
 
   app.delete("/admin/api/users/:telegramUserId", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Access denied" });
+      return;
+    }
     const telegramUserId = Number(request.params.telegramUserId);
     const result = await adminWebappService.deleteUser(telegramUserId);
     response.status(result.ok ? 200 : 400).json(result);
@@ -596,6 +588,11 @@ export function createApp(env: EnvConfig): AppContext {
   app.delete(
     "/admin/api/candidates/:telegramUserId",
     async (request: Request, response: Response) => {
+      const session = readAdminSession(request);
+      if (!session) {
+        response.status(401).json({ ok: false, error: "Access denied" });
+        return;
+      }
       const telegramUserId = Number(request.params.telegramUserId);
       const result = await adminWebappService.deleteCandidate(telegramUserId);
       response.status(result.ok ? 200 : 400).json(result);
@@ -603,6 +600,11 @@ export function createApp(env: EnvConfig): AppContext {
   );
 
   app.delete("/admin/api/jobs/:jobId", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Access denied" });
+      return;
+    }
     const result = await adminWebappService.deleteJob(String(request.params.jobId ?? ""));
     response.status(result.ok ? 200 : 400).json(result);
   });

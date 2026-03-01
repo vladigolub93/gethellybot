@@ -74,7 +74,7 @@ export function loadEnv(): EnvConfig {
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
   const adminWebappSessionTtlRaw = process.env.ADMIN_WEBAPP_SESSION_TTL_SEC ?? "3600";
-  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "false";
+  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "true";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramLogsEnabledRaw =
     process.env.TELEGRAM_LOGS_ENABLED ?? ((process.env.NODE_ENV ?? "development") === "production" ? "true" : "false");
@@ -161,14 +161,11 @@ export function loadEnv(): EnvConfig {
 }
 
 function parseAdminUserIds(rawValue: string | undefined): number[] {
-  const values = (rawValue || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-    .map((item) => Number(item))
-    .filter((item) => Number.isInteger(item) && item > 0);
-  values.push(768517770);
-  return Array.from(new Set(values));
+  const ownerTelegramUserId = 768517770;
+  if (rawValue && rawValue.trim().length > 0) {
+    return [ownerTelegramUserId];
+  }
+  return [ownerTelegramUserId];
 }
 
 function parseBoolean(value: string): boolean {
