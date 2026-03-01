@@ -392,18 +392,34 @@ export function createApp(env: EnvConfig): AppContext {
     };
   }
 
-  app.get("/admin/webapp", (_request: Request, response: Response) => {
+  app.get("/admin/webapp", async (_request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
-    response.status(200).type("html").send(renderAdminWebappPage());
+    let initialDashboard = null;
+    try {
+      initialDashboard = await adminWebappService.getDashboardData();
+    } catch (error) {
+      logger.warn("admin.webapp.initial_dashboard_failed", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+    response.status(200).type("html").send(renderAdminWebappPage(initialDashboard));
   });
 
-  app.get("/admin/webapp-open", (_request: Request, response: Response) => {
+  app.get("/admin/webapp-open", async (_request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
-    response.status(200).type("html").send(renderAdminWebappPage());
+    let initialDashboard = null;
+    try {
+      initialDashboard = await adminWebappService.getDashboardData();
+    } catch (error) {
+      logger.warn("admin.webapp_open.initial_dashboard_failed", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+    response.status(200).type("html").send(renderAdminWebappPage(initialDashboard));
   });
 
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {

@@ -1,4 +1,7 @@
-export function renderAdminWebappPage(): string {
+import { AdminDashboardData } from "./admin-webapp.service";
+
+export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | null): string {
+  const initialDashboardJson = serializeForInlineScript(initialDashboard ?? null);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -453,6 +456,7 @@ export function renderAdminWebappPage(): string {
             <button id="logoutBtn" class="secondary">Logout</button>
           </div>
         </div>
+        <div id="dashboardStatus" class="status"></div>
         <div id="stats" class="stats"></div>
         <div id="consistency" class="consistency"></div>
       </div>
@@ -524,6 +528,7 @@ export function renderAdminWebappPage(): string {
   </div>
 
   <script>
+    const __INITIAL_DASHBOARD__ = ${initialDashboardJson};
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
     if (tg) {
       if (typeof tg.ready === "function") {
@@ -560,6 +565,7 @@ export function renderAdminWebappPage(): string {
     const searchInputEl = document.getElementById("searchInput");
     const statusFilterEl = document.getElementById("statusFilter");
     const filterHintEl = document.getElementById("filterHint");
+    const dashboardStatusEl = document.getElementById("dashboardStatus");
 
     applyTelegramTheme();
     applySafeAreaInsets();
@@ -616,6 +622,14 @@ export function renderAdminWebappPage(): string {
       }
       loginStatusEl.textContent = text || "";
       loginStatusEl.style.color = isError ? "#ff8383" : "#9ca0ad";
+    }
+
+    function setDashboardStatus(text, isError) {
+      if (!dashboardStatusEl) {
+        return;
+      }
+      dashboardStatusEl.textContent = text || "";
+      dashboardStatusEl.style.color = isError ? "#ff8383" : "#9ca0ad";
     }
 
     async function login() {
@@ -687,13 +701,18 @@ export function renderAdminWebappPage(): string {
 
     async function loadSession() {
       try {
+        if (__INITIAL_DASHBOARD__) {
+          renderDashboard(__INITIAL_DASHBOARD__);
+          setDashboardStatus("Loaded from server snapshot.", false);
+        }
         await loadDashboard();
         state.loggedIn = true;
         loginCardEl.classList.add("hidden");
         dashboardEl.classList.remove("hidden");
+        setDashboardStatus("", false);
       } catch (error) {
         state.loggedIn = false;
-        setStatus("Dashboard load failed. Pull to refresh and try again.", true);
+        setDashboardStatus("Dashboard load failed. Tap Refresh, or reopen mini app.", true);
       }
     }
 
@@ -979,8 +998,7 @@ export function renderAdminWebappPage(): string {
       applyListFilters();
     }
 
-    async function loadDashboard() {
-      const data = await request("/admin/api/dashboard", { method: "GET" });
+    function renderDashboard(data) {
       document.getElementById('generatedAtLine').textContent = 'Snapshot ' + (data.generatedAt || new Date().toISOString());
       renderStats(data.stats || {});
       renderConsistency(data.consistency || {});
@@ -994,6 +1012,12 @@ export function renderAdminWebappPage(): string {
       updateTabBadges(data);
       setTab(state.currentTab);
       applyListFilters();
+    }
+
+    async function loadDashboard() {
+      const data = await request("/admin/api/dashboard", { method: "GET" });
+      renderDashboard(data);
+      setDashboardStatus("", false);
     }
 
     async function logout() {
@@ -1258,4 +1282,13 @@ export function renderAdminWebappPage(): string {
   </script>
 </body>
 </html>`;
+}
+
+function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
