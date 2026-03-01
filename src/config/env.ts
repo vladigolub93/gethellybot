@@ -11,6 +11,10 @@ export interface EnvConfig {
   telegramLogsRatePerMin: number;
   telegramLogsBatchMs: number;
   adminSecret?: string;
+  adminWebappPin: string;
+  adminUserIds: number[];
+  adminWebappSessionTtlSec: number;
+  adminWebappRequireTelegram: boolean;
   port: number;
   telegramBotToken: string;
   telegramWebhookPath: string;
@@ -65,6 +69,8 @@ export function loadEnv(): EnvConfig {
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
   const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
+  const adminWebappSessionTtlRaw = process.env.ADMIN_WEBAPP_SESSION_TTL_SEC ?? "3600";
+  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "true";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramLogsEnabledRaw =
     process.env.TELEGRAM_LOGS_ENABLED ?? ((process.env.NODE_ENV ?? "development") === "production" ? "true" : "false");
@@ -75,6 +81,8 @@ export function loadEnv(): EnvConfig {
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
   const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
+  const adminWebappSessionTtlSec = Number(adminWebappSessionTtlRaw);
+  const adminWebappRequireTelegram = parseBoolean(adminWebappRequireTelegramRaw);
   const debugMode = parseBoolean(debugModeRaw);
   const telegramLogsEnabled = parseBoolean(telegramLogsEnabledRaw);
   const telegramLogsRatePerMin = Number(telegramLogsRatePerMinRaw);
@@ -98,6 +106,9 @@ export function loadEnv(): EnvConfig {
   if (!Number.isFinite(telegramLogsBatchMs) || telegramLogsBatchMs < 250) {
     throw new Error(`Invalid TELEGRAM_LOG_BATCH_MS value: ${telegramLogsBatchMsRaw}`);
   }
+  if (!Number.isInteger(adminWebappSessionTtlSec) || adminWebappSessionTtlSec < 300) {
+    throw new Error(`Invalid ADMIN_WEBAPP_SESSION_TTL_SEC value: ${adminWebappSessionTtlRaw}`);
+  }
 
   return {
     nodeEnv: process.env.NODE_ENV ?? "development",
@@ -108,6 +119,10 @@ export function loadEnv(): EnvConfig {
     telegramLogsRatePerMin: telegramLogsRatePerMin,
     telegramLogsBatchMs: telegramLogsBatchMs,
     adminSecret: getOptionalTrimmed("ADMIN_SECRET"),
+    adminWebappPin: process.env.ADMIN_WEBAPP_PIN?.trim() || "21041993",
+    adminUserIds: parseAdminUserIds(process.env.ADMIN_USER_IDS),
+    adminWebappSessionTtlSec,
+    adminWebappRequireTelegram,
     port,
     telegramBotToken: getRequiredString("TELEGRAM_BOT_TOKEN"),
     telegramWebhookPath,
@@ -130,6 +145,19 @@ export function loadEnv(): EnvConfig {
     qdrantCandidateCollection: getOptionalTrimmed("QDRANT_CANDIDATE_COLLECTION") ?? "helly_candidates_v1",
     qdrantBackfillOnStart,
   };
+}
+
+function parseAdminUserIds(rawValue: string | undefined): number[] {
+  if (!rawValue) {
+    return [];
+  }
+  const values = rawValue
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  return Array.from(new Set(values));
 }
 
 function parseBoolean(value: string): boolean {

@@ -1,4 +1,12 @@
 import express, { Express, Request, Response } from "express";
+import {
+  extractCookie,
+  issueAdminSessionToken,
+  verifyAdminSessionToken,
+  verifyTelegramInitData,
+} from "./admin/admin-auth.service";
+import { renderAdminWebappPage } from "./admin/admin-webapp.page";
+import { AdminWebappService } from "./admin/admin-webapp.service";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
 import { OutboundMessageComposerService } from "./ai/outbound-message-composer.service";
@@ -158,6 +166,11 @@ export function createApp(env: EnvConfig): AppContext {
     usersRepository,
     logger,
     qdrantClient,
+  );
+  const adminWebappService = new AdminWebappService(
+    logger,
+    dataDeletionService,
+    supabaseClient,
   );
   const qualityFlagsService = new QualityFlagsService(qualityFlagsRepository, logger);
   const guardrailsService = new HiringScopeGuardrailsService(
@@ -322,6 +335,152 @@ export function createApp(env: EnvConfig): AppContext {
   });
 
   const dbStatusService = new DbStatusService(logger, supabaseClient);
+  const adminSessionCookieName = "helly_admin_session";
+  const adminSessionSecret = env.adminSecret || env.telegramBotToken;
+
+  function readAdminSession(request: Request): {
+    telegramUserId?: number;
+    username?: string;
+  } | null {
+    const token = extractCookie(request.header("cookie"), adminSessionCookieName);
+    if (!token) {
+      return null;
+    }
+    const payload = verifyAdminSessionToken(token, adminSessionSecret);
+    if (!payload) {
+      return null;
+    }
+    if (
+      env.adminUserIds.length > 0 &&
+      (!payload.telegramUserId || !env.adminUserIds.includes(payload.telegramUserId))
+    ) {
+      return null;
+    }
+    return {
+      telegramUserId: payload.telegramUserId,
+      username: payload.username,
+    };
+  }
+
+  app.get("/admin/webapp", (_request: Request, response: Response) => {
+    response.status(200).type("html").send(renderAdminWebappPage());
+  });
+
+  app.post("/admin/api/auth/login", (request: Request, response: Response) => {
+    const pin =
+      typeof request.body?.pin === "string" ? request.body.pin.trim() : "";
+    if (!pin || pin !== env.adminWebappPin) {
+      response.status(401).json({ ok: false, error: "Invalid PIN" });
+      return;
+    }
+
+    const initData =
+      typeof request.body?.initData === "string"
+        ? request.body.initData
+        : "";
+    if (env.adminWebappRequireTelegram || initData.trim().length > 0) {
+      const verification = verifyTelegramInitData(initData, env.telegramBotToken);
+      if (!verification.ok || !verification.identity) {
+        response.status(401).json({
+          ok: false,
+          error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
+        });
+        return;
+      }
+      if (
+        env.adminUserIds.length > 0 &&
+        !env.adminUserIds.includes(verification.identity.telegramUserId)
+      ) {
+        response.status(403).json({ ok: false, error: "Access denied" });
+        return;
+      }
+
+      const sessionToken = issueAdminSessionToken({
+        secret: adminSessionSecret,
+        ttlSeconds: env.adminWebappSessionTtlSec,
+        telegramUserId: verification.identity.telegramUserId,
+        username: verification.identity.username,
+      });
+
+      response.setHeader(
+        "Set-Cookie",
+        buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
+      );
+      response.status(200).json({
+        ok: true,
+        telegramUserId: verification.identity.telegramUserId,
+        username: verification.identity.username ?? null,
+      });
+      return;
+    }
+
+    if (env.adminUserIds.length > 0) {
+      response.status(401).json({
+        ok: false,
+        error: "Telegram validation is required for configured admins",
+      });
+      return;
+    }
+
+    const sessionToken = issueAdminSessionToken({
+      secret: adminSessionSecret,
+      ttlSeconds: env.adminWebappSessionTtlSec,
+    });
+    response.setHeader(
+      "Set-Cookie",
+      buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
+    );
+    response.status(200).json({ ok: true });
+  });
+
+  app.post("/admin/api/auth/logout", (_request: Request, response: Response) => {
+    response.setHeader(
+      "Set-Cookie",
+      buildCookieHeader(adminSessionCookieName, "", 0, env.nodeEnv === "production"),
+    );
+    response.status(200).json({ ok: true });
+  });
+
+  app.get("/admin/api/session", (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+    response.status(200).json({ ok: true, session });
+  });
+
+  app.get("/admin/api/dashboard", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+    const dashboard = await adminWebappService.getDashboardData();
+    response.status(200).json(dashboard);
+  });
+
+  app.delete("/admin/api/users/:telegramUserId", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+    const telegramUserId = Number(request.params.telegramUserId);
+    const result = await adminWebappService.deleteUser(telegramUserId);
+    response.status(result.ok ? 200 : 400).json(result);
+  });
+
+  app.delete("/admin/api/jobs/:jobId", async (request: Request, response: Response) => {
+    const session = readAdminSession(request);
+    if (!session) {
+      response.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+    const result = await adminWebappService.deleteJob(String(request.params.jobId ?? ""));
+    response.status(result.ok ? 200 : 400).json(result);
+  });
+
   app.get("/admin/db-status", async (request: Request, response: Response) => {
     if (!env.adminSecret) {
       response.status(503).json({
@@ -348,4 +507,23 @@ export function createApp(env: EnvConfig): AppContext {
   app.use(env.telegramWebhookPath, webhookController);
 
   return { app, telegramClient, logger };
+}
+
+function buildCookieHeader(
+  name: string,
+  value: string,
+  maxAgeSeconds: number,
+  secure: boolean,
+): string {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "Path=/admin",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (secure) {
+    parts.push("Secure");
+  }
+  return parts.join("; ");
 }
