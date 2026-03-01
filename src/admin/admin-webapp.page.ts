@@ -402,7 +402,7 @@ export function renderAdminWebappPage(): string {
       <p class="subtitle">PIN plus Telegram identity check, session TTL 1 hour.</p>
       <div class="row" style="margin-top:10px;">
         <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
-        <button id="loginBtn" type="button">Sign in</button>
+        <button id="loginBtn" type="button" onclick="window.__hellyAdminLogin && window.__hellyAdminLogin()">Sign in</button>
       </div>
       <div id="loginStatus" class="status"></div>
     </section>
@@ -624,6 +624,7 @@ export function renderAdminWebappPage(): string {
         }
       }
     }
+    window.__hellyAdminLogin = login;
 
     async function tryTelegramAutoLogin() {
       if (!state.initData || !state.initData.trim()) {
@@ -1219,7 +1220,6 @@ export function renderAdminWebappPage(): string {
     });
 
     setStatus("Enter PIN and tap Sign in.", false);
-    window.__hellyAdminLogin = login;
     loadSession();
   </script>
 </body>

