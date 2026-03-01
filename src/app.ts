@@ -88,6 +88,10 @@ export function createApp(env: EnvConfig): AppContext {
   });
   const app = express();
 
+  if (env.nodeEnv === "production" && env.adminUserIds.length === 0) {
+    logger.warn("Admin webapp is misconfigured, ADMIN_USER_IDS is empty in production");
+  }
+
   app.use(express.json({ limit: "2mb" }));
 
   const llmClient = new LlmClient(env.openaiApiKey, logger, CHAT_MODEL);
@@ -367,6 +371,14 @@ export function createApp(env: EnvConfig): AppContext {
   });
 
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {
+    if (env.nodeEnv === "production" && env.adminUserIds.length === 0) {
+      response.status(503).json({
+        ok: false,
+        error: "Admin webapp is disabled until ADMIN_USER_IDS is configured",
+      });
+      return;
+    }
+
     const pin =
       typeof request.body?.pin === "string" ? request.body.pin.trim() : "";
     if (!pin || pin !== env.adminWebappPin) {
