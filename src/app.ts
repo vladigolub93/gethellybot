@@ -399,6 +399,13 @@ export function createApp(env: EnvConfig): AppContext {
     response.status(200).type("html").send(renderAdminWebappPage());
   });
 
+  app.get("/admin/webapp-open", (_request: Request, response: Response) => {
+    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.setHeader("Pragma", "no-cache");
+    response.setHeader("Expires", "0");
+    response.status(200).type("html").send(renderAdminWebappPage());
+  });
+
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {
     const pin =
       typeof request.body?.pin === "string" ? request.body.pin.trim() : "";
@@ -549,9 +556,19 @@ export function createApp(env: EnvConfig): AppContext {
     response.status(200).json({ ok: true, session });
   });
 
-  app.get("/admin/api/dashboard", async (request: Request, response: Response) => {
-    const dashboard = await adminWebappService.getDashboardData();
-    response.status(200).json(dashboard);
+  app.get("/admin/api/dashboard", async (_request: Request, response: Response) => {
+    try {
+      const dashboard = await adminWebappService.getDashboardData();
+      response.status(200).json(dashboard);
+    } catch (error) {
+      logger.error("admin.dashboard.load_failed", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      response.status(500).json({
+        ok: false,
+        error: "Dashboard data load failed. Check Supabase credentials and migrations.",
+      });
+    }
   });
 
   app.delete("/admin/api/users/:telegramUserId", async (request: Request, response: Response) => {
