@@ -659,19 +659,19 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       setStatus(message, true);
       const hint = document.getElementById("accessHint");
       if (hint) {
-        hint.textContent = "Извини, ты не админ, поэтому у тебя нет доступа.";
+        hint.textContent = "Sorry, you are not an admin, so you do not have access.";
       }
     }
 
     async function loadSession() {
       setStatus("Checking access...", false);
       if (!state.initData || !state.initData.trim()) {
-        showAccessDenied("Открой Web App из Telegram-кнопки бота.");
+        showAccessDenied("Open this Web App from the bot button inside Telegram.");
         return;
       }
       const autoLoggedIn = await tryTelegramAutoLogin();
       if (!autoLoggedIn) {
-        showAccessDenied("Извини, ты не админ, поэтому у тебя нет доступа.");
+        showAccessDenied("Sorry, you are not an admin, so you do not have access.");
         return;
       }
       try {
