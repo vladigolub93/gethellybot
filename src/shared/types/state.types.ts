@@ -103,6 +103,7 @@ export interface UserSessionState {
   interviewMessageWithoutAnswerCount?: number;
   answersSinceConfirm?: number;
   pendingFollowUp?: InterviewFollowUpState;
+  reanswerRequestsByQuestion?: Record<string, number>;
   answers?: InterviewAnswer[];
   interviewStartedAt?: string;
   interviewCompletedAt?: string;
@@ -131,6 +132,12 @@ export interface InterviewAnswer {
   readonly questionId: string;
   readonly questionText: string;
   readonly answerText: string;
+  readonly status?: "draft" | "final";
+  readonly qualityWarning?: boolean;
+  readonly authenticityScore?: number;
+  readonly authenticitySignals?: string[];
+  readonly authenticityLabel?: "likely_human" | "uncertain" | "likely_ai_assisted";
+  readonly aiAssistedScore?: number;
   readonly originalText?: string;
   readonly normalizedEnglishText?: string;
   readonly detectedLanguage?: "en" | "ru" | "uk" | "other";

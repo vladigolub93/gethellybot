@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { callJsonPromptSafe } from "../../ai/llm.safe";
 import { InterviewIntentRouterService } from "../../interviews/interview-intent-router.service";
+import { getNextQuestionIndex } from "../../interviews/interview-progress";
 import { AlwaysOnRouterService } from "../../router/always-on-router.service";
 import { checkAndConsumeUserRateLimit } from "../../shared/utils/rate-limit";
 import { shouldProcessUpdate } from "../../shared/utils/telegram-idempotency";
@@ -32,6 +33,35 @@ function testRateLimiter(): void {
     }
   }
   assert.equal(blocked, true);
+}
+
+function testDraftAnswerDoesNotAdvanceQuestion(): void {
+  const plan = {
+    summary: "test",
+    questions: [
+      { id: "q1", question: "Q1", goal: "", gapToClarify: "" },
+      { id: "q2", question: "Q2", goal: "", gapToClarify: "" },
+    ],
+  };
+  const draftAnswer = {
+    questionIndex: 0,
+    questionId: "q1",
+    questionText: "Q1",
+    answerText: "templated",
+    status: "draft" as const,
+    inputType: "text" as const,
+    answeredAt: new Date().toISOString(),
+  };
+  const finalAnswer = {
+    ...draftAnswer,
+    status: "final" as const,
+    answerText: "real answer",
+  };
+
+  const nextWithDraftOnly = getNextQuestionIndex(plan, [draftAnswer], []);
+  const nextWithFinal = getNextQuestionIndex(plan, [finalAnswer], []);
+  assert.equal(nextWithDraftOnly, 0);
+  assert.equal(nextWithFinal, 1);
 }
 
 async function testAlwaysOnRouterIsCalled(): Promise<void> {
@@ -115,6 +145,7 @@ async function testJsonSafeFallbackPath(): Promise<void> {
 async function run(): Promise<void> {
   await testWebhookIdempotency();
   testRateLimiter();
+  testDraftAnswerDoesNotAdvanceQuestion();
   await testAlwaysOnRouterIsCalled();
   await testInterviewIntentMetaDoesNotAdvance();
   await testJsonSafeFallbackPath();

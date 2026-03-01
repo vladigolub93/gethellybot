@@ -632,6 +632,10 @@ export class StateRouter {
           );
           return;
         }
+        if (skipResult.kind === "reanswer_required") {
+          await this.sendBotMessage(session.userId, session.chatId, skipResult.message);
+          return;
+        }
 
         this.stateService.transition(session.userId, skipResult.completedState);
         await this.sendBotMessage(session.userId, session.chatId, skipResult.completionMessage);
@@ -2417,6 +2421,11 @@ export class StateRouter {
       };
       const result = await this.interviewEngine.submitAnswer(session, normalizedInput);
 
+      if (result.kind === "reanswer_required") {
+        await this.sendBotMessage(session.userId, session.chatId, result.message);
+        return;
+      }
+
       if (result.kind === "next_question") {
         const latestSession = this.stateService.getSession(session.userId) ?? session;
         if (result.preQuestionMessage) {
@@ -2967,7 +2976,11 @@ function buildInterviewRemainingQuestionsReply(
     return "I do not see the interview plan right now. Please answer the current question and I will continue.";
   }
 
-  const answered = new Set((session.answers ?? []).map((item) => item.questionIndex));
+  const answered = new Set(
+    (session.answers ?? [])
+      .filter((item) => item.status !== "draft")
+      .map((item) => item.questionIndex),
+  );
   const skipped = new Set(session.skippedQuestionIndexes ?? []);
   let remaining = 0;
   for (let index = 0; index < plan.questions.length; index += 1) {
@@ -3165,7 +3178,11 @@ function resolveMissingQuestionIndexFromPlan(session: UserSessionState): number 
   if (!plan) {
     return null;
   }
-  const answered = new Set((session.answers ?? []).map((item) => item.questionIndex));
+  const answered = new Set(
+    (session.answers ?? [])
+      .filter((item) => item.status !== "draft")
+      .map((item) => item.questionIndex),
+  );
   const skipped = new Set(session.skippedQuestionIndexes ?? []);
   for (let index = 0; index < plan.questions.length; index += 1) {
     if (!answered.has(index) && !skipped.has(index)) {

@@ -95,6 +95,7 @@ export class StateService {
       answersSinceConfirm: 0,
       pendingDataDeletionConfirmation: false,
       pendingDataDeletionRequestedAt: undefined,
+      reanswerRequestsByQuestion: {},
     };
     this.sessions.set(userId, session);
     return session;
@@ -747,6 +748,31 @@ export class StateService {
     const answers = session.answers ?? [];
     answers.push(answer);
     session.answers = answers;
+    return session;
+  }
+
+  getReanswerRequestCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    const key = String(questionIndex);
+    return session.reanswerRequestsByQuestion?.[key] ?? 0;
+  }
+
+  incrementReanswerRequestCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    if (!session.reanswerRequestsByQuestion) {
+      session.reanswerRequestsByQuestion = {};
+    }
+    const key = String(questionIndex);
+    const next = (session.reanswerRequestsByQuestion[key] ?? 0) + 1;
+    session.reanswerRequestsByQuestion[key] = next;
+    return next;
+  }
+
+  clearReanswerRequestCount(userId: number, questionIndex: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    if (session.reanswerRequestsByQuestion) {
+      delete session.reanswerRequestsByQuestion[String(questionIndex)];
+    }
     return session;
   }
 

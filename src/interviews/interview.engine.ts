@@ -19,7 +19,7 @@ import {
 import { ManagerJobProfileV2Service } from "./manager-job-profile-v2.service";
 import { ManagerJobTechnicalSummaryService } from "./manager-job-technical-summary.service";
 import { evaluateInterviewBootstrap } from "./interview-bootstrap.guard";
-import { getNextQuestionIndex, isInterviewComplete } from "./interview-progress";
+import { getNextQuestionIndex, isFinalAnswer, isInterviewComplete } from "./interview-progress";
 import { formatInterviewResultMessage, InterviewResultService } from "./interview-result.service";
 import { interviewSummaryUnavailableMessage } from "../telegram/ui/messages";
 import { CandidateInterviewPlanV2 } from "../shared/types/interview-plan.types";
@@ -57,6 +57,12 @@ export type InterviewAnswerResult =
       questionText: string;
       isFollowUp?: boolean;
       preQuestionMessage?: string;
+    }
+  | {
+      kind: "reanswer_required";
+      questionIndex: number;
+      questionText: string;
+      message: string;
     }
   | {
       kind: "completed";
@@ -247,11 +253,13 @@ export class InterviewEngine {
       pendingFollowUp && pendingFollowUp.questionIndex === currentIndex,
     );
     const currentQuestionText = isFollowUpAnswer ? pendingFollowUp?.questionText ?? question.question : question.question;
-    const answerRecord: InterviewAnswer = {
+    let answerRecord: InterviewAnswer = {
       questionIndex: currentIndex,
       questionId: question.id,
       questionText: currentQuestionText,
       answerText: normalizedAnswer,
+      status: "final",
+      qualityWarning: false,
       originalText: originalAnswer,
       normalizedEnglishText: normalizedAnswer,
       detectedLanguage: answer.detectedLanguage,
@@ -263,7 +271,73 @@ export class InterviewEngine {
       answeredAt: new Date().toISOString(),
     };
 
+    const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
+    if (updateResult.candidateAuthenticity && session.state === "interviewing_candidate") {
+      const aiAssistedScore = normalizeAiAssistedScore(
+        updateResult.candidateAuthenticity.authenticityScore,
+        updateResult.candidateAuthenticity.authenticityLabel,
+      );
+      answerRecord = {
+        ...answerRecord,
+        authenticityScore: updateResult.candidateAuthenticity.authenticityScore,
+        authenticitySignals: updateResult.candidateAuthenticity.authenticitySignals,
+        authenticityLabel: updateResult.candidateAuthenticity.authenticityLabel,
+        aiAssistedScore,
+      };
+
+      if (aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD) {
+        const currentReanswerCount = this.stateService.getReanswerRequestCount(
+          session.userId,
+          currentIndex,
+        );
+        if (currentReanswerCount < MAX_REANSWER_REQUESTS_PER_QUESTION) {
+          const nextReanswerCount = this.stateService.incrementReanswerRequestCount(
+            session.userId,
+            currentIndex,
+          );
+          answerRecord = {
+            ...answerRecord,
+            status: "draft",
+            qualityWarning: false,
+          };
+          this.stateService.upsertAnswer(session.userId, answerRecord);
+          this.stateService.setCurrentQuestionIndex(session.userId, currentIndex);
+          this.stateService.clearPendingFollowUp(session.userId);
+          return {
+            kind: "reanswer_required",
+            questionIndex: currentIndex,
+            questionText: currentQuestionText,
+            message: buildCandidateAiReanswerMessage(
+              resolveReanswerLanguagePreference(session.preferredLanguage, answer.detectedLanguage),
+              aiAssistedScore >= AI_ASSISTED_HARD_THRESHOLD,
+              nextReanswerCount,
+            ),
+          };
+        }
+
+        answerRecord = {
+          ...answerRecord,
+          status: "final",
+          qualityWarning: true,
+        };
+        await this.qualityFlagsService?.raise({
+          entityType: "candidate",
+          entityId: String(session.userId),
+          flag: "candidate_ai_assisted_answer_likely",
+          details: {
+            questionIndex: currentIndex,
+            authenticityScore: updateResult.candidateAuthenticity.authenticityScore,
+            authenticitySignals: updateResult.candidateAuthenticity.authenticitySignals,
+            aiAssistedScore,
+            threshold: "max_reanswer_reached_accept_with_warning",
+          },
+        });
+      }
+    }
+
     this.stateService.upsertAnswer(session.userId, answerRecord);
+    this.stateService.clearReanswerRequestCount(session.userId, currentIndex);
+
     const answersAfterCurrent = this.stateService.getAnswers(session.userId);
     const skippedAfterCurrent = this.stateService.getSkippedQuestionIndexes(session.userId);
     const interviewTurnCapReached = hasReachedInterviewTurnCap(
@@ -271,15 +345,14 @@ export class InterviewEngine {
       skippedAfterCurrent,
     );
 
-    const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
     if (updateResult.followUpRequired) {
       if (interviewTurnCapReached) {
         this.stateService.clearPendingFollowUp(session.userId);
       } else {
       const followUpsForQuestion = answersAfterCurrent.filter(
-        (item) => item.questionIndex === currentIndex && item.isFollowUp,
+        (item) => item.questionIndex === currentIndex && item.isFollowUp && isFinalAnswer(item),
       ).length;
-      const totalFollowUps = answersAfterCurrent.filter((item) => item.isFollowUp).length;
+      const totalFollowUps = answersAfterCurrent.filter((item) => item.isFollowUp && isFinalAnswer(item)).length;
       const followUpLimitReached = followUpsForQuestion >= 1 || totalFollowUps >= 1;
 
       if (followUpLimitReached) {
@@ -369,7 +442,9 @@ export class InterviewEngine {
       throw new Error("Interview context is missing.");
     }
 
-    const answers = this.stateService.getAnswers(session.userId);
+    const answers = this.stateService
+      .getAnswers(session.userId)
+      .filter((item) => isFinalAnswer(item));
     const skipped = this.stateService.getSkippedQuestionIndexes(session.userId);
     const currentIndex = resolveCurrentQuestionIndex(
       plan,
@@ -576,10 +651,26 @@ export class InterviewEngine {
     session: UserSessionState,
     question: InterviewPlan["questions"][number],
     answerRecord: InterviewAnswer,
-  ): Promise<{ followUpRequired: boolean; followUpFocus: string; preQuestionMessage?: string }> {
+  ): Promise<{
+    followUpRequired: boolean;
+    followUpFocus: string;
+    preQuestionMessage?: string;
+    candidateAuthenticity?: {
+      authenticityScore: number;
+      authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted";
+      authenticitySignals: string[];
+    };
+  }> {
     let followUpRequired = false;
     let followUpFocus = "";
     let preQuestionMessage: string | undefined;
+    let candidateAuthenticity:
+      | {
+          authenticityScore: number;
+          authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted";
+          authenticitySignals: string[];
+        }
+      | undefined;
 
     try {
       if (session.state === "interviewing_candidate") {
@@ -597,6 +688,11 @@ export class InterviewEngine {
         if (profileUpdateV2) {
           followUpRequired = profileUpdateV2.follow_up_required;
           followUpFocus = profileUpdateV2.follow_up_focus ?? "";
+          candidateAuthenticity = {
+            authenticityScore: profileUpdateV2.authenticity_score,
+            authenticityLabel: profileUpdateV2.authenticity_label,
+            authenticitySignals: profileUpdateV2.authenticity_signals,
+          };
           this.stateService.addCandidateConfidenceUpdates(
             session.userId,
             profileUpdateV2.confidence_updates,
@@ -619,12 +715,18 @@ export class InterviewEngine {
               });
             }
           }
-          const aiAssistedLikely = shouldTreatCandidateAnswerAsAiAssisted(
-            profileUpdateV2.authenticity_label,
+          const aiAssistedScore = normalizeAiAssistedScore(
             profileUpdateV2.authenticity_score,
-            profileUpdateV2.authenticity_signals,
-            answerRecord.answerText,
+            profileUpdateV2.authenticity_label,
           );
+          const aiAssistedLikely =
+            aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD ||
+            shouldTreatCandidateAnswerAsAiAssisted(
+              profileUpdateV2.authenticity_label,
+              profileUpdateV2.authenticity_score,
+              profileUpdateV2.authenticity_signals,
+              answerRecord.answerText,
+            );
           if (aiAssistedLikely) {
             const nextStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
             this.stateService.setCandidateAiAssistedStreak(session.userId, nextStreak);
@@ -642,6 +744,9 @@ export class InterviewEngine {
                 questionIndex: answerRecord.questionIndex,
                 authenticityScore: profileUpdateV2.authenticity_score,
                 authenticitySignals: profileUpdateV2.authenticity_signals,
+                aiAssistedScore,
+                threshold:
+                  aiAssistedScore >= AI_ASSISTED_HARD_THRESHOLD ? "hard" : "soft",
                 streak: nextStreak,
               },
             });
@@ -670,7 +775,7 @@ export class InterviewEngine {
           extractedText: session.candidateResumeText ?? "",
         });
         this.stateService.setCandidateProfile(session.userId, updated);
-        return { followUpRequired, followUpFocus, preQuestionMessage };
+        return { followUpRequired, followUpFocus, preQuestionMessage, candidateAuthenticity };
       }
 
       if (session.state === "interviewing_manager") {
@@ -768,7 +873,7 @@ export class InterviewEngine {
       });
     }
 
-    return { followUpRequired: false, followUpFocus: "", preQuestionMessage };
+    return { followUpRequired: false, followUpFocus: "", preQuestionMessage, candidateAuthenticity };
   }
 
   async generateCandidateTechnicalSummary(
@@ -865,7 +970,7 @@ function resolveCurrentQuestionIndex(
     typeof currentQuestionIndex === "number" &&
     currentQuestionIndex >= 0 &&
     currentQuestionIndex < plan.questions.length &&
-    !answers.some((item) => item.questionIndex === currentQuestionIndex) &&
+    !answers.some((item) => item.questionIndex === currentQuestionIndex && isFinalAnswer(item)) &&
     !skippedQuestionIndexes.includes(currentQuestionIndex)
   ) {
     return currentQuestionIndex;
@@ -957,6 +1062,73 @@ function buildManagerAiAssistedWarningMessage(streak: number): string {
     return "This still looks AI-generated and generic. Please do not paste AI text, share real hiring context from your team, voice is preferred.";
   }
   return "This looks AI-assisted and generic. Please answer in your own words with one real role example from your team, voice is preferred.";
+}
+
+const AI_ASSISTED_SOFT_THRESHOLD = 0.7;
+const AI_ASSISTED_HARD_THRESHOLD = 0.85;
+const MAX_REANSWER_REQUESTS_PER_QUESTION = 2;
+
+function normalizeAiAssistedScore(
+  authenticityScore: number,
+  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
+): number {
+  let score = clamp01(authenticityScore);
+  if (authenticityLabel === "likely_human") {
+    score = 1 - score;
+  } else if (authenticityLabel === "likely_ai_assisted") {
+    score = Math.max(score, 1 - score);
+  }
+
+  if (authenticityLabel === "likely_ai_assisted" && score < AI_ASSISTED_SOFT_THRESHOLD) {
+    return AI_ASSISTED_SOFT_THRESHOLD;
+  }
+  return score;
+}
+
+function resolveReanswerLanguagePreference(
+  preferredLanguage: "en" | "ru" | "uk" | "unknown" | undefined,
+  detectedLanguage: "en" | "ru" | "uk" | "other" | undefined,
+): "en" | "ru" | "uk" {
+  if (preferredLanguage === "ru" || preferredLanguage === "uk") {
+    return preferredLanguage;
+  }
+  if (detectedLanguage === "ru" || detectedLanguage === "uk") {
+    return detectedLanguage;
+  }
+  return "en";
+}
+
+function buildCandidateAiReanswerMessage(
+  language: "en" | "ru" | "uk",
+  isHard: boolean,
+  attemptNumber: number,
+): string {
+  if (language === "ru") {
+    return isHard
+      ? `Это выглядит слишком идеально, похоже на AI-ответ. Я не пытаюсь вас поймать, мне нужен ваш реальный опыт. Пожалуйста, ответьте заново: один реальный проект, что лично сделали вы, и одна конкретная прод-деталь. Голосом тоже отлично. Попытка ${attemptNumber} из ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
+      : `Это звучит слишком гладко, похоже на AI-ответ. Я не пытаюсь вас поймать, мне нужен ваш реальный опыт. Пожалуйста, ответьте заново: один реальный проект, что лично сделали вы, и одна конкретная прод-деталь. Голосом тоже можно. Попытка ${attemptNumber} из ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
+  }
+  if (language === "uk") {
+    return isHard
+      ? `Це виглядає занадто ідеально, схоже на AI-відповідь. Я не намагаюся вас підловити, мені потрібен ваш реальний досвід. Будь ласка, дайте відповідь ще раз: один реальний проєкт, що саме ви зробили, і одна конкретна прод-деталь. Голосом теж ок. Спроба ${attemptNumber} з ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
+      : `Це звучить трохи занадто гладко, схоже на AI-відповідь. Я не намагаюся вас підловити, мені потрібен ваш реальний досвід. Будь ласка, дайте відповідь ще раз: один реальний проєкт, що саме ви зробили, і одна конкретна прод-деталь. Голосом теж можна. Спроба ${attemptNumber} з ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
+  }
+  return isHard
+    ? `This feels a bit too perfect, like an AI answer. I am not trying to catch you, I just need your real experience. Please answer again with one real project, what you personally did, and one concrete production detail. Voice message is totally fine if that is easier. Attempt ${attemptNumber}/${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
+    : `This feels a bit too perfect, like an AI answer. I am not trying to catch you, I just need your real experience. Please answer again with one real project, what you personally did, and one concrete production detail. Voice message is totally fine if that is easier. Attempt ${attemptNumber}/${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
 }
 
 function shouldTreatCandidateAnswerAsAiAssisted(
@@ -1078,7 +1250,8 @@ function hasReachedInterviewTurnCap(
   answers: ReadonlyArray<InterviewAnswer>,
   skippedQuestionIndexes: ReadonlyArray<number>,
 ): boolean {
-  return answers.length + skippedQuestionIndexes.length >= 10;
+  const finalAnswersCount = answers.filter((item) => isFinalAnswer(item)).length;
+  return finalAnswersCount + skippedQuestionIndexes.length >= 10;
 }
 
 function isCandidateProfile(profile: CandidateProfile | JobProfile): profile is CandidateProfile {
