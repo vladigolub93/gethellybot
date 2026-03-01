@@ -277,6 +277,9 @@ export class InterviewEngine {
         updateResult.candidateAuthenticity.authenticityScore,
         updateResult.candidateAuthenticity.authenticityLabel,
       );
+      const aiAssistedLikely =
+        Boolean(updateResult.candidateAiAssistedLikely) ||
+        aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD;
       answerRecord = {
         ...answerRecord,
         authenticityScore: updateResult.candidateAuthenticity.authenticityScore,
@@ -285,7 +288,7 @@ export class InterviewEngine {
         aiAssistedScore,
       };
 
-      if (aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD) {
+      if (aiAssistedLikely) {
         const currentReanswerCount = this.stateService.getReanswerRequestCount(
           session.userId,
           currentIndex,
@@ -655,6 +658,7 @@ export class InterviewEngine {
     followUpRequired: boolean;
     followUpFocus: string;
     preQuestionMessage?: string;
+    candidateAiAssistedLikely?: boolean;
     candidateAuthenticity?: {
       authenticityScore: number;
       authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted";
@@ -671,6 +675,7 @@ export class InterviewEngine {
           authenticitySignals: string[];
         }
       | undefined;
+    let candidateAiAssistedLikely = false;
 
     try {
       if (session.state === "interviewing_candidate") {
@@ -727,6 +732,7 @@ export class InterviewEngine {
               profileUpdateV2.authenticity_signals,
               answerRecord.answerText,
             );
+          candidateAiAssistedLikely = aiAssistedLikely;
           if (aiAssistedLikely) {
             const nextStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
             this.stateService.setCandidateAiAssistedStreak(session.userId, nextStreak);
@@ -775,7 +781,13 @@ export class InterviewEngine {
           extractedText: session.candidateResumeText ?? "",
         });
         this.stateService.setCandidateProfile(session.userId, updated);
-        return { followUpRequired, followUpFocus, preQuestionMessage, candidateAuthenticity };
+        return {
+          followUpRequired,
+          followUpFocus,
+          preQuestionMessage,
+          candidateAuthenticity,
+          candidateAiAssistedLikely,
+        };
       }
 
       if (session.state === "interviewing_manager") {
@@ -873,7 +885,13 @@ export class InterviewEngine {
       });
     }
 
-    return { followUpRequired: false, followUpFocus: "", preQuestionMessage, candidateAuthenticity };
+    return {
+      followUpRequired: false,
+      followUpFocus: "",
+      preQuestionMessage,
+      candidateAuthenticity,
+      candidateAiAssistedLikely,
+    };
   }
 
   async generateCandidateTechnicalSummary(

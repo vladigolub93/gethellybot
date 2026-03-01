@@ -390,6 +390,9 @@ export function createApp(env: EnvConfig): AppContext {
   }
 
   app.get("/admin/webapp", (_request: Request, response: Response) => {
+    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.setHeader("Pragma", "no-cache");
+    response.setHeader("Expires", "0");
     response.status(200).type("html").send(renderAdminWebappPage());
   });
 
@@ -397,6 +400,9 @@ export function createApp(env: EnvConfig): AppContext {
     const pin =
       typeof request.body?.pin === "string" ? request.body.pin.trim() : "";
     if (!pin || pin !== env.adminWebappPin) {
+      logger.warn("Admin login failed due to invalid pin", {
+        hasInitData: typeof request.body?.initData === "string" && request.body.initData.trim().length > 0,
+      });
       response.status(401).json({ ok: false, error: "Invalid PIN" });
       return;
     }
@@ -409,6 +415,9 @@ export function createApp(env: EnvConfig): AppContext {
     if (hasInitData) {
       const verification = verifyTelegramInitData(initData, env.telegramBotToken);
       if (!verification.ok || !verification.identity) {
+        logger.warn("Admin login failed due to Telegram validation", {
+          error: verification.error ?? "unknown_error",
+        });
         response.status(401).json({
           ok: false,
           error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
@@ -419,6 +428,9 @@ export function createApp(env: EnvConfig): AppContext {
         env.adminUserIds.length > 0 &&
         !env.adminUserIds.includes(verification.identity.telegramUserId)
       ) {
+        logger.warn("Admin login blocked by ADMIN_USER_IDS", {
+          telegramUserId: verification.identity.telegramUserId,
+        });
         response.status(403).json({ ok: false, error: "Access denied" });
         return;
       }
@@ -439,6 +451,9 @@ export function createApp(env: EnvConfig): AppContext {
         telegramUserId: verification.identity.telegramUserId,
         username: verification.identity.username ?? null,
       });
+      logger.info("Admin login succeeded with Telegram initData", {
+        telegramUserId: verification.identity.telegramUserId,
+      });
       return;
     }
 
@@ -451,6 +466,7 @@ export function createApp(env: EnvConfig): AppContext {
       buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
     );
     response.status(200).json({ ok: true });
+    logger.info("Admin login succeeded with PIN-only fallback");
   });
 
   app.post("/admin/api/auth/logout", (_request: Request, response: Response) => {

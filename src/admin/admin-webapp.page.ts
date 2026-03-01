@@ -402,7 +402,7 @@ export function renderAdminWebappPage(): string {
       <p class="subtitle">PIN plus Telegram identity check, session TTL 1 hour.</p>
       <div class="row" style="margin-top:10px;">
         <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
-        <button id="loginBtn">Sign in</button>
+        <button id="loginBtn" type="button">Sign in</button>
       </div>
       <div id="loginStatus" class="status"></div>
     </section>
@@ -512,6 +512,7 @@ export function renderAdminWebappPage(): string {
     const state = {
       initData: tg ? (tg.initData || "") : "",
       loggedIn: false,
+      loginPending: false,
       currentTab: "jobs",
       searchQuery: "",
       statusFilter: "",
@@ -543,14 +544,29 @@ export function renderAdminWebappPage(): string {
     }
 
     async function request(path, options) {
-      const response = await fetch(path, {
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        ...(options || {}),
-      });
-      const json = await response.json().catch(() => ({}));
+      let response;
+      try {
+        response = await fetch(path, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "content-type": "application/json" },
+          ...(options || {}),
+        });
+      } catch {
+        throw new Error("Network error. Please try again.");
+      }
+
+      const rawText = await response.text().catch(() => "");
+      let json = {};
+      if (rawText) {
+        try {
+          json = JSON.parse(rawText);
+        } catch {
+          json = {};
+        }
+      }
       if (!response.ok) {
-        throw new Error(json.error || json.message || ("HTTP " + response.status));
+        throw new Error((json && (json.error || json.message)) || ("HTTP " + response.status));
       }
       return json;
     }
@@ -564,10 +580,19 @@ export function renderAdminWebappPage(): string {
     }
 
     async function login() {
-      const pin = document.getElementById("pinInput").value.trim();
+      if (state.loginPending) {
+        return;
+      }
+      const pinInput = document.getElementById("pinInput");
+      const pin = pinInput ? pinInput.value.trim() : "";
       if (!pin) {
         setStatus("Please enter PIN", true);
         return;
+      }
+      state.loginPending = true;
+      const loginBtn = document.getElementById("loginBtn");
+      if (loginBtn) {
+        loginBtn.disabled = true;
       }
       setStatus("Signing in...", false);
       try {
@@ -581,6 +606,11 @@ export function renderAdminWebappPage(): string {
         await loadDashboard();
       } catch (error) {
         setStatus(error.message || "Login failed", true);
+      } finally {
+        state.loginPending = false;
+        if (loginBtn) {
+          loginBtn.disabled = false;
+        }
       }
     }
 
@@ -1077,6 +1107,10 @@ export function renderAdminWebappPage(): string {
 
     if (loginBtnEl) {
       loginBtnEl.addEventListener("click", login);
+      loginBtnEl.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        login();
+      });
     }
     if (refreshBtnEl) {
       refreshBtnEl.addEventListener("click", loadDashboard);
@@ -1120,6 +1154,9 @@ export function renderAdminWebappPage(): string {
     window.addEventListener("error", () => {
       setStatus("UI error happened. Please close and reopen the mini app.", true);
     });
+    window.addEventListener("unhandledrejection", () => {
+      setStatus("Request failed. Please retry Sign in.", true);
+    });
 
     document.querySelectorAll('.tab-btn').forEach((button) => {
       button.addEventListener('click', () => {
@@ -1128,6 +1165,8 @@ export function renderAdminWebappPage(): string {
       });
     });
 
+    setStatus("Enter PIN and tap Sign in.", false);
+    window.__hellyAdminLogin = login;
     loadSession();
   </script>
 </body>
