@@ -428,7 +428,15 @@ export class AdminWebappService {
         "id,manager_telegram_user_id",
       );
 
-      await this.supabaseClient.deleteMany("matches", { job_id: jobId });
+      const shouldFilterByUuidJobId = isUuidLike(String(jobId));
+      if (shouldFilterByUuidJobId) {
+        await this.supabaseClient.deleteMany("matches", { job_id: jobId });
+      }
+      if (jobRow?.manager_telegram_user_id) {
+        await this.supabaseClient.deleteMany("matches", {
+          manager_telegram_user_id: jobRow.manager_telegram_user_id,
+        });
+      }
       await this.supabaseClient.deleteMany("jobs", { id: jobId });
 
       if (jobRow?.manager_telegram_user_id) {
@@ -447,7 +455,10 @@ export class AdminWebappService {
         }
       }
 
-      const verification = await this.verifyJobDeletion(jobId);
+      const verification = await this.verifyJobDeletion(
+        jobId,
+        jobRow?.manager_telegram_user_id,
+      );
       this.logger.info("admin.job.deleted", { jobId, verification });
       return {
         ok: verification.remainingRefs.length === 0,
@@ -492,14 +503,21 @@ export class AdminWebappService {
     };
   }
 
-  private async verifyJobDeletion(jobId: string | number): Promise<{ remainingRefs: string[] }> {
+  private async verifyJobDeletion(
+    jobId: string | number,
+    managerTelegramUserId?: number,
+  ): Promise<{ remainingRefs: string[] }> {
     if (!this.supabaseClient) {
       return { remainingRefs: [] };
     }
-    const checks: Array<Promise<{ name: string; hasRows: boolean }>> = [
-      this.tableHasRows("jobs", { id: jobId }),
-      this.tableHasRows("matches", { job_id: jobId }),
-    ];
+    const checks: Array<Promise<{ name: string; hasRows: boolean }>> = [this.tableHasRows("jobs", { id: jobId })];
+    if (typeof managerTelegramUserId === "number" && Number.isInteger(managerTelegramUserId)) {
+      checks.push(
+        this.tableHasRows("matches", {
+          manager_telegram_user_id: managerTelegramUserId,
+        }),
+      );
+    }
     const results = await Promise.all(checks);
     return {
       remainingRefs: results.filter((item) => item.hasRows).map((item) => item.name),
@@ -514,7 +532,7 @@ export class AdminWebappService {
       const rows = await this.supabaseClient!.selectMany<{ id?: string | number }>(
         table,
         filters,
-        "id",
+        "*",
       );
       return {
         name: `${table}:${JSON.stringify(filters)}`,
@@ -576,4 +594,10 @@ function normalizeJobId(jobIdRaw: string): string | number | null {
     return asNumber;
   }
   return trimmed;
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
 }
