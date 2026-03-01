@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const JOB_DESCRIPTION_ANALYSIS_V1_PROMPT = `You are Helly’s Job Description Analysis Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You analyze raw job description text and extract structured role intelligence.
 

@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const JOB_PROFILE_UPDATE_V2_PROMPT = `You are Helly’s Job Intake Evaluation Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You update and refine the Job Profile JSON based on a single hiring manager answer.
 

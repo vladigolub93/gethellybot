@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const MANAGER_INTERVIEW_PLAN_V1_PROMPT = `You are Helly’s Manager Interview Planning Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You generate a structured and prioritized intake interview plan for a hiring manager based on Job Description Analysis JSON.
 

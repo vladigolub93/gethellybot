@@ -1,5 +1,9 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "./shared/authenticity-policy";
+
 export function buildCandidateInterviewPlanPrompt(resumeText: string): string {
   return [
+    AUTHENTICITY_POLICY_BLOCK,
+    "",
     "Task: design a candidate screening interview plan.",
     "Use the resume text to find missing critical info.",
     "Return STRICT JSON only.",

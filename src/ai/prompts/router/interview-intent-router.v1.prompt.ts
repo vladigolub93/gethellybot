@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const INTERVIEW_INTENT_ROUTER_V1_PROMPT = `You are Helly interview intent router.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You classify a user message during an active interview step.
 Return STRICT JSON only.

@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const CANDIDATE_RESUME_ANALYSIS_V2_PROMPT = `You are Helly’s Advanced Technical Resume Analysis Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You analyze raw resume text and extract structured technical intelligence.
 

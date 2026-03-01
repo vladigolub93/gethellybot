@@ -141,6 +141,9 @@ export interface InterviewAnswer {
   readonly authenticitySignals?: string[];
   readonly authenticityLabel?: "likely_human" | "uncertain" | "likely_ai_assisted";
   readonly aiAssistedScore?: number;
+  readonly aiAssistedLikelihood?: "low" | "medium" | "high";
+  readonly aiAssistedConfidence?: number;
+  readonly missingElements?: string[];
   readonly originalText?: string;
   readonly normalizedEnglishText?: string;
   readonly detectedLanguage?: "en" | "ru" | "uk" | "other";

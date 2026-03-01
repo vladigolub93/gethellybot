@@ -39,6 +39,7 @@ import { InterviewIntentRouterService } from "./interviews/interview-intent-rout
 import { CandidateNameExtractorService } from "./interviews/candidate-name-extractor.service";
 import { ManagerJobProfileV2Service } from "./interviews/manager-job-profile-v2.service";
 import { ManagerJobTechnicalSummaryService } from "./interviews/manager-job-technical-summary.service";
+import { AnswerEvaluatorService } from "./interviews/answer-evaluator.service";
 import { HiringScopeGuardrailsService } from "./guardrails/hiring-scope-guardrails.service";
 import { NormalizationService } from "./i18n/normalization.service";
 import { MatchingEngine } from "./matching/matching.engine";
@@ -216,6 +217,7 @@ export function createApp(env: EnvConfig): AppContext {
     qualityFlagsService,
   );
   const managerJobTechnicalSummaryService = new ManagerJobTechnicalSummaryService(llmClient);
+  const answerEvaluatorService = new AnswerEvaluatorService(llmClient, logger);
   const matchStorageService = new MatchStorageService(logger, matchesRepository);
   const matchingEngine = new MatchingEngine(
     interviewStorageService,
@@ -278,6 +280,7 @@ export function createApp(env: EnvConfig): AppContext {
     managerJobProfileV2Service,
     managerJobTechnicalSummaryService,
     interviewConfirmationService,
+    answerEvaluatorService,
     logger,
     qualityFlagsService,
     qdrantBackfillService,

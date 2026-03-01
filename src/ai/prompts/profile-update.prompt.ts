@@ -1,4 +1,5 @@
 import { InterviewQuestion } from "../../shared/types/domain.types";
+import { AUTHENTICITY_POLICY_BLOCK } from "./shared/authenticity-policy";
 
 interface ProfileUpdatePromptInput {
   role: "candidate" | "manager";
@@ -45,6 +46,8 @@ export function buildProfileUpdatePrompt(input: ProfileUpdatePromptInput): strin
         ].join("\n");
 
   return [
+    AUTHENTICITY_POLICY_BLOCK,
+    "",
     "Task: update a structured profile after one interview answer.",
     "Return STRICT JSON only.",
     "Do not remove previously known facts unless contradicted.",

@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const CANDIDATE_INTERVIEW_PLAN_V2_PROMPT = `You are Helly’s Advanced Technical Interview Planning Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You generate a structured and prioritized technical interview plan based on Candidate Resume Analysis v2 JSON.
 

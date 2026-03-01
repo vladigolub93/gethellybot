@@ -1,5 +1,9 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const MATCHING_COMMAND_ROUTER_V1_PROMPT = `
 You route user text into matching commands for a recruitment assistant.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 Return STRICT JSON only:
 {

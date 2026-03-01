@@ -1,4 +1,8 @@
+import { AUTHENTICITY_POLICY_BLOCK } from "../shared/authenticity-policy";
+
 export const CANDIDATE_PROFILE_UPDATE_V2_PROMPT = `You are Helly’s Technical Interview Evaluation Engine.
+
+${AUTHENTICITY_POLICY_BLOCK}
 
 You update and refine Candidate Resume Analysis v2 JSON based on a single candidate answer.
 

@@ -30,6 +30,7 @@ import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile
 import { QualityFlagsService } from "../qa/quality-flags.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 import { QdrantBackfillService } from "../matching/qdrant-backfill.service";
+import { AnswerEvaluatorService } from "./answer-evaluator.service";
 
 export interface InterviewBootstrapResult {
   nextState: UserState;
@@ -89,6 +90,7 @@ export class InterviewEngine {
     private readonly managerJobProfileV2Service: ManagerJobProfileV2Service,
     private readonly managerJobTechnicalSummaryService: ManagerJobTechnicalSummaryService,
     private readonly interviewConfirmationService: InterviewConfirmationService,
+    private readonly answerEvaluatorService: AnswerEvaluatorService,
     private readonly logger: Logger,
     private readonly qualityFlagsService?: QualityFlagsService,
     private readonly qdrantBackfillService?: QdrantBackfillService,
@@ -271,72 +273,87 @@ export class InterviewEngine {
       answeredAt: new Date().toISOString(),
     };
 
-    const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
-    if (updateResult.candidateAuthenticity && session.state === "interviewing_candidate") {
-      const aiAssistedScore = normalizeAiAssistedScore(
-        updateResult.candidateAuthenticity.authenticityScore,
-        updateResult.candidateAuthenticity.authenticityLabel,
-      );
-      const aiAssistedLikely =
-        Boolean(updateResult.candidateAiAssistedLikely) ||
-        aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD;
-      answerRecord = {
-        ...answerRecord,
-        authenticityScore: updateResult.candidateAuthenticity.authenticityScore,
-        authenticitySignals: updateResult.candidateAuthenticity.authenticitySignals,
-        authenticityLabel: updateResult.candidateAuthenticity.authenticityLabel,
-        aiAssistedScore,
-      };
+    const answerEvaluation = await this.answerEvaluatorService.evaluateAnswer({
+      role: session.state === "interviewing_candidate" ? "candidate" : "manager",
+      question: currentQuestionText,
+      answer: normalizedAnswer,
+      preferredLanguage: session.preferredLanguage,
+      detectedLanguage: answer.detectedLanguage,
+    });
+    answerRecord = {
+      ...answerRecord,
+      authenticitySignals: answerEvaluation.signals,
+      aiAssistedLikelihood: answerEvaluation.ai_assisted_likelihood,
+      aiAssistedConfidence: answerEvaluation.ai_assisted_confidence,
+      missingElements: answerEvaluation.missing_elements,
+    };
 
-      if (aiAssistedLikely) {
-        const currentReanswerCount = this.stateService.getReanswerRequestCount(
+    if (answerEvaluation.should_request_reanswer) {
+      const currentReanswerCount = this.stateService.getReanswerRequestCount(
+        session.userId,
+        currentIndex,
+      );
+      if (currentReanswerCount < MAX_REANSWER_REQUESTS_PER_QUESTION) {
+        const nextReanswerCount = this.stateService.incrementReanswerRequestCount(
           session.userId,
           currentIndex,
         );
-        if (currentReanswerCount < MAX_REANSWER_REQUESTS_PER_QUESTION) {
-          const nextReanswerCount = this.stateService.incrementReanswerRequestCount(
-            session.userId,
-            currentIndex,
-          );
-          answerRecord = {
-            ...answerRecord,
-            status: "draft",
-            qualityWarning: false,
-          };
-          this.stateService.upsertAnswer(session.userId, answerRecord);
-          this.stateService.setCurrentQuestionIndex(session.userId, currentIndex);
-          this.stateService.clearPendingFollowUp(session.userId);
-          return {
-            kind: "reanswer_required",
-            questionIndex: currentIndex,
-            questionText: currentQuestionText,
-            message: buildCandidateAiReanswerMessage(
-              resolveReanswerLanguagePreference(session.preferredLanguage, answer.detectedLanguage),
-              aiAssistedScore >= AI_ASSISTED_HARD_THRESHOLD,
-              nextReanswerCount,
-            ),
-          };
-        }
-
-        answerRecord = {
+        this.stateService.upsertAnswer(session.userId, {
           ...answerRecord,
-          status: "final",
-          qualityWarning: true,
-        };
+          status: "draft",
+          qualityWarning: false,
+        });
+        this.stateService.setCurrentQuestionIndex(session.userId, currentIndex);
+        this.stateService.clearPendingFollowUp(session.userId);
         await this.qualityFlagsService?.raise({
-          entityType: "candidate",
+          entityType: session.state === "interviewing_candidate" ? "candidate" : "job",
           entityId: String(session.userId),
-          flag: "candidate_ai_assisted_answer_likely",
+          flag:
+            session.state === "interviewing_candidate"
+              ? "candidate_ai_assisted_answer_likely"
+              : "manager_ai_assisted_answer_likely",
           details: {
             questionIndex: currentIndex,
-            authenticityScore: updateResult.candidateAuthenticity.authenticityScore,
-            authenticitySignals: updateResult.candidateAuthenticity.authenticitySignals,
-            aiAssistedScore,
-            threshold: "max_reanswer_reached_accept_with_warning",
+            reanswerCount: nextReanswerCount,
+            aiAssistedLikelihood: answerEvaluation.ai_assisted_likelihood,
+            aiAssistedConfidence: answerEvaluation.ai_assisted_confidence,
+            signals: answerEvaluation.signals,
+            missingElements: answerEvaluation.missing_elements,
           },
         });
+        return {
+          kind: "reanswer_required",
+          questionIndex: currentIndex,
+          questionText: currentQuestionText,
+          message: answerEvaluation.message_to_user,
+        };
       }
+
+      answerRecord = {
+        ...answerRecord,
+        status: "final",
+        qualityWarning: true,
+      };
+      await this.qualityFlagsService?.raise({
+        entityType: session.state === "interviewing_candidate" ? "candidate" : "job",
+        entityId: String(session.userId),
+        flag:
+          session.state === "interviewing_candidate"
+            ? "candidate_ai_assisted_answer_likely"
+            : "manager_ai_assisted_answer_likely",
+        details: {
+          questionIndex: currentIndex,
+          reanswerCount: MAX_REANSWER_REQUESTS_PER_QUESTION,
+          acceptedAfterMaxReasks: true,
+          aiAssistedLikelihood: answerEvaluation.ai_assisted_likelihood,
+          aiAssistedConfidence: answerEvaluation.ai_assisted_confidence,
+          signals: answerEvaluation.signals,
+          missingElements: answerEvaluation.missing_elements,
+        },
+      });
     }
+
+    const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
 
     this.stateService.upsertAnswer(session.userId, answerRecord);
     this.stateService.clearReanswerRequestCount(session.userId, currentIndex);
@@ -658,24 +675,10 @@ export class InterviewEngine {
     followUpRequired: boolean;
     followUpFocus: string;
     preQuestionMessage?: string;
-    candidateAiAssistedLikely?: boolean;
-    candidateAuthenticity?: {
-      authenticityScore: number;
-      authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted";
-      authenticitySignals: string[];
-    };
   }> {
     let followUpRequired = false;
     let followUpFocus = "";
     let preQuestionMessage: string | undefined;
-    let candidateAuthenticity:
-      | {
-          authenticityScore: number;
-          authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted";
-          authenticitySignals: string[];
-        }
-      | undefined;
-    let candidateAiAssistedLikely = false;
 
     try {
       if (session.state === "interviewing_candidate") {
@@ -693,11 +696,6 @@ export class InterviewEngine {
         if (profileUpdateV2) {
           followUpRequired = profileUpdateV2.follow_up_required;
           followUpFocus = profileUpdateV2.follow_up_focus ?? "";
-          candidateAuthenticity = {
-            authenticityScore: profileUpdateV2.authenticity_score,
-            authenticityLabel: profileUpdateV2.authenticity_label,
-            authenticitySignals: profileUpdateV2.authenticity_signals,
-          };
           this.stateService.addCandidateConfidenceUpdates(
             session.userId,
             profileUpdateV2.confidence_updates,
@@ -720,57 +718,6 @@ export class InterviewEngine {
               });
             }
           }
-          const aiAssistedScore = normalizeAiAssistedScore(
-            profileUpdateV2.authenticity_score,
-            profileUpdateV2.authenticity_label,
-          );
-          const aiAssistedLikely =
-            aiAssistedScore >= AI_ASSISTED_SOFT_THRESHOLD ||
-            shouldTreatCandidateAnswerAsAiAssisted(
-              profileUpdateV2.authenticity_label,
-              profileUpdateV2.authenticity_score,
-              profileUpdateV2.authenticity_signals,
-              answerRecord.answerText,
-            );
-          candidateAiAssistedLikely = aiAssistedLikely;
-          if (aiAssistedLikely) {
-            const nextStreak = (session.candidateAiAssistedStreak ?? 0) + 1;
-            this.stateService.setCandidateAiAssistedStreak(session.userId, nextStreak);
-            followUpRequired = true;
-            if (!followUpFocus) {
-              followUpFocus =
-                "one concrete personal example from your real project, including your own decisions and trade offs";
-            }
-            preQuestionMessage = buildAiAssistedWarningMessage(nextStreak);
-            await this.qualityFlagsService?.raise({
-              entityType: "candidate",
-              entityId: String(session.userId),
-              flag: "candidate_ai_assisted_answer_likely",
-              details: {
-                questionIndex: answerRecord.questionIndex,
-                authenticityScore: profileUpdateV2.authenticity_score,
-                authenticitySignals: profileUpdateV2.authenticity_signals,
-                aiAssistedScore,
-                threshold:
-                  aiAssistedScore >= AI_ASSISTED_HARD_THRESHOLD ? "hard" : "soft",
-                streak: nextStreak,
-              },
-            });
-            if (nextStreak >= 2) {
-              this.stateService.setCandidateNeedsLiveValidation(session.userId, true);
-              this.stateService.addCandidateConfidenceUpdates(session.userId, [
-                {
-                  field: "interview_authenticity_confidence",
-                  previous_value: "medium",
-                  new_value: "low",
-                  reason:
-                    "Multiple answers look AI-assisted and need live validation with concrete personal evidence.",
-                },
-              ]);
-            }
-          } else {
-            this.stateService.setCandidateAiAssistedStreak(session.userId, 0);
-          }
         }
 
         const updated = await this.candidateProfileBuilder.update({
@@ -785,8 +732,6 @@ export class InterviewEngine {
           followUpRequired,
           followUpFocus,
           preQuestionMessage,
-          candidateAuthenticity,
-          candidateAiAssistedLikely,
         };
       }
 
@@ -811,12 +756,6 @@ export class InterviewEngine {
 
         followUpRequired = managerProfileUpdate.follow_up_required;
         followUpFocus = managerProfileUpdate.follow_up_focus ?? "";
-        const managerAiAssistedLikely = shouldTreatManagerAnswerAsAiAssisted(
-          managerProfileUpdate.authenticity_label,
-          managerProfileUpdate.authenticity_score,
-          managerProfileUpdate.authenticity_signals,
-          answerRecord.answerText,
-        );
         if (managerProfileUpdate.answer_quality === "low") {
           const recentAnswers = this.stateService.getAnswers(session.userId).slice(-3);
           const lowSignal = recentAnswers.filter((item) => item.isFollowUp).length >= 2;
@@ -830,41 +769,6 @@ export class InterviewEngine {
               },
             });
           }
-        }
-        if (managerAiAssistedLikely) {
-          const nextStreak = (session.managerAiAssistedStreak ?? 0) + 1;
-          this.stateService.setManagerAiAssistedStreak(session.userId, nextStreak);
-          followUpRequired = true;
-          if (!followUpFocus) {
-            followUpFocus =
-              "one concrete role context with actual constraints, responsibilities, and expected outcomes in the first three months";
-          }
-          preQuestionMessage = buildManagerAiAssistedWarningMessage(nextStreak);
-          await this.qualityFlagsService?.raise({
-            entityType: "job",
-            entityId: String(session.userId),
-            flag: "manager_ai_assisted_answer_likely",
-            details: {
-              questionIndex: answerRecord.questionIndex,
-              authenticityScore: managerProfileUpdate.authenticity_score,
-              authenticitySignals: managerProfileUpdate.authenticity_signals,
-              streak: nextStreak,
-            },
-          });
-          if (nextStreak >= 2) {
-            this.stateService.setManagerNeedsLiveValidation(session.userId, true);
-            this.stateService.addManagerProfileUpdates(session.userId, [
-              {
-                field: "intake_authenticity_confidence",
-                previous_value: "medium",
-                new_value: "low",
-                reason:
-                  "Multiple manager answers look AI-assisted and require concrete operational examples.",
-              },
-            ]);
-          }
-        } else {
-          this.stateService.setManagerAiAssistedStreak(session.userId, 0);
         }
 
         const updated = await this.jobProfileBuilder.update({
@@ -889,8 +793,6 @@ export class InterviewEngine {
       followUpRequired: false,
       followUpFocus: "",
       preQuestionMessage,
-      candidateAuthenticity,
-      candidateAiAssistedLikely,
     };
   }
 
@@ -1068,228 +970,7 @@ function simplifyFollowUpFocus(focus: string): string {
   return compact.length >= 6 ? compact : fallback;
 }
 
-function buildAiAssistedWarningMessage(streak: number): string {
-  if (streak >= 2) {
-    return "This still looks AI-generated. Please do not paste AI text, answer from your own real experience. A short voice reply is preferred.";
-  }
-  return "This looks AI-assisted and too generic. Please reply from your real project experience in your own words, voice is preferred.";
-}
-
-function buildManagerAiAssistedWarningMessage(streak: number): string {
-  if (streak >= 2) {
-    return "This still looks AI-generated and generic. Please do not paste AI text, share real hiring context from your team, voice is preferred.";
-  }
-  return "This looks AI-assisted and generic. Please answer in your own words with one real role example from your team, voice is preferred.";
-}
-
-const AI_ASSISTED_SOFT_THRESHOLD = 0.7;
-const AI_ASSISTED_HARD_THRESHOLD = 0.85;
 const MAX_REANSWER_REQUESTS_PER_QUESTION = 2;
-
-function normalizeAiAssistedScore(
-  authenticityScore: number,
-  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
-): number {
-  let score = clamp01(authenticityScore);
-  if (authenticityLabel === "likely_human") {
-    score = 1 - score;
-  } else if (authenticityLabel === "likely_ai_assisted") {
-    score = Math.max(score, 1 - score);
-  }
-
-  if (authenticityLabel === "likely_ai_assisted" && score < AI_ASSISTED_SOFT_THRESHOLD) {
-    return AI_ASSISTED_SOFT_THRESHOLD;
-  }
-  return score;
-}
-
-function resolveReanswerLanguagePreference(
-  preferredLanguage: "en" | "ru" | "uk" | "unknown" | undefined,
-  detectedLanguage: "en" | "ru" | "uk" | "other" | undefined,
-): "en" | "ru" | "uk" {
-  if (preferredLanguage === "ru" || preferredLanguage === "uk") {
-    return preferredLanguage;
-  }
-  if (detectedLanguage === "ru" || detectedLanguage === "uk") {
-    return detectedLanguage;
-  }
-  return "en";
-}
-
-function buildCandidateAiReanswerMessage(
-  language: "en" | "ru" | "uk",
-  isHard: boolean,
-  attemptNumber: number,
-): string {
-  if (language === "ru") {
-    return isHard
-      ? `Это выглядит слишком идеально, похоже на AI-ответ. Я не пытаюсь вас поймать, мне нужен ваш реальный опыт. Пожалуйста, ответьте заново: один реальный проект, что лично сделали вы, и одна конкретная прод-деталь. Голосом тоже отлично. Попытка ${attemptNumber} из ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
-      : `Это звучит слишком гладко, похоже на AI-ответ. Я не пытаюсь вас поймать, мне нужен ваш реальный опыт. Пожалуйста, ответьте заново: один реальный проект, что лично сделали вы, и одна конкретная прод-деталь. Голосом тоже можно. Попытка ${attemptNumber} из ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
-  }
-  if (language === "uk") {
-    return isHard
-      ? `Це виглядає занадто ідеально, схоже на AI-відповідь. Я не намагаюся вас підловити, мені потрібен ваш реальний досвід. Будь ласка, дайте відповідь ще раз: один реальний проєкт, що саме ви зробили, і одна конкретна прод-деталь. Голосом теж ок. Спроба ${attemptNumber} з ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
-      : `Це звучить трохи занадто гладко, схоже на AI-відповідь. Я не намагаюся вас підловити, мені потрібен ваш реальний досвід. Будь ласка, дайте відповідь ще раз: один реальний проєкт, що саме ви зробили, і одна конкретна прод-деталь. Голосом теж можна. Спроба ${attemptNumber} з ${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
-  }
-  return isHard
-    ? `This feels a bit too perfect, like an AI answer. I am not trying to catch you, I just need your real experience. Please answer again with one real project, what you personally did, and one concrete production detail. Voice message is totally fine if that is easier. Attempt ${attemptNumber}/${MAX_REANSWER_REQUESTS_PER_QUESTION}.`
-    : `This feels a bit too perfect, like an AI answer. I am not trying to catch you, I just need your real experience. Please answer again with one real project, what you personally did, and one concrete production detail. Voice message is totally fine if that is easier. Attempt ${attemptNumber}/${MAX_REANSWER_REQUESTS_PER_QUESTION}.`;
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  if (value < 0) {
-    return 0;
-  }
-  if (value > 1) {
-    return 1;
-  }
-  return value;
-}
-
-function shouldTreatCandidateAnswerAsAiAssisted(
-  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
-  authenticityScore: number,
-  authenticitySignals: ReadonlyArray<string>,
-  answerText: string,
-): boolean {
-  if (authenticityLabel === "likely_ai_assisted" || authenticityScore <= 0.35) {
-    return true;
-  }
-
-  if (containsFabricationAdmission(answerText)) {
-    return true;
-  }
-
-  const signalsLookAi = hasAiAuthenticitySignals(authenticitySignals);
-  if (signalsLookAi) {
-    return true;
-  }
-
-  const templatedNarrative = looksTemplatedNarrative(answerText);
-  if (authenticityLabel === "uncertain" && authenticityScore <= 0.6 && templatedNarrative) {
-    return true;
-  }
-
-  if (looksOverStructuredAiEssay(answerText)) {
-    return true;
-  }
-
-  return false;
-}
-
-function shouldTreatManagerAnswerAsAiAssisted(
-  authenticityLabel: "likely_human" | "uncertain" | "likely_ai_assisted",
-  authenticityScore: number,
-  authenticitySignals: ReadonlyArray<string>,
-  answerText: string,
-): boolean {
-  if (authenticityLabel === "likely_ai_assisted" || authenticityScore <= 0.35) {
-    return true;
-  }
-
-  if (containsFabricationAdmission(answerText)) {
-    return true;
-  }
-
-  const signalsLookAi = hasAiAuthenticitySignals(authenticitySignals);
-  if (signalsLookAi) {
-    return true;
-  }
-
-  const templatedNarrative = looksTemplatedNarrative(answerText);
-  if (authenticityLabel === "uncertain" && authenticityScore <= 0.6 && templatedNarrative) {
-    return true;
-  }
-
-  if (looksOverStructuredAiEssay(answerText)) {
-    return true;
-  }
-
-  return false;
-}
-
-function hasAiAuthenticitySignals(authenticitySignals: ReadonlyArray<string>): boolean {
-  if (authenticitySignals.length === 0) {
-    return false;
-  }
-  const joined = authenticitySignals.join(" ").toLowerCase();
-  return /generic|template|boilerplate|polished but generic|hypothetical|not personal|non-responsive|fabricat|invented|copied|ai-assisted|ai generated|no concrete/.test(
-    joined,
-  );
-}
-
-function containsFabricationAdmission(answerText: string): boolean {
-  const text = answerText.trim().toLowerCase();
-  if (!text) {
-    return false;
-  }
-
-  return (
-    /\bi made (it )?up\b/.test(text) ||
-    /\bi invented (it|this)\b/.test(text) ||
-    /\bi do not have (that|this|real) experience\b/.test(text) ||
-    /\bno real experience\b/.test(text) ||
-    /я придумал/.test(text) ||
-    /нет у меня такого опыта/.test(text) ||
-    /не маю такого досвіду/.test(text)
-  );
-}
-
-function looksTemplatedNarrative(answerText: string): boolean {
-  const text = answerText.trim();
-  if (text.length < 550) {
-    return false;
-  }
-
-  const sectionMarkers = text.match(
-    /(^|\n)\s*(ui|api|backend|database|db|response|flow|step\s*\d+|frontend|service)\s*[.:]/gim,
-  );
-  const markerCount = sectionMarkers?.length ?? 0;
-
-  const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
-  return markerCount >= 3 || paragraphCount >= 4;
-}
-
-function looksOverStructuredAiEssay(answerText: string): boolean {
-  const text = answerText.trim();
-  if (text.length < 350) {
-    return false;
-  }
-
-  const lower = text.toLowerCase();
-  const structuralMarkers = [
-    "in the ui",
-    "in the api layer",
-    "at the database layer",
-    "on success",
-    "what i owned personally",
-    "i owned",
-    "the tradeoff",
-    "the trade-off",
-    "end to end",
-    "if you want, i can also",
-    "if you want i can also",
-    "sure. i will",
-    "we chose",
-  ];
-  const markersMatched = structuralMarkers.filter((marker) => lower.includes(marker)).length;
-  const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
-  const hasWeakConcreteSignal = !/\b(p95|p99|ms|rps|qps|incident|oncall|slo|sla|postmortem|migration|rollback|ticket|pager|prometheus|grafana)\b/i.test(
-    text,
-  );
-  const hasUiApiDbSequence =
-    lower.includes("in the ui") &&
-    lower.includes("in the api layer") &&
-    lower.includes("at the database layer");
-
-  return (
-    (paragraphCount >= 4 && markersMatched >= 3 && hasWeakConcreteSignal) ||
-    (hasUiApiDbSequence && markersMatched >= 2)
-  );
-}
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {
   const direction = analysis.primary_direction === "unknown" ? "technical" : analysis.primary_direction;
