@@ -405,7 +405,8 @@ export function createApp(env: EnvConfig): AppContext {
       typeof request.body?.initData === "string"
         ? request.body.initData
         : "";
-    if (env.adminWebappRequireTelegram || initData.trim().length > 0) {
+    const hasInitData = initData.trim().length > 0;
+    if (hasInitData) {
       const verification = verifyTelegramInitData(initData, env.telegramBotToken);
       if (!verification.ok || !verification.identity) {
         response.status(401).json({
@@ -437,14 +438,6 @@ export function createApp(env: EnvConfig): AppContext {
         ok: true,
         telegramUserId: verification.identity.telegramUserId,
         username: verification.identity.username ?? null,
-      });
-      return;
-    }
-
-    if (env.adminUserIds.length > 0) {
-      response.status(401).json({
-        ok: false,
-        error: "Telegram validation is required for configured admins",
       });
       return;
     }
