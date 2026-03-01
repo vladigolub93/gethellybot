@@ -28,6 +28,8 @@ export interface EnvConfig {
   telegramReactionsEnabled: boolean;
   telegramReactionsProbability: number;
   telegramButtonsEnabled: boolean;
+  interviewReminderEnabled: boolean;
+  interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
   supabaseServiceRoleKey?: string;
@@ -68,6 +70,8 @@ export function loadEnv(): EnvConfig {
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
   const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
+  const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
+  const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
   const adminWebappSessionTtlRaw = process.env.ADMIN_WEBAPP_SESSION_TTL_SEC ?? "3600";
   const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "true";
@@ -80,6 +84,8 @@ export function loadEnv(): EnvConfig {
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
   const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
+  const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
+  const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
   const adminWebappSessionTtlSec = Number(adminWebappSessionTtlRaw);
   const adminWebappRequireTelegram = parseBoolean(adminWebappRequireTelegramRaw);
@@ -98,6 +104,11 @@ export function loadEnv(): EnvConfig {
   if (!Number.isFinite(telegramReactionsProbability) || telegramReactionsProbability < 0 || telegramReactionsProbability > 1) {
     throw new Error(
       `Invalid TELEGRAM_REACTIONS_PROBABILITY value: ${reactionsProbabilityRaw}. Expected number between 0 and 1.`,
+    );
+  }
+  if (!Number.isFinite(interviewReminderCheckIntervalMinutes) || interviewReminderCheckIntervalMinutes < 10) {
+    throw new Error(
+      `Invalid INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES value: ${interviewReminderCheckIntervalRaw}`,
     );
   }
   if (!Number.isFinite(telegramLogsRatePerMin) || telegramLogsRatePerMin < 1) {
@@ -136,6 +147,8 @@ export function loadEnv(): EnvConfig {
     telegramReactionsEnabled,
     telegramReactionsProbability,
     telegramButtonsEnabled,
+    interviewReminderEnabled,
+    interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),
     supabasePublishableKey: getOptionalTrimmed("SUPABASE_PUBLISHABLE_KEY"),
     supabaseServiceRoleKey: getOptionalTrimmed("SUPABASE_SERVICE_ROLE_KEY"),

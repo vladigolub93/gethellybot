@@ -73,6 +73,14 @@ interface DataDeletionRequestRow {
   updated_at: string | null;
 }
 
+interface AdminInterviewRunRow {
+  telegram_user_id: number;
+  role: string;
+  completed_at: string | null;
+}
+
+type InterviewProgressStatus = "not_started" | "in_progress" | "completed";
+
 export interface AdminDashboardData {
   generatedAt: string;
   consistency: {
@@ -94,6 +102,10 @@ export interface AdminDashboardData {
     contactSharedUsers: number;
     qualityFlags24h: number;
     interviewsTotal: number;
+    candidateInterviewsCompleted: number;
+    candidateInterviewsInProgress: number;
+    managerInterviewsCompleted: number;
+    managerInterviewsInProgress: number;
   };
   users: Array<{
     telegramUserId: number;
@@ -103,6 +115,8 @@ export interface AdminDashboardData {
     preferredLanguage: string;
     contactShared: boolean;
     candidateProfileComplete: boolean;
+    candidateInterviewStatus: InterviewProgressStatus;
+    managerInterviewStatus: InterviewProgressStatus;
     updatedAt?: string;
   }>;
   candidates: Array<{
@@ -111,6 +125,7 @@ export interface AdminDashboardData {
     fullName?: string;
     profileStatus: string;
     interviewConfidence?: string;
+    interviewStatus: InterviewProgressStatus;
     candidateProfileComplete: boolean;
     contactShared: boolean;
     updatedAt?: string;
@@ -123,6 +138,7 @@ export interface AdminDashboardData {
     status: string;
     workFormat: string;
     profileComplete: boolean;
+    managerInterviewStatus: InterviewProgressStatus;
     updatedAt?: string;
   }>;
   matches: Array<{
@@ -151,6 +167,24 @@ export interface AdminDashboardData {
     requestedAt?: string;
     updatedAt?: string;
   }>;
+  interviewProgress: {
+    candidates: Array<{
+      telegramUserId: number;
+      username?: string;
+      fullName?: string;
+      status: InterviewProgressStatus;
+      currentState: string;
+      updatedAt?: string;
+    }>;
+    managers: Array<{
+      telegramUserId: number;
+      username?: string;
+      fullName?: string;
+      status: InterviewProgressStatus;
+      currentState: string;
+      updatedAt?: string;
+    }>;
+  };
 }
 
 export interface AdminDeleteResult {
@@ -192,6 +226,10 @@ export class AdminWebappService {
           contactSharedUsers: 0,
           qualityFlags24h: 0,
           interviewsTotal: 0,
+          candidateInterviewsCompleted: 0,
+          candidateInterviewsInProgress: 0,
+          managerInterviewsCompleted: 0,
+          managerInterviewsInProgress: 0,
         },
         users: [],
         candidates: [],
@@ -199,10 +237,14 @@ export class AdminWebappService {
         matches: [],
         qualityFlags: [],
         deletionRequests: [],
+        interviewProgress: {
+          candidates: [],
+          managers: [],
+        },
       };
     }
 
-    const [users, profiles, jobs, matches, qualityFlags, deletionRequests, interviews] = await Promise.all([
+    const [users, profiles, jobs, matches, qualityFlags, deletionRequests, interviews, userStates] = await Promise.all([
       this.supabaseClient.selectMany<AdminUserRow>(
         "users",
         {},
@@ -233,10 +275,19 @@ export class AdminWebappService {
         {},
         "telegram_user_id,reason,status,requested_at,updated_at",
       ),
-      this.supabaseClient.selectMany<{ telegram_user_id: number }>(
+      this.supabaseClient.selectMany<AdminInterviewRunRow>(
         "interview_runs",
         {},
-        "telegram_user_id",
+        "telegram_user_id,role,completed_at",
+      ),
+      this.supabaseClient.selectMany<{
+        telegram_user_id: number;
+        state: string;
+        updated_at: string;
+      }>(
+        "user_states",
+        {},
+        "telegram_user_id,state,updated_at",
       ),
     ]);
 
@@ -249,6 +300,23 @@ export class AdminWebappService {
     const userById = new Map<number, AdminUserRow>();
     for (const user of users) {
       userById.set(user.telegram_user_id, user);
+    }
+    const userStateById = new Map<number, { state: string; updatedAt: string }>();
+    for (const row of userStates) {
+      userStateById.set(row.telegram_user_id, {
+        state: row.state,
+        updatedAt: row.updated_at,
+      });
+    }
+
+    const candidateInterviewCompleted = new Set<number>();
+    const managerInterviewCompleted = new Set<number>();
+    for (const run of interviews) {
+      if (run.role === "candidate") {
+        candidateInterviewCompleted.add(run.telegram_user_id);
+      } else if (run.role === "manager") {
+        managerInterviewCompleted.add(run.telegram_user_id);
+      }
     }
 
     const candidateProfiles = profiles
@@ -266,6 +334,60 @@ export class AdminWebappService {
       typeof qdrantCount === "number"
         ? candidateProfiles.length - qdrantCount
         : null;
+
+    const usersWithInterviewStatus = usersSorted.map((item) => {
+      const stateRow = userStateById.get(item.telegram_user_id);
+      const candidateInterviewStatus = resolveInterviewStatus({
+        role: "candidate",
+        state: stateRow?.state,
+        completed: candidateInterviewCompleted.has(item.telegram_user_id),
+      });
+      const managerInterviewStatus = resolveInterviewStatus({
+        role: "manager",
+        state: stateRow?.state,
+        completed: managerInterviewCompleted.has(item.telegram_user_id),
+      });
+      return {
+        telegramUserId: item.telegram_user_id,
+        username: item.telegram_username ?? undefined,
+        fullName: [item.first_name, item.last_name]
+          .filter((part) => Boolean(part))
+          .join(" ") || undefined,
+        role: item.role ?? "unknown",
+        preferredLanguage: item.preferred_language ?? "unknown",
+        contactShared: Boolean(item.contact_shared),
+        candidateProfileComplete: Boolean(item.candidate_profile_complete),
+        candidateInterviewStatus,
+        managerInterviewStatus,
+        updatedAt: item.updated_at ?? undefined,
+      };
+    });
+
+    const interviewProgressCandidates = usersWithInterviewStatus
+      .filter((item) => item.role === "candidate")
+      .map((item) => ({
+        telegramUserId: item.telegramUserId,
+        username: item.username,
+        fullName: item.fullName,
+        status: item.candidateInterviewStatus,
+        currentState: userStateById.get(item.telegramUserId)?.state ?? "unknown",
+        updatedAt: item.updatedAt,
+      }))
+      .sort((a, b) => safeTime(b.updatedAt ?? null) - safeTime(a.updatedAt ?? null))
+      .slice(0, 150);
+
+    const interviewProgressManagers = usersWithInterviewStatus
+      .filter((item) => item.role === "manager")
+      .map((item) => ({
+        telegramUserId: item.telegramUserId,
+        username: item.username,
+        fullName: item.fullName,
+        status: item.managerInterviewStatus,
+        currentState: userStateById.get(item.telegramUserId)?.state ?? "unknown",
+        updatedAt: item.updatedAt,
+      }))
+      .sort((a, b) => safeTime(b.updatedAt ?? null) - safeTime(a.updatedAt ?? null))
+      .slice(0, 150);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -288,21 +410,23 @@ export class AdminWebappService {
         contactSharedUsers: users.filter((item) => Boolean(item.contact_shared)).length,
         qualityFlags24h: qualityFlags.filter((item) => now - safeTime(item.created_at) <= oneDayMs).length,
         interviewsTotal: interviews.length,
+        candidateInterviewsCompleted: usersWithInterviewStatus.filter(
+          (item) => item.role === "candidate" && item.candidateInterviewStatus === "completed",
+        ).length,
+        candidateInterviewsInProgress: usersWithInterviewStatus.filter(
+          (item) => item.role === "candidate" && item.candidateInterviewStatus === "in_progress",
+        ).length,
+        managerInterviewsCompleted: usersWithInterviewStatus.filter(
+          (item) => item.role === "manager" && item.managerInterviewStatus === "completed",
+        ).length,
+        managerInterviewsInProgress: usersWithInterviewStatus.filter(
+          (item) => item.role === "manager" && item.managerInterviewStatus === "in_progress",
+        ).length,
       },
-      users: usersSorted.slice(0, 120).map((item) => ({
-        telegramUserId: item.telegram_user_id,
-        username: item.telegram_username ?? undefined,
-        fullName: [item.first_name, item.last_name]
-          .filter((part) => Boolean(part))
-          .join(" ") || undefined,
-        role: item.role ?? "unknown",
-        preferredLanguage: item.preferred_language ?? "unknown",
-        contactShared: Boolean(item.contact_shared),
-        candidateProfileComplete: Boolean(item.candidate_profile_complete),
-        updatedAt: item.updated_at ?? undefined,
-      })),
+      users: usersWithInterviewStatus.slice(0, 120),
       candidates: candidateProfiles.slice(0, 120).map((profile) => {
         const user = userById.get(profile.telegram_user_id);
+        const stateRow = userStateById.get(profile.telegram_user_id);
         const summary = asRecord(profile.technical_summary_json);
         const confidence = toText(summary?.interview_confidence_level).toLowerCase();
         return {
@@ -317,6 +441,11 @@ export class AdminWebappService {
             confidence === "low" || confidence === "medium" || confidence === "high"
               ? confidence
               : undefined,
+          interviewStatus: resolveInterviewStatus({
+            role: "candidate",
+            state: stateRow?.state,
+            completed: candidateInterviewCompleted.has(profile.telegram_user_id),
+          }),
           candidateProfileComplete: Boolean(user?.candidate_profile_complete),
           contactShared: Boolean(user?.contact_shared),
           updatedAt: profile.updated_at ?? user?.updated_at ?? undefined,
@@ -337,6 +466,11 @@ export class AdminWebappService {
           status: item.status,
           workFormat: item.job_work_format ?? "unknown",
           profileComplete: Boolean(item.job_profile_complete),
+          managerInterviewStatus: resolveInterviewStatus({
+            role: "manager",
+            state: userStateById.get(item.manager_telegram_user_id)?.state,
+            completed: managerInterviewCompleted.has(item.manager_telegram_user_id),
+          }),
           updatedAt: item.updated_at ?? undefined,
         };
       }),
@@ -375,6 +509,10 @@ export class AdminWebappService {
         requestedAt: item.requested_at ?? undefined,
         updatedAt: item.updated_at ?? undefined,
       })),
+      interviewProgress: {
+        candidates: interviewProgressCandidates,
+        managers: interviewProgressManagers,
+      },
     };
   }
 
@@ -629,6 +767,40 @@ function truncate(value: string | null | undefined, maxLength: number): string {
     return value;
   }
   return `${value.slice(0, maxLength - 3)}...`;
+}
+
+const CANDIDATE_INCOMPLETE_STATES = new Set<string>([
+  "waiting_resume",
+  "extracting_resume",
+  "interviewing_candidate",
+  "candidate_mandatory_fields",
+]);
+
+const MANAGER_INCOMPLETE_STATES = new Set<string>([
+  "waiting_job",
+  "extracting_job",
+  "interviewing_manager",
+  "manager_mandatory_fields",
+]);
+
+function resolveInterviewStatus(input: {
+  role: "candidate" | "manager";
+  state?: string;
+  completed: boolean;
+}): InterviewProgressStatus {
+  if (input.completed) {
+    return "completed";
+  }
+  if (!input.state) {
+    return "not_started";
+  }
+  if (input.role === "candidate" && CANDIDATE_INCOMPLETE_STATES.has(input.state)) {
+    return "in_progress";
+  }
+  if (input.role === "manager" && MANAGER_INCOMPLETE_STATES.has(input.state)) {
+    return "in_progress";
+  }
+  return "not_started";
 }
 
 function normalizeJobId(jobIdRaw: string): string | number | null {

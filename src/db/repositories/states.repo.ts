@@ -21,6 +21,10 @@ export class StatesRepository {
     private readonly supabaseClient?: SupabaseRestClient,
   ) {}
 
+  isEnabled(): boolean {
+    return Boolean(this.supabaseClient);
+  }
+
   async loadByTelegramUserId(telegramUserId: number): Promise<UserSessionState | null> {
     if (!this.supabaseClient) {
       return null;
@@ -79,6 +83,35 @@ export class StatesRepository {
     );
 
     this.logger.debug("User state persisted in Supabase", { telegramUserId: session.userId });
+  }
+
+  async listAllSessions(): Promise<Array<{ session: UserSessionState; updatedAt: string }>> {
+    if (!this.supabaseClient) {
+      return [];
+    }
+
+    const rows = await this.supabaseClient.selectMany<UserStateRow>(
+      USER_STATES_TABLE,
+      {},
+      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,last_bot_message,updated_at",
+    );
+
+    return rows.map((row) => {
+      const payload = row.state_payload ?? {};
+      const session: UserSessionState = {
+        userId: row.telegram_user_id,
+        chatId: row.chat_id,
+        username: row.telegram_username ?? undefined,
+        role: normalizeRole(row.role),
+        state: row.state as UserSessionState["state"],
+        ...payload,
+        lastBotMessage: row.last_bot_message ?? undefined,
+      };
+      return {
+        session,
+        updatedAt: row.updated_at,
+      };
+    });
   }
 }
 

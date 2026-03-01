@@ -48,6 +48,7 @@ import { VectorSearchRepository } from "./matching/vector-search.repo";
 import { CandidateNotifier } from "./notifications/candidate-notifier";
 import { ManagerNotifier } from "./notifications/manager-notifier";
 import { NotificationEngine } from "./notifications/notification.engine";
+import { InterviewReminderService } from "./notifications/interview-reminder.service";
 import { RateLimitService } from "./notifications/rate-limit.service";
 import { DataDeletionService } from "./privacy/data-deletion.service";
 import { CandidateProfileBuilder } from "./profiles/candidate-profile.builder";
@@ -255,6 +256,11 @@ export function createApp(env: EnvConfig): AppContext {
     usersRepository,
     logger,
   );
+  const interviewReminderService = new InterviewReminderService(
+    statesRepository,
+    telegramClient,
+    logger,
+  );
   const interviewEngine = new InterviewEngine(
     interviewPlanService,
     stateService,
@@ -287,6 +293,26 @@ export function createApp(env: EnvConfig): AppContext {
           error: error instanceof Error ? error.message : "Unknown error",
         });
       });
+  }
+  if (env.interviewReminderEnabled && interviewReminderService.isEnabled()) {
+    const intervalMs = Math.floor(env.interviewReminderCheckIntervalMinutes * 60 * 1000);
+    setTimeout(() => {
+      void interviewReminderService.sendDueReminders().catch((error) => {
+        logger.warn("interview.reminder.initial_run_failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      });
+    }, 25_000);
+    setInterval(() => {
+      void interviewReminderService.sendDueReminders().catch((error) => {
+        logger.warn("interview.reminder.scheduled_run_failed", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      });
+    }, intervalMs);
+    logger.info("Interview reminder scheduler started", {
+      intervalMinutes: env.interviewReminderCheckIntervalMinutes,
+    });
   }
   const stateRouter = new StateRouter(
     stateService,

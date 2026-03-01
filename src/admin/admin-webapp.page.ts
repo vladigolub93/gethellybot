@@ -362,6 +362,7 @@ export function renderAdminWebappPage(): string {
         <div class="tabs">
           <button class="tab-btn active" data-tab="jobs">Jobs</button>
           <button class="tab-btn" data-tab="candidates">Candidates</button>
+          <button class="tab-btn" data-tab="interviews">Interviews</button>
           <button class="tab-btn" data-tab="users">Users</button>
           <button class="tab-btn" data-tab="matches">Matches</button>
           <button class="tab-btn" data-tab="flags">Flags</button>
@@ -377,6 +378,11 @@ export function renderAdminWebappPage(): string {
       <div id="tab-candidates" class="card tab-content hidden">
         <h3 class="title">Candidates</h3>
         <div id="candidatesList" class="list" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="tab-interviews" class="card tab-content hidden">
+        <h3 class="title">Interview progress</h3>
+        <div id="interviewsList" class="list" style="margin-top:10px;"></div>
       </div>
 
       <div id="tab-users" class="card tab-content hidden">
@@ -503,6 +509,10 @@ export function renderAdminWebappPage(): string {
         ["Candidates", stats.candidatesTotal],
         ["Managers", stats.managersTotal],
         ["Interviews", stats.interviewsTotal],
+        ["Candidate done", stats.candidateInterviewsCompleted || 0],
+        ["Candidate in progress", stats.candidateInterviewsInProgress || 0],
+        ["Manager done", stats.managerInterviewsCompleted || 0],
+        ["Manager in progress", stats.managerInterviewsInProgress || 0],
         ["Jobs", stats.jobsTotal],
         ["Active jobs", stats.jobsActive],
         ["Matches", stats.matchesTotal],
@@ -547,6 +557,7 @@ export function renderAdminWebappPage(): string {
             '<div class="kv-row"><b>Domain</b><span>' + escapeHtml(row.domain) + '</span></div>' +
             '<div class="kv-row"><b>Manager</b><span>' + escapeHtml(String(row.managerTelegramUserId)) + '</span></div>' +
             '<div class="kv-row"><b>Format</b><span>' + escapeHtml(row.workFormat) + '</span></div>' +
+            '<div class="kv-row"><b>Interview</b><span>' + escapeHtml(row.managerInterviewStatus || 'not_started') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
           '<div class="item-actions"><button class="danger" onclick="deleteJob(\'' + escapeAttr(row.id) + '\')">Delete job</button></div>' +
@@ -568,6 +579,7 @@ export function renderAdminWebappPage(): string {
           '<div class="kv">' +
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
             '<div class="kv-row"><b>Profile status</b><span>' + escapeHtml(row.profileStatus) + '</span></div>' +
+            '<div class="kv-row"><b>Interview</b><span>' + escapeHtml(row.interviewStatus || 'not_started') + '</span></div>' +
             '<div class="kv-row"><b>Mandatory complete</b><span>' + (row.candidateProfileComplete ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Contact shared</b><span>' + (row.contactShared ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
@@ -591,10 +603,40 @@ export function renderAdminWebappPage(): string {
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
             '<div class="kv-row"><b>Role</b><span>' + escapeHtml(row.role) + '</span></div>' +
             '<div class="kv-row"><b>Language</b><span>' + escapeHtml(row.preferredLanguage) + '</span></div>' +
+            '<div class="kv-row"><b>Candidate interview</b><span>' + escapeHtml(row.candidateInterviewStatus || 'not_started') + '</span></div>' +
+            '<div class="kv-row"><b>Manager interview</b><span>' + escapeHtml(row.managerInterviewStatus || 'not_started') + '</span></div>' +
             '<div class="kv-row"><b>Candidate complete</b><span>' + (row.candidateProfileComplete ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
           '<div class="item-actions"><button class="danger" onclick="deleteUser(' + Number(row.telegramUserId) + ')">Delete user</button></div>' +
+        '</article>';
+      }).join("");
+    }
+
+    function renderInterviews(interviewProgress) {
+      const list = document.getElementById("interviewsList");
+      const candidates = (interviewProgress && interviewProgress.candidates) || [];
+      const managers = (interviewProgress && interviewProgress.managers) || [];
+      const rows = []
+        .concat(candidates.map((row) => ({ ...row, role: 'candidate' })))
+        .concat(managers.map((row) => ({ ...row, role: 'manager' })));
+
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No interview progress data found.</div>';
+        return;
+      }
+
+      list.innerHTML = rows.map((row) => {
+        const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
+        const statusClass = row.status === 'completed' ? 'ok' : (row.status === 'in_progress' ? 'warn' : '');
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + statusClass + '">' + escapeHtml(row.status || 'not_started') + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Role</b><span>' + escapeHtml(row.role) + '</span></div>' +
+            '<div class="kv-row"><b>Current state</b><span>' + escapeHtml(row.currentState || 'unknown') + '</span></div>' +
+            '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
+          '</div>' +
         '</article>';
       }).join("");
     }
@@ -661,7 +703,7 @@ export function renderAdminWebappPage(): string {
         const active = button.getAttribute('data-tab') === tabName;
         button.classList.toggle('active', active);
       });
-      const sections = ["jobs", "candidates", "users", "matches", "flags", "events"];
+      const sections = ["jobs", "candidates", "interviews", "users", "matches", "flags", "events"];
       sections.forEach((name) => {
         const section = document.getElementById('tab-' + name);
         section.classList.toggle('hidden', tabName !== name);
@@ -675,6 +717,7 @@ export function renderAdminWebappPage(): string {
       renderConsistency(data.consistency || {});
       renderJobs(data.jobs || []);
       renderCandidates(data.candidates || []);
+      renderInterviews(data.interviewProgress || {});
       renderUsers(data.users || []);
       renderMatches(data.matches || []);
       renderFlags(data.qualityFlags || []);

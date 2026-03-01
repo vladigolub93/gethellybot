@@ -58,6 +58,7 @@ export interface UserSessionState {
   contactLastName?: string;
   pendingDataDeletionConfirmation?: boolean;
   pendingDataDeletionRequestedAt?: string;
+  lastIncompleteInterviewReminderAt?: string;
   lastBotMessage?: string;
   lastBotMessageHash?: string;
   lastBotMessageAt?: string;
