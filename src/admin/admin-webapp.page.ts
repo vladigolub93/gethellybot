@@ -783,7 +783,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
             '<div class="kv-row"><b>Interview</b><span>' + escapeHtml(row.managerInterviewStatus || 'not_started') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
-          '<div class="item-actions"><button class="danger" onclick="deleteJob(\'' + escapeAttr(row.id) + '\')">Delete job</button></div>' +
+          '<div class="item-actions"><button class="danger" data-action="delete-job" data-job-id="' + escapeAttr(row.id) + '">Delete job</button></div>' +
         '</article>';
       }).join("");
     }
@@ -815,7 +815,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
             '<div class="kv-row"><b>Contact shared</b><span>' + (row.contactShared ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
-          '<div class="item-actions"><button class="danger" onclick="deleteCandidate(' + Number(row.telegramUserId) + ')">Delete candidate</button></div>' +
+          '<div class="item-actions"><button class="danger" data-action="delete-candidate" data-user-id="' + Number(row.telegramUserId) + '">Delete candidate</button></div>' +
         '</article>';
       }).join("");
     }
@@ -851,7 +851,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
             '<div class="kv-row"><b>Candidate complete</b><span>' + (row.candidateProfileComplete ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
-          '<div class="item-actions"><button class="danger" onclick="deleteUser(' + Number(row.telegramUserId) + ')">Delete user</button></div>' +
+          '<div class="item-actions"><button class="danger" data-action="delete-user" data-user-id="' + Number(row.telegramUserId) + '">Delete user</button></div>' +
         '</article>';
       }).join("");
     }
@@ -1262,6 +1262,40 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
         }
       });
     }
+
+    document.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const button = target.closest("button[data-action]");
+      if (!button) {
+        return;
+      }
+      const action = button.getAttribute("data-action");
+      if (action === "delete-job") {
+        const jobId = button.getAttribute("data-job-id");
+        if (jobId) {
+          void window.deleteJob(jobId);
+        }
+        return;
+      }
+      if (action === "delete-user") {
+        const userIdRaw = button.getAttribute("data-user-id");
+        const userId = Number(userIdRaw);
+        if (Number.isInteger(userId) && userId > 0) {
+          void window.deleteUser(userId);
+        }
+        return;
+      }
+      if (action === "delete-candidate") {
+        const userIdRaw = button.getAttribute("data-user-id");
+        const userId = Number(userIdRaw);
+        if (Number.isInteger(userId) && userId > 0) {
+          void window.deleteCandidate(userId);
+        }
+      }
+    });
 
     window.addEventListener("error", () => {
       setStatus("UI error happened. Please close and reopen the mini app.", true);
