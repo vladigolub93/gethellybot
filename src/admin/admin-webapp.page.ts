@@ -492,8 +492,12 @@ export function renderAdminWebappPage(): string {
   <script>
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
     if (tg) {
-      tg.ready();
-      tg.expand();
+      if (typeof tg.ready === "function") {
+        try { tg.ready(); } catch {}
+      }
+      if (typeof tg.expand === "function") {
+        try { tg.expand(); } catch {}
+      }
       if (typeof tg.setHeaderColor === "function") {
         try { tg.setHeaderColor("#0a0a0d"); } catch {}
       }
@@ -552,6 +556,9 @@ export function renderAdminWebappPage(): string {
     }
 
     function setStatus(text, isError) {
+      if (!loginStatusEl) {
+        return;
+      }
       loginStatusEl.textContent = text || "";
       loginStatusEl.style.color = isError ? "#ff8383" : "#9ca0ad";
     }
@@ -1062,28 +1069,56 @@ export function renderAdminWebappPage(): string {
       return String(value || "").toLowerCase().replace(/\\s+/g, " ").trim();
     }
 
-    document.getElementById("loginBtn").addEventListener("click", login);
-    document.getElementById("refreshBtn").addEventListener("click", loadDashboard);
-    document.getElementById("logoutBtn").addEventListener("click", logout);
-    document.getElementById("clearFiltersBtn").addEventListener("click", () => {
-      state.searchQuery = "";
-      state.statusFilter = "";
-      searchInputEl.value = "";
-      statusFilterEl.value = "";
-      applyListFilters();
-    });
-    searchInputEl.addEventListener("input", (event) => {
-      state.searchQuery = event.target.value || "";
-      applyListFilters();
-    });
-    statusFilterEl.addEventListener("change", (event) => {
-      state.statusFilter = event.target.value || "";
-      applyListFilters();
-    });
-    document.getElementById("pinInput").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        login();
-      }
+    const loginBtnEl = document.getElementById("loginBtn");
+    const refreshBtnEl = document.getElementById("refreshBtn");
+    const logoutBtnEl = document.getElementById("logoutBtn");
+    const clearFiltersBtnEl = document.getElementById("clearFiltersBtn");
+    const pinInputEl = document.getElementById("pinInput");
+
+    if (loginBtnEl) {
+      loginBtnEl.addEventListener("click", login);
+    }
+    if (refreshBtnEl) {
+      refreshBtnEl.addEventListener("click", loadDashboard);
+    }
+    if (logoutBtnEl) {
+      logoutBtnEl.addEventListener("click", logout);
+    }
+    if (clearFiltersBtnEl) {
+      clearFiltersBtnEl.addEventListener("click", () => {
+        state.searchQuery = "";
+        state.statusFilter = "";
+        if (searchInputEl) {
+          searchInputEl.value = "";
+        }
+        if (statusFilterEl) {
+          statusFilterEl.value = "";
+        }
+        applyListFilters();
+      });
+    }
+    if (searchInputEl) {
+      searchInputEl.addEventListener("input", (event) => {
+        state.searchQuery = event.target.value || "";
+        applyListFilters();
+      });
+    }
+    if (statusFilterEl) {
+      statusFilterEl.addEventListener("change", (event) => {
+        state.statusFilter = event.target.value || "";
+        applyListFilters();
+      });
+    }
+    if (pinInputEl) {
+      pinInputEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          login();
+        }
+      });
+    }
+
+    window.addEventListener("error", () => {
+      setStatus("UI error happened. Please close and reopen the mini app.", true);
     });
 
     document.querySelectorAll('.tab-btn').forEach((button) => {
