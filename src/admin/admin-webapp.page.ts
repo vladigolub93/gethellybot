@@ -339,6 +339,40 @@ export function renderAdminWebappPage(): string {
       width: 100%;
     }
 
+    details.item-details {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    details.item-details summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: #d7d8de;
+      font-weight: 600;
+      list-style: none;
+      outline: none;
+    }
+
+    details.item-details summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.item-details pre {
+      margin: 10px 0 0;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.28);
+      color: #d7d8de;
+      font-size: 0.74rem;
+      line-height: 1.4;
+      max-height: 240px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .empty {
       color: var(--muted);
       font-size: 0.88rem;
@@ -397,9 +431,9 @@ export function renderAdminWebappPage(): string {
       <div id="tgInfo" class="muted" style="margin-top:8px;">Telegram context is loading...</div>
     </section>
 
-    <section id="loginCard" class="card">
+    <section id="loginCard" class="card hidden">
       <h1 class="title">Admin sign in</h1>
-      <p class="subtitle">PIN plus Telegram identity check, session TTL 1 hour.</p>
+      <p class="subtitle">Login is disabled in open testing mode.</p>
       <div class="row" style="margin-top:10px;">
         <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
         <button id="loginBtn" type="button" onclick="window.__hellyAdminLogin && window.__hellyAdminLogin()">Sign in</button>
@@ -407,7 +441,7 @@ export function renderAdminWebappPage(): string {
       <div id="loginStatus" class="status"></div>
     </section>
 
-    <section id="dashboard" class="hidden">
+    <section id="dashboard">
       <div class="card">
         <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
           <div>
@@ -652,27 +686,14 @@ export function renderAdminWebappPage(): string {
     }
 
     async function loadSession() {
-      if (!state.sessionToken) {
-        try {
-          const saved = window.localStorage.getItem("helly_admin_session_token");
-          if (saved) {
-            state.sessionToken = saved;
-          }
-        } catch (error) {}
-      }
       try {
-        await request("/admin/api/session", { method: "GET" });
+        await loadDashboard();
         state.loggedIn = true;
         loginCardEl.classList.add("hidden");
         dashboardEl.classList.remove("hidden");
-        await loadDashboard();
       } catch (error) {
-        const autoLoggedIn = await tryTelegramAutoLogin();
-        if (!autoLoggedIn) {
-          state.loggedIn = false;
-          dashboardEl.classList.add("hidden");
-          loginCardEl.classList.remove("hidden");
-        }
+        state.loggedIn = false;
+        setStatus("Dashboard load failed. Pull to refresh and try again.", true);
       }
     }
 
@@ -901,14 +922,19 @@ export function renderAdminWebappPage(): string {
           row.flag || "",
           row.entityType || "",
           row.entityId || "",
+          row.details || "",
           row.createdAt || "",
         ].join(" "));
+        const detailsBlock = row.details
+          ? '<details class="item-details"><summary>View details</summary><pre>' + escapeHtml(row.details) + '</pre></details>'
+          : '<div class="muted">No details payload.</div>';
         return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(row.flag) + '</div><span class="pill">' + escapeHtml(row.entityType) + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Entity</b><span>' + escapeHtml(row.entityType + ':' + row.entityId) + '</span></div>' +
             '<div class="kv-row"><b>Time</b><span>' + escapeHtml(row.createdAt || '-') + '</span></div>' +
           '</div>' +
+          detailsBlock +
         '</article>';
       }).join("");
     }
@@ -1227,7 +1253,7 @@ export function renderAdminWebappPage(): string {
       });
     });
 
-    setStatus("Enter PIN and tap Sign in.", false);
+    setStatus("Open testing mode. Login is disabled.", false);
     loadSession();
   </script>
 </body>

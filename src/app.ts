@@ -5,7 +5,7 @@ import {
   verifyAdminSessionToken,
   verifyTelegramInitData,
 } from "./admin/admin-auth.service";
-import { renderAdminWebappOpenPage } from "./admin/admin-webapp-open.page";
+import { renderAdminWebappPage } from "./admin/admin-webapp.page";
 import { AdminWebappService } from "./admin/admin-webapp.service";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
@@ -392,12 +392,11 @@ export function createApp(env: EnvConfig): AppContext {
     };
   }
 
-  app.get("/admin/webapp", async (_request: Request, response: Response) => {
+  app.get("/admin/webapp", (_request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
-    const dashboard = await adminWebappService.getDashboardData();
-    response.status(200).type("html").send(renderAdminWebappOpenPage(dashboard));
+    response.status(200).type("html").send(renderAdminWebappPage());
   });
 
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {
@@ -551,21 +550,11 @@ export function createApp(env: EnvConfig): AppContext {
   });
 
   app.get("/admin/api/dashboard", async (request: Request, response: Response) => {
-    const session = readAdminSession(request);
-    if (!session) {
-      response.status(401).json({ ok: false, error: "Unauthorized" });
-      return;
-    }
     const dashboard = await adminWebappService.getDashboardData();
     response.status(200).json(dashboard);
   });
 
   app.delete("/admin/api/users/:telegramUserId", async (request: Request, response: Response) => {
-    const session = readAdminSession(request);
-    if (!session) {
-      response.status(401).json({ ok: false, error: "Unauthorized" });
-      return;
-    }
     const telegramUserId = Number(request.params.telegramUserId);
     const result = await adminWebappService.deleteUser(telegramUserId);
     response.status(result.ok ? 200 : 400).json(result);
@@ -574,11 +563,6 @@ export function createApp(env: EnvConfig): AppContext {
   app.delete(
     "/admin/api/candidates/:telegramUserId",
     async (request: Request, response: Response) => {
-      const session = readAdminSession(request);
-      if (!session) {
-        response.status(401).json({ ok: false, error: "Unauthorized" });
-        return;
-      }
       const telegramUserId = Number(request.params.telegramUserId);
       const result = await adminWebappService.deleteCandidate(telegramUserId);
       response.status(result.ok ? 200 : 400).json(result);
@@ -586,11 +570,6 @@ export function createApp(env: EnvConfig): AppContext {
   );
 
   app.delete("/admin/api/jobs/:jobId", async (request: Request, response: Response) => {
-    const session = readAdminSession(request);
-    if (!session) {
-      response.status(401).json({ ok: false, error: "Unauthorized" });
-      return;
-    }
     const result = await adminWebappService.deleteJob(String(request.params.jobId ?? ""));
     response.status(result.ok ? 200 : 400).json(result);
   });

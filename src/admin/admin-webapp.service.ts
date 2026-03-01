@@ -158,6 +158,7 @@ export interface AdminDashboardData {
     entityType: string;
     entityId: string;
     flag: string;
+    details?: string;
     createdAt?: string;
   }>;
   deletionRequests: Array<{
@@ -500,6 +501,7 @@ export class AdminWebappService {
         entityType: item.entity_type,
         entityId: item.entity_id,
         flag: item.flag,
+        details: stringifyUnknown(item.details),
         createdAt: item.created_at ?? undefined,
       })),
       deletionRequests: deletionSorted.slice(0, 120).map((item) => ({
@@ -757,6 +759,20 @@ function toText(value: unknown): string {
     return "";
   }
   return value.trim();
+}
+
+function stringifyUnknown(value: unknown): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (_error) {
+    return String(value);
+  }
 }
 
 function truncate(value: string | null | undefined, maxLength: number): string {
