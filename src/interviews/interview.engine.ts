@@ -1173,6 +1173,10 @@ function shouldTreatCandidateAnswerAsAiAssisted(
     return true;
   }
 
+  if (looksOverStructuredAiEssay(answerText)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -1197,6 +1201,10 @@ function shouldTreatManagerAnswerAsAiAssisted(
 
   const templatedNarrative = looksTemplatedNarrative(answerText);
   if (authenticityLabel === "uncertain" && authenticityScore <= 0.6 && templatedNarrative) {
+    return true;
+  }
+
+  if (looksOverStructuredAiEssay(answerText)) {
     return true;
   }
 
@@ -1243,6 +1251,31 @@ function looksTemplatedNarrative(answerText: string): boolean {
 
   const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
   return markerCount >= 3 || paragraphCount >= 4;
+}
+
+function looksOverStructuredAiEssay(answerText: string): boolean {
+  const text = answerText.trim();
+  if (text.length < 900) {
+    return false;
+  }
+
+  const lower = text.toLowerCase();
+  const structuralMarkers = [
+    "in the ui",
+    "in the api layer",
+    "at the database layer",
+    "on success",
+    "what i owned personally",
+    "the tradeoff",
+    "end to end",
+  ];
+  const markersMatched = structuralMarkers.filter((marker) => lower.includes(marker)).length;
+  const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
+  const hasWeakConcreteSignal = !/\b(p95|p99|ms|rps|qps|incident|oncall|slo|sla|postmortem|migration|rollback)\b/i.test(
+    text,
+  );
+
+  return paragraphCount >= 5 && markersMatched >= 3 && hasWeakConcreteSignal;
 }
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {

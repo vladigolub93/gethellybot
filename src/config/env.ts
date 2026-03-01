@@ -74,7 +74,7 @@ export function loadEnv(): EnvConfig {
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
   const adminWebappSessionTtlRaw = process.env.ADMIN_WEBAPP_SESSION_TTL_SEC ?? "3600";
-  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "true";
+  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "false";
   const debugModeRaw = process.env.DEBUG_MODE ?? "false";
   const telegramLogsEnabledRaw =
     process.env.TELEGRAM_LOGS_ENABLED ?? ((process.env.NODE_ENV ?? "development") === "production" ? "true" : "false");

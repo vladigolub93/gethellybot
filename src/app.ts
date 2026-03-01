@@ -378,6 +378,7 @@ export function createApp(env: EnvConfig): AppContext {
       return null;
     }
     if (
+      env.adminWebappRequireTelegram &&
       env.adminUserIds.length > 0 &&
       (!payload.telegramUserId || !env.adminUserIds.includes(payload.telegramUserId))
     ) {
@@ -418,43 +419,47 @@ export function createApp(env: EnvConfig): AppContext {
         logger.warn("Admin login failed due to Telegram validation", {
           error: verification.error ?? "unknown_error",
         });
-        response.status(401).json({
-          ok: false,
-          error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
+        if (env.adminWebappRequireTelegram) {
+          response.status(401).json({
+            ok: false,
+            error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
+          });
+          return;
+        }
+      } else {
+        if (
+          env.adminWebappRequireTelegram &&
+          env.adminUserIds.length > 0 &&
+          !env.adminUserIds.includes(verification.identity.telegramUserId)
+        ) {
+          logger.warn("Admin login blocked by ADMIN_USER_IDS", {
+            telegramUserId: verification.identity.telegramUserId,
+          });
+          response.status(403).json({ ok: false, error: "Access denied" });
+          return;
+        }
+
+        const sessionToken = issueAdminSessionToken({
+          secret: adminSessionSecret,
+          ttlSeconds: env.adminWebappSessionTtlSec,
+          telegramUserId: verification.identity.telegramUserId,
+          username: verification.identity.username,
         });
-        return;
-      }
-      if (
-        env.adminUserIds.length > 0 &&
-        !env.adminUserIds.includes(verification.identity.telegramUserId)
-      ) {
-        logger.warn("Admin login blocked by ADMIN_USER_IDS", {
+
+        response.setHeader(
+          "Set-Cookie",
+          buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
+        );
+        response.status(200).json({
+          ok: true,
+          telegramUserId: verification.identity.telegramUserId,
+          username: verification.identity.username ?? null,
+        });
+        logger.info("Admin login succeeded with Telegram initData", {
           telegramUserId: verification.identity.telegramUserId,
         });
-        response.status(403).json({ ok: false, error: "Access denied" });
         return;
       }
-
-      const sessionToken = issueAdminSessionToken({
-        secret: adminSessionSecret,
-        ttlSeconds: env.adminWebappSessionTtlSec,
-        telegramUserId: verification.identity.telegramUserId,
-        username: verification.identity.username,
-      });
-
-      response.setHeader(
-        "Set-Cookie",
-        buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
-      );
-      response.status(200).json({
-        ok: true,
-        telegramUserId: verification.identity.telegramUserId,
-        username: verification.identity.username ?? null,
-      });
-      logger.info("Admin login succeeded with Telegram initData", {
-        telegramUserId: verification.identity.telegramUserId,
-      });
-      return;
     }
 
     const sessionToken = issueAdminSessionToken({
