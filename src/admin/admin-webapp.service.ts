@@ -51,6 +51,11 @@ interface AdminMatchRow {
   updated_at: string | null;
 }
 
+interface AdminMatchIdRow {
+  id: string;
+  job_id: string | number | null;
+}
+
 interface AdminQualityFlagRow {
   id: string;
   entity_type: string;
@@ -428,14 +433,22 @@ export class AdminWebappService {
         "id,manager_telegram_user_id",
       );
 
-      const shouldFilterByUuidJobId = isUuidLike(String(jobId));
-      if (shouldFilterByUuidJobId) {
+      if (isUuidLike(String(jobId))) {
         await this.supabaseClient.deleteMany("matches", { job_id: jobId });
       }
       if (jobRow?.manager_telegram_user_id) {
-        await this.supabaseClient.deleteMany("matches", {
-          manager_telegram_user_id: jobRow.manager_telegram_user_id,
-        });
+        const managerMatches = await this.supabaseClient.selectMany<AdminMatchIdRow>(
+          "matches",
+          { manager_telegram_user_id: jobRow.manager_telegram_user_id },
+          "id,job_id",
+        );
+        const targetMatchIds = managerMatches
+          .filter((item) => String(item.job_id ?? "") === String(jobId))
+          .map((item) => item.id)
+          .filter((id) => typeof id === "string" && id.length > 0);
+        for (const matchId of targetMatchIds) {
+          await this.supabaseClient.deleteMany("matches", { id: matchId });
+        }
       }
       await this.supabaseClient.deleteMany("jobs", { id: jobId });
 
@@ -513,15 +526,49 @@ export class AdminWebappService {
     const checks: Array<Promise<{ name: string; hasRows: boolean }>> = [this.tableHasRows("jobs", { id: jobId })];
     if (typeof managerTelegramUserId === "number" && Number.isInteger(managerTelegramUserId)) {
       checks.push(
-        this.tableHasRows("matches", {
-          manager_telegram_user_id: managerTelegramUserId,
-        }),
+        this.managerHasMatchesForJob(managerTelegramUserId, jobId),
       );
     }
     const results = await Promise.all(checks);
     return {
       remainingRefs: results.filter((item) => item.hasRows).map((item) => item.name),
     };
+  }
+
+  private async managerHasMatchesForJob(
+    managerTelegramUserId: number,
+    jobId: string | number,
+  ): Promise<{ name: string; hasRows: boolean }> {
+    if (!this.supabaseClient) {
+      return {
+        name: `matches:manager_${managerTelegramUserId}:job_${jobId}`,
+        hasRows: false,
+      };
+    }
+    try {
+      const matches = await this.supabaseClient.selectMany<AdminMatchIdRow>(
+        "matches",
+        { manager_telegram_user_id: managerTelegramUserId },
+        "id,job_id",
+      );
+      const hasRows = matches.some(
+        (item) => String(item.job_id ?? "") === String(jobId),
+      );
+      return {
+        name: `matches:manager_${managerTelegramUserId}:job_${jobId}`,
+        hasRows,
+      };
+    } catch (error) {
+      this.logger.warn("admin.manager_job_matches_check_failed", {
+        managerTelegramUserId,
+        jobId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return {
+        name: `matches:manager_${managerTelegramUserId}:job_${jobId}:check_failed`,
+        hasRows: true,
+      };
+    }
   }
 
   private async tableHasRows(
