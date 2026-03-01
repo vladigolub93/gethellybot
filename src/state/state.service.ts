@@ -385,9 +385,15 @@ export class StateService {
     return session;
   }
 
-  setLastBotMessage(userId: number, message?: string): UserSessionState {
+  setLastBotMessage(
+    userId: number,
+    message?: string,
+    meta?: { hash?: string; at?: string },
+  ): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.lastBotMessage = message;
+    session.lastBotMessageHash = meta?.hash;
+    session.lastBotMessageAt = meta?.at;
     return session;
   }
 

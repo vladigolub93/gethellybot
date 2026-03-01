@@ -3,6 +3,7 @@ import { StateRouter } from "../state.router";
 import { shouldProcessUpdate } from "../../shared/utils/telegram-idempotency";
 import { NormalizedUpdate, TelegramUpdate } from "../../shared/types/telegram.types";
 import { normalizeUpdate } from "../../telegram/update-normalizer";
+import { beginUpdateContext } from "../../telegram/reply-guard";
 
 export interface LlmGateDispatcher {
   handleIncomingUpdate(update: TelegramUpdate | NormalizedUpdate): Promise<void>;
@@ -52,6 +53,7 @@ class DefaultLlmGateDispatcher implements LlmGateDispatcher {
       },
     );
 
+    beginUpdateContext(normalized.updateId, normalized.userId);
     await this.stateRouter.route(normalized);
 
     logContext(

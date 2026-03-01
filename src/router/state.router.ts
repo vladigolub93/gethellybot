@@ -1,4 +1,5 @@
 import { logContext, Logger } from "../config/logger";
+import { createHash } from "node:crypto";
 import { ContactExchangeService } from "../decisions/contact-exchange.service";
 import { DecisionService } from "../decisions/decision.service";
 import { LlmClient } from "../ai/llm.client";
@@ -476,6 +477,7 @@ export class StateRouter {
     if (session.state === "role_selection") {
       await this.sendBotMessage(session.userId, update.chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
+        kind: "secondary",
       });
     }
   }
@@ -639,8 +641,13 @@ export class StateRouter {
 
         this.stateService.transition(session.userId, skipResult.completedState);
         await this.sendBotMessage(session.userId, session.chatId, skipResult.completionMessage);
-        if (skipResult.followupMessage) {
-          await this.sendBotMessage(session.userId, session.chatId, skipResult.followupMessage);
+        const needsMandatoryFlow =
+          skipResult.completedState === "candidate_profile_ready" ||
+          skipResult.completedState === "job_profile_ready";
+        if (skipResult.followupMessage && !needsMandatoryFlow) {
+          await this.sendBotMessage(session.userId, session.chatId, skipResult.followupMessage, {
+            kind: "secondary",
+          });
         }
         if (skipResult.completedState === "candidate_profile_ready") {
           const latestSession = this.stateService.getSession(session.userId) ?? session;
@@ -1187,12 +1194,16 @@ export class StateRouter {
 
   private async restartFlow(
     update: Extract<NormalizedUpdate, { kind: "text" }>,
+    options?: { includeWelcome?: boolean },
   ): Promise<void> {
     const session = this.stateService.reset(update.userId, update.chatId, update.username);
     this.stateService.setAwaitingContactChoice(session.userId, true);
-    await this.sendBotMessage(session.userId, update.chatId, welcomeMessage());
+    if (options?.includeWelcome !== false) {
+      await this.sendBotMessage(session.userId, update.chatId, welcomeMessage());
+    }
     await this.sendBotMessage(session.userId, update.chatId, contactRequestMessage(), {
       replyMarkup: buildContactRequestKeyboard(),
+      kind: "secondary",
     });
   }
 
@@ -1249,7 +1260,7 @@ export class StateRouter {
       replyMarkup: buildRemoveReplyKeyboard(),
       source: "state_router.system.data_deletion",
     });
-    await this.restartFlow(update);
+    await this.restartFlow(update, { includeWelcome: false });
   }
 
   private buildDeterministicRouteFallback(update: NormalizedUpdate): AlwaysOnRouterDecision | null {
@@ -1323,13 +1334,15 @@ export class StateRouter {
     const extractingState = intakeState === "waiting_resume" ? "extracting_resume" : "extracting_job";
     this.stateService.transition(update.userId, extractingState);
 
-    await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
+    await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage(), {
+      kind: "secondary",
+    });
     const stillProcessingTimer = setTimeout(() => {
       void this.sendBotMessage(
         session.userId,
         update.chatId,
         stillProcessingDocumentMessage(),
-        { source: "state_router.progress.document" },
+        { source: "state_router.progress.document", kind: "secondary" },
       );
     }, 10_000);
 
@@ -1381,25 +1394,27 @@ export class StateRouter {
         questions: bootstrap.plan.questions.length,
         hasOneLiner: Boolean(bootstrap.intakeOneLiner),
       });
-      if (bootstrap.intakeOneLiner) {
-        await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
-      }
-      if (bootstrap.nextState === "interviewing_candidate") {
-        await this.sendBotMessage(session.userId, update.chatId, candidateInterviewPreparationMessage());
-      } else {
-        await this.sendBotMessage(session.userId, update.chatId, managerInterviewPreparationMessage());
-      }
-      if (bootstrap.answerInstruction) {
-        await this.sendBotMessage(session.userId, update.chatId, bootstrap.answerInstruction);
-      }
-      await this.sendBotMessage(session.userId, update.chatId, interviewLanguageSupportMessage());
       const firstQuestionText = await this.formatInterviewQuestionForDelivery(
         session,
         bootstrap.firstQuestion,
         0,
         false,
       );
-      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, firstQuestionText));
+      const interviewState =
+        bootstrap.nextState === "interviewing_candidate"
+          ? "interviewing_candidate"
+          : "interviewing_manager";
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        this.buildInterviewBootstrapDeliveryMessage({
+          nextState: interviewState,
+          intakeOneLiner: bootstrap.intakeOneLiner,
+          answerInstruction: bootstrap.answerInstruction,
+          firstQuestionText,
+          firstQuestionIndex: 0,
+        }),
+      );
       this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
       if (bootstrap.candidatePlanV2) {
         this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
@@ -1495,6 +1510,30 @@ export class StateRouter {
     return `${knownName}, ${baseText}`;
   }
 
+  private buildInterviewBootstrapDeliveryMessage(input: {
+    nextState: "interviewing_candidate" | "interviewing_manager";
+    intakeOneLiner?: string | null;
+    answerInstruction?: string | null;
+    firstQuestionText: string;
+    firstQuestionIndex: number;
+  }): string {
+    const parts: string[] = [];
+    if (input.intakeOneLiner?.trim()) {
+      parts.push(input.intakeOneLiner.trim());
+    }
+    parts.push(
+      input.nextState === "interviewing_candidate"
+        ? candidateInterviewPreparationMessage()
+        : managerInterviewPreparationMessage(),
+    );
+    if (input.answerInstruction?.trim()) {
+      parts.push(input.answerInstruction.trim());
+    }
+    parts.push(interviewLanguageSupportMessage());
+    parts.push(questionMessage(input.firstQuestionIndex, input.firstQuestionText));
+    return parts.join("\n\n");
+  }
+
   private async resolveKnownUserName(session: UserSessionState): Promise<string | null> {
     if (session.contactFirstName?.trim()) {
       return sanitizeUserName(session.contactFirstName);
@@ -1510,15 +1549,45 @@ export class StateRouter {
     options?: {
       source?: string;
       replyMarkup?: TelegramReplyMarkup;
+      kind?: "primary" | "secondary";
     },
   ): Promise<void> {
     const baseSource = options?.source ?? "state_router.dialogue";
     const source = resolveMessageSource(baseSource, text, options?.replyMarkup);
-    const sanitizedText = sanitizeUserFacingText(text);
+    let sanitizedText = sanitizeUserFacingText(text);
+    const latestSession = this.stateService.getSession(userId);
+    const previousText = latestSession?.lastBotMessage?.trim();
+    const previousAt = latestSession?.lastBotMessageAt;
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const previousMs = previousAt ? Date.parse(previousAt) : Number.NaN;
+    const isSameWithinWindow =
+      Boolean(previousText) &&
+      previousText === sanitizedText.trim() &&
+      Number.isFinite(previousMs) &&
+      nowMs - previousMs <= 60_000;
+
+    if (isSameWithinWindow) {
+      const stateForFallback = latestSession?.state ?? "role_selection";
+      const replacement = getNonRepeatingFallbackByState(stateForFallback);
+      sanitizedText =
+        replacement.trim() === sanitizedText.trim()
+          ? "Please send the document as a PDF or DOCX, or paste the full text here."
+          : replacement;
+      this.logger.warn("repeat_loop_prevented", {
+        telegram_user_id: userId,
+        chat_id: chatId,
+        source,
+        previousHash: latestSession?.lastBotMessageHash,
+        nextHash: hashMessageText(sanitizedText),
+      });
+    }
+
     this.logger.debug("user.reply.sent", {
       telegram_user_id: userId,
       chat_id: chatId,
       source,
+      kind: options?.kind ?? "primary",
       reply_sent: true,
     });
     await this.telegramClient.sendUserMessage({
@@ -1526,8 +1595,12 @@ export class StateRouter {
       chatId,
       text: sanitizedText,
       replyMarkup: options?.replyMarkup,
+      kind: options?.kind ?? "primary",
     });
-    this.stateService.setLastBotMessage(userId, sanitizedText);
+    this.stateService.setLastBotMessage(userId, sanitizedText, {
+      hash: hashMessageText(sanitizedText),
+      at: nowIso,
+    });
   }
 
   private async handleContactUpdate(
@@ -1565,6 +1638,7 @@ export class StateRouter {
     if (session.state === "role_selection") {
       await this.sendBotMessage(session.userId, update.chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
+        kind: "secondary",
       });
     }
   }
@@ -1605,6 +1679,7 @@ export class StateRouter {
     if (session.state === "role_selection") {
       await this.sendBotMessage(session.userId, chatId, roleSelectionMessage(), {
         replyMarkup: buildRoleSelectionKeyboard(),
+        kind: "secondary",
       });
     }
   }
@@ -1673,7 +1748,9 @@ export class StateRouter {
       await this.sendBotMessage(session.userId, chatId, candidateMandatoryCompletedMessage(), {
         replyMarkup: buildCandidateMatchingActionsKeyboard(),
       });
-      await this.sendBotMessage(session.userId, chatId, candidateMatchingActionsReadyMessage());
+      await this.sendBotMessage(session.userId, chatId, candidateMatchingActionsReadyMessage(), {
+        kind: "secondary",
+      });
       return;
     }
 
@@ -1682,7 +1759,12 @@ export class StateRouter {
     if (options?.showIntro) {
       await this.sendBotMessage(session.userId, chatId, candidateMandatoryIntroMessage());
     }
-    await this.askCandidateMandatoryQuestion(session.userId, chatId, nextStep);
+    await this.askCandidateMandatoryQuestion(
+      session.userId,
+      chatId,
+      nextStep,
+      options?.showIntro ? "secondary" : "primary",
+    );
   }
 
   private async handleCandidateMandatoryTextInput(
@@ -1800,21 +1882,25 @@ export class StateRouter {
     userId: number,
     chatId: number,
     step: CandidateMandatoryStep,
+    kind: "primary" | "secondary" = "primary",
   ): Promise<void> {
     if (step === "location") {
       await this.sendBotMessage(userId, chatId, candidateMandatoryLocationQuestionMessage(), {
         replyMarkup: buildCandidateMandatoryLocationKeyboard(),
+        kind,
       });
       return;
     }
     if (step === "work_mode") {
       await this.sendBotMessage(userId, chatId, candidateMandatoryWorkModeQuestionMessage(), {
         replyMarkup: buildCandidateWorkModeKeyboard(),
+        kind,
       });
       return;
     }
     await this.sendBotMessage(userId, chatId, candidateMandatorySalaryQuestionMessage(), {
       replyMarkup: buildRemoveReplyKeyboard(),
+      kind,
     });
   }
 
@@ -1959,7 +2045,9 @@ export class StateRouter {
       await this.sendBotMessage(session.userId, chatId, managerMandatoryCompletedMessage(), {
         replyMarkup: buildManagerMatchingActionsKeyboard(),
       });
-      await this.sendBotMessage(session.userId, chatId, managerMatchingActionsReadyMessage());
+      await this.sendBotMessage(session.userId, chatId, managerMatchingActionsReadyMessage(), {
+        kind: "secondary",
+      });
       if (options?.runMatchingAfterComplete) {
         await this.publishManagerMatches(session.userId);
       }
@@ -1971,7 +2059,12 @@ export class StateRouter {
     if (options?.showIntro) {
       await this.sendBotMessage(session.userId, chatId, managerMandatoryIntroMessage());
     }
-    await this.askManagerMandatoryQuestion(session.userId, chatId, nextStep);
+    await this.askManagerMandatoryQuestion(
+      session.userId,
+      chatId,
+      nextStep,
+      options?.showIntro ? "secondary" : "primary",
+    );
   }
 
   private async handleManagerMandatoryTextInput(
@@ -2099,21 +2192,25 @@ export class StateRouter {
     userId: number,
     chatId: number,
     step: ManagerMandatoryStep,
+    kind: "primary" | "secondary" = "primary",
   ): Promise<void> {
     if (step === "work_format") {
       await this.sendBotMessage(userId, chatId, managerMandatoryWorkFormatQuestionMessage(), {
         replyMarkup: buildManagerWorkFormatKeyboard(),
+        kind,
       });
       return;
     }
     if (step === "countries") {
       await this.sendBotMessage(userId, chatId, managerMandatoryCountriesQuestionMessage(), {
         replyMarkup: buildRemoveReplyKeyboard(),
+        kind,
       });
       return;
     }
     await this.sendBotMessage(userId, chatId, managerMandatoryBudgetQuestionMessage(), {
       replyMarkup: buildRemoveReplyKeyboard(),
+      kind,
     });
   }
 
@@ -2242,13 +2339,15 @@ export class StateRouter {
     const extractingState = intakeState === "waiting_resume" ? "extracting_resume" : "extracting_job";
     this.stateService.transition(update.userId, extractingState);
 
-    await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage());
+    await this.sendBotMessage(session.userId, update.chatId, processingDocumentMessage(), {
+      kind: "secondary",
+    });
     const stillProcessingTimer = setTimeout(() => {
       void this.sendBotMessage(
         session.userId,
         update.chatId,
         stillProcessingDocumentMessage(),
-        { source: "state_router.progress.document" },
+        { source: "state_router.progress.document", kind: "secondary" },
       );
     }, 10_000);
 
@@ -2312,25 +2411,27 @@ export class StateRouter {
         questions: bootstrap.plan.questions.length,
         hasOneLiner: Boolean(bootstrap.intakeOneLiner),
       });
-      if (bootstrap.intakeOneLiner) {
-        await this.sendBotMessage(session.userId, update.chatId, bootstrap.intakeOneLiner);
-      }
-      if (bootstrap.nextState === "interviewing_candidate") {
-        await this.sendBotMessage(session.userId, update.chatId, candidateInterviewPreparationMessage());
-      } else {
-        await this.sendBotMessage(session.userId, update.chatId, managerInterviewPreparationMessage());
-      }
-      if (bootstrap.answerInstruction) {
-        await this.sendBotMessage(session.userId, update.chatId, bootstrap.answerInstruction);
-      }
-      await this.sendBotMessage(session.userId, update.chatId, interviewLanguageSupportMessage());
       const firstQuestionText = await this.formatInterviewQuestionForDelivery(
         session,
         bootstrap.firstQuestion,
         0,
         false,
       );
-      await this.sendBotMessage(session.userId, update.chatId, questionMessage(0, firstQuestionText));
+      const interviewState =
+        bootstrap.nextState === "interviewing_candidate"
+          ? "interviewing_candidate"
+          : "interviewing_manager";
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        this.buildInterviewBootstrapDeliveryMessage({
+          nextState: interviewState,
+          intakeOneLiner: bootstrap.intakeOneLiner,
+          answerInstruction: bootstrap.answerInstruction,
+          firstQuestionText,
+          firstQuestionIndex: 0,
+        }),
+      );
       this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
       if (bootstrap.candidatePlanV2) {
         this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
@@ -2408,7 +2509,7 @@ export class StateRouter {
         session.userId,
         session.chatId,
         stillProcessingAnswerMessage(),
-        { source: "state_router.progress.answer" },
+        { source: "state_router.progress.answer", kind: "secondary" },
       );
     }, 12_000);
 
@@ -2428,24 +2529,22 @@ export class StateRouter {
 
       if (result.kind === "next_question") {
         const latestSession = this.stateService.getSession(session.userId) ?? session;
-        if (result.preQuestionMessage) {
-          await this.sendBotMessage(session.userId, session.chatId, result.preQuestionMessage);
-        }
+        let secondaryMessage: string | null = result.preQuestionMessage?.trim() || null;
         const shouldSendProgressConfirmation = !result.isFollowUp && this.shouldSendProgressConfirmation(
           latestSession,
           normalizedInput.answerText,
         );
-        if (shouldSendProgressConfirmation) {
+        if (!secondaryMessage && shouldSendProgressConfirmation) {
           const confirmation = await this.generateInterviewProgressConfirmation(latestSession);
           if (confirmation) {
-            await this.sendBotMessage(session.userId, session.chatId, confirmation);
+            secondaryMessage = confirmation;
             this.stateService.resetAnswersSinceConfirm(session.userId);
           }
         }
 
         await this.maybeSendInterviewReaction(session, originalText, sourceMessageId);
-        if (!result.isFollowUp) {
-          await this.maybeSendCandidateEmpathyLine(session);
+        if (!secondaryMessage && !result.isFollowUp) {
+          secondaryMessage = await this.getCandidateEmpathyLine(latestSession);
         }
         const nextQuestionText = await this.formatInterviewQuestionForDelivery(
           latestSession,
@@ -2453,12 +2552,16 @@ export class StateRouter {
           result.questionIndex,
           Boolean(result.isFollowUp),
         );
+        const questionBlock = result.isFollowUp
+          ? nextQuestionText
+          : questionMessage(result.questionIndex, nextQuestionText);
+        const outbound = secondaryMessage
+          ? `${secondaryMessage}\n\n${questionBlock}`
+          : questionBlock;
         await this.sendBotMessage(
           session.userId,
           session.chatId,
-          result.isFollowUp
-            ? nextQuestionText
-            : questionMessage(result.questionIndex, nextQuestionText),
+          outbound,
         );
         return;
       }
@@ -2466,8 +2569,13 @@ export class StateRouter {
       this.stateService.transition(session.userId, result.completedState);
       this.stateService.resetAnswersSinceConfirm(session.userId);
       await this.sendBotMessage(session.userId, session.chatId, result.completionMessage);
-      if (result.followupMessage) {
-        await this.sendBotMessage(session.userId, session.chatId, result.followupMessage);
+      const needsMandatoryFlow =
+        result.completedState === "candidate_profile_ready" ||
+        result.completedState === "job_profile_ready";
+      if (result.followupMessage && !needsMandatoryFlow) {
+        await this.sendBotMessage(session.userId, session.chatId, result.followupMessage, {
+          kind: "secondary",
+        });
       }
       if (result.completedState === "candidate_profile_ready") {
         const latestSession = this.stateService.getSession(session.userId) ?? session;
@@ -2507,7 +2615,9 @@ export class StateRouter {
       return;
     }
 
-    await this.sendBotMessage(session.userId, update.chatId, transcribingVoiceMessage());
+    await this.sendBotMessage(session.userId, update.chatId, transcribingVoiceMessage(), {
+      kind: "secondary",
+    });
 
     try {
       const buffer = await this.telegramFileService.downloadFile(update.fileId);
@@ -2588,17 +2698,17 @@ export class StateRouter {
     });
   }
 
-  private async maybeSendCandidateEmpathyLine(session: UserSessionState): Promise<void> {
+  private async getCandidateEmpathyLine(session: UserSessionState): Promise<string | null> {
     if (session.state !== "interviewing_candidate") {
-      return;
+      return null;
     }
     if (Math.random() > 0.4) {
-      return;
+      return null;
     }
 
     const line = getShortEmpathyLine(session.lastEmpathyLine);
-    await this.sendBotMessage(session.userId, session.chatId, line);
     this.stateService.setLastEmpathyLine(session.userId, line);
+    return line;
   }
 
   private shouldSendProgressConfirmation(
@@ -2781,6 +2891,7 @@ export class StateRouter {
       this.stateService.setOnboardingCompleted(session.userId, true);
       await this.sendBotMessage(session.userId, chatId, candidateResumePrompt(), {
         replyMarkup: buildRemoveReplyKeyboard(),
+        kind: "secondary",
       });
       return;
     }
@@ -2791,6 +2902,7 @@ export class StateRouter {
     this.stateService.setOnboardingCompleted(session.userId, true);
     await this.sendBotMessage(session.userId, chatId, managerJobPrompt(), {
       replyMarkup: buildRemoveReplyKeyboard(),
+      kind: "secondary",
     });
   }
 
@@ -2805,24 +2917,28 @@ export class StateRouter {
         return false;
       }
 
-      for (const match of managerMatches) {
-        await this.sendBotMessage(
-          session.userId,
-          chatId,
-          managerCandidateSuggestionMessage({
-            candidateUserId: match.candidateUserId,
-            score: match.score,
-            candidateSummary: match.candidateSummary,
-            candidateTechnicalSummary: match.candidateTechnicalSummary ?? null,
-            explanationMessage:
-              match.explanationJson?.message_for_manager ?? match.explanation,
-          }),
-          {
-            source: "state_router.show_matches.manager_card",
-            replyMarkup: buildManagerDecisionKeyboard(match.id),
-          },
-        );
-      }
+      const match = managerMatches[0];
+      const message = managerCandidateSuggestionMessage({
+        candidateUserId: match.candidateUserId,
+        score: match.score,
+        candidateSummary: match.candidateSummary,
+        candidateTechnicalSummary: match.candidateTechnicalSummary ?? null,
+        explanationMessage:
+          match.explanationJson?.message_for_manager ?? match.explanation,
+      });
+      const withHint =
+        managerMatches.length > 1
+          ? `${message}\n\nShowing the strongest match first. Type show matches again for the next one.`
+          : message;
+      await this.sendBotMessage(
+        session.userId,
+        chatId,
+        withHint,
+        {
+          source: "state_router.show_matches.manager_card",
+          replyMarkup: buildManagerDecisionKeyboard(match.id),
+        },
+      );
       return true;
     }
 
@@ -2834,23 +2950,27 @@ export class StateRouter {
       return false;
     }
 
-    for (const match of candidateMatches) {
-      await this.sendBotMessage(
-        session.userId,
-        chatId,
-        candidateOpportunityMessage({
-          score: match.score,
-          jobSummary: match.jobSummary,
-          explanationMessage:
-            match.explanationJson?.message_for_candidate ?? match.explanation,
-          jobTechnicalSummary: match.jobTechnicalSummary ?? null,
-        }),
-        {
-          source: "state_router.show_matches.candidate_card",
-          replyMarkup: buildCandidateDecisionKeyboard(match.id),
-        },
-      );
-    }
+    const match = candidateMatches[0];
+    const message = candidateOpportunityMessage({
+      score: match.score,
+      jobSummary: match.jobSummary,
+      explanationMessage:
+        match.explanationJson?.message_for_candidate ?? match.explanation,
+      jobTechnicalSummary: match.jobTechnicalSummary ?? null,
+    });
+    const withHint =
+      candidateMatches.length > 1
+        ? `${message}\n\nShowing the strongest role first. Type show matches again for the next one.`
+        : message;
+    await this.sendBotMessage(
+      session.userId,
+      chatId,
+      withHint,
+      {
+        source: "state_router.show_matches.candidate_card",
+        replyMarkup: buildCandidateDecisionKeyboard(match.id),
+      },
+    );
     return true;
   }
 
@@ -3882,6 +4002,10 @@ function isHardSystemMessageText(text: string): boolean {
     normalized.includes("pdf or docx") ||
     normalized.includes("choose your role")
   );
+}
+
+function hashMessageText(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
 function shouldUsePersonalName(userId: number, marker: number): boolean {

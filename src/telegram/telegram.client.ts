@@ -2,6 +2,8 @@ import { Logger } from "../config/logger";
 import { TELEGRAM_PARSE_MODE } from "../shared/constants";
 import { TelegramApiResponse, TelegramReplyMarkup } from "../shared/types/telegram.types";
 import { isHardSystemSource } from "../shared/utils/message-source";
+import { canSendReply, getUpdateContext, markSent, ReplyKind } from "./reply-guard";
+import { createHash } from "node:crypto";
 import fetch from "node-fetch";
 
 interface SetWebhookPayload {
@@ -69,16 +71,39 @@ export class TelegramClient {
     chatId: number;
     text: string;
     replyMarkup?: TelegramReplyMarkup;
+    kind?: ReplyKind;
   }): Promise<void> {
+    const requestedKind = input.kind ?? "primary";
+    const updateContext = getUpdateContext();
+    const guardApplies = updateContext !== null && updateContext.telegramUserId === input.chatId;
+    const kind = requestedKind;
+    const textHash = hashText(input.text);
+    if (guardApplies && !canSendReply(kind)) {
+      const context = updateContext!;
+      this.logger.warn("reply_guard_blocked", {
+        source: input.source,
+        chatId: input.chatId,
+        kind,
+        textHash,
+        updateId: context.updateId,
+        telegramUserId: context.telegramUserId,
+      });
+      return;
+    }
+
     this.logger.debug("telegram.user_message", {
       source: input.source,
       chatId: input.chatId,
+      kind,
       textPreview: input.text.slice(0, 140),
     });
     await this.sendMessage(input.chatId, input.text, {
       replyMarkup: input.replyMarkup,
       source: input.source,
     });
+    if (guardApplies) {
+      markSent(kind);
+    }
   }
 
   // Internal low-level sender. Prefer sendUserMessage in business logic.
@@ -249,4 +274,8 @@ function shouldSendReplyMarkup(
   void replyMarkup;
   void buttonsEnabled;
   return true;
+}
+
+function hashText(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }

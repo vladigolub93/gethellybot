@@ -59,6 +59,8 @@ export interface UserSessionState {
   pendingDataDeletionConfirmation?: boolean;
   pendingDataDeletionRequestedAt?: string;
   lastBotMessage?: string;
+  lastBotMessageHash?: string;
+  lastBotMessageAt?: string;
   lastEmpathyLine?: string;
   reactionMessagesSinceLast?: number;
   lastReactionAt?: string;

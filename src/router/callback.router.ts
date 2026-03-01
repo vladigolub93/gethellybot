@@ -117,6 +117,7 @@ export class CallbackRouter {
         candidateResumePrompt(),
         "callback_router.role_candidate.resume_prompt",
         buildRemoveReplyKeyboard(),
+        "secondary",
       );
       return;
     }
@@ -153,6 +154,7 @@ export class CallbackRouter {
         managerJobPrompt(),
         "callback_router.role_manager.job_prompt",
         buildRemoveReplyKeyboard(),
+        "secondary",
       );
       return;
     }
@@ -313,12 +315,14 @@ export class CallbackRouter {
     text: string,
     source: string,
     replyMarkup?: TelegramReplyMarkup,
+    kind: "primary" | "secondary" = "primary",
   ): Promise<void> {
     await this.telegramClient.sendUserMessage({
       source,
       chatId,
       text,
       replyMarkup,
+      kind,
     });
   }
 }
