@@ -557,7 +557,7 @@ export function renderAdminWebappPage(): string {
           headers,
         }, options || {});
         response = await fetch(path, fetchOptions);
-      } catch {
+      } catch (error) {
         throw new Error("Network error. Please try again.");
       }
 
@@ -566,7 +566,7 @@ export function renderAdminWebappPage(): string {
       if (rawText) {
         try {
           json = JSON.parse(rawText);
-        } catch {
+        } catch (error) {
           json = {};
         }
       }
@@ -666,7 +666,7 @@ export function renderAdminWebappPage(): string {
         loginCardEl.classList.add("hidden");
         dashboardEl.classList.remove("hidden");
         await loadDashboard();
-      } catch {
+      } catch (error) {
         const autoLoggedIn = await tryTelegramAutoLogin();
         if (!autoLoggedIn) {
           state.loggedIn = false;
