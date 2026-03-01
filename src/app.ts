@@ -5,7 +5,7 @@ import {
   verifyAdminSessionToken,
   verifyTelegramInitData,
 } from "./admin/admin-auth.service";
-import { renderAdminWebappPage } from "./admin/admin-webapp.page";
+import { renderAdminWebappOpenPage } from "./admin/admin-webapp-open.page";
 import { AdminWebappService } from "./admin/admin-webapp.service";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
@@ -392,11 +392,12 @@ export function createApp(env: EnvConfig): AppContext {
     };
   }
 
-  app.get("/admin/webapp", (_request: Request, response: Response) => {
+  app.get("/admin/webapp", async (_request: Request, response: Response) => {
     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.setHeader("Pragma", "no-cache");
     response.setHeader("Expires", "0");
-    response.status(200).type("html").send(renderAdminWebappPage());
+    const dashboard = await adminWebappService.getDashboardData();
+    response.status(200).type("html").send(renderAdminWebappOpenPage(dashboard));
   });
 
   app.post("/admin/api/auth/login", (request: Request, response: Response) => {
