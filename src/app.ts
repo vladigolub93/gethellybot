@@ -175,6 +175,7 @@ export function createApp(env: EnvConfig): AppContext {
     logger,
     dataDeletionService,
     supabaseClient,
+    qdrantClient,
   );
   const qualityFlagsService = new QualityFlagsService(qualityFlagsRepository, logger);
   const guardrailsService = new HiringScopeGuardrailsService(
@@ -482,6 +483,20 @@ export function createApp(env: EnvConfig): AppContext {
     const result = await adminWebappService.deleteUser(telegramUserId);
     response.status(result.ok ? 200 : 400).json(result);
   });
+
+  app.delete(
+    "/admin/api/candidates/:telegramUserId",
+    async (request: Request, response: Response) => {
+      const session = readAdminSession(request);
+      if (!session) {
+        response.status(401).json({ ok: false, error: "Unauthorized" });
+        return;
+      }
+      const telegramUserId = Number(request.params.telegramUserId);
+      const result = await adminWebappService.deleteCandidate(telegramUserId);
+      response.status(result.ok ? 200 : 400).json(result);
+    },
+  );
 
   app.delete("/admin/api/jobs/:jobId", async (request: Request, response: Response) => {
     const session = readAdminSession(request);

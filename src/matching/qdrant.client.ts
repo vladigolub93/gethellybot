@@ -9,6 +9,9 @@ interface QdrantSearchPoint {
 
 interface QdrantCollectionResponse {
   result?: {
+    points_count?: number;
+    vectors_count?: number;
+    indexed_vectors_count?: number;
     config?: {
       params?: {
         vectors?: {
@@ -198,6 +201,34 @@ export class QdrantClient {
       .filter((id) => id > 0);
 
     return Array.from(new Set(ids));
+  }
+
+  async getCandidateVectorCount(): Promise<number | null> {
+    if (!this.isEnabled()) {
+      return null;
+    }
+    const collection = this.config.candidateCollection;
+    const response = await this.request<QdrantCollectionResponse>(
+      "GET",
+      `/collections/${encodeURIComponent(collection)}`,
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const result = response.data.result;
+    const byPoints = Number(result?.points_count ?? NaN);
+    if (Number.isFinite(byPoints) && byPoints >= 0) {
+      return Math.floor(byPoints);
+    }
+    const byVectors = Number(result?.vectors_count ?? NaN);
+    if (Number.isFinite(byVectors) && byVectors >= 0) {
+      return Math.floor(byVectors);
+    }
+    const byIndexed = Number(result?.indexed_vectors_count ?? NaN);
+    if (Number.isFinite(byIndexed) && byIndexed >= 0) {
+      return Math.floor(byIndexed);
+    }
+    return null;
   }
 
   private async request<T>(

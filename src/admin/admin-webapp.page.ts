@@ -9,8 +9,6 @@ export function renderAdminWebappPage(): string {
   <style>
     :root {
       --bg: #0a0a0d;
-      --bg-elev: #12121a;
-      --bg-soft: #171722;
       --text: #f4f4f7;
       --muted: #9ca0ad;
       --accent: #7b2cff;
@@ -18,6 +16,7 @@ export function renderAdminWebappPage(): string {
       --border: rgba(255, 255, 255, 0.08);
       --danger: #ff5757;
       --ok: #2cd482;
+      --warn: #f7b73f;
       --safe-top: 0px;
       --safe-bottom: 0px;
       --safe-left: 0px;
@@ -36,7 +35,7 @@ export function renderAdminWebappPage(): string {
       width: 100%;
       max-width: 100%;
       overflow-x: hidden;
-      background: radial-gradient(circle at 10% -20%, #1c1230 0%, #0a0a0d 55%);
+      background: radial-gradient(circle at 12% -18%, #211239 0%, #0a0a0d 56%);
       color: var(--text);
       font-family: "SF Pro Text", "Inter", "Segoe UI", sans-serif;
       -webkit-font-smoothing: antialiased;
@@ -45,7 +44,7 @@ export function renderAdminWebappPage(): string {
 
     .app {
       width: 100%;
-      max-width: 920px;
+      max-width: 940px;
       margin: 0 auto;
       padding-top: calc(14px + var(--safe-top));
       padding-bottom: calc(18px + var(--safe-bottom));
@@ -56,17 +55,11 @@ export function renderAdminWebappPage(): string {
     }
 
     .card {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
       backdrop-filter: blur(6px);
-    }
-
-    .hero {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
     }
 
     .logo {
@@ -95,7 +88,7 @@ export function renderAdminWebappPage(): string {
     }
 
     .subtitle {
-      margin: 0;
+      margin: 2px 0 0;
       font-size: 12px;
       color: var(--muted);
     }
@@ -141,14 +134,8 @@ export function renderAdminWebappPage(): string {
       white-space: nowrap;
     }
 
-    button:active {
-      transform: translateY(1px);
-    }
-
-    button.secondary {
-      background: rgba(255, 255, 255, 0.12);
-    }
-
+    button:active { transform: translateY(1px); }
+    button.secondary { background: rgba(255, 255, 255, 0.12); }
     button.danger {
       background: rgba(255, 87, 87, 0.18);
       border: 1px solid rgba(255, 87, 87, 0.55);
@@ -163,13 +150,11 @@ export function renderAdminWebappPage(): string {
       overflow-wrap: anywhere;
     }
 
-    .hidden {
-      display: none !important;
-    }
+    .hidden { display: none !important; }
 
     .tabs {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 6px;
     }
 
@@ -212,6 +197,21 @@ export function renderAdminWebappPage(): string {
       font-weight: 700;
       color: #fff;
     }
+
+    .consistency {
+      margin-top: 9px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.02);
+      display: grid;
+      gap: 5px;
+    }
+
+    .consistency .good { color: #8de8bd; }
+    .consistency .warn { color: #f7d48a; }
 
     .list {
       display: grid;
@@ -262,6 +262,12 @@ export function renderAdminWebappPage(): string {
       background: rgba(44, 212, 130, 0.14);
     }
 
+    .pill.warn {
+      border-color: rgba(247, 183, 63, 0.45);
+      color: #f9d58f;
+      background: rgba(247, 183, 63, 0.12);
+    }
+
     .kv {
       display: grid;
       gap: 4px;
@@ -269,7 +275,7 @@ export function renderAdminWebappPage(): string {
 
     .kv-row {
       display: grid;
-      grid-template-columns: 118px 1fr;
+      grid-template-columns: 122px 1fr;
       gap: 6px;
       font-size: 12px;
       color: var(--muted);
@@ -284,6 +290,7 @@ export function renderAdminWebappPage(): string {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .empty {
@@ -293,6 +300,12 @@ export function renderAdminWebappPage(): string {
       border: 1px dashed var(--border);
       border-radius: 11px;
       text-align: center;
+    }
+
+    @media (max-width: 680px) {
+      .tabs {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
 
     @media (max-width: 520px) {
@@ -309,22 +322,19 @@ export function renderAdminWebappPage(): string {
       .item-actions button {
         width: 100%;
       }
-      .tabs {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
     }
   </style>
 </head>
 <body>
   <div class="app">
-    <section class="card hero">
+    <section class="card">
       <div class="logo"><span class="mark">&gt;</span>helly<span class="mark">_</span></div>
-      <div id="tgInfo" class="muted">Telegram context is loading...</div>
+      <div id="tgInfo" class="muted" style="margin-top:8px;">Telegram context is loading...</div>
     </section>
 
     <section id="loginCard" class="card">
       <h1 class="title">Admin sign in</h1>
-      <p class="subtitle">PIN + Telegram identity check, session expires in 1 hour.</p>
+      <p class="subtitle">PIN plus Telegram identity check, session TTL 1 hour.</p>
       <div class="row" style="margin-top:10px;">
         <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
         <button id="loginBtn">Sign in</button>
@@ -336,8 +346,8 @@ export function renderAdminWebappPage(): string {
       <div class="card">
         <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
           <div>
-            <h2 class="title">Operations</h2>
-            <p class="subtitle">Live snapshot, no horizontal scrolling, mobile-first.</p>
+            <h2 class="title">Operations dashboard</h2>
+            <p class="subtitle" id="generatedAtLine">Loading...</p>
           </div>
           <div class="row">
             <button id="refreshBtn" class="secondary">Refresh</button>
@@ -345,21 +355,28 @@ export function renderAdminWebappPage(): string {
           </div>
         </div>
         <div id="stats" class="stats"></div>
+        <div id="consistency" class="consistency"></div>
       </div>
 
       <div class="card">
         <div class="tabs">
           <button class="tab-btn active" data-tab="jobs">Jobs</button>
+          <button class="tab-btn" data-tab="candidates">Candidates</button>
           <button class="tab-btn" data-tab="users">Users</button>
           <button class="tab-btn" data-tab="matches">Matches</button>
           <button class="tab-btn" data-tab="flags">Flags</button>
-          <button class="tab-btn" data-tab="all">All</button>
+          <button class="tab-btn" data-tab="events">Events</button>
         </div>
       </div>
 
       <div id="tab-jobs" class="card tab-content">
         <h3 class="title">Jobs</h3>
         <div id="jobsList" class="list" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="tab-candidates" class="card tab-content hidden">
+        <h3 class="title">Candidates</h3>
+        <div id="candidatesList" class="list" style="margin-top:10px;"></div>
       </div>
 
       <div id="tab-users" class="card tab-content hidden">
@@ -375,6 +392,11 @@ export function renderAdminWebappPage(): string {
       <div id="tab-flags" class="card tab-content hidden">
         <h3 class="title">Quality flags and errors</h3>
         <div id="flagsList" class="list" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="tab-events" class="card tab-content hidden">
+        <h3 class="title">Data deletion and events</h3>
+        <div id="eventsList" class="list" style="margin-top:10px;"></div>
       </div>
     </section>
   </div>
@@ -480,6 +502,7 @@ export function renderAdminWebappPage(): string {
         ["Users", stats.usersTotal],
         ["Candidates", stats.candidatesTotal],
         ["Managers", stats.managersTotal],
+        ["Interviews", stats.interviewsTotal],
         ["Jobs", stats.jobsTotal],
         ["Active jobs", stats.jobsActive],
         ["Matches", stats.matchesTotal],
@@ -490,6 +513,24 @@ export function renderAdminWebappPage(): string {
       container.innerHTML = entries.map(([label, value]) =>
         '<div class="stat"><div class="k">' + escapeHtml(String(label)) + '</div><div class="v">' + escapeHtml(String(value)) + '</div></div>'
       ).join("");
+    }
+
+    function renderConsistency(consistency) {
+      const root = document.getElementById('consistency');
+      const qdrantState = consistency.qdrantEnabled ? 'enabled' : 'disabled';
+      const gap = consistency.vectorSyncGap;
+      const gapLine = gap == null
+        ? '<span class="warn">Qdrant candidate count is unavailable</span>'
+        : gap === 0
+          ? '<span class="good">Vector sync is healthy, gap 0</span>'
+          : '<span class="warn">Vector sync gap: ' + escapeHtml(String(gap)) + '</span>';
+
+      root.innerHTML =
+        '<div>Supabase: <span class="good">' + (consistency.supabaseConfigured ? 'configured' : 'not configured') + '</span></div>' +
+        '<div>Qdrant: <span class="' + (consistency.qdrantEnabled ? 'good' : 'warn') + '">' + qdrantState + '</span></div>' +
+        '<div>Candidate profiles in Supabase: <b>' + escapeHtml(String(consistency.candidateProfilesInSupabase)) + '</b></div>' +
+        '<div>Candidate vectors in Qdrant: <b>' + escapeHtml(consistency.candidateVectorsInQdrant == null ? 'n/a' : String(consistency.candidateVectorsInQdrant)) + '</b></div>' +
+        '<div>' + gapLine + '</div>';
     }
 
     function renderJobs(rows) {
@@ -506,8 +547,32 @@ export function renderAdminWebappPage(): string {
             '<div class="kv-row"><b>Domain</b><span>' + escapeHtml(row.domain) + '</span></div>' +
             '<div class="kv-row"><b>Manager</b><span>' + escapeHtml(String(row.managerTelegramUserId)) + '</span></div>' +
             '<div class="kv-row"><b>Format</b><span>' + escapeHtml(row.workFormat) + '</span></div>' +
+            '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
           '<div class="item-actions"><button class="danger" onclick="deleteJob(\'' + escapeAttr(row.id) + '\')">Delete job</button></div>' +
+        '</article>';
+      }).join("");
+    }
+
+    function renderCandidates(rows) {
+      const list = document.getElementById("candidatesList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No candidates found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
+        const confidenceClass = row.interviewConfidence === 'low' ? 'warn' : (row.interviewConfidence ? 'ok' : '');
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + confidenceClass + '">' + escapeHtml(row.interviewConfidence || 'no confidence') + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Profile status</b><span>' + escapeHtml(row.profileStatus) + '</span></div>' +
+            '<div class="kv-row"><b>Mandatory complete</b><span>' + (row.candidateProfileComplete ? 'yes' : 'no') + '</span></div>' +
+            '<div class="kv-row"><b>Contact shared</b><span>' + (row.contactShared ? 'yes' : 'no') + '</span></div>' +
+            '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
+          '</div>' +
+          '<div class="item-actions"><button class="danger" onclick="deleteCandidate(' + Number(row.telegramUserId) + ')">Delete candidate</button></div>' +
         '</article>';
       }).join("");
     }
@@ -526,6 +591,7 @@ export function renderAdminWebappPage(): string {
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
             '<div class="kv-row"><b>Role</b><span>' + escapeHtml(row.role) + '</span></div>' +
             '<div class="kv-row"><b>Language</b><span>' + escapeHtml(row.preferredLanguage) + '</span></div>' +
+            '<div class="kv-row"><b>Candidate complete</b><span>' + (row.candidateProfileComplete ? 'yes' : 'no') + '</span></div>' +
             '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
           '</div>' +
           '<div class="item-actions"><button class="danger" onclick="deleteUser(' + Number(row.telegramUserId) + ')">Delete user</button></div>' +
@@ -570,27 +636,49 @@ export function renderAdminWebappPage(): string {
       }).join("");
     }
 
+    function renderEvents(rows) {
+      const list = document.getElementById("eventsList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No deletion events found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        const pillClass = row.status === 'requested' ? 'warn' : 'ok';
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">Deletion request for ' + escapeHtml(String(row.telegramUserId)) + '</div><span class="pill ' + pillClass + '">' + escapeHtml(row.status) + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Reason</b><span>' + escapeHtml(row.reason) + '</span></div>' +
+            '<div class="kv-row"><b>Requested</b><span>' + escapeHtml(row.requestedAt || '-') + '</span></div>' +
+            '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
+          '</div>' +
+        '</article>';
+      }).join("");
+    }
+
     function setTab(tabName) {
       state.currentTab = tabName;
       document.querySelectorAll('.tab-btn').forEach((button) => {
         const active = button.getAttribute('data-tab') === tabName;
         button.classList.toggle('active', active);
       });
-      const sections = ["jobs", "users", "matches", "flags"];
+      const sections = ["jobs", "candidates", "users", "matches", "flags", "events"];
       sections.forEach((name) => {
         const section = document.getElementById('tab-' + name);
-        const visible = tabName === 'all' || tabName === name;
-        section.classList.toggle('hidden', !visible);
+        section.classList.toggle('hidden', tabName !== name);
       });
     }
 
     async function loadDashboard() {
       const data = await request("/admin/api/dashboard", { method: "GET" });
+      document.getElementById('generatedAtLine').textContent = 'Snapshot ' + (data.generatedAt || new Date().toISOString());
       renderStats(data.stats || {});
+      renderConsistency(data.consistency || {});
       renderJobs(data.jobs || []);
+      renderCandidates(data.candidates || []);
       renderUsers(data.users || []);
       renderMatches(data.matches || []);
       renderFlags(data.qualityFlags || []);
+      renderEvents(data.deletionRequests || []);
       setTab(state.currentTab);
     }
 
@@ -606,7 +694,12 @@ export function renderAdminWebappPage(): string {
       if (!confirm("Delete job " + jobId + " and linked matches?")) {
         return;
       }
-      await request("/admin/api/jobs/" + encodeURIComponent(jobId), { method: "DELETE" });
+      const result = await request("/admin/api/jobs/" + encodeURIComponent(jobId), { method: "DELETE" });
+      if (!result.ok) {
+        alert(result.message || 'Delete failed');
+      } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
+        alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
+      }
       await loadDashboard();
     };
 
@@ -614,7 +707,25 @@ export function renderAdminWebappPage(): string {
       if (!confirm("Delete user " + userId + " and all related data?")) {
         return;
       }
-      await request("/admin/api/users/" + encodeURIComponent(String(userId)), { method: "DELETE" });
+      const result = await request("/admin/api/users/" + encodeURIComponent(String(userId)), { method: "DELETE" });
+      if (!result.ok) {
+        alert(result.message || 'Delete failed');
+      } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
+        alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
+      }
+      await loadDashboard();
+    };
+
+    window.deleteCandidate = async function(userId) {
+      if (!confirm("Delete candidate " + userId + " and all related data?")) {
+        return;
+      }
+      const result = await request("/admin/api/candidates/" + encodeURIComponent(String(userId)), { method: "DELETE" });
+      if (!result.ok) {
+        alert(result.message || 'Delete failed');
+      } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
+        alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
+      }
       await loadDashboard();
     };
 
@@ -624,14 +735,13 @@ export function renderAdminWebappPage(): string {
       }
       const theme = tg.themeParams;
       setCssVar('--bg', theme.bg_color || '#0a0a0d');
-      setCssVar('--bg-elev', theme.secondary_bg_color || '#12121a');
       setCssVar('--text', theme.text_color || '#f4f4f7');
       setCssVar('--muted', theme.hint_color || '#9ca0ad');
       setCssVar('--accent', theme.button_color || '#7b2cff');
       if (theme.button_color) {
         setCssVar('--accent-soft', withAlpha(theme.button_color, 0.2));
       }
-      document.body.style.background = 'radial-gradient(circle at 10% -20%, ' + withAlpha(theme.button_color || '#7b2cff', 0.25) + ' 0%, ' + (theme.bg_color || '#0a0a0d') + ' 55%)';
+      document.body.style.background = 'radial-gradient(circle at 12% -18%, ' + withAlpha(theme.button_color || '#7b2cff', 0.24) + ' 0%, ' + (theme.bg_color || '#0a0a0d') + ' 56%)';
     }
 
     function applySafeAreaInsets() {
@@ -646,9 +756,7 @@ export function renderAdminWebappPage(): string {
     }
 
     function setCssVar(name, value) {
-      if (!value) {
-        return;
-      }
+      if (!value) return;
       document.documentElement.style.setProperty(name, value);
     }
 
