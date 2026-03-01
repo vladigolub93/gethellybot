@@ -40,30 +40,31 @@ export function renderAdminWebappPage(): string {
       font-family: "SF Pro Text", "Inter", "Segoe UI", sans-serif;
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
+      font-size: 16px;
     }
 
     .app {
       width: 100%;
-      max-width: 940px;
+      max-width: 980px;
       margin: 0 auto;
-      padding-top: calc(14px + var(--safe-top));
+      padding-top: calc(12px + var(--safe-top));
       padding-bottom: calc(18px + var(--safe-bottom));
-      padding-left: calc(12px + var(--safe-left));
-      padding-right: calc(12px + var(--safe-right));
+      padding-left: calc(10px + var(--safe-left));
+      padding-right: calc(10px + var(--safe-right));
       display: grid;
       gap: 10px;
     }
 
     .card {
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
+      border-radius: 16px;
+      padding: 14px;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
       backdrop-filter: blur(6px);
     }
 
     .logo {
-      font-size: 26px;
+      font-size: 30px;
       font-weight: 700;
       letter-spacing: 0.2px;
       line-height: 1;
@@ -75,22 +76,24 @@ export function renderAdminWebappPage(): string {
 
     .muted {
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
+      font-size: 0.86rem;
+      line-height: 1.5;
       overflow-wrap: anywhere;
     }
 
     .title {
       margin: 0;
-      font-size: 15px;
+      font-size: 1.02rem;
       font-weight: 650;
       color: var(--text);
+      line-height: 1.35;
     }
 
     .subtitle {
-      margin: 2px 0 0;
-      font-size: 12px;
+      margin: 4px 0 0;
+      font-size: 0.84rem;
       color: var(--muted);
+      line-height: 1.4;
     }
 
     .row {
@@ -104,28 +107,40 @@ export function renderAdminWebappPage(): string {
       flex: 1;
     }
 
-    input {
+    input,
+    select {
       width: 100%;
-      padding: 11px 12px;
-      border-radius: 11px;
+      padding: 12px 12px;
+      border-radius: 12px;
       border: 1px solid var(--border);
       background: rgba(255, 255, 255, 0.03);
       color: var(--text);
       outline: none;
-      font-size: 14px;
+      font-size: 0.95rem;
+      min-height: 44px;
     }
 
-    input:focus {
+    select {
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 17px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 28px;
+    }
+
+    input:focus,
+    select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
     button {
       border: 0;
-      border-radius: 11px;
-      padding: 10px 12px;
-      min-height: 38px;
-      font-size: 13px;
+      border-radius: 12px;
+      padding: 11px 14px;
+      min-height: 44px;
+      font-size: 0.9rem;
       font-weight: 650;
       color: #fff;
       background: var(--accent);
@@ -135,7 +150,7 @@ export function renderAdminWebappPage(): string {
     }
 
     button:active { transform: translateY(1px); }
-    button.secondary { background: rgba(255, 255, 255, 0.12); }
+    button.secondary { background: rgba(255, 255, 255, 0.14); }
     button.danger {
       background: rgba(255, 87, 87, 0.18);
       border: 1px solid rgba(255, 87, 87, 0.55);
@@ -143,28 +158,41 @@ export function renderAdminWebappPage(): string {
     }
 
     .status {
-      min-height: 16px;
-      font-size: 12px;
+      min-height: 20px;
+      font-size: 0.85rem;
       color: var(--muted);
       margin-top: 8px;
       overflow-wrap: anywhere;
+      line-height: 1.4;
     }
 
     .hidden { display: none !important; }
+    .hidden-by-filter { display: none !important; }
 
     .tabs {
-      display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 6px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none;
     }
 
     .tab-btn {
+      flex: 0 0 auto;
+      min-width: 118px;
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid var(--border);
       color: var(--muted);
-      font-size: 12px;
-      min-height: 34px;
-      padding: 8px 4px;
+      font-size: 0.82rem;
+      min-height: 40px;
+      padding: 9px 12px;
+      scroll-snap-align: start;
     }
 
     .tab-btn.active {
@@ -173,10 +201,16 @@ export function renderAdminWebappPage(): string {
       background: linear-gradient(180deg, rgba(123, 44, 255, 0.25), rgba(123, 44, 255, 0.16));
     }
 
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
     .stats {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px;
+      gap: 8px;
     }
 
     .stat {
@@ -188,26 +222,29 @@ export function renderAdminWebappPage(): string {
 
     .stat .k {
       color: var(--muted);
-      font-size: 11px;
+      font-size: 0.75rem;
+      line-height: 1.3;
     }
 
     .stat .v {
-      margin-top: 4px;
-      font-size: 20px;
+      margin-top: 6px;
+      font-size: 1.25rem;
       font-weight: 700;
       color: #fff;
+      line-height: 1.2;
     }
 
     .consistency {
-      margin-top: 9px;
-      border-radius: 11px;
+      margin-top: 10px;
+      border-radius: 12px;
       border: 1px solid var(--border);
       padding: 10px;
-      font-size: 12px;
+      font-size: 0.83rem;
       color: var(--muted);
       background: rgba(255, 255, 255, 0.02);
       display: grid;
-      gap: 5px;
+      gap: 6px;
+      line-height: 1.4;
     }
 
     .consistency .good { color: #8de8bd; }
@@ -215,16 +252,16 @@ export function renderAdminWebappPage(): string {
 
     .list {
       display: grid;
-      gap: 8px;
+      gap: 9px;
     }
 
     .item {
       border: 1px solid var(--border);
       border-radius: 12px;
       background: rgba(255, 255, 255, 0.02);
-      padding: 10px;
+      padding: 11px;
       display: grid;
-      gap: 6px;
+      gap: 7px;
       overflow-wrap: anywhere;
       word-break: break-word;
     }
@@ -232,15 +269,15 @@ export function renderAdminWebappPage(): string {
     .item-head {
       display: flex;
       justify-content: space-between;
-      gap: 8px;
+      gap: 10px;
       align-items: flex-start;
     }
 
     .item-title {
-      font-size: 14px;
+      font-size: 0.95rem;
       font-weight: 650;
       color: #fff;
-      line-height: 1.3;
+      line-height: 1.35;
     }
 
     .pill {
@@ -248,12 +285,13 @@ export function renderAdminWebappPage(): string {
       align-items: center;
       border-radius: 999px;
       padding: 4px 8px;
-      font-size: 11px;
+      font-size: 0.73rem;
       line-height: 1;
       border: 1px solid var(--border);
       color: var(--muted);
       background: rgba(255, 255, 255, 0.04);
       white-space: nowrap;
+      min-height: 20px;
     }
 
     .pill.ok {
@@ -270,57 +308,84 @@ export function renderAdminWebappPage(): string {
 
     .kv {
       display: grid;
-      gap: 4px;
+      gap: 5px;
     }
 
     .kv-row {
       display: grid;
-      grid-template-columns: 122px 1fr;
-      gap: 6px;
-      font-size: 12px;
+      grid-template-columns: 1fr;
+      gap: 2px;
+      font-size: 0.82rem;
       color: var(--muted);
+      line-height: 1.35;
     }
 
     .kv-row b {
       color: #d7d8de;
       font-weight: 550;
+      font-size: 0.77rem;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
     }
 
     .item-actions {
       display: flex;
-      justify-content: flex-end;
+      justify-content: stretch;
       gap: 8px;
       flex-wrap: wrap;
     }
 
+    .item-actions button {
+      width: 100%;
+    }
+
     .empty {
       color: var(--muted);
-      font-size: 13px;
-      padding: 10px;
+      font-size: 0.88rem;
+      padding: 12px;
       border: 1px dashed var(--border);
       border-radius: 11px;
       text-align: center;
+      line-height: 1.4;
     }
 
-    @media (max-width: 680px) {
-      .tabs {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+    @media (min-width: 640px) {
+      .app {
+        padding-left: calc(14px + var(--safe-left));
+        padding-right: calc(14px + var(--safe-right));
       }
-    }
 
-    @media (max-width: 520px) {
-      .stats {
-        grid-template-columns: 1fr;
+      .filters {
+        grid-template-columns: 1fr 170px auto;
+        align-items: center;
       }
+
       .kv-row {
-        grid-template-columns: 1fr;
-        gap: 2px;
+        grid-template-columns: 126px 1fr;
+        gap: 8px;
       }
+
       .item-actions {
-        justify-content: stretch;
+        justify-content: flex-end;
       }
+
       .item-actions button {
-        width: 100%;
+        width: auto;
+      }
+    }
+
+    @media (min-width: 860px) {
+      .tabs {
+        flex-wrap: wrap;
+        overflow: visible;
+      }
+
+      .tab-btn {
+        min-width: 128px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
   </style>
@@ -360,14 +425,31 @@ export function renderAdminWebappPage(): string {
 
       <div class="card">
         <div class="tabs">
-          <button class="tab-btn active" data-tab="jobs">Jobs</button>
-          <button class="tab-btn" data-tab="candidates">Candidates</button>
-          <button class="tab-btn" data-tab="interviews">Interviews</button>
-          <button class="tab-btn" data-tab="users">Users</button>
-          <button class="tab-btn" data-tab="matches">Matches</button>
-          <button class="tab-btn" data-tab="flags">Flags</button>
-          <button class="tab-btn" data-tab="events">Events</button>
+          <button class="tab-btn active" data-tab="jobs" data-label="Jobs">Jobs</button>
+          <button class="tab-btn" data-tab="candidates" data-label="Candidates">Candidates</button>
+          <button class="tab-btn" data-tab="interviews" data-label="Interviews">Interviews</button>
+          <button class="tab-btn" data-tab="users" data-label="Users">Users</button>
+          <button class="tab-btn" data-tab="matches" data-label="Matches">Matches</button>
+          <button class="tab-btn" data-tab="flags" data-label="Flags">Flags</button>
+          <button class="tab-btn" data-tab="events" data-label="Events">Events</button>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="filters">
+          <input id="searchInput" type="text" placeholder="Search in current tab" autocomplete="off" />
+          <select id="statusFilter">
+            <option value="">All statuses</option>
+            <option value="in_progress">In progress</option>
+            <option value="completed">Completed</option>
+            <option value="not_started">Not started</option>
+            <option value="active">Active</option>
+            <option value="contact_shared">Contact shared</option>
+            <option value="requested">Requested</option>
+          </select>
+          <button id="clearFiltersBtn" class="secondary">Clear</button>
+        </div>
+        <p class="subtitle" id="filterHint">Use search and status filters to narrow current tab.</p>
       </div>
 
       <div id="tab-jobs" class="card tab-content">
@@ -427,12 +509,17 @@ export function renderAdminWebappPage(): string {
       initData: tg ? (tg.initData || "") : "",
       loggedIn: false,
       currentTab: "jobs",
+      searchQuery: "",
+      statusFilter: "",
     };
 
     const tgInfoEl = document.getElementById("tgInfo");
     const loginStatusEl = document.getElementById("loginStatus");
     const loginCardEl = document.getElementById("loginCard");
     const dashboardEl = document.getElementById("dashboard");
+    const searchInputEl = document.getElementById("searchInput");
+    const statusFilterEl = document.getElementById("statusFilter");
+    const filterHintEl = document.getElementById("filterHint");
 
     applyTelegramTheme();
     applySafeAreaInsets();
@@ -550,7 +637,16 @@ export function renderAdminWebappPage(): string {
         return;
       }
       list.innerHTML = rows.map((row) => {
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.status || "");
+        const search = normalizeForSearch([
+          row.id,
+          row.title,
+          row.domain,
+          row.workFormat,
+          row.managerTelegramUserId,
+          row.managerInterviewStatus,
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(row.title) + '</div><span class="pill">' + escapeHtml(row.status) + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>ID</b><span>' + escapeHtml(row.id) + '</span></div>' +
@@ -574,7 +670,15 @@ export function renderAdminWebappPage(): string {
       list.innerHTML = rows.map((row) => {
         const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
         const confidenceClass = row.interviewConfidence === 'low' ? 'warn' : (row.interviewConfidence ? 'ok' : '');
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.interviewStatus || "");
+        const search = normalizeForSearch([
+          row.telegramUserId,
+          row.username || "",
+          row.fullName || "",
+          row.profileStatus || "",
+          row.interviewStatus || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + confidenceClass + '">' + escapeHtml(row.interviewConfidence || 'no confidence') + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
@@ -597,7 +701,19 @@ export function renderAdminWebappPage(): string {
       }
       list.innerHTML = rows.map((row) => {
         const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
-        return '<article class="item">' +
+        const status = normalizeForSearch([
+          row.role || "",
+          row.candidateInterviewStatus || "",
+          row.managerInterviewStatus || "",
+        ].join(" "));
+        const search = normalizeForSearch([
+          row.telegramUserId,
+          row.username || "",
+          row.fullName || "",
+          row.role || "",
+          row.preferredLanguage || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + (row.contactShared ? 'ok' : '') + '">' + (row.contactShared ? 'contact shared' : 'no contact') + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
@@ -629,7 +745,15 @@ export function renderAdminWebappPage(): string {
       list.innerHTML = rows.map((row) => {
         const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
         const statusClass = row.status === 'completed' ? 'ok' : (row.status === 'in_progress' ? 'warn' : '');
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.status || "");
+        const search = normalizeForSearch([
+          row.telegramUserId,
+          row.username || "",
+          row.fullName || "",
+          row.role || "",
+          row.currentState || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + statusClass + '">' + escapeHtml(row.status || 'not_started') + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
@@ -648,7 +772,16 @@ export function renderAdminWebappPage(): string {
         return;
       }
       list.innerHTML = rows.map((row) => {
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.status || "");
+        const search = normalizeForSearch([
+          row.id,
+          row.jobId || "",
+          row.candidateTelegramUserId,
+          row.managerTelegramUserId,
+          row.totalScore == null ? "" : String(row.totalScore),
+          row.status || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">Match ' + escapeHtml(row.id) + '</div><span class="pill">' + escapeHtml(row.status) + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Job ID</b><span>' + escapeHtml(row.jobId || '-') + '</span></div>' +
@@ -668,7 +801,14 @@ export function renderAdminWebappPage(): string {
         return;
       }
       list.innerHTML = rows.map((row) => {
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.entityType || "");
+        const search = normalizeForSearch([
+          row.flag || "",
+          row.entityType || "",
+          row.entityId || "",
+          row.createdAt || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">' + escapeHtml(row.flag) + '</div><span class="pill">' + escapeHtml(row.entityType) + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Entity</b><span>' + escapeHtml(row.entityType + ':' + row.entityId) + '</span></div>' +
@@ -686,7 +826,14 @@ export function renderAdminWebappPage(): string {
       }
       list.innerHTML = rows.map((row) => {
         const pillClass = row.status === 'requested' ? 'warn' : 'ok';
-        return '<article class="item">' +
+        const status = normalizeForSearch(row.status || "");
+        const search = normalizeForSearch([
+          row.telegramUserId,
+          row.reason || "",
+          row.status || "",
+          row.requestedAt || "",
+        ].join(" "));
+        return '<article class="item" data-search="' + escapeAttr(search) + '" data-status="' + escapeAttr(status) + '">' +
           '<div class="item-head"><div class="item-title">Deletion request for ' + escapeHtml(String(row.telegramUserId)) + '</div><span class="pill ' + pillClass + '">' + escapeHtml(row.status) + '</span></div>' +
           '<div class="kv">' +
             '<div class="kv-row"><b>Reason</b><span>' + escapeHtml(row.reason) + '</span></div>' +
@@ -708,6 +855,7 @@ export function renderAdminWebappPage(): string {
         const section = document.getElementById('tab-' + name);
         section.classList.toggle('hidden', tabName !== name);
       });
+      applyListFilters();
     }
 
     async function loadDashboard() {
@@ -722,7 +870,9 @@ export function renderAdminWebappPage(): string {
       renderMatches(data.matches || []);
       renderFlags(data.qualityFlags || []);
       renderEvents(data.deletionRequests || []);
+      updateTabBadges(data);
       setTab(state.currentTab);
+      applyListFilters();
     }
 
     async function logout() {
@@ -803,6 +953,79 @@ export function renderAdminWebappPage(): string {
       document.documentElement.style.setProperty(name, value);
     }
 
+    function updateTabBadges(data) {
+      const counts = {
+        jobs: Array.isArray(data.jobs) ? data.jobs.length : 0,
+        candidates: Array.isArray(data.candidates) ? data.candidates.length : 0,
+        interviews:
+          ((data.interviewProgress && Array.isArray(data.interviewProgress.candidates)) ? data.interviewProgress.candidates.length : 0) +
+          ((data.interviewProgress && Array.isArray(data.interviewProgress.managers)) ? data.interviewProgress.managers.length : 0),
+        users: Array.isArray(data.users) ? data.users.length : 0,
+        matches: Array.isArray(data.matches) ? data.matches.length : 0,
+        flags: Array.isArray(data.qualityFlags) ? data.qualityFlags.length : 0,
+        events: Array.isArray(data.deletionRequests) ? data.deletionRequests.length : 0,
+      };
+      document.querySelectorAll('.tab-btn').forEach((button) => {
+        const tab = button.getAttribute('data-tab');
+        const label = button.getAttribute('data-label') || tab || 'Tab';
+        if (!tab || counts[tab] == null) {
+          button.textContent = label;
+          return;
+        }
+        button.textContent = label + ' (' + String(counts[tab]) + ')';
+      });
+    }
+
+    function getCurrentListId() {
+      const map = {
+        jobs: "jobsList",
+        candidates: "candidatesList",
+        interviews: "interviewsList",
+        users: "usersList",
+        matches: "matchesList",
+        flags: "flagsList",
+        events: "eventsList",
+      };
+      return map[state.currentTab] || null;
+    }
+
+    function applyListFilters() {
+      const listId = getCurrentListId();
+      if (!listId) {
+        return;
+      }
+      const listEl = document.getElementById(listId);
+      if (!listEl) {
+        return;
+      }
+      const query = normalizeForSearch(state.searchQuery || "");
+      const status = normalizeForSearch(state.statusFilter || "");
+      const items = Array.from(listEl.querySelectorAll('.item'));
+      if (!items.length) {
+        if (filterHintEl) {
+          filterHintEl.textContent = "No items in current tab.";
+        }
+        return;
+      }
+
+      let visible = 0;
+      items.forEach((item) => {
+        const itemSearch = item.getAttribute('data-search') || "";
+        const itemStatus = item.getAttribute('data-status') || "";
+        const queryMatch = !query || itemSearch.includes(query);
+        const statusMatch = !status || itemStatus.includes(status);
+        const show = queryMatch && statusMatch;
+        item.classList.toggle('hidden-by-filter', !show);
+        if (show) {
+          visible += 1;
+        }
+      });
+
+      if (filterHintEl) {
+        filterHintEl.textContent = "Showing " + String(visible) + " of " + String(items.length) + " in " + state.currentTab + ".";
+      }
+    }
+
     function withAlpha(color, alpha) {
       const hex = String(color || '').trim();
       if (!hex.startsWith('#') || (hex.length !== 7 && hex.length !== 4)) {
@@ -835,9 +1058,28 @@ export function renderAdminWebappPage(): string {
       return String(value).replaceAll("'", "&#039;");
     }
 
+    function normalizeForSearch(value) {
+      return String(value || "").toLowerCase().replace(/\\s+/g, " ").trim();
+    }
+
     document.getElementById("loginBtn").addEventListener("click", login);
     document.getElementById("refreshBtn").addEventListener("click", loadDashboard);
     document.getElementById("logoutBtn").addEventListener("click", logout);
+    document.getElementById("clearFiltersBtn").addEventListener("click", () => {
+      state.searchQuery = "";
+      state.statusFilter = "";
+      searchInputEl.value = "";
+      statusFilterEl.value = "";
+      applyListFilters();
+    });
+    searchInputEl.addEventListener("input", (event) => {
+      state.searchQuery = event.target.value || "";
+      applyListFilters();
+    });
+    statusFilterEl.addEventListener("change", (event) => {
+      state.statusFilter = event.target.value || "";
+      applyListFilters();
+    });
     document.getElementById("pinInput").addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         login();
