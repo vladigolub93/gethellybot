@@ -551,12 +551,12 @@ export function renderAdminWebappPage(): string {
         if (state.sessionToken) {
           headers["authorization"] = "Bearer " + state.sessionToken;
         }
-        response = await fetch(path, {
+        const fetchOptions = Object.assign({
           credentials: "include",
           cache: "no-store",
           headers,
-          ...(options || {}),
-        });
+        }, options || {});
+        response = await fetch(path, fetchOptions);
       } catch {
         throw new Error("Network error. Please try again.");
       }
@@ -820,9 +820,17 @@ export function renderAdminWebappPage(): string {
       const list = document.getElementById("interviewsList");
       const candidates = (interviewProgress && interviewProgress.candidates) || [];
       const managers = (interviewProgress && interviewProgress.managers) || [];
-      const rows = []
-        .concat(candidates.map((row) => ({ ...row, role: 'candidate' })))
-        .concat(managers.map((row) => ({ ...row, role: 'manager' })));
+      const candidateRows = candidates.map((row) => {
+        const next = Object.assign({}, row);
+        next.role = 'candidate';
+        return next;
+      });
+      const managerRows = managers.map((row) => {
+        const next = Object.assign({}, row);
+        next.role = 'manager';
+        return next;
+      });
+      const rows = [].concat(candidateRows).concat(managerRows);
 
       if (!rows.length) {
         list.innerHTML = '<div class="empty">No interview progress data found.</div>';
