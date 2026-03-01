@@ -493,19 +493,19 @@ export function renderAdminWebappPage(): string {
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
     if (tg) {
       if (typeof tg.ready === "function") {
-        try { tg.ready(); } catch {}
+        try { tg.ready(); } catch (error) {}
       }
       if (typeof tg.expand === "function") {
-        try { tg.expand(); } catch {}
+        try { tg.expand(); } catch (error) {}
       }
       if (typeof tg.setHeaderColor === "function") {
-        try { tg.setHeaderColor("#0a0a0d"); } catch {}
+        try { tg.setHeaderColor("#0a0a0d"); } catch (error) {}
       }
       if (typeof tg.setBackgroundColor === "function") {
-        try { tg.setBackgroundColor("#0a0a0d"); } catch {}
+        try { tg.setBackgroundColor("#0a0a0d"); } catch (error) {}
       }
       if (typeof tg.disableVerticalSwipes === "function") {
-        try { tg.disableVerticalSwipes(); } catch {}
+        try { tg.disableVerticalSwipes(); } catch (error) {}
       }
     }
 
@@ -1084,15 +1084,15 @@ export function renderAdminWebappPage(): string {
 
     function escapeHtml(value) {
       return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     function escapeAttr(value) {
-      return String(value).replaceAll("'", "&#039;");
+      return String(value).replace(/'/g, "&#039;");
     }
 
     function normalizeForSearch(value) {

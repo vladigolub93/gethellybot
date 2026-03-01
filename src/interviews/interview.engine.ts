@@ -1255,7 +1255,7 @@ function looksTemplatedNarrative(answerText: string): boolean {
 
 function looksOverStructuredAiEssay(answerText: string): boolean {
   const text = answerText.trim();
-  if (text.length < 900) {
+  if (text.length < 350) {
     return false;
   }
 
@@ -1266,16 +1266,29 @@ function looksOverStructuredAiEssay(answerText: string): boolean {
     "at the database layer",
     "on success",
     "what i owned personally",
+    "i owned",
     "the tradeoff",
+    "the trade-off",
     "end to end",
+    "if you want, i can also",
+    "if you want i can also",
+    "sure. i will",
+    "we chose",
   ];
   const markersMatched = structuralMarkers.filter((marker) => lower.includes(marker)).length;
   const paragraphCount = text.split(/\n{2,}/).filter((segment) => segment.trim().length > 0).length;
-  const hasWeakConcreteSignal = !/\b(p95|p99|ms|rps|qps|incident|oncall|slo|sla|postmortem|migration|rollback)\b/i.test(
+  const hasWeakConcreteSignal = !/\b(p95|p99|ms|rps|qps|incident|oncall|slo|sla|postmortem|migration|rollback|ticket|pager|prometheus|grafana)\b/i.test(
     text,
   );
+  const hasUiApiDbSequence =
+    lower.includes("in the ui") &&
+    lower.includes("in the api layer") &&
+    lower.includes("at the database layer");
 
-  return paragraphCount >= 5 && markersMatched >= 3 && hasWeakConcreteSignal;
+  return (
+    (paragraphCount >= 4 && markersMatched >= 3 && hasWeakConcreteSignal) ||
+    (hasUiApiDbSequence && markersMatched >= 2)
+  );
 }
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {
