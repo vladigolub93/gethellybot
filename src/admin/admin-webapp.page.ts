@@ -557,6 +557,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       searchQuery: "",
       statusFilter: "",
     };
+    const mutationRefreshTimers = [];
 
     const tgInfoEl = document.getElementById("tgInfo");
     const loginStatusEl = document.getElementById("loginStatus");
@@ -1032,6 +1033,36 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       setStatus("Logged out", false);
     }
 
+    function clearMutationRefreshTimers() {
+      while (mutationRefreshTimers.length > 0) {
+        const timerId = mutationRefreshTimers.pop();
+        clearTimeout(timerId);
+      }
+    }
+
+    function scheduleMutationRefreshBurst() {
+      clearMutationRefreshTimers();
+      const delays = [1500, 4000, 9000];
+      delays.forEach((delay) => {
+        const timerId = setTimeout(() => {
+          loadDashboard().catch(() => {
+            setDashboardStatus("Auto refresh failed. Tap Refresh to retry.", true);
+          });
+        }, delay);
+        mutationRefreshTimers.push(timerId);
+      });
+    }
+
+    async function refreshAfterMutation() {
+      setDashboardStatus("Updating dashboard...", false);
+      try {
+        await loadDashboard();
+      } catch (_error) {
+        setDashboardStatus("Dashboard update failed. Tap Refresh to retry.", true);
+      }
+      scheduleMutationRefreshBurst();
+    }
+
     window.deleteJob = async function(jobId) {
       if (!confirm("Delete job " + jobId + " and linked matches?")) {
         return;
@@ -1042,7 +1073,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
         alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
       }
-      await loadDashboard();
+      await refreshAfterMutation();
     };
 
     window.deleteUser = async function(userId) {
@@ -1055,7 +1086,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
         alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
       }
-      await loadDashboard();
+      await refreshAfterMutation();
     };
 
     window.deleteCandidate = async function(userId) {
@@ -1068,7 +1099,7 @@ export function renderAdminWebappPage(initialDashboard?: AdminDashboardData | nu
       } else if (result.verification && result.verification.remainingRefs && result.verification.remainingRefs.length) {
         alert('Deleted with warnings: ' + result.verification.remainingRefs.join(', '));
       }
-      await loadDashboard();
+      await refreshAfterMutation();
     };
 
     function applyTelegramTheme() {
