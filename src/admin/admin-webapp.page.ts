@@ -3,113 +3,342 @@ export function renderAdminWebappPage(): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Helly Admin</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f7faf8;
-      --card: #ffffff;
-      --text: #1a2a22;
-      --muted: #587062;
-      --accent: #10684f;
-      --danger: #b42318;
-      --border: #dde7e1;
+      --bg: #0a0a0d;
+      --bg-elev: #12121a;
+      --bg-soft: #171722;
+      --text: #f4f4f7;
+      --muted: #9ca0ad;
+      --accent: #7b2cff;
+      --accent-soft: rgba(123, 44, 255, 0.2);
+      --border: rgba(255, 255, 255, 0.08);
+      --danger: #ff5757;
+      --ok: #2cd482;
+      --safe-top: 0px;
+      --safe-bottom: 0px;
+      --safe-left: 0px;
+      --safe-right: 0px;
     }
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    html,
     body {
       margin: 0;
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-      background: radial-gradient(circle at top right, #d2e8dd 0%, var(--bg) 44%);
+      padding: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      background: radial-gradient(circle at 10% -20%, #1c1230 0%, #0a0a0d 55%);
       color: var(--text);
+      font-family: "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
-    .wrap {
-      max-width: 1100px;
+
+    .app {
+      width: 100%;
+      max-width: 920px;
       margin: 0 auto;
-      padding: 16px;
+      padding-top: calc(14px + var(--safe-top));
+      padding-bottom: calc(18px + var(--safe-bottom));
+      padding-left: calc(12px + var(--safe-left));
+      padding-right: calc(12px + var(--safe-right));
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
+
     .card {
-      background: var(--card);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 14px;
+      padding: 12px;
+      backdrop-filter: blur(6px);
     }
-    h1, h2 { margin: 0 0 10px; }
-    h1 { font-size: 22px; }
-    h2 { font-size: 16px; }
-    .muted { color: var(--muted); }
-    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    input {
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      min-width: 240px;
-      font-size: 14px;
-    }
-    button {
-      border: 0;
-      border-radius: 10px;
-      padding: 10px 12px;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.secondary { background: #5a6b62; }
-    button.danger { background: var(--danger); }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+
+    .hero {
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
+
+    .logo {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      line-height: 1;
+    }
+
+    .logo .mark {
+      color: var(--accent);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+      color: var(--text);
+    }
+
+    .subtitle {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .grow {
+      flex: 1;
+    }
+
+    input {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      outline: none;
+      font-size: 14px;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    button {
+      border: 0;
+      border-radius: 11px;
+      padding: 10px 12px;
+      min-height: 38px;
+      font-size: 13px;
+      font-weight: 650;
+      color: #fff;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.08s ease, opacity 0.2s ease;
+      white-space: nowrap;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button.secondary {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    button.danger {
+      background: rgba(255, 87, 87, 0.18);
+      border: 1px solid rgba(255, 87, 87, 0.55);
+      color: #ffd6d6;
+    }
+
+    .status {
+      min-height: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+      overflow-wrap: anywhere;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .tab-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 34px;
+      padding: 8px 4px;
+    }
+
+    .tab-btn.active {
+      color: #fff;
+      border-color: rgba(123, 44, 255, 0.7);
+      background: linear-gradient(180deg, rgba(123, 44, 255, 0.25), rgba(123, 44, 255, 0.16));
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
     .stat {
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 10px;
-      background: #fbfdfc;
+      background: rgba(255, 255, 255, 0.02);
     }
-    .stat .label { color: var(--muted); font-size: 12px; }
-    .stat .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
+
+    .stat .k {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stat .v {
+      margin-top: 4px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .item-title {
+      font-size: 14px;
+      font-weight: 650;
+      color: #fff;
+      line-height: 1.3;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      line-height: 1;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      white-space: nowrap;
+    }
+
+    .pill.ok {
+      border-color: rgba(44, 212, 130, 0.45);
+      color: #8de8bd;
+      background: rgba(44, 212, 130, 0.14);
+    }
+
+    .kv {
+      display: grid;
+      gap: 4px;
+    }
+
+    .kv-row {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .kv-row b {
+      color: #d7d8de;
+      font-weight: 550;
+    }
+
+    .item-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .empty {
+      color: var(--muted);
       font-size: 13px;
+      padding: 10px;
+      border: 1px dashed var(--border);
+      border-radius: 11px;
+      text-align: center;
     }
-    th, td {
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      padding: 8px;
-      vertical-align: top;
+
+    @media (max-width: 520px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+      .kv-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }
+      .item-actions {
+        justify-content: stretch;
+      }
+      .item-actions button {
+        width: 100%;
+      }
+      .tabs {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
-    th { color: var(--muted); font-weight: 600; }
-    .hide { display: none; }
-    .status { font-size: 12px; color: var(--muted); min-height: 18px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Helly Admin</h1>
+  <div class="app">
+    <section class="card hero">
+      <div class="logo"><span class="mark">&gt;</span>helly<span class="mark">_</span></div>
       <div id="tgInfo" class="muted">Telegram context is loading...</div>
-    </div>
+    </section>
 
-    <div id="loginCard" class="card">
-      <h2>Admin Login</h2>
-      <div class="row">
-        <input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" />
+    <section id="loginCard" class="card">
+      <h1 class="title">Admin sign in</h1>
+      <p class="subtitle">PIN + Telegram identity check, session expires in 1 hour.</p>
+      <div class="row" style="margin-top:10px;">
+        <div class="grow"><input id="pinInput" type="password" placeholder="Enter admin PIN" autocomplete="off" /></div>
         <button id="loginBtn">Sign in</button>
       </div>
       <div id="loginStatus" class="status"></div>
-    </div>
+    </section>
 
-    <div id="dashboard" class="hide">
+    <section id="dashboard" class="hidden">
       <div class="card">
-        <div class="row" style="justify-content: space-between;">
-          <h2>Overview</h2>
+        <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+          <div>
+            <h2 class="title">Operations</h2>
+            <p class="subtitle">Live snapshot, no horizontal scrolling, mobile-first.</p>
+          </div>
           <div class="row">
             <button id="refreshBtn" class="secondary">Refresh</button>
             <button id="logoutBtn" class="secondary">Logout</button>
@@ -119,45 +348,35 @@ export function renderAdminWebappPage(): string {
       </div>
 
       <div class="card">
-        <h2>Jobs</h2>
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Title</th><th>Domain</th><th>Status</th><th>Manager</th><th>Action</th></tr>
-          </thead>
-          <tbody id="jobsBody"></tbody>
-        </table>
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="jobs">Jobs</button>
+          <button class="tab-btn" data-tab="users">Users</button>
+          <button class="tab-btn" data-tab="matches">Matches</button>
+          <button class="tab-btn" data-tab="flags">Flags</button>
+          <button class="tab-btn" data-tab="all">All</button>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>Users</h2>
-        <table>
-          <thead>
-            <tr><th>Telegram ID</th><th>Name</th><th>Role</th><th>Contact</th><th>Lang</th><th>Action</th></tr>
-          </thead>
-          <tbody id="usersBody"></tbody>
-        </table>
+      <div id="tab-jobs" class="card tab-content">
+        <h3 class="title">Jobs</h3>
+        <div id="jobsList" class="list" style="margin-top:10px;"></div>
       </div>
 
-      <div class="card">
-        <h2>Matches</h2>
-        <table>
-          <thead>
-            <tr><th>ID</th><th>Job</th><th>Candidate</th><th>Score</th><th>Status</th><th>Created</th></tr>
-          </thead>
-          <tbody id="matchesBody"></tbody>
-        </table>
+      <div id="tab-users" class="card tab-content hidden">
+        <h3 class="title">Users</h3>
+        <div id="usersList" class="list" style="margin-top:10px;"></div>
       </div>
 
-      <div class="card">
-        <h2>Quality Flags and Errors</h2>
-        <table>
-          <thead>
-            <tr><th>Time</th><th>Entity</th><th>Flag</th></tr>
-          </thead>
-          <tbody id="flagsBody"></tbody>
-        </table>
+      <div id="tab-matches" class="card tab-content hidden">
+        <h3 class="title">Matches</h3>
+        <div id="matchesList" class="list" style="margin-top:10px;"></div>
       </div>
-    </div>
+
+      <div id="tab-flags" class="card tab-content hidden">
+        <h3 class="title">Quality flags and errors</h3>
+        <div id="flagsList" class="list" style="margin-top:10px;"></div>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -165,11 +384,21 @@ export function renderAdminWebappPage(): string {
     if (tg) {
       tg.ready();
       tg.expand();
+      if (typeof tg.setHeaderColor === "function") {
+        try { tg.setHeaderColor("#0a0a0d"); } catch {}
+      }
+      if (typeof tg.setBackgroundColor === "function") {
+        try { tg.setBackgroundColor("#0a0a0d"); } catch {}
+      }
+      if (typeof tg.disableVerticalSwipes === "function") {
+        try { tg.disableVerticalSwipes(); } catch {}
+      }
     }
 
     const state = {
       initData: tg ? (tg.initData || "") : "",
       loggedIn: false,
+      currentTab: "jobs",
     };
 
     const tgInfoEl = document.getElementById("tgInfo");
@@ -177,12 +406,21 @@ export function renderAdminWebappPage(): string {
     const loginCardEl = document.getElementById("loginCard");
     const dashboardEl = document.getElementById("dashboard");
 
+    applyTelegramTheme();
+    applySafeAreaInsets();
+
+    if (tg && tg.onEvent) {
+      tg.onEvent("themeChanged", applyTelegramTheme);
+      tg.onEvent("safeAreaChanged", applySafeAreaInsets);
+      tg.onEvent("contentSafeAreaChanged", applySafeAreaInsets);
+    }
+
     if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
       const user = tg.initDataUnsafe.user;
       const username = user.username ? "@" + user.username : "";
-      tgInfoEl.textContent = "Telegram user: " + user.id + " " + username;
+      tgInfoEl.textContent = "Telegram user " + user.id + " " + username;
     } else {
-      tgInfoEl.textContent = "Open this page inside Telegram bot web app.";
+      tgInfoEl.textContent = "Open this mini app from your bot menu button inside Telegram.";
     }
 
     async function request(path, options) {
@@ -200,7 +438,7 @@ export function renderAdminWebappPage(): string {
 
     function setStatus(text, isError) {
       loginStatusEl.textContent = text || "";
-      loginStatusEl.style.color = isError ? "#b42318" : "#587062";
+      loginStatusEl.style.color = isError ? "#ff8383" : "#9ca0ad";
     }
 
     async function login() {
@@ -216,8 +454,8 @@ export function renderAdminWebappPage(): string {
           body: JSON.stringify({ pin, initData: state.initData || null }),
         });
         state.loggedIn = true;
-        loginCardEl.classList.add("hide");
-        dashboardEl.classList.remove("hide");
+        loginCardEl.classList.add("hidden");
+        dashboardEl.classList.remove("hidden");
         await loadDashboard();
       } catch (error) {
         setStatus(error.message || "Login failed", true);
@@ -228,8 +466,8 @@ export function renderAdminWebappPage(): string {
       try {
         await request("/admin/api/session", { method: "GET" });
         state.loggedIn = true;
-        loginCardEl.classList.add("hide");
-        dashboardEl.classList.remove("hide");
+        loginCardEl.classList.add("hidden");
+        dashboardEl.classList.remove("hidden");
         await loadDashboard();
       } catch {
         state.loggedIn = false;
@@ -250,77 +488,117 @@ export function renderAdminWebappPage(): string {
         ["Flags 24h", stats.qualityFlags24h],
       ];
       container.innerHTML = entries.map(([label, value]) =>
-        '<div class="stat"><div class="label">' + escapeHtml(String(label)) + '</div><div class="value">' + escapeHtml(String(value)) + '</div></div>'
+        '<div class="stat"><div class="k">' + escapeHtml(String(label)) + '</div><div class="v">' + escapeHtml(String(value)) + '</div></div>'
       ).join("");
     }
 
     function renderJobs(rows) {
-      const body = document.getElementById("jobsBody");
-      body.innerHTML = rows.map((row) => {
-        return '<tr>' +
-          '<td>' + escapeHtml(row.id) + '</td>' +
-          '<td>' + escapeHtml(row.title) + '</td>' +
-          '<td>' + escapeHtml(row.domain) + '</td>' +
-          '<td>' + escapeHtml(row.status) + '</td>' +
-          '<td>' + escapeHtml(String(row.managerTelegramUserId)) + '</td>' +
-          '<td><button class="danger" onclick="deleteJob(\'' + escapeAttr(row.id) + '\')">Delete</button></td>' +
-        '</tr>';
+      const list = document.getElementById("jobsList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No jobs found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">' + escapeHtml(row.title) + '</div><span class="pill">' + escapeHtml(row.status) + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>ID</b><span>' + escapeHtml(row.id) + '</span></div>' +
+            '<div class="kv-row"><b>Domain</b><span>' + escapeHtml(row.domain) + '</span></div>' +
+            '<div class="kv-row"><b>Manager</b><span>' + escapeHtml(String(row.managerTelegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Format</b><span>' + escapeHtml(row.workFormat) + '</span></div>' +
+          '</div>' +
+          '<div class="item-actions"><button class="danger" onclick="deleteJob(\'' + escapeAttr(row.id) + '\')">Delete job</button></div>' +
+        '</article>';
       }).join("");
     }
 
     function renderUsers(rows) {
-      const body = document.getElementById("usersBody");
-      body.innerHTML = rows.map((row) => {
-        return '<tr>' +
-          '<td>' + escapeHtml(String(row.telegramUserId)) + '</td>' +
-          '<td>' + escapeHtml((row.fullName || "") + (row.username ? " (" + row.username + ")" : "")) + '</td>' +
-          '<td>' + escapeHtml(row.role) + '</td>' +
-          '<td>' + escapeHtml(row.contactShared ? "yes" : "no") + '</td>' +
-          '<td>' + escapeHtml(row.preferredLanguage) + '</td>' +
-          '<td><button class="danger" onclick="deleteUser(' + Number(row.telegramUserId) + ')">Delete</button></td>' +
-        '</tr>';
+      const list = document.getElementById("usersList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No users found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        const name = (row.fullName || "Unknown") + (row.username ? " (" + row.username + ")" : "");
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">' + escapeHtml(name) + '</div><span class="pill ' + (row.contactShared ? 'ok' : '') + '">' + (row.contactShared ? 'contact shared' : 'no contact') + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Telegram ID</b><span>' + escapeHtml(String(row.telegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Role</b><span>' + escapeHtml(row.role) + '</span></div>' +
+            '<div class="kv-row"><b>Language</b><span>' + escapeHtml(row.preferredLanguage) + '</span></div>' +
+            '<div class="kv-row"><b>Updated</b><span>' + escapeHtml(row.updatedAt || '-') + '</span></div>' +
+          '</div>' +
+          '<div class="item-actions"><button class="danger" onclick="deleteUser(' + Number(row.telegramUserId) + ')">Delete user</button></div>' +
+        '</article>';
       }).join("");
     }
 
     function renderMatches(rows) {
-      const body = document.getElementById("matchesBody");
-      body.innerHTML = rows.map((row) => {
-        return '<tr>' +
-          '<td>' + escapeHtml(row.id) + '</td>' +
-          '<td>' + escapeHtml(row.jobId || "-") + '</td>' +
-          '<td>' + escapeHtml(String(row.candidateTelegramUserId)) + '</td>' +
-          '<td>' + escapeHtml(row.totalScore != null ? String(row.totalScore) : "-") + '</td>' +
-          '<td>' + escapeHtml(row.status) + '</td>' +
-          '<td>' + escapeHtml(row.createdAt || "-") + '</td>' +
-        '</tr>';
+      const list = document.getElementById("matchesList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No matches found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">Match ' + escapeHtml(row.id) + '</div><span class="pill">' + escapeHtml(row.status) + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Job ID</b><span>' + escapeHtml(row.jobId || '-') + '</span></div>' +
+            '<div class="kv-row"><b>Candidate</b><span>' + escapeHtml(String(row.candidateTelegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Manager</b><span>' + escapeHtml(String(row.managerTelegramUserId)) + '</span></div>' +
+            '<div class="kv-row"><b>Total score</b><span>' + escapeHtml(row.totalScore != null ? String(row.totalScore) : '-') + '</span></div>' +
+            '<div class="kv-row"><b>Created</b><span>' + escapeHtml(row.createdAt || '-') + '</span></div>' +
+          '</div>' +
+        '</article>';
       }).join("");
     }
 
     function renderFlags(rows) {
-      const body = document.getElementById("flagsBody");
-      body.innerHTML = rows.map((row) => {
-        return '<tr>' +
-          '<td>' + escapeHtml(row.createdAt || "-") + '</td>' +
-          '<td>' + escapeHtml(row.entityType + ':' + row.entityId) + '</td>' +
-          '<td>' + escapeHtml(row.flag) + '</td>' +
-        '</tr>';
+      const list = document.getElementById("flagsList");
+      if (!rows.length) {
+        list.innerHTML = '<div class="empty">No quality flags found.</div>';
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        return '<article class="item">' +
+          '<div class="item-head"><div class="item-title">' + escapeHtml(row.flag) + '</div><span class="pill">' + escapeHtml(row.entityType) + '</span></div>' +
+          '<div class="kv">' +
+            '<div class="kv-row"><b>Entity</b><span>' + escapeHtml(row.entityType + ':' + row.entityId) + '</span></div>' +
+            '<div class="kv-row"><b>Time</b><span>' + escapeHtml(row.createdAt || '-') + '</span></div>' +
+          '</div>' +
+        '</article>';
       }).join("");
+    }
+
+    function setTab(tabName) {
+      state.currentTab = tabName;
+      document.querySelectorAll('.tab-btn').forEach((button) => {
+        const active = button.getAttribute('data-tab') === tabName;
+        button.classList.toggle('active', active);
+      });
+      const sections = ["jobs", "users", "matches", "flags"];
+      sections.forEach((name) => {
+        const section = document.getElementById('tab-' + name);
+        const visible = tabName === 'all' || tabName === name;
+        section.classList.toggle('hidden', !visible);
+      });
     }
 
     async function loadDashboard() {
       const data = await request("/admin/api/dashboard", { method: "GET" });
-      renderStats(data.stats);
+      renderStats(data.stats || {});
       renderJobs(data.jobs || []);
       renderUsers(data.users || []);
       renderMatches(data.matches || []);
       renderFlags(data.qualityFlags || []);
+      setTab(state.currentTab);
     }
 
     async function logout() {
       await request("/admin/api/auth/logout", { method: "POST" });
       state.loggedIn = false;
-      dashboardEl.classList.add("hide");
-      loginCardEl.classList.remove("hide");
+      dashboardEl.classList.add("hidden");
+      loginCardEl.classList.remove("hidden");
       setStatus("Logged out", false);
     }
 
@@ -339,6 +617,59 @@ export function renderAdminWebappPage(): string {
       await request("/admin/api/users/" + encodeURIComponent(String(userId)), { method: "DELETE" });
       await loadDashboard();
     };
+
+    function applyTelegramTheme() {
+      if (!tg || !tg.themeParams) {
+        return;
+      }
+      const theme = tg.themeParams;
+      setCssVar('--bg', theme.bg_color || '#0a0a0d');
+      setCssVar('--bg-elev', theme.secondary_bg_color || '#12121a');
+      setCssVar('--text', theme.text_color || '#f4f4f7');
+      setCssVar('--muted', theme.hint_color || '#9ca0ad');
+      setCssVar('--accent', theme.button_color || '#7b2cff');
+      if (theme.button_color) {
+        setCssVar('--accent-soft', withAlpha(theme.button_color, 0.2));
+      }
+      document.body.style.background = 'radial-gradient(circle at 10% -20%, ' + withAlpha(theme.button_color || '#7b2cff', 0.25) + ' 0%, ' + (theme.bg_color || '#0a0a0d') + ' 55%)';
+    }
+
+    function applySafeAreaInsets() {
+      if (!tg) {
+        return;
+      }
+      const inset = tg.safeAreaInset || tg.contentSafeAreaInset || {};
+      setCssVar('--safe-top', px(inset.top));
+      setCssVar('--safe-bottom', px(inset.bottom));
+      setCssVar('--safe-left', px(inset.left));
+      setCssVar('--safe-right', px(inset.right));
+    }
+
+    function setCssVar(name, value) {
+      if (!value) {
+        return;
+      }
+      document.documentElement.style.setProperty(name, value);
+    }
+
+    function withAlpha(color, alpha) {
+      const hex = String(color || '').trim();
+      if (!hex.startsWith('#') || (hex.length !== 7 && hex.length !== 4)) {
+        return 'rgba(123,44,255,' + alpha + ')';
+      }
+      const normalized = hex.length === 4
+        ? '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3]
+        : hex;
+      const r = parseInt(normalized.slice(1, 3), 16);
+      const g = parseInt(normalized.slice(3, 5), 16);
+      const b = parseInt(normalized.slice(5, 7), 16);
+      return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+
+    function px(value) {
+      const n = Number(value || 0);
+      return Number.isFinite(n) ? n + 'px' : '0px';
+    }
 
     function escapeHtml(value) {
       return String(value)
@@ -360,6 +691,13 @@ export function renderAdminWebappPage(): string {
       if (event.key === "Enter") {
         login();
       }
+    });
+
+    document.querySelectorAll('.tab-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const tabName = button.getAttribute('data-tab') || 'jobs';
+        setTab(tabName);
+      });
     });
 
     loadSession();
