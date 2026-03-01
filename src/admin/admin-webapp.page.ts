@@ -625,6 +625,31 @@ export function renderAdminWebappPage(): string {
       }
     }
 
+    async function tryTelegramAutoLogin() {
+      if (!state.initData || !state.initData.trim()) {
+        return false;
+      }
+      try {
+        const result = await request("/admin/api/auth/telegram-login", {
+          method: "POST",
+          body: JSON.stringify({ initData: state.initData }),
+        });
+        if (result && typeof result.sessionToken === "string" && result.sessionToken) {
+          state.sessionToken = result.sessionToken;
+          try {
+            window.localStorage.setItem("helly_admin_session_token", result.sessionToken);
+          } catch (error) {}
+        }
+        state.loggedIn = true;
+        loginCardEl.classList.add("hidden");
+        dashboardEl.classList.remove("hidden");
+        await loadDashboard();
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
     async function loadSession() {
       if (!state.sessionToken) {
         try {
@@ -641,9 +666,12 @@ export function renderAdminWebappPage(): string {
         dashboardEl.classList.remove("hidden");
         await loadDashboard();
       } catch {
-        state.loggedIn = false;
-        dashboardEl.classList.add("hidden");
-        loginCardEl.classList.remove("hidden");
+        const autoLoggedIn = await tryTelegramAutoLogin();
+        if (!autoLoggedIn) {
+          state.loggedIn = false;
+          dashboardEl.classList.add("hidden");
+          loginCardEl.classList.remove("hidden");
+        }
       }
     }
 

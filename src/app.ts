@@ -477,6 +477,61 @@ export function createApp(env: EnvConfig): AppContext {
     logger.info("Admin login succeeded with PIN-only fallback");
   });
 
+  app.post("/admin/api/auth/telegram-login", (request: Request, response: Response) => {
+    const initData =
+      typeof request.body?.initData === "string"
+        ? request.body.initData
+        : "";
+    if (!initData.trim()) {
+      response.status(400).json({ ok: false, error: "Missing Telegram initData" });
+      return;
+    }
+
+    const verification = verifyTelegramInitData(initData, env.telegramBotToken);
+    if (!verification.ok || !verification.identity) {
+      logger.warn("Admin telegram-login failed due to Telegram validation", {
+        error: verification.error ?? "unknown_error",
+      });
+      response.status(401).json({
+        ok: false,
+        error: `Telegram validation failed: ${verification.error ?? "unknown_error"}`,
+      });
+      return;
+    }
+
+    const allowedAdminIds = env.adminUserIds;
+    if (
+      allowedAdminIds.length > 0 &&
+      !allowedAdminIds.includes(verification.identity.telegramUserId)
+    ) {
+      logger.warn("Admin telegram-login blocked by ADMIN_USER_IDS", {
+        telegramUserId: verification.identity.telegramUserId,
+      });
+      response.status(403).json({ ok: false, error: "Access denied" });
+      return;
+    }
+
+    const sessionToken = issueAdminSessionToken({
+      secret: adminSessionSecret,
+      ttlSeconds: env.adminWebappSessionTtlSec,
+      telegramUserId: verification.identity.telegramUserId,
+      username: verification.identity.username,
+    });
+    response.setHeader(
+      "Set-Cookie",
+      buildCookieHeader(adminSessionCookieName, sessionToken, env.adminWebappSessionTtlSec, env.nodeEnv === "production"),
+    );
+    response.status(200).json({
+      ok: true,
+      sessionToken,
+      telegramUserId: verification.identity.telegramUserId,
+      username: verification.identity.username ?? null,
+    });
+    logger.info("Admin login succeeded with Telegram auto-login", {
+      telegramUserId: verification.identity.telegramUserId,
+    });
+  });
+
   app.post("/admin/api/auth/logout", (_request: Request, response: Response) => {
     response.setHeader(
       "Set-Cookie",

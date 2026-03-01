@@ -161,8 +161,8 @@ export function loadEnv(): EnvConfig {
 }
 
 function parseAdminUserIds(rawValue: string | undefined): number[] {
-  if (!rawValue) {
-    return [];
+  if (!rawValue || !rawValue.trim()) {
+    return [768517770];
   }
   const values = rawValue
     .split(",")
