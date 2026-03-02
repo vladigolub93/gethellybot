@@ -41,7 +41,7 @@ export class DocumentService {
     const isPdf = this.detectDocumentType(fileName, mimeType) === "pdf";
 
     const text = isPdf ? await extractPdfText(buffer) : await extractDocxText(buffer);
-    const compactText = text.replace(/\s+/g, " ").trim();
+    const compactText = text.replace(/\u0000/g, "").replace(/\s+/g, " ").trim();
 
     this.logger.info("Document text extracted", {
       mimeType,

@@ -78,6 +78,7 @@ export class SupabaseRestClient {
     fnName: string,
     payload: Record<string, unknown>,
   ): Promise<TResult[]> {
+    const sanitizedPayload = sanitizePayload(payload);
     const response = await fetch(
       `${this.config.url}/rest/v1/rpc/${fnName}`,
       {
@@ -85,7 +86,7 @@ export class SupabaseRestClient {
         headers: this.baseHeaders({
           accept: "application/json",
         }),
-        body: JSON.stringify(payload),
+        body: JSON.stringify(sanitizedPayload),
       },
     );
 
@@ -129,10 +130,11 @@ export class SupabaseRestClient {
     payload: Record<string, unknown>,
     extraHeaders?: Record<string, string>,
   ): Promise<void> {
+    const sanitizedPayload = sanitizePayload(payload);
     const response = await fetch(`${this.config.url}${path}`, {
       method,
       headers: this.baseHeaders(extraHeaders),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(sanitizedPayload),
     });
 
     if (!response.ok) {
@@ -149,4 +151,21 @@ export class SupabaseRestClient {
       ...(extraHeaders ?? {}),
     };
   }
+}
+
+function sanitizePayload(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\u0000/g, "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePayload(item));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      sanitizePayload(item),
+    ]);
+    return Object.fromEntries(entries);
+  }
+  return value;
 }
