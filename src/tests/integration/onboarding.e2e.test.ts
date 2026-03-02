@@ -92,6 +92,7 @@ function buildRouterHarness(): {
       async classify() {
         return {
           route: "OTHER",
+          conversation_intent: "OTHER",
           meta_type: null,
           control_type: null,
           matching_intent: null,

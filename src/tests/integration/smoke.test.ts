@@ -74,6 +74,7 @@ async function testAlwaysOnRouterIsCalled(): Promise<void> {
       calls += 1;
       return JSON.stringify({
         route: "OTHER",
+        conversation_intent: "OTHER",
         meta_type: null,
         control_type: null,
         matching_intent: null,

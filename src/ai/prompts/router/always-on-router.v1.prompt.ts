@@ -27,6 +27,7 @@ Input JSON fields:
 Output JSON schema:
 {
   "route": "DOC | VOICE | JD_TEXT | RESUME_TEXT | INTERVIEW_ANSWER | META | CONTROL | MATCHING_COMMAND | OFFTOPIC | OTHER",
+  "conversation_intent": "ANSWER | CLARIFY | COMMAND | MATCHING | COMPLAINT | SMALLTALK | OTHER",
   "meta_type": "timing | language | format | privacy | other | null",
   "control_type": "pause | resume | restart | help | stop | null",
   "matching_intent": "run | show | pause | resume | help | null",
@@ -105,6 +106,15 @@ Routing rules:
 
 20) Use user_rag_context to keep replies consistent with known role, state, and previously extracted data.
 
+21) Set conversation_intent for every case:
+- ANSWER: user gives substantive answer to current question.
+- CLARIFY: user asks what exactly to answer or asks to repeat/rephrase the current question.
+- COMMAND: user asks to pause, resume, restart, stop, delete, continue, or skip.
+- MATCHING: user asks to run or show matches.
+- COMPLAINT: user expresses frustration or dissatisfaction.
+- SMALLTALK: user sends casual non-task dialogue.
+- OTHER: everything else.
+
 Reply quality rules:
 - reply must be short and actionable.
 - reply must sound natural and human, not scripted.
@@ -121,6 +131,7 @@ State hints:
 - candidate_mandatory_fields expects practical candidate profile details, location, work mode, and salary.
 
 Output constraints:
+- conversation_intent is required.
 - meta_type must be null unless route is META.
 - control_type must be null unless route is CONTROL.
 - matching_intent must be null unless route is MATCHING_COMMAND.

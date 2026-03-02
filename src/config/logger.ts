@@ -33,6 +33,7 @@ export interface LoggerContext {
   role?: string;
   current_state?: string;
   route?: string;
+  conversation_intent?: string;
   action?: string;
   prompt_name?: string;
   model_name?: string;

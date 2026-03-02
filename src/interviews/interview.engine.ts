@@ -288,6 +288,12 @@ export class InterviewEngine {
       missingElements: answerEvaluation.missing_elements,
     };
 
+    const answerQualityFlag = resolveAnswerQualityFlag(
+      session.state === "interviewing_candidate" ? "candidate" : "manager",
+      answerEvaluation.ai_assisted_likelihood,
+      answerEvaluation.ai_assisted_confidence,
+    );
+
     if (answerEvaluation.should_request_reanswer) {
       const currentReanswerCount = this.stateService.getReanswerRequestCount(
         session.userId,
@@ -308,13 +314,11 @@ export class InterviewEngine {
         await this.qualityFlagsService?.raise({
           entityType: session.state === "interviewing_candidate" ? "candidate" : "job",
           entityId: String(session.userId),
-          flag:
-            session.state === "interviewing_candidate"
-              ? "candidate_ai_assisted_answer_likely"
-              : "manager_ai_assisted_answer_likely",
+          flag: answerQualityFlag,
           details: {
             questionIndex: currentIndex,
             reanswerCount: nextReanswerCount,
+            qualityCategory: answerQualityFlag,
             aiAssistedLikelihood: answerEvaluation.ai_assisted_likelihood,
             aiAssistedConfidence: answerEvaluation.ai_assisted_confidence,
             signals: answerEvaluation.signals,
@@ -337,14 +341,12 @@ export class InterviewEngine {
       await this.qualityFlagsService?.raise({
         entityType: session.state === "interviewing_candidate" ? "candidate" : "job",
         entityId: String(session.userId),
-        flag:
-          session.state === "interviewing_candidate"
-            ? "candidate_ai_assisted_answer_likely"
-            : "manager_ai_assisted_answer_likely",
+        flag: answerQualityFlag,
         details: {
           questionIndex: currentIndex,
           reanswerCount: MAX_REANSWER_REQUESTS_PER_QUESTION,
           acceptedAfterMaxReasks: true,
+          qualityCategory: answerQualityFlag,
           aiAssistedLikelihood: answerEvaluation.ai_assisted_likelihood,
           aiAssistedConfidence: answerEvaluation.ai_assisted_confidence,
           signals: answerEvaluation.signals,
@@ -353,7 +355,14 @@ export class InterviewEngine {
       });
     }
 
-    const updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
+    const explicitNoKnowledge = isExplicitNoKnowledgeAnswer(normalizedAnswer);
+    let updateResult = await this.updateProfileAfterAnswer(session, question, answerRecord);
+    if (answerRecord.qualityWarning || explicitNoKnowledge) {
+      updateResult = {
+        ...updateResult,
+        followUpRequired: false,
+      };
+    }
 
     this.stateService.upsertAnswer(session.userId, answerRecord);
     this.stateService.clearReanswerRequestCount(session.userId, currentIndex);
@@ -514,6 +523,21 @@ export class InterviewEngine {
       questionIndex: nextQuestionIndex,
       questionText: plan.questions[nextQuestionIndex].question,
       isFollowUp: false,
+    };
+  }
+
+  async finishInterviewNow(session: UserSessionState): Promise<Extract<InterviewAnswerResult, { kind: "completed" }>> {
+    if (session.state !== "interviewing_candidate" && session.state !== "interviewing_manager") {
+      throw new Error("Interview is not active.");
+    }
+    this.stateService.clearPendingFollowUp(session.userId);
+    this.stateService.clearCurrentQuestionIndex(session.userId);
+    const completion = await this.completeInterview(session);
+    return {
+      kind: "completed",
+      completedState: completion.completedState,
+      completionMessage: completion.message,
+      followupMessage: completion.followupMessage,
     };
   }
 
@@ -971,6 +995,42 @@ function simplifyFollowUpFocus(focus: string): string {
 }
 
 const MAX_REANSWER_REQUESTS_PER_QUESTION = 2;
+
+function resolveAnswerQualityFlag(
+  role: "candidate" | "manager",
+  likelihood: "low" | "medium" | "high",
+  confidence: number,
+): "candidate_ai_assisted_answer_likely" | "manager_ai_assisted_answer_likely" | "candidate_low_signal_answer" | "manager_low_signal_answer" {
+  const isAiLikely =
+    likelihood === "high" || (likelihood === "medium" && Number.isFinite(confidence) && confidence >= 0.75);
+  if (role === "candidate") {
+    return isAiLikely ? "candidate_ai_assisted_answer_likely" : "candidate_low_signal_answer";
+  }
+  return isAiLikely ? "manager_ai_assisted_answer_likely" : "manager_low_signal_answer";
+}
+
+function isExplicitNoKnowledgeAnswer(answerText: string): boolean {
+  const normalized = answerText.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized === "i do not know" ||
+    normalized === "i don't know" ||
+    normalized === "not sure" ||
+    normalized === "do not remember" ||
+    normalized === "i did not work on this" ||
+    normalized === "i wasn't involved" ||
+    normalized === "не знаю" ||
+    normalized === "не помню" ||
+    normalized === "не работал" ||
+    normalized === "я не работал" ||
+    normalized === "не могу" ||
+    normalized.includes("я был стажер") ||
+    normalized.includes("я був стажер") ||
+    normalized.includes("i was an intern")
+  );
+}
 
 function buildCandidateFallbackOneLiner(analysis: CandidateResumeAnalysisV2): string {
   const direction = analysis.primary_direction === "unknown" ? "technical" : analysis.primary_direction;

@@ -63,10 +63,17 @@ function normalizeEvaluation(
 ): InterviewAnswerEvaluation {
   const shouldRequest = Boolean(raw.should_request_reanswer);
   const shouldAccept = shouldRequest ? false : Boolean(raw.should_accept);
-  const likelihood = normalizeLikelihood(raw.ai_assisted_likelihood);
-  const confidence = clamp01(raw.ai_assisted_confidence);
+  let likelihood = normalizeLikelihood(raw.ai_assisted_likelihood);
+  let confidence = clamp01(raw.ai_assisted_confidence);
   const signals = toStringArray(raw.signals, 8);
   const missingElements = toStringArray(raw.missing_elements, 8);
+
+  if (shouldRequest && likelihood === "low") {
+    likelihood = "medium";
+  }
+  if (shouldRequest && confidence < 0.55) {
+    confidence = 0.55;
+  }
 
   return {
     should_accept: shouldAccept,
@@ -116,11 +123,14 @@ function resolveEvaluatorLanguage(
   preferredLanguage: "en" | "ru" | "uk" | "unknown" | undefined,
   detectedLanguage: "en" | "ru" | "uk" | "other" | undefined,
 ): EvaluatorLanguage {
-  if (preferredLanguage === "ru" || preferredLanguage === "uk") {
-    return preferredLanguage;
+  if (detectedLanguage === "en") {
+    return "en";
   }
   if (detectedLanguage === "ru" || detectedLanguage === "uk") {
     return detectedLanguage;
+  }
+  if (preferredLanguage === "ru" || preferredLanguage === "uk") {
+    return preferredLanguage;
   }
   return "en";
 }

@@ -129,9 +129,11 @@ import { InterviewConfirmationService } from "../confirmations/interview-confirm
 import { AlwaysOnRouterService } from "./always-on-router.service";
 import { CallbackRouter } from "./callback.router";
 import { UserRagContextService } from "./context/user-rag-context.service";
+import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
+  private readonly answerProcessingStatusAt = new Map<number, number>();
 
   constructor(
     private readonly stateService: StateService,
@@ -247,17 +249,19 @@ export class StateRouter {
       telegramUserId: session.userId,
       currentState: session.state,
       route: routed.decision.route,
+      conversationIntent: routed.decision.conversation_intent,
+      action: resolveRouterDispatchAction(routed.decision, session),
     });
 
     switch (update.kind) {
       case "text":
-        await this.dispatchTextRoute(
+        await this.dispatchTextByIntentAction({
           update,
           session,
-          routed.decision,
-          routed.textEnglish ?? update.text,
-          routed.detectedLanguage ?? detectLanguageQuick(update.text),
-        );
+          decision: routed.decision,
+          textEnglish: routed.textEnglish ?? update.text,
+          detectedLanguage: routed.detectedLanguage ?? detectLanguageQuick(update.text),
+        });
         break;
       case "document":
         await this.handleDocumentUpdate(update);
@@ -299,7 +303,8 @@ export class StateRouter {
         role: session.role ?? "unknown",
         current_state: session.state,
         route: routed.decision.route,
-        action: mapRouteToActionLabel(routed.decision.route),
+        action: resolveRouterDispatchAction(routed.decision, session),
+        conversation_intent: routed.decision.conversation_intent,
         prompt_name: "always_on_router_v1",
         model_name: this.llmClient.getModelName(),
         did_call_llm_router: true,
@@ -442,6 +447,7 @@ export class StateRouter {
         return {
           decision: {
             route: "OTHER",
+            conversation_intent: "OTHER",
             meta_type: null,
             control_type: null,
             matching_intent: null,
@@ -480,6 +486,19 @@ export class StateRouter {
         kind: "secondary",
       });
     }
+  }
+
+  private async dispatchTextByIntentAction(input: {
+    update: Extract<NormalizedUpdate, { kind: "text" }>;
+    session: UserSessionState;
+    decision: AlwaysOnRouterDecision;
+    textEnglish: string;
+    detectedLanguage: "en" | "ru" | "uk" | "other";
+  }): Promise<void> {
+    const { update, session, decision, textEnglish, detectedLanguage } = input;
+    void resolveRouterDispatchAction(decision, session);
+    // Global intent→action dispatch layer. Interview safety checks still run inside dispatchTextRoute.
+    await this.dispatchTextRoute(update, session, decision, textEnglish, detectedLanguage);
   }
 
   private async dispatchTextRoute(
@@ -617,6 +636,23 @@ export class StateRouter {
     }
 
     if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
+      if (isEnglishPreferenceSignal(rawText, normalizedEnglishText)) {
+        this.stateService.setPreferredLanguage(session.userId, "en");
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          "Got it, we will continue in English. Please answer the current question, text or voice is fine.",
+          { source: "state_router.system.interview_language_pref" },
+        );
+        return;
+      }
+
+      if (isInterviewFinishCommand(rawText, normalizedEnglishText)) {
+        const completion = await this.interviewEngine.finishInterviewNow(session);
+        await this.handleInterviewCompletedState(session, update.chatId, completion);
+        return;
+      }
+
       if (isInterviewSkipCommand(normalizedEnglishText)) {
         const skipResult = await this.interviewEngine.skipCurrentQuestion(session);
         this.stateService.resetInterviewNoAnswerCounter(session.userId);
@@ -639,29 +675,7 @@ export class StateRouter {
           return;
         }
 
-        this.stateService.transition(session.userId, skipResult.completedState);
-        await this.sendBotMessage(session.userId, session.chatId, skipResult.completionMessage);
-        const needsMandatoryFlow =
-          skipResult.completedState === "candidate_profile_ready" ||
-          skipResult.completedState === "job_profile_ready";
-        if (skipResult.followupMessage && !needsMandatoryFlow) {
-          await this.sendBotMessage(session.userId, session.chatId, skipResult.followupMessage, {
-            kind: "secondary",
-          });
-        }
-        if (skipResult.completedState === "candidate_profile_ready") {
-          const latestSession = this.stateService.getSession(session.userId) ?? session;
-          await this.startCandidateMandatoryFieldsFlow(latestSession, session.chatId, {
-            showIntro: true,
-          });
-        }
-        if (skipResult.completedState === "job_profile_ready") {
-          const latestSession = this.stateService.getSession(session.userId) ?? session;
-          await this.startManagerMandatoryFieldsFlow(latestSession, session.chatId, {
-            showIntro: true,
-            runMatchingAfterComplete: true,
-          });
-        }
+        await this.handleInterviewCompletedState(session, session.chatId, skipResult);
         return;
       }
 
@@ -742,6 +756,11 @@ export class StateRouter {
       if (intentDecision.intent === "CONTROL") {
         if (intentDecision.control_type === "restart") {
           await this.restartFlow(update);
+          return;
+        }
+        if (intentDecision.control_type === "stop") {
+          const completion = await this.interviewEngine.finishInterviewNow(session);
+          await this.handleInterviewCompletedState(session, update.chatId, completion);
           return;
         }
         await this.sendRouterReplyWithLoopGuard(
@@ -1067,6 +1086,42 @@ export class StateRouter {
     await this.sendRouterReplyWithLoopGuard(session, update.chatId, decision.reply);
   }
 
+  private async handleInterviewCompletedState(
+    session: UserSessionState,
+    chatId: number,
+    result: Extract<Awaited<ReturnType<InterviewEngine["skipCurrentQuestion"]>>, { kind: "completed" }>,
+  ): Promise<void> {
+    this.stateService.transition(session.userId, result.completedState);
+    this.stateService.resetAnswersSinceConfirm(session.userId);
+    await this.sendBotMessage(session.userId, chatId, result.completionMessage, {
+      source: "state_router.system.interview_completed",
+    });
+
+    const needsMandatoryFlow =
+      result.completedState === "candidate_profile_ready" ||
+      result.completedState === "job_profile_ready";
+    if (result.followupMessage && !needsMandatoryFlow) {
+      await this.sendBotMessage(session.userId, chatId, result.followupMessage, {
+        kind: "secondary",
+        source: "state_router.system.interview_completed_followup",
+      });
+    }
+    if (result.completedState === "candidate_profile_ready") {
+      const latestSession = this.stateService.getSession(session.userId) ?? session;
+      await this.startCandidateMandatoryFieldsFlow(latestSession, chatId, {
+        showIntro: true,
+      });
+      return;
+    }
+    if (result.completedState === "job_profile_ready") {
+      const latestSession = this.stateService.getSession(session.userId) ?? session;
+      await this.startManagerMandatoryFieldsFlow(latestSession, chatId, {
+        showIntro: true,
+        runMatchingAfterComplete: true,
+      });
+    }
+  }
+
   private async handleMatchingIntentRoute(input: {
     session: UserSessionState;
     chatId: number;
@@ -1267,6 +1322,7 @@ export class StateRouter {
     if (update.kind === "document") {
       return {
         route: "DOC",
+        conversation_intent: "OTHER",
         meta_type: null,
         control_type: null,
         matching_intent: null,
@@ -1278,6 +1334,7 @@ export class StateRouter {
     if (update.kind === "voice") {
       return {
         route: "VOICE",
+        conversation_intent: "OTHER",
         meta_type: null,
         control_type: null,
         matching_intent: null,
@@ -1289,6 +1346,7 @@ export class StateRouter {
     if (update.kind === "text" && isStartCommand(update.text.trim())) {
       return {
         route: "CONTROL",
+        conversation_intent: "COMMAND",
         meta_type: null,
         control_type: "restart",
         matching_intent: null,
@@ -1451,11 +1509,9 @@ export class StateRouter {
   ): Promise<void> {
     const trimmed = reply.trim();
     const previous = session.lastBotMessage?.trim();
-    const isInterviewState =
-      session.state === "interviewing_candidate" || session.state === "interviewing_manager";
     const finalReply =
-      trimmed && previous && trimmed === previous && !isInterviewState
-        ? getNonRepeatingFallbackByState(session.state)
+      trimmed && previous && trimmed === previous
+        ? getSecondaryFallbackByState(session.state)
         : trimmed || "Please continue with your hiring flow.";
     await this.sendBotMessage(session.userId, chatId, finalReply);
   }
@@ -1572,7 +1628,7 @@ export class StateRouter {
       const replacement = getNonRepeatingFallbackByState(stateForFallback);
       sanitizedText =
         replacement.trim() === sanitizedText.trim()
-          ? "Please send the document as a PDF or DOCX, or paste the full text here."
+          ? getSecondaryFallbackByState(stateForFallback)
           : replacement;
       this.logger.warn("repeat_loop_prevented", {
         telegram_user_id: userId,
@@ -2505,6 +2561,12 @@ export class StateRouter {
     }
 
     const stillProcessingTimer = setTimeout(() => {
+      const nowMs = Date.now();
+      const lastSentMs = this.answerProcessingStatusAt.get(session.userId) ?? 0;
+      if (nowMs - lastSentMs < 30_000) {
+        return;
+      }
+      this.answerProcessingStatusAt.set(session.userId, nowMs);
       void this.sendBotMessage(
         session.userId,
         session.chatId,
@@ -2523,7 +2585,9 @@ export class StateRouter {
       const result = await this.interviewEngine.submitAnswer(session, normalizedInput);
 
       if (result.kind === "reanswer_required") {
-        await this.sendBotMessage(session.userId, session.chatId, result.message);
+        await this.sendBotMessage(session.userId, session.chatId, result.message, {
+          source: "state_router.system.interview_reanswer",
+        });
         return;
       }
 
@@ -3314,7 +3378,46 @@ function resolveMissingQuestionIndexFromPlan(session: UserSessionState): number 
 
 function isInterviewSkipCommand(textEnglish: string): boolean {
   const normalized = textEnglish.trim().toLowerCase();
-  return normalized === "skip" || normalized === "skip question" || normalized === "pass";
+  return (
+    normalized === "skip" ||
+    normalized === "skip question" ||
+    normalized === "skip this question" ||
+    normalized === "pass" ||
+    normalized === "pass question" ||
+    normalized === "пропустить" ||
+    normalized === "пропустить вопрос" ||
+    normalized === "пропусти вопрос" ||
+    normalized === "пропустить этот вопрос" ||
+    normalized === "пропусти этот вопрос" ||
+    normalized === "пропустити" ||
+    normalized === "пропустити питання" ||
+    normalized === "pass this one"
+  );
+}
+
+function isInterviewFinishCommand(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase().replace(/\s+/g, " ");
+  const english = normalizedEnglishText.trim().toLowerCase().replace(/\s+/g, " ");
+  return (
+    english.includes("finish interview") ||
+    english.includes("end interview") ||
+    english.includes("stop interview") ||
+    english.includes("i am done with interview") ||
+    english.includes("i'm done with interview") ||
+    english.includes("finish all questions") ||
+    english.includes("skip all questions") ||
+    english.includes("done, find roles") ||
+    english.includes("stop questions") ||
+    raw.includes("я закончил интервью") ||
+    raw.includes("я завершил интервью") ||
+    raw.includes("закончим интервью") ||
+    raw.includes("заверши интервью") ||
+    raw.includes("останови интервью") ||
+    raw.includes("все вопросы пропусти") ||
+    raw.includes("пропусти все вопросы") ||
+    raw.includes("закінчити інтерв'ю") ||
+    raw.includes("заверши співбесіду")
+  );
 }
 
 function estimateAnswerQuality(answerText: string): "low" | "medium" | "high" {
@@ -3359,34 +3462,6 @@ function matchingHelpMessage(): string {
     "pause matching",
     "resume matching",
   ].join("\n");
-}
-
-function mapRouteToActionLabel(route: AlwaysOnRouterDecision["route"]): string {
-  if (route === "DOC") {
-    return "process_document";
-  }
-  if (route === "VOICE") {
-    return "transcribe_voice";
-  }
-  if (route === "JD_TEXT" || route === "RESUME_TEXT") {
-    return "process_pasted_text";
-  }
-  if (route === "INTERVIEW_ANSWER") {
-    return "process_interview_answer";
-  }
-  if (route === "MATCHING_COMMAND") {
-    return "matching_command";
-  }
-  if (route === "CONTROL") {
-    return "control";
-  }
-  if (route === "META") {
-    return "meta_reply";
-  }
-  if (route === "OFFTOPIC") {
-    return "redirect_offtopic";
-  }
-  return "generic_reply";
 }
 
 function didRouteLikelyCallTaskPrompt(route: AlwaysOnRouterDecision["route"]): boolean {
@@ -3632,6 +3707,20 @@ function isRoleLearnHowItWorksText(rawText: string, normalizedEnglishText: strin
     raw.includes("learn how this works") ||
     raw.includes("как это работает") ||
     raw.includes("як це працює")
+  );
+}
+
+function isEnglishPreferenceSignal(rawText: string, normalizedEnglishText: string): boolean {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  return (
+    english.includes("i don't understand russian") ||
+    english.includes("i do not understand russian") ||
+    english.includes("english please") ||
+    english.includes("please use english") ||
+    english.includes("speak english") ||
+    raw.includes("по английски") ||
+    raw.includes("английский пожалуйста")
   );
 }
 
@@ -3968,6 +4057,25 @@ function getNonRepeatingFallbackByState(state: UserSessionState["state"]): strin
     return "Please tell me your role by text or voice, candidate or hiring.";
   }
   return "Please continue with the current step.";
+}
+
+function getSecondaryFallbackByState(state: UserSessionState["state"]): string {
+  if (state === "waiting_resume") {
+    return "You can also forward a resume file from another chat, PDF or DOCX is supported.";
+  }
+  if (state === "waiting_job") {
+    return "You can also forward a job description file from another chat, PDF or DOCX is supported.";
+  }
+  if (state === "extracting_resume" || state === "extracting_job") {
+    return "Processing is still running. I will post the next step as soon as it is ready.";
+  }
+  if (state === "interviewing_candidate" || state === "interviewing_manager") {
+    return "If you want to move on, type skip. You can also answer by voice.";
+  }
+  if (state === "role_selection") {
+    return "Please choose role by text or button, candidate or hiring.";
+  }
+  return "Please continue with the next step.";
 }
 
 function resolveMessageSource(

@@ -59,7 +59,7 @@ export class AlwaysOnRouterService {
         maxTokens: 280,
         promptName: "always_on_router_v1",
         schemaHint:
-          "Always-on router JSON with route, meta_type, control_type, matching_intent, reply, should_advance, should_process_text_as_document.",
+          "Always-on router JSON with route, conversation_intent, meta_type, control_type, matching_intent, reply, should_advance, should_process_text_as_document.",
       });
       if (!safe.ok) {
         throw new Error(`always_on_router_v1_failed:${safe.error_code}`);
@@ -103,6 +103,7 @@ export class AlwaysOnRouterService {
 function parseAlwaysOnRouterDecision(raw: string): AlwaysOnRouterDecision {
   const parsed = parseJsonObject(raw);
   const route = normalizeRoute(parsed.route);
+  const conversationIntent = normalizeConversationIntent(parsed.conversation_intent, route);
   const metaType = normalizeMetaType(parsed.meta_type, route);
   const controlType = normalizeControlType(parsed.control_type, route);
   const matchingIntent = normalizeMatchingIntent(parsed.matching_intent, route);
@@ -124,6 +125,7 @@ function parseAlwaysOnRouterDecision(raw: string): AlwaysOnRouterDecision {
 
   return {
     route,
+    conversation_intent: conversationIntent,
     meta_type: metaType,
     control_type: controlType,
     matching_intent: matchingIntent,
@@ -160,6 +162,38 @@ function normalizeRoute(value: unknown): AlwaysOnRouterDecision["route"] {
     return normalized;
   }
   throw new Error("always-on router output is invalid: route is not supported");
+}
+
+function normalizeConversationIntent(
+  value: unknown,
+  route: AlwaysOnRouterDecision["route"],
+): AlwaysOnRouterDecision["conversation_intent"] {
+  const normalized = toText(value).toUpperCase();
+  if (
+    normalized === "ANSWER" ||
+    normalized === "CLARIFY" ||
+    normalized === "COMMAND" ||
+    normalized === "MATCHING" ||
+    normalized === "COMPLAINT" ||
+    normalized === "SMALLTALK" ||
+    normalized === "OTHER"
+  ) {
+    return normalized;
+  }
+
+  if (route === "INTERVIEW_ANSWER") {
+    return "ANSWER";
+  }
+  if (route === "MATCHING_COMMAND") {
+    return "MATCHING";
+  }
+  if (route === "CONTROL") {
+    return "COMMAND";
+  }
+  if (route === "META") {
+    return "CLARIFY";
+  }
+  return "OTHER";
 }
 
 function normalizeMetaType(

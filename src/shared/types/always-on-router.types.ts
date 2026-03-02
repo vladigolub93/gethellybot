@@ -10,12 +10,22 @@ export type AlwaysOnRouterRoute =
   | "OFFTOPIC"
   | "OTHER";
 
+export type AlwaysOnConversationIntent =
+  | "ANSWER"
+  | "CLARIFY"
+  | "COMMAND"
+  | "MATCHING"
+  | "COMPLAINT"
+  | "SMALLTALK"
+  | "OTHER";
+
 export type AlwaysOnMetaType = "timing" | "language" | "format" | "privacy" | "other" | null;
 export type AlwaysOnControlType = "pause" | "resume" | "restart" | "help" | "stop" | null;
 export type AlwaysOnMatchingIntent = "run" | "show" | "pause" | "resume" | "help" | null;
 
 export interface AlwaysOnRouterDecision {
   route: AlwaysOnRouterRoute;
+  conversation_intent: AlwaysOnConversationIntent;
   meta_type: AlwaysOnMetaType;
   control_type: AlwaysOnControlType;
   matching_intent: AlwaysOnMatchingIntent;
