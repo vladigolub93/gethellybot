@@ -9,11 +9,14 @@ import { MatchingDecisionV1 } from "../shared/types/matching-decision.types";
 
 export type CandidateDecision = "pending" | "applied" | "rejected";
 export type ManagerDecision = "pending" | "accepted" | "rejected";
+/** Stage 10: unified statuses for matching + consent flow. */
 export type MatchStatus =
-  | "suggested"
-  | "candidate_pending"
-  | "manager_pending"
+  | "proposed"
+  | "candidate_applied"
+  | "candidate_rejected"
   | "manager_accepted"
+  | "manager_rejected"
+  | "contact_pending"
   | "contact_shared"
   | "closed";
 

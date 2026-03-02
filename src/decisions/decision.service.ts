@@ -140,17 +140,14 @@ export class DecisionService {
   }
 
   private async ensureCandidateCanActOnMatch(match: MatchRecord): Promise<void> {
-    if (match.status === "closed" || match.status === "contact_shared") {
-      throw new Error("This match is already closed.");
+    if (match.status !== "proposed") {
+      throw new Error("This match is no longer available for this action.");
     }
   }
 
   private async ensureManagerCanActOnMatch(match: MatchRecord): Promise<void> {
-    if (match.status === "closed" || match.status === "contact_shared") {
-      throw new Error("This match is already closed.");
-    }
-    if (match.candidateDecision !== "applied") {
-      throw new Error("Candidate has not applied for this match.");
+    if (match.status !== "candidate_applied") {
+      throw new Error("Candidate has not applied for this match, or it is no longer available.");
     }
   }
 }

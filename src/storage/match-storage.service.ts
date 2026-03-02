@@ -45,7 +45,7 @@ export class MatchStorageService {
       explanation: candidate.explanation,
       candidateDecision: "pending" as const,
       managerDecision: "pending" as const,
-      status: "suggested" as const,
+      status: "proposed" as const,
       createdAt,
       updatedAt: createdAt,
     }));
@@ -72,13 +72,13 @@ export class MatchStorageService {
     if (decision === "applied") {
       return this.updateDecision(matchId, {
         candidateDecision: "applied",
-        status: "manager_pending",
+        status: "candidate_applied",
       });
     }
 
     return this.updateDecision(matchId, {
       candidateDecision: "rejected",
-      status: "closed",
+      status: "candidate_rejected",
     });
   }
 
@@ -95,8 +95,12 @@ export class MatchStorageService {
 
     return this.updateDecision(matchId, {
       managerDecision: "rejected",
-      status: "closed",
+      status: "manager_rejected",
     });
+  }
+
+  async setContactPending(matchId: string): Promise<MatchRecord | null> {
+    return this.updateDecision(matchId, { status: "contact_pending" });
   }
 
   async markContactShared(matchId: string): Promise<MatchRecord | null> {

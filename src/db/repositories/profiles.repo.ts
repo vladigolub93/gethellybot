@@ -1,6 +1,11 @@
 import { Logger } from "../../config/logger";
 import { CandidateProfile, JobProfile } from "../../shared/types/domain.types";
-import { normalizeCandidateProfile, normalizeJobProfile } from "../../profiles/profile.schemas";
+import {
+  CandidateProfileV2,
+  JobProfileV2 as CanonicalJobProfileV2,
+  normalizeCandidateProfile,
+  normalizeJobProfile,
+} from "../../profiles/profile.schemas";
 import {
   CandidateResumeAnalysisV2,
   CandidateResumeAnalysisV2Result,
@@ -8,8 +13,20 @@ import {
 import { CandidateInterviewPlanV2 } from "../../shared/types/interview-plan.types";
 import { CandidateTechnicalSummaryV1 } from "../../shared/types/candidate-summary.types";
 import { SupabaseRestClient } from "../supabase.client";
+import {
+  CandidatePrescreenAnswerState,
+  CandidatePrescreenFactState,
+  CandidatePrescreenQuestionState,
+  CandidatePrescreenVersion,
+  JobPrescreenAnswerState,
+  JobPrescreenFactState,
+  JobPrescreenQuestionState,
+  JobPrescreenVersion,
+} from "../../shared/types/state.types";
 
 const PROFILES_TABLE = "profiles";
+const CANDIDATE_PROFILES_TABLE = "candidate_profiles";
+const JOB_PROFILES_TABLE = "job_profiles";
 const SEARCH_CANDIDATES_RPC = "search_candidate_profiles";
 
 interface ProfileRow {
@@ -25,6 +42,16 @@ interface ProfileRow {
   source_text_english?: unknown;
   telegram_file_id?: unknown;
   last_confirmation_one_liner?: unknown;
+}
+
+interface CanonicalProfileRow {
+  telegram_user_id: number;
+  profile_json: unknown;
+  profile_text: string;
+  embedding?: unknown;
+  embedding_metadata?: unknown;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface CandidateVectorSearchRow {
@@ -312,6 +339,204 @@ export class ProfilesRepository {
       .slice(0, Math.max(1, limit));
   }
 
+  async getCanonicalCandidateProfileV2(
+    telegramUserId: number,
+  ): Promise<{ profileJson: CandidateProfileV2 | null; profileText: string }> {
+    if (!this.supabaseClient) {
+      return { profileJson: null, profileText: "" };
+    }
+
+    const row = await this.supabaseClient.selectOne<CanonicalProfileRow>(
+      CANDIDATE_PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+      },
+      "telegram_user_id,profile_json,profile_text",
+    );
+    if (!row || !isRecord(row.profile_json)) {
+      return { profileJson: null, profileText: "" };
+    }
+    return {
+      profileJson: row.profile_json as unknown as CandidateProfileV2,
+      profileText: toText(row.profile_text),
+    };
+  }
+
+  async hasCanonicalCandidateVector(telegramUserId: number): Promise<boolean> {
+    if (!this.supabaseClient) {
+      return true;
+    }
+    const row = await this.supabaseClient.selectOne<CanonicalProfileRow>(
+      CANDIDATE_PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+      },
+      "telegram_user_id,embedding",
+    );
+    return row?.embedding !== null && typeof row?.embedding !== "undefined";
+  }
+
+  async getCanonicalJobProfileV2(
+    telegramUserId: number,
+  ): Promise<{ profileJson: CanonicalJobProfileV2 | null; profileText: string }> {
+    if (!this.supabaseClient) {
+      return { profileJson: null, profileText: "" };
+    }
+
+    const row = await this.supabaseClient.selectOne<CanonicalProfileRow>(
+      JOB_PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+      },
+      "telegram_user_id,profile_json,profile_text",
+    );
+    if (!row || !isRecord(row.profile_json)) {
+      return { profileJson: null, profileText: "" };
+    }
+    return {
+      profileJson: row.profile_json as unknown as CanonicalJobProfileV2,
+      profileText: toText(row.profile_text),
+    };
+  }
+
+  async hasCanonicalJobVector(telegramUserId: number): Promise<boolean> {
+    if (!this.supabaseClient) {
+      return true;
+    }
+    const row = await this.supabaseClient.selectOne<CanonicalProfileRow>(
+      JOB_PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+      },
+      "telegram_user_id,embedding",
+    );
+    return row?.embedding !== null && typeof row?.embedding !== "undefined";
+  }
+
+  async upsertCanonicalCandidateProfileV2(input: {
+    telegramUserId: number;
+    profileJson: CandidateProfileV2;
+    profileText: string;
+    embedding?: number[];
+    embeddingMetadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    await this.supabaseClient.upsert(
+      CANDIDATE_PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        profile_json: input.profileJson,
+        profile_text: input.profileText,
+        embedding: vectorLiteral(input.embedding),
+        embedding_metadata: input.embeddingMetadata ?? {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id" },
+    );
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,raw_resume_analysis_json,technical_summary_json,profile_status,source_type,source_text_original,source_text_english,telegram_file_id,last_confirmation_one_liner",
+    );
+    const existingProfile = isRecord(existing?.profile_json)
+      ? (existing.profile_json as Record<string, unknown>)
+      : {};
+    const mergedProfile = {
+      ...existingProfile,
+      candidate_profile_v2: input.profileJson,
+      profile_text: input.profileText,
+      profile_text_lang: "en",
+    };
+
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+        profile_json: mergedProfile,
+        searchable_text: input.profileText,
+        embedding: vectorLiteral(input.embedding),
+        raw_resume_analysis_json: existing?.raw_resume_analysis_json ?? null,
+        technical_summary_json: existing?.technical_summary_json ?? null,
+        profile_status: existing?.profile_status ?? "analysis_ready",
+        source_type: existing?.source_type ?? null,
+        source_text_original: existing?.source_text_original ?? null,
+        source_text_english: existing?.source_text_english ?? null,
+        telegram_file_id: existing?.telegram_file_id ?? null,
+        last_confirmation_one_liner: existing?.last_confirmation_one_liner ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
+  }
+
+  async upsertCanonicalJobProfileV2(input: {
+    telegramUserId: number;
+    profileJson: CanonicalJobProfileV2;
+    profileText: string;
+    embedding?: number[];
+    embeddingMetadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    await this.supabaseClient.upsert(
+      JOB_PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        profile_json: input.profileJson,
+        profile_text: input.profileText,
+        embedding: vectorLiteral(input.embedding),
+        embedding_metadata: input.embeddingMetadata ?? {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id" },
+    );
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "job",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,profile_status,source_type,source_text_original,source_text_english,telegram_file_id,last_confirmation_one_liner",
+    );
+    const mergedProfile = {
+      ...(isRecord(existing?.profile_json)
+        ? (existing.profile_json as Record<string, unknown>)
+        : {}),
+      job_profile_v2: input.profileJson,
+      profile_text: input.profileText,
+      profile_text_lang: "en",
+    };
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "job",
+        profile_json: mergedProfile,
+        searchable_text: input.profileText,
+        embedding: vectorLiteral(input.embedding),
+        profile_status: existing?.profile_status ?? "analysis_ready",
+        source_type: existing?.source_type ?? null,
+        source_text_original: existing?.source_text_original ?? null,
+        source_text_english: existing?.source_text_english ?? null,
+        telegram_file_id: existing?.telegram_file_id ?? null,
+        last_confirmation_one_liner: existing?.last_confirmation_one_liner ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
+  }
+
   async getCandidateMatchSource(telegramUserId: number): Promise<CandidateMatchSource | null> {
     if (!this.supabaseClient) {
       return null;
@@ -460,6 +685,191 @@ export class ProfilesRepository {
       hasTextOriginal: Boolean(input.sourceTextOriginal?.trim()),
       hasTextEnglish: Boolean(input.sourceTextEnglish?.trim()),
     });
+  }
+
+  async getCandidatePrescreenVersion(
+    telegramUserId: number,
+  ): Promise<CandidatePrescreenVersion | null> {
+    if (!this.supabaseClient) {
+      return null;
+    }
+
+    const row = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+        kind: "candidate",
+      },
+      "telegram_user_id,kind,profile_json",
+    );
+    if (!row || !isRecord(row.profile_json)) {
+      return null;
+    }
+
+    const direct = toText(row.profile_json.prescreen_version).toLowerCase();
+    if (direct === "v1" || direct === "v2") {
+      return direct;
+    }
+
+    const nested = isRecord(row.profile_json.prescreen_v2)
+      ? toText(row.profile_json.prescreen_v2.version).toLowerCase()
+      : "";
+    if (nested === "v1" || nested === "v2") {
+      return nested;
+    }
+
+    return null;
+  }
+
+  async saveCandidatePrescreenSnapshot(input: {
+    telegramUserId: number;
+    prescreenVersion: CandidatePrescreenVersion;
+    snapshot: {
+      language?: string;
+      claims?: unknown;
+      questions?: CandidatePrescreenQuestionState[];
+      answers?: CandidatePrescreenAnswerState[];
+      facts?: CandidatePrescreenFactState[];
+      current_question_index?: number;
+    };
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,raw_resume_analysis_json,technical_summary_json,profile_status,source_type,source_text_original,source_text_english,telegram_file_id,last_confirmation_one_liner",
+    );
+
+    const existingProfile = isRecord(existing?.profile_json)
+      ? (existing.profile_json as Record<string, unknown>)
+      : {};
+    const mergedProfile = {
+      ...existingProfile,
+      prescreen_version: input.prescreenVersion,
+      prescreen_v2: {
+        version: input.prescreenVersion,
+        ...input.snapshot,
+        updated_at: new Date().toISOString(),
+      },
+    };
+
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "candidate",
+        profile_json: mergedProfile,
+        searchable_text: existing?.searchable_text ?? "",
+        raw_resume_analysis_json: existing?.raw_resume_analysis_json ?? null,
+        technical_summary_json: existing?.technical_summary_json ?? null,
+        profile_status: existing?.profile_status ?? "analysis_ready",
+        source_type: existing?.source_type ?? null,
+        source_text_original: existing?.source_text_original ?? null,
+        source_text_english: existing?.source_text_english ?? null,
+        telegram_file_id: existing?.telegram_file_id ?? null,
+        last_confirmation_one_liner: existing?.last_confirmation_one_liner ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
+  }
+
+  async getJobPrescreenVersion(
+    telegramUserId: number,
+  ): Promise<JobPrescreenVersion | null> {
+    if (!this.supabaseClient) {
+      return null;
+    }
+
+    const row = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: telegramUserId,
+        kind: "job",
+      },
+      "telegram_user_id,kind,profile_json",
+    );
+    if (!row || !isRecord(row.profile_json)) {
+      return null;
+    }
+
+    const direct = toText(row.profile_json.prescreen_version).toLowerCase();
+    if (direct === "v1" || direct === "v2") {
+      return direct;
+    }
+
+    const nested = isRecord(row.profile_json.prescreen_v2)
+      ? toText(row.profile_json.prescreen_v2.version).toLowerCase()
+      : "";
+    if (nested === "v1" || nested === "v2") {
+      return nested;
+    }
+
+    return null;
+  }
+
+  async saveJobPrescreenSnapshot(input: {
+    telegramUserId: number;
+    prescreenVersion: JobPrescreenVersion;
+    snapshot: {
+      language?: string;
+      claims?: unknown;
+      questions?: JobPrescreenQuestionState[];
+      answers?: JobPrescreenAnswerState[];
+      facts?: JobPrescreenFactState[];
+      current_question_index?: number;
+    };
+  }): Promise<void> {
+    if (!this.supabaseClient) {
+      return;
+    }
+
+    const existing = await this.supabaseClient.selectOne<ProfileRow>(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "job",
+      },
+      "telegram_user_id,kind,profile_json,searchable_text,technical_summary_json,profile_status,source_type,source_text_original,source_text_english,telegram_file_id,last_confirmation_one_liner",
+    );
+
+    const existingProfile = isRecord(existing?.profile_json)
+      ? (existing.profile_json as Record<string, unknown>)
+      : {};
+    const mergedProfile = {
+      ...existingProfile,
+      prescreen_version: input.prescreenVersion,
+      prescreen_v2: {
+        version: input.prescreenVersion,
+        ...input.snapshot,
+        updated_at: new Date().toISOString(),
+      },
+    };
+
+    await this.supabaseClient.upsert(
+      PROFILES_TABLE,
+      {
+        telegram_user_id: input.telegramUserId,
+        kind: "job",
+        profile_json: mergedProfile,
+        searchable_text: existing?.searchable_text ?? "",
+        technical_summary_json: existing?.technical_summary_json ?? null,
+        profile_status: existing?.profile_status ?? "analysis_ready",
+        source_type: existing?.source_type ?? null,
+        source_text_original: existing?.source_text_original ?? null,
+        source_text_english: existing?.source_text_english ?? null,
+        telegram_file_id: existing?.telegram_file_id ?? null,
+        last_confirmation_one_liner: existing?.last_confirmation_one_liner ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "telegram_user_id,kind" },
+    );
   }
 
   async saveLastConfirmationOneLiner(input: {

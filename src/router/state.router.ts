@@ -1,5 +1,8 @@
+import { recordFailure, recordLastRoute } from "../admin/admin-debug.store";
+import { safeNotifyAdmin } from "../admin/admin-notifier";
 import { logContext, Logger } from "../config/logger";
 import { createHash } from "node:crypto";
+import { RouterV2Decision, RouterV2Service } from "../ai/router.v2";
 import { ContactExchangeService } from "../decisions/contact-exchange.service";
 import { DecisionService } from "../decisions/decision.service";
 import { LlmClient } from "../ai/llm.client";
@@ -19,6 +22,8 @@ import {
 } from "../interviews/interview-bootstrap.guard";
 import { InterviewEngine } from "../interviews/interview.engine";
 import { InterviewIntentRouterService } from "../interviews/interview-intent-router.service";
+import { CandidatePrescreenEngine } from "../interviews/prescreen/candidate-prescreen.engine";
+import { JobPrescreenEngine } from "../interviews/prescreen/job-prescreen.engine";
 import { CandidateNameExtractorService } from "../interviews/candidate-name-extractor.service";
 import { JobMandatoryFieldsService } from "../jobs/job-mandatory-fields.service";
 import { parseBudget } from "../jobs/parsers/budget.parser";
@@ -33,6 +38,8 @@ import {
   CandidateMandatoryStep,
   CandidateSalaryCurrency,
   CandidateSalaryPeriod,
+  CandidatePrescreenVersion,
+  JobPrescreenVersion,
   CandidateWorkMode,
   JobBudgetCurrency,
   JobBudgetPeriod,
@@ -123,12 +130,18 @@ import {
   transcriptionFailedMessage,
   transcribingVoiceMessage,
   voiceTooLongMessage,
+  dialogueLlmFallbackMessage,
+  dialogueSkipAndMoveOnMessage,
 } from "../telegram/ui/messages";
 import { maybeReact } from "../telegram/reactions/reaction.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 import { AlwaysOnRouterService } from "./always-on-router.service";
 import { CallbackRouter } from "./callback.router";
 import { UserRagContextService } from "./context/user-rag-context.service";
+import type { DialogueOrchestrator } from "./dialogue/dialogue.orchestrator";
+import type { LanguageService } from "./dialogue/language.service";
+import type { ReplyComposerV2 } from "./dialogue/reply.composer";
+import type { DialogueOrchestratorV2 } from "../dialogue/dialogue.orchestrator";
 import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
 
 export class StateRouter {
@@ -160,13 +173,25 @@ export class StateRouter {
     private readonly jobsRepository: JobsRepository,
     private readonly profilesRepository: ProfilesRepository,
     private readonly llmClient: LlmClient,
+    private readonly routerV2Service: RouterV2Service,
     private readonly alwaysOnRouterService: AlwaysOnRouterService,
     private readonly interviewIntentRouterService: InterviewIntentRouterService,
     private readonly normalizationService: NormalizationService,
     private readonly interviewConfirmationService: InterviewConfirmationService,
     private readonly userRagContextService: UserRagContextService,
     private readonly candidateNameExtractorService: CandidateNameExtractorService,
+    private readonly prescreenV2Enabled: boolean,
+    private readonly jobPrescreenV2Enabled: boolean,
+    private readonly candidatePrescreenEngine: CandidatePrescreenEngine,
+    private readonly jobPrescreenEngine: JobPrescreenEngine,
     private readonly logger: Logger,
+    private readonly conversationStateV2Enabled: boolean,
+    private readonly dialogueOrchestratorV2: DialogueOrchestratorV2 | undefined,
+    private readonly dialogueV2Enabled: boolean,
+    private readonly replyComposerV2?: ReplyComposerV2,
+    private readonly languageService?: LanguageService,
+    private readonly dialogueOrchestrator?: DialogueOrchestrator,
+    private readonly adminUserIds?: number[],
   ) {
     this.callbackRouter = new CallbackRouter(
       this.stateService,
@@ -253,15 +278,150 @@ export class StateRouter {
       action: resolveRouterDispatchAction(routed.decision, session),
     });
 
+    if (update.kind === "text") {
+      this.stateService.setTurnContext(update.userId, {
+        lastUserMessage: update.text,
+        language:
+          routed.detectedLanguage === "ru" || routed.detectedLanguage === "uk"
+            ? routed.detectedLanguage
+            : "en",
+      });
+    }
+
     switch (update.kind) {
       case "text":
-        await this.dispatchTextByIntentAction({
-          update,
-          session,
-          decision: routed.decision,
-          textEnglish: routed.textEnglish ?? update.text,
-          detectedLanguage: routed.detectedLanguage ?? detectLanguageQuick(update.text),
-        });
+        {
+          if (this.adminUserIds?.length && this.adminUserIds.includes(session.userId)) {
+            const trimmed = update.text.trim();
+            const match = trimmed.match(/^\/(debug_\w+)(?:\s+(\d+))?$/);
+            if (match) {
+              const cmd = match[1] as
+                | "debug_chat_id"
+                | "debug_state"
+                | "debug_profile"
+                | "debug_last_route"
+                | "debug_matches"
+                | "debug_active_job"
+                | "debug_failures";
+              const optionalUserId = match[2] ? parseInt(match[2], 10) : undefined;
+              await this.handleAdminDebugCommand(update, session, cmd, optionalUserId);
+              break;
+            }
+          }
+          const lang =
+            routed.detectedLanguage === "ru" || routed.detectedLanguage === "uk"
+              ? routed.detectedLanguage
+              : "en";
+          if (
+            this.conversationStateV2Enabled &&
+            this.dialogueOrchestratorV2 &&
+            isPrescreenOrOnboardingState(session)
+          ) {
+            const ctx = {
+              userId: update.userId,
+              chatId: update.chatId,
+              session,
+              userMessage: update.text,
+              language: lang as "en" | "ru" | "uk",
+            };
+            let result: Awaited<ReturnType<NonNullable<typeof this.dialogueOrchestratorV2>["handleUserMessage"]>>;
+            try {
+              result = await this.dialogueOrchestratorV2.handleUserMessage(ctx);
+            } catch (err) {
+              recordFailure(session.userId, "llm_fail", {
+                source: "dialogue_orchestrator",
+                detail: err instanceof Error ? err.message : String(err),
+              });
+              safeNotifyAdmin("error", "Dialogue orchestrator failed", undefined, {
+                userId: session.userId,
+                chatId: session.chatId,
+                state: session.state,
+                phase: session.dialoguePhase,
+                updateId: update.updateId,
+                errorStack: err instanceof Error ? err.stack : undefined,
+              });
+              await this.sendBotMessage(
+                session.userId,
+                update.chatId,
+                dialogueLlmFallbackMessage(lang as "en" | "ru" | "uk"),
+                { source: "state_router.dialogue_v2.fallback" },
+              );
+              break;
+            }
+            const replyHash = hashMessageText(result.replyText);
+            if (session.lastBotMessageHash && replyHash === session.lastBotMessageHash) {
+              result = this.dialogueOrchestratorV2.buildRepeatLoopReply(lang);
+            }
+            const updated = { ...session, ...result.nextStatePatch };
+            this.stateService.setSession(updated);
+            this.logger.info("dialogue.orchestrator_v2.result", {
+              userId: update.userId,
+              intent: result.intent,
+              phaseTransition: result.phaseTransition,
+              questionsAskedCount: result.questionsAskedCount,
+              promptName: result.promptName,
+              parseSuccess: result.parseSuccess,
+              matchCardsCount: result.matchCards?.length ?? 0,
+            });
+            if (result.matchAction) {
+              try {
+                await this.callbackRouter.executeMatchAction(
+                  update.userId,
+                  update.chatId,
+                  result.matchAction,
+                );
+                await this.sendBotMessage(update.userId, update.chatId, result.replyText, {
+                  source: "state_router.dialogue_v2.match_action",
+                });
+              } catch (err) {
+                this.logger.warn("dialogue_v2.match_action failed", {
+                  userId: update.userId,
+                  matchAction: result.matchAction,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                await this.sendBotMessage(update.userId, update.chatId, result.replyText, {
+                  source: "state_router.dialogue_v2.match_action_fallback",
+                });
+              }
+            } else if (result.matchCards && result.matchCards.length > 0) {
+              await this.sendBotMessage(update.userId, update.chatId, result.replyText, {
+                source: "state_router.dialogue_v2.matching_intro",
+              });
+              for (const card of result.matchCards) {
+                const replyMarkup = card.isCandidateCard
+                  ? buildCandidateDecisionKeyboard(card.matchId)
+                  : buildManagerDecisionKeyboard(card.matchId);
+                await this.sendBotMessage(update.userId, update.chatId, card.text, {
+                  source: "state_router.dialogue_v2.match_card",
+                  replyMarkup,
+                });
+              }
+            } else {
+              await this.sendBotMessage(update.userId, update.chatId, result.replyText, {
+                source: "state_router.dialogue_v2",
+              });
+            }
+            break;
+          }
+          const throughRouterV2 = await this.routeTextThroughRouterV2({
+            update,
+            session,
+            decision: routed.decision,
+            textEnglish: routed.textEnglish ?? update.text,
+            detectedLanguage: routed.detectedLanguage ?? detectLanguageQuick(update.text),
+          });
+          if (!throughRouterV2) {
+            break;
+          }
+          await this.dispatchTextByIntentAction({
+            update,
+            session,
+            decision: throughRouterV2.decision,
+            textEnglish: throughRouterV2.textEnglish,
+            detectedLanguage: throughRouterV2.detectedLanguage,
+            routerV2Decision: throughRouterV2.routerV2Decision,
+          });
+        }
         break;
       case "document":
         await this.handleDocumentUpdate(update);
@@ -314,6 +474,7 @@ export class StateRouter {
     );
 
     this.stateService.markUpdateProcessed(session.userId, update.updateId);
+    this.stateService.clearTurnContext(update.userId);
     const latestSession = this.stateService.getSession(session.userId);
     if (latestSession) {
       await this.statePersistenceService.persistSession(latestSession);
@@ -427,9 +588,21 @@ export class StateRouter {
         ragContext: rag.ragContext,
       };
     } catch (error) {
+      recordFailure(session.userId, "llm_fail", {
+        source: "always_on_router",
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      safeNotifyAdmin("error", "LLM classify failed", undefined, {
+        userId: session.userId,
+        chatId: session.chatId,
+        state: session.state,
+        updateId: update.updateId,
+        promptName: "always_on_router",
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
       this.logger.warn("always-on router failed, sending safe fallback", {
         updateId: update.updateId,
-        telegramUserId: update.userId,
+        telegramUserId: session.userId,
         state: session.state,
         error: error instanceof Error ? error.message : "Unknown error",
       });
@@ -444,6 +617,8 @@ export class StateRouter {
         };
       }
       if (update.kind === "text" || update.kind === "callback") {
+        const fallbackLang =
+          detectedLanguage === "ru" || detectedLanguage === "uk" ? detectedLanguage : "en";
         return {
           decision: {
             route: "OTHER",
@@ -451,7 +626,7 @@ export class StateRouter {
             meta_type: null,
             control_type: null,
             matching_intent: null,
-            reply: "Please continue with the current step.",
+            reply: dialogueLlmFallbackMessage(fallbackLang),
             should_advance: false,
             should_process_text_as_document: false,
           },
@@ -464,7 +639,7 @@ export class StateRouter {
       await this.sendRouterReplyWithLoopGuard(
         session,
         update.chatId,
-        "I had trouble understanding that message. Please try again, or send the document text or file.",
+        dialogueLlmFallbackMessage("en"),
       );
       return null;
     }
@@ -494,11 +669,148 @@ export class StateRouter {
     decision: AlwaysOnRouterDecision;
     textEnglish: string;
     detectedLanguage: "en" | "ru" | "uk" | "other";
+    routerV2Decision?: RouterV2Decision;
   }): Promise<void> {
-    const { update, session, decision, textEnglish, detectedLanguage } = input;
+    const { update, session, decision, textEnglish, detectedLanguage, routerV2Decision } = input;
     void resolveRouterDispatchAction(decision, session);
     // Global intent→action dispatch layer. Interview safety checks still run inside dispatchTextRoute.
-    await this.dispatchTextRoute(update, session, decision, textEnglish, detectedLanguage);
+    await this.dispatchTextRoute(
+      update,
+      session,
+      decision,
+      textEnglish,
+      detectedLanguage,
+      routerV2Decision,
+    );
+  }
+
+  private async routeTextThroughRouterV2(input: {
+    update: Extract<NormalizedUpdate, { kind: "text" }>;
+    session: UserSessionState;
+    decision: AlwaysOnRouterDecision;
+    textEnglish: string;
+    detectedLanguage: "en" | "ru" | "uk" | "other";
+  }): Promise<{
+    decision: AlwaysOnRouterDecision;
+    textEnglish: string;
+    detectedLanguage: "en" | "ru" | "uk" | "other";
+    routerV2Decision: RouterV2Decision;
+  } | null> {
+    const { update, session } = input;
+    const routerV2 = await this.routerV2Service.classify({
+      userMessage: update.text,
+      currentState: session.state,
+      partialProfile: buildRouterV2PartialProfile(session),
+      lastMessages: buildRouterV2LastMessages(session, update.text),
+      role: resolveRouterV2Role(session),
+    });
+
+    this.logger.debug("router.v2.intent", {
+      updateId: update.updateId,
+      telegramUserId: session.userId,
+      parseSuccess: routerV2.parseSuccess,
+      intent: routerV2.decision.intent,
+      nextAction: routerV2.decision.next_action,
+    });
+
+    if (!routerV2.parseSuccess) {
+      await this.sendBotMessage(
+        session.userId,
+        update.chatId,
+        routerV2.decision.assistant_message,
+        { source: "state_router.system.router_v2_fallback" },
+      );
+      return null;
+    }
+
+    const decision = this.applyRouterV2NextAction(
+      input.decision,
+      routerV2.decision,
+      session,
+    );
+
+    return {
+      decision,
+      textEnglish: input.textEnglish,
+      detectedLanguage: input.detectedLanguage,
+      routerV2Decision: routerV2.decision,
+    };
+  }
+
+  private applyRouterV2NextAction(
+    decision: AlwaysOnRouterDecision,
+    routerV2Decision: RouterV2Decision,
+    session: UserSessionState,
+  ): AlwaysOnRouterDecision {
+    const nextAction = routerV2Decision.next_action;
+    const assistantMessage = routerV2Decision.assistant_message;
+    const safeReply = assistantMessage.trim() || decision.reply;
+    if (routerV2Decision.intent === "status_request") {
+      return {
+        ...decision,
+        route: "OTHER",
+        conversation_intent: "OTHER",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: safeReply,
+        should_advance: false,
+        should_process_text_as_document: false,
+      };
+    }
+    if (nextAction === "extract_resume") {
+      return {
+        ...decision,
+        route: "RESUME_TEXT",
+        conversation_intent: "OTHER",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: safeReply,
+        should_advance: false,
+        should_process_text_as_document: true,
+      };
+    }
+    if (nextAction === "extract_job") {
+      return {
+        ...decision,
+        route: "JD_TEXT",
+        conversation_intent: "OTHER",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: safeReply,
+        should_advance: false,
+        should_process_text_as_document: true,
+      };
+    }
+    if (nextAction === "ask_next_question" && isInterviewingState(session.state)) {
+      return {
+        ...decision,
+        route: "INTERVIEW_ANSWER",
+        conversation_intent: "ANSWER",
+        meta_type: null,
+        control_type: null,
+        matching_intent: null,
+        reply: safeReply,
+        should_advance: true,
+        should_process_text_as_document: false,
+      };
+    }
+    if (nextAction === "run_matching") {
+      return {
+        ...decision,
+        route: "MATCHING_COMMAND",
+        conversation_intent: "MATCHING",
+        meta_type: null,
+        control_type: null,
+        matching_intent: "run",
+        reply: safeReply,
+        should_advance: false,
+        should_process_text_as_document: false,
+      };
+    }
+    return decision;
   }
 
   private async dispatchTextRoute(
@@ -507,11 +819,22 @@ export class StateRouter {
     decision: AlwaysOnRouterDecision,
     normalizedEnglishText: string,
     detectedLanguage: "en" | "ru" | "uk" | "other",
+    routerV2Decision?: RouterV2Decision,
   ): Promise<void> {
     const rawText = update.text.trim();
     const normalizedLower = normalizedEnglishText.trim().toLowerCase();
     const mandatoryUpdateCommand = detectCandidateMandatoryUpdateCommand(normalizedLower);
     const managerMandatoryUpdateCommand = detectManagerMandatoryUpdateCommand(normalizedLower);
+    const explicitMatchingIntent = detectExplicitMatchingIntent(rawText, normalizedLower, session.role ?? null);
+
+    if (routerV2Decision?.intent === "status_request") {
+      await this.sendRouterReplyWithLoopGuard(
+        session,
+        update.chatId,
+        await this.buildStatusReplyForUser(session),
+      );
+      return;
+    }
 
     if (isStartCommand(rawText) || decision.control_type === "restart") {
       await this.restartFlow(update);
@@ -520,6 +843,16 @@ export class StateRouter {
 
     if (session.pendingDataDeletionConfirmation) {
       await this.handlePendingDataDeletionConfirmation(update, session, rawText, normalizedEnglishText);
+      return;
+    }
+
+    if (explicitMatchingIntent && decision.route !== "MATCHING_COMMAND") {
+      await this.handleMatchingIntentRoute({
+        session,
+        chatId: update.chatId,
+        matchingIntent: explicitMatchingIntent,
+        reply: decision.reply,
+      });
       return;
     }
 
@@ -636,6 +969,10 @@ export class StateRouter {
     }
 
     if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
+      const isCandidatePrescreenV2 = this.isCandidatePrescreenV2Session(session);
+      const isManagerPrescreenV2 = this.isManagerPrescreenV2Session(session);
+      const isAnyPrescreenV2 = isCandidatePrescreenV2 || isManagerPrescreenV2;
+
       if (isEnglishPreferenceSignal(rawText, normalizedEnglishText)) {
         this.stateService.setPreferredLanguage(session.userId, "en");
         await this.sendBotMessage(
@@ -649,12 +986,50 @@ export class StateRouter {
 
       if (isInterviewFinishCommand(rawText, normalizedEnglishText)) {
         const completion = await this.interviewEngine.finishInterviewNow(session);
-        await this.handleInterviewCompletedState(session, update.chatId, completion);
+        if (isAnyPrescreenV2) {
+          this.stateService.transition(session.userId, completion.completedState);
+          this.stateService.clearCurrentQuestionIndex(session.userId);
+          if (isCandidatePrescreenV2) {
+            this.stateService.clearPrescreenQuestionIndex(session.userId);
+          }
+          if (isManagerPrescreenV2) {
+            this.stateService.clearJobPrescreenQuestionIndex(session.userId);
+          }
+          await this.sendBotMessage(
+            session.userId,
+            update.chatId,
+            isCandidatePrescreenV2
+              ? "Okay, we can stop here. I saved your partial profile. You can ask me to find jobs anytime."
+              : "Okay, we can stop here. I saved your partial job profile. You can ask me to find candidates anytime.",
+            {
+              source: isCandidatePrescreenV2
+                ? "state_router.system.prescreen_v2_stop"
+                : "state_router.system.job_prescreen_v2_stop",
+            },
+          );
+          const latestSession = this.stateService.getSession(session.userId) ?? session;
+          if (isCandidatePrescreenV2) {
+            await this.startCandidateMandatoryFieldsFlow(latestSession, update.chatId, {
+              showIntro: true,
+            });
+          } else {
+            await this.startManagerMandatoryFieldsFlow(latestSession, update.chatId, {
+              showIntro: true,
+              runMatchingAfterComplete: true,
+            });
+          }
+        } else {
+          await this.handleInterviewCompletedState(session, update.chatId, completion);
+        }
         return;
       }
 
       if (isInterviewSkipCommand(normalizedEnglishText)) {
-        const skipResult = await this.interviewEngine.skipCurrentQuestion(session);
+        const skipResult = isCandidatePrescreenV2
+          ? await this.candidatePrescreenEngine.skipCurrentQuestion(session)
+          : isManagerPrescreenV2
+          ? await this.jobPrescreenEngine.skipCurrentQuestion(session)
+          : await this.interviewEngine.skipCurrentQuestion(session);
         this.stateService.resetInterviewNoAnswerCounter(session.userId);
         if (skipResult.kind === "next_question") {
           const nextQuestionText = await this.formatInterviewQuestionForDelivery(
@@ -666,7 +1041,9 @@ export class StateRouter {
           await this.sendBotMessage(
             session.userId,
             session.chatId,
-            questionMessage(skipResult.questionIndex, nextQuestionText),
+            skipResult.isFollowUp
+              ? nextQuestionText
+              : questionMessage(skipResult.questionIndex, nextQuestionText),
           );
           return;
         }
@@ -674,8 +1051,45 @@ export class StateRouter {
           await this.sendBotMessage(session.userId, session.chatId, skipResult.message);
           return;
         }
-
-        await this.handleInterviewCompletedState(session, session.chatId, skipResult);
+        if (isAnyPrescreenV2) {
+          const completion = await this.interviewEngine.finishInterviewNow(session);
+          this.stateService.transition(session.userId, completion.completedState);
+          this.stateService.clearCurrentQuestionIndex(session.userId);
+          if (isCandidatePrescreenV2) {
+            this.stateService.clearPrescreenQuestionIndex(session.userId);
+          }
+          if (isManagerPrescreenV2) {
+            this.stateService.clearJobPrescreenQuestionIndex(session.userId);
+          }
+          await this.sendBotMessage(
+            session.userId,
+            session.chatId,
+            skipResult.completionMessage,
+            {
+              source: isCandidatePrescreenV2
+                ? "state_router.system.prescreen_v2_completed"
+                : "state_router.system.job_prescreen_v2_completed",
+            },
+          );
+          const latestSession = this.stateService.getSession(session.userId) ?? session;
+          if (isCandidatePrescreenV2) {
+            await this.startCandidateMandatoryFieldsFlow(latestSession, session.chatId, {
+              showIntro: true,
+            });
+          } else {
+            await this.startManagerMandatoryFieldsFlow(latestSession, session.chatId, {
+              showIntro: true,
+              runMatchingAfterComplete: true,
+            });
+          }
+        } else {
+          const completion =
+            skipResult as Extract<
+              Awaited<ReturnType<InterviewEngine["skipCurrentQuestion"]>>,
+              { kind: "completed" }
+            >;
+          await this.handleInterviewCompletedState(session, session.chatId, completion);
+        }
         return;
       }
 
@@ -758,15 +1172,51 @@ export class StateRouter {
           await this.restartFlow(update);
           return;
         }
-        if (intentDecision.control_type === "stop") {
+        if (intentDecision.control_type === "stop" || (isAnyPrescreenV2 && intentDecision.control_type === "pause")) {
           const completion = await this.interviewEngine.finishInterviewNow(session);
-          await this.handleInterviewCompletedState(session, update.chatId, completion);
+          if (isAnyPrescreenV2) {
+            this.stateService.transition(session.userId, completion.completedState);
+            this.stateService.clearCurrentQuestionIndex(session.userId);
+            if (isCandidatePrescreenV2) {
+              this.stateService.clearPrescreenQuestionIndex(session.userId);
+            }
+            if (isManagerPrescreenV2) {
+              this.stateService.clearJobPrescreenQuestionIndex(session.userId);
+            }
+            await this.sendBotMessage(
+              session.userId,
+              update.chatId,
+              isCandidatePrescreenV2
+                ? "Okay, we can pause here. I saved your partial profile. You can ask me to find jobs anytime."
+                : "Okay, we can pause here. I saved your partial job profile. You can ask me to find candidates anytime.",
+              {
+                source: isCandidatePrescreenV2
+                  ? "state_router.system.prescreen_v2_pause"
+                  : "state_router.system.job_prescreen_v2_pause",
+              },
+            );
+            const latestSession = this.stateService.getSession(session.userId) ?? session;
+            if (isCandidatePrescreenV2) {
+              await this.startCandidateMandatoryFieldsFlow(latestSession, update.chatId, {
+                showIntro: true,
+              });
+            } else {
+              await this.startManagerMandatoryFieldsFlow(latestSession, update.chatId, {
+                showIntro: true,
+                runMatchingAfterComplete: true,
+              });
+            }
+          } else {
+            await this.handleInterviewCompletedState(session, update.chatId, completion);
+          }
           return;
         }
         await this.sendRouterReplyWithLoopGuard(
           session,
           update.chatId,
-          localizeInterviewMetaReply(intentDecision.reply, intentDecision.meta_type, detectedLanguage),
+          isAnyPrescreenV2
+            ? localizePrescreenMetaReply(intentDecision.reply, detectedLanguage)
+            : localizeInterviewMetaReply(intentDecision.reply, intentDecision.meta_type, detectedLanguage),
         );
         return;
       }
@@ -774,7 +1224,9 @@ export class StateRouter {
       await this.sendRouterReplyWithLoopGuard(
         session,
         update.chatId,
-        localizeInterviewMetaReply(intentDecision.reply, intentDecision.meta_type, detectedLanguage),
+        isAnyPrescreenV2
+          ? localizePrescreenMetaReply(intentDecision.reply, detectedLanguage)
+          : localizeInterviewMetaReply(intentDecision.reply, intentDecision.meta_type, detectedLanguage),
       );
       return;
     }
@@ -1196,6 +1648,20 @@ export class StateRouter {
         );
         return;
       }
+      const userFlags = await this.usersRepository.getUserFlags(session.userId);
+      if (!userFlags.contactShared) {
+        await this.sendRouterReplyWithLoopGuard(
+          session,
+          chatId,
+          "Before I can match you, please share your Telegram contact.",
+        );
+        await this.sendBotMessage(session.userId, chatId, contactRequestMessage(), {
+          source: "state_router.system.matching_contact_required",
+          replyMarkup: buildContactRequestKeyboard(),
+          kind: "secondary",
+        });
+        return;
+      }
 
       if (session.role === "candidate") {
         const isComplete = await this.isCandidateMandatoryComplete(session);
@@ -1226,12 +1692,23 @@ export class StateRouter {
         }
       }
 
-      const flags = await this.usersRepository.getUserFlags(session.userId);
-      if (flags.matchingPaused || !flags.autoMatchingEnabled) {
+      if (userFlags.matchingPaused || !userFlags.autoMatchingEnabled) {
         await this.sendRouterReplyWithLoopGuard(
           session,
           chatId,
           "Matching is paused. Type resume matching if you want me to search again.",
+        );
+        return;
+      }
+      const readiness =
+        session.role === "candidate"
+          ? await this.matchingEngine.checkCandidateMatchingReadiness(session.userId)
+          : await this.matchingEngine.checkManagerMatchingReadiness(session.userId);
+      if (!readiness.ready) {
+        await this.sendRouterReplyWithLoopGuard(
+          session,
+          chatId,
+          "I need your resume and a few quick answers first. Send your resume file or type your key experience.",
         );
         return;
       }
@@ -1240,7 +1717,10 @@ export class StateRouter {
         session.role === "candidate"
           ? await this.matchingEngine.runForCandidate(String(session.userId))
           : await this.matchingEngine.runForManager(String(session.userId));
-      await this.sendRouterReplyWithLoopGuard(session, chatId, run.message);
+      const sentCards = await this.showTopMatchesWithActions(session, chatId);
+      if (!sentCards) {
+        await this.sendRouterReplyWithLoopGuard(session, chatId, run.message);
+      }
       return;
     }
 
@@ -1440,46 +1920,68 @@ export class StateRouter {
         });
       }
 
-      const bootstrapSession: UserSessionState = {
-        ...session,
-        state: intakeState,
-      };
-      const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, input.sourceTextEnglish);
-      this.logger.info("interview.bootstrap.completed", {
-        userId: update.userId,
-        sourceType: "text",
-        nextState: bootstrap.nextState,
-        questions: bootstrap.plan.questions.length,
-        hasOneLiner: Boolean(bootstrap.intakeOneLiner),
-      });
-      const firstQuestionText = await this.formatInterviewQuestionForDelivery(
-        session,
-        bootstrap.firstQuestion,
-        0,
-        false,
-      );
-      const interviewState =
-        bootstrap.nextState === "interviewing_candidate"
-          ? "interviewing_candidate"
-          : "interviewing_manager";
-      await this.sendBotMessage(
-        session.userId,
-        update.chatId,
-        this.buildInterviewBootstrapDeliveryMessage({
-          nextState: interviewState,
-          intakeOneLiner: bootstrap.intakeOneLiner,
-          answerInstruction: bootstrap.answerInstruction,
-          firstQuestionText,
-          firstQuestionIndex: 0,
-        }),
-      );
-      this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
-      if (bootstrap.candidatePlanV2) {
-        this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
+      const useCandidatePrescreenV2 =
+        intakeState === "waiting_resume" && (await this.shouldUseCandidatePrescreenV2(session));
+      const useJobPrescreenV2 =
+        intakeState === "waiting_job" && (await this.shouldUseJobPrescreenV2(session));
+      if (useCandidatePrescreenV2) {
+        await this.bootstrapCandidatePrescreenV2({
+          session,
+          chatId: update.chatId,
+          resumeText: input.sourceTextEnglish,
+          sourceType: "text",
+          documentType: "unknown",
+        });
+      } else if (useJobPrescreenV2) {
+        await this.bootstrapJobPrescreenV2({
+          session,
+          chatId: update.chatId,
+          jdText: input.sourceTextEnglish,
+          sourceType: "text",
+          documentType: "unknown",
+        });
+      } else {
+        const bootstrapSession: UserSessionState = {
+          ...session,
+          state: intakeState,
+        };
+        const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, input.sourceTextEnglish);
+        this.logger.info("interview.bootstrap.completed", {
+          userId: update.userId,
+          sourceType: "text",
+          nextState: bootstrap.nextState,
+          questions: bootstrap.plan.questions.length,
+          hasOneLiner: Boolean(bootstrap.intakeOneLiner),
+        });
+        const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+          session,
+          bootstrap.firstQuestion,
+          0,
+          false,
+        );
+        const interviewState =
+          bootstrap.nextState === "interviewing_candidate"
+            ? "interviewing_candidate"
+            : "interviewing_manager";
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          this.buildInterviewBootstrapDeliveryMessage({
+            nextState: interviewState,
+            intakeOneLiner: bootstrap.intakeOneLiner,
+            answerInstruction: bootstrap.answerInstruction,
+            firstQuestionText,
+            firstQuestionIndex: 0,
+          }),
+        );
+        this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
+        if (bootstrap.candidatePlanV2) {
+          this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
+        }
+        this.stateService.setCurrentQuestionIndex(update.userId, 0);
+        this.stateService.markInterviewStarted(update.userId, "unknown", new Date().toISOString());
+        this.stateService.transition(update.userId, bootstrap.nextState);
       }
-      this.stateService.setCurrentQuestionIndex(update.userId, 0);
-      this.stateService.markInterviewStarted(update.userId, "unknown", new Date().toISOString());
-      this.stateService.transition(update.userId, bootstrap.nextState);
     } catch (error) {
       const latestSession = this.stateService.getSession(update.userId);
       if (latestSession?.state === extractingState) {
@@ -1509,10 +2011,37 @@ export class StateRouter {
   ): Promise<void> {
     const trimmed = reply.trim();
     const previous = session.lastBotMessage?.trim();
-    const finalReply =
-      trimmed && previous && trimmed === previous
-        ? getSecondaryFallbackByState(session.state)
-        : trimmed || "Please continue with your hiring flow.";
+    const isRepeat = Boolean(trimmed && previous && trimmed === previous);
+    const turnContext = this.stateService.getTurnContext(session.userId);
+    const lang = turnContext?.language ?? "en";
+
+    let finalReply: string;
+    if (
+      this.dialogueV2Enabled &&
+      this.replyComposerV2 &&
+      turnContext?.lastUserMessage
+    ) {
+      if (isRepeat) {
+        finalReply = dialogueSkipAndMoveOnMessage(lang);
+      } else {
+        const composed = await this.replyComposerV2.compose({
+          userRole: session.role ?? "candidate",
+          userLanguage: lang,
+          currentState: session.state,
+          lastUserMessage: turnContext.lastUserMessage,
+          profileSummaryFacts: [],
+          lastBotMessage: session.lastBotMessage,
+          avoidPhrase: session.lastBotMessage ?? undefined,
+        });
+        finalReply =
+          (composed?.message?.trim() ?? trimmed) || "Please continue with your hiring flow.";
+      }
+    } else {
+      finalReply =
+        isRepeat
+          ? getSecondaryFallbackByState(session.state)
+          : trimmed || "Please continue with your hiring flow.";
+    }
     await this.sendBotMessage(session.userId, chatId, finalReply);
   }
 
@@ -1590,12 +2119,296 @@ export class StateRouter {
     return parts.join("\n\n");
   }
 
+  private isCandidatePrescreenV2Session(session: UserSessionState): boolean {
+    return (
+      session.state === "interviewing_candidate" &&
+      session.prescreenVersion === "v2" &&
+      Boolean(session.prescreenPlan?.length)
+    );
+  }
+
+  private isManagerPrescreenV2Session(session: UserSessionState): boolean {
+    return (
+      session.state === "interviewing_manager" &&
+      session.jobPrescreenVersion === "v2" &&
+      Boolean(session.jobPrescreenPlan?.length)
+    );
+  }
+
+  private async shouldUseCandidatePrescreenV2(session: UserSessionState): Promise<boolean> {
+    if (!this.prescreenV2Enabled || session.role !== "candidate") {
+      return false;
+    }
+
+    if (session.prescreenVersion === "v1") {
+      return false;
+    }
+    if (session.prescreenVersion === "v2") {
+      return true;
+    }
+
+    const persistedVersion = await this.profilesRepository.getCandidatePrescreenVersion(
+      session.userId,
+    );
+    const resolvedVersion: CandidatePrescreenVersion = persistedVersion ?? "v2";
+    this.stateService.setPrescreenVersion(session.userId, resolvedVersion);
+    return resolvedVersion === "v2";
+  }
+
+  private async shouldUseJobPrescreenV2(session: UserSessionState): Promise<boolean> {
+    if (!this.jobPrescreenV2Enabled || session.role !== "manager") {
+      return false;
+    }
+
+    if (session.jobPrescreenVersion === "v1") {
+      return false;
+    }
+    if (session.jobPrescreenVersion === "v2") {
+      return true;
+    }
+
+    const persistedVersion = await this.profilesRepository.getJobPrescreenVersion(
+      session.userId,
+    );
+    const resolvedVersion: JobPrescreenVersion = persistedVersion ?? "v2";
+    this.stateService.setJobPrescreenVersion(session.userId, resolvedVersion);
+    return resolvedVersion === "v2";
+  }
+
+  private async bootstrapCandidatePrescreenV2(input: {
+    session: UserSessionState;
+    chatId: number;
+    resumeText: string;
+    sourceType: "file" | "text";
+    documentType: "pdf" | "docx" | "unknown";
+  }): Promise<void> {
+    const language = resolvePrescreenBootstrapLanguage(input.session.preferredLanguage);
+    const result = await this.candidatePrescreenEngine.bootstrap(
+      input.session,
+      input.resumeText,
+      language,
+    );
+
+    this.logger.info("candidate.prescreen_v2.bootstrap.completed", {
+      userId: input.session.userId,
+      sourceType: input.sourceType,
+      questions: result.questionsGenerated,
+      language,
+    });
+
+    this.stateService.setInterviewPlan(input.session.userId, result.plan);
+    this.stateService.setPrescreenVersion(input.session.userId, "v2");
+    this.stateService.setCurrentQuestionIndex(input.session.userId, 0);
+    this.stateService.setPrescreenQuestionIndex(input.session.userId, 0);
+    this.stateService.markInterviewStarted(
+      input.session.userId,
+      input.documentType,
+      new Date().toISOString(),
+    );
+    this.stateService.transition(input.session.userId, "interviewing_candidate");
+
+    const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+      input.session,
+      result.firstQuestion,
+      0,
+      false,
+    );
+    await this.sendBotMessage(
+      input.session.userId,
+      input.chatId,
+      `${result.summarySentence}\n\n${questionMessage(0, firstQuestionText)}`,
+      { source: "state_router.system.prescreen_v2_bootstrap" },
+    );
+  }
+
+  private async bootstrapJobPrescreenV2(input: {
+    session: UserSessionState;
+    chatId: number;
+    jdText: string;
+    sourceType: "file" | "text";
+    documentType: "pdf" | "docx" | "unknown";
+  }): Promise<void> {
+    const language = resolvePrescreenBootstrapLanguage(input.session.preferredLanguage);
+    const result = await this.jobPrescreenEngine.bootstrap(
+      input.session,
+      input.jdText,
+      language,
+    );
+
+    this.logger.info("job.prescreen_v2.bootstrap.completed", {
+      userId: input.session.userId,
+      sourceType: input.sourceType,
+      questions: result.questionsGenerated,
+      language,
+    });
+
+    this.stateService.setInterviewPlan(input.session.userId, result.plan);
+    this.stateService.setJobPrescreenVersion(input.session.userId, "v2");
+    this.stateService.setCurrentQuestionIndex(input.session.userId, 0);
+    this.stateService.setJobPrescreenQuestionIndex(input.session.userId, 0);
+    this.stateService.markInterviewStarted(
+      input.session.userId,
+      input.documentType,
+      new Date().toISOString(),
+    );
+    this.stateService.transition(input.session.userId, "interviewing_manager");
+
+    const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+      input.session,
+      result.firstQuestion,
+      0,
+      false,
+    );
+    await this.sendBotMessage(
+      input.session.userId,
+      input.chatId,
+      `${result.summarySentence}\n\n${questionMessage(0, firstQuestionText)}`,
+      { source: "state_router.system.job_prescreen_v2_bootstrap" },
+    );
+  }
+
   private async resolveKnownUserName(session: UserSessionState): Promise<string | null> {
     if (session.contactFirstName?.trim()) {
       return sanitizeUserName(session.contactFirstName);
     }
     const rag = await this.userRagContextService.buildRouterContext(session);
     return sanitizeUserName(rag.knownUserName);
+  }
+
+  private async handleAdminDebugCommand(
+    update: NormalizedUpdate & { kind: "text" },
+    session: UserSessionState,
+    command:
+      | "debug_chat_id"
+      | "debug_state"
+      | "debug_profile"
+      | "debug_last_route"
+      | "debug_matches"
+      | "debug_active_job"
+      | "debug_failures",
+    optionalUserId?: number,
+  ): Promise<void> {
+    const targetUserId = optionalUserId ?? session.userId;
+    const targetSession = optionalUserId ? this.stateService.getSession(optionalUserId) : session;
+
+    if (command === "debug_chat_id") {
+      await this.sendBotMessage(
+        update.userId,
+        update.chatId,
+        `chat_id: ${update.chatId}\n(Use Bot API getUpdates to see chat.type)`,
+        { source: "state_router.admin.debug_chat_id" },
+      );
+      return;
+    }
+
+    if (command === "debug_state") {
+      const s = targetSession ?? { state: "no_session", userId: targetUserId };
+      const phase = (s as UserSessionState).dialoguePhase ?? "—";
+      const role = (s as UserSessionState).role ?? "—";
+      const lang = (s as UserSessionState).preferredLanguage ?? "—";
+      const prescreen = (s as UserSessionState).prescreenV2;
+      const asked = prescreen?.totalQuestionsAsked ?? 0;
+      const mandatory = prescreen?.mandatory
+        ? JSON.stringify(prescreen.mandatory).slice(0, 80)
+        : "—";
+      const lastIntent = prescreen?.lastIntent ?? "—";
+      const text = [
+        `user=${targetUserId}`,
+        `phase=${phase}`,
+        `state=${(s as UserSessionState).state}`,
+        `role=${role}`,
+        `lang=${lang}`,
+        `asked=${asked}`,
+        `mandatory=${mandatory}`,
+        `lastIntent=${lastIntent}`,
+      ].join("\n");
+      await this.sendBotMessage(update.userId, update.chatId, text, {
+        source: "state_router.admin.debug_state",
+      });
+      return;
+    }
+
+    if (command === "debug_profile") {
+      const s = targetSession as UserSessionState | undefined;
+      if (!s) {
+        await this.sendBotMessage(update.userId, update.chatId, `No session for user ${targetUserId}`, {
+          source: "state_router.admin.debug_profile",
+        });
+        return;
+      }
+      const cand = s.candidateTechnicalSummary;
+      const job = s.managerTechnicalSummary ?? s.managerJobProfileV2;
+      const lines: string[] = [];
+      if (cand) {
+        lines.push("Candidate:", cand.headline?.slice(0, 120) ?? "—", cand.technical_depth_summary?.slice(0, 120) ?? "—");
+      }
+      if (job && typeof job === "object") {
+        const j = job as { role_title?: string; headline?: string };
+        lines.push("Job:", (j.role_title ?? j.headline ?? "—").slice(0, 120));
+      }
+      if (lines.length === 0) lines.push("No profile snapshot in session.");
+      await this.sendBotMessage(update.userId, update.chatId, lines.join("\n").slice(0, 500), {
+        source: "state_router.admin.debug_profile",
+      });
+      return;
+    }
+
+    if (command === "debug_last_route") {
+      const { getLastRoute } = await import("../admin/admin-debug.store");
+      const route = getLastRoute(targetUserId);
+      const text = route
+        ? `handler=${route.handler}\nsource=${route.source}\nat=${route.at}`
+        : `No last route for user ${targetUserId}.`;
+      await this.sendBotMessage(update.userId, update.chatId, text, {
+        source: "state_router.admin.debug_last_route",
+      });
+      return;
+    }
+
+    if (command === "debug_failures") {
+      const { getLastFailures } = await import("../admin/admin-debug.store");
+      const failures = getLastFailures(targetUserId, 5);
+      const lines =
+        failures.length > 0
+          ? failures.map((f, i) => `${i + 1}) ${f.kind} ${f.promptName ?? ""} ${f.source ?? ""} ${f.at}`)
+          : [`No failures recorded for user ${targetUserId}.`];
+      await this.sendBotMessage(update.userId, update.chatId, ["debug_failures (last 5):", ""].concat(lines).join("\n"), {
+        source: "state_router.admin.debug_failures",
+      });
+      return;
+    }
+
+    if (command === "debug_matches") {
+      const all = await this.matchStorageService.listAll();
+      const forUser = all.filter(
+        (m) => m.candidateUserId === targetUserId || m.managerUserId === targetUserId,
+      );
+      const sorted = forUser.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      const top5 = sorted.slice(0, 5);
+      const lines = top5.length
+        ? top5.map(
+            (m, i) =>
+              `${i + 1}) ${m.id.slice(0, 30)}… | c=${m.candidateUserId} m=${m.managerUserId} | ${m.status}`,
+          )
+        : [`No matches for user ${targetUserId}.`];
+      await this.sendBotMessage(update.userId, update.chatId, ["debug_matches (last 5):", ""].concat(lines).join("\n"), {
+        source: "state_router.admin.debug_matches",
+      });
+      return;
+    }
+
+    if (command === "debug_active_job") {
+      const s = targetSession as UserSessionState | undefined;
+      const activeJobId = s?.lastActiveJobId ?? "not set";
+      await this.sendBotMessage(
+        update.userId,
+        update.chatId,
+        `debug_active_job (user=${targetUserId}): ${activeJobId}`,
+        { source: "state_router.admin.debug_active_job" },
+      );
+    }
   }
 
   private async sendBotMessage(
@@ -1630,15 +2443,26 @@ export class StateRouter {
         replacement.trim() === sanitizedText.trim()
           ? getSecondaryFallbackByState(stateForFallback)
           : replacement;
+      const prevHash = latestSession?.lastBotMessageHash;
+      const nextHash = hashMessageText(sanitizedText);
+      recordFailure(userId, "repeat_loop", { source });
       this.logger.warn("repeat_loop_prevented", {
         telegram_user_id: userId,
         chat_id: chatId,
         source,
-        previousHash: latestSession?.lastBotMessageHash,
-        nextHash: hashMessageText(sanitizedText),
+        previousHash: prevHash,
+        nextHash,
+      });
+      safeNotifyAdmin("warn", "repeat_loop_prevented", undefined, {
+        userId,
+        chatId,
+        state: stateForFallback,
+        source,
+        lastOutboundHashes: [prevHash, nextHash].filter(Boolean) as string[],
       });
     }
 
+    recordLastRoute(userId, "send", source);
     this.logger.debug("user.reply.sent", {
       telegram_user_id: userId,
       chat_id: chatId,
@@ -2455,50 +3279,72 @@ export class StateRouter {
         });
       }
 
-      const bootstrapSession: UserSessionState = {
-        ...session,
-        state: intakeState,
-      };
-      const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, normalizedExtractedText);
-      this.logger.info("interview.bootstrap.completed", {
-        userId: update.userId,
-        sourceType: "file",
-        nextState: bootstrap.nextState,
-        questions: bootstrap.plan.questions.length,
-        hasOneLiner: Boolean(bootstrap.intakeOneLiner),
-      });
-      const firstQuestionText = await this.formatInterviewQuestionForDelivery(
-        session,
-        bootstrap.firstQuestion,
-        0,
-        false,
-      );
-      const interviewState =
-        bootstrap.nextState === "interviewing_candidate"
-          ? "interviewing_candidate"
-          : "interviewing_manager";
-      await this.sendBotMessage(
-        session.userId,
-        update.chatId,
-        this.buildInterviewBootstrapDeliveryMessage({
-          nextState: interviewState,
-          intakeOneLiner: bootstrap.intakeOneLiner,
-          answerInstruction: bootstrap.answerInstruction,
-          firstQuestionText,
-          firstQuestionIndex: 0,
-        }),
-      );
-      this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
-      if (bootstrap.candidatePlanV2) {
-        this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
+      const useCandidatePrescreenV2 =
+        intakeState === "waiting_resume" && (await this.shouldUseCandidatePrescreenV2(session));
+      const useJobPrescreenV2 =
+        intakeState === "waiting_job" && (await this.shouldUseJobPrescreenV2(session));
+      if (useCandidatePrescreenV2) {
+        await this.bootstrapCandidatePrescreenV2({
+          session,
+          chatId: update.chatId,
+          resumeText: normalizedExtractedText,
+          sourceType: "file",
+          documentType: this.documentService.detectDocumentType(update.fileName, update.mimeType),
+        });
+      } else if (useJobPrescreenV2) {
+        await this.bootstrapJobPrescreenV2({
+          session,
+          chatId: update.chatId,
+          jdText: normalizedExtractedText,
+          sourceType: "file",
+          documentType: this.documentService.detectDocumentType(update.fileName, update.mimeType),
+        });
+      } else {
+        const bootstrapSession: UserSessionState = {
+          ...session,
+          state: intakeState,
+        };
+        const bootstrap = await this.interviewEngine.bootstrapInterview(bootstrapSession, normalizedExtractedText);
+        this.logger.info("interview.bootstrap.completed", {
+          userId: update.userId,
+          sourceType: "file",
+          nextState: bootstrap.nextState,
+          questions: bootstrap.plan.questions.length,
+          hasOneLiner: Boolean(bootstrap.intakeOneLiner),
+        });
+        const firstQuestionText = await this.formatInterviewQuestionForDelivery(
+          session,
+          bootstrap.firstQuestion,
+          0,
+          false,
+        );
+        const interviewState =
+          bootstrap.nextState === "interviewing_candidate"
+            ? "interviewing_candidate"
+            : "interviewing_manager";
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          this.buildInterviewBootstrapDeliveryMessage({
+            nextState: interviewState,
+            intakeOneLiner: bootstrap.intakeOneLiner,
+            answerInstruction: bootstrap.answerInstruction,
+            firstQuestionText,
+            firstQuestionIndex: 0,
+          }),
+        );
+        this.stateService.setInterviewPlan(update.userId, bootstrap.plan);
+        if (bootstrap.candidatePlanV2) {
+          this.stateService.setCandidateInterviewPlanV2(update.userId, bootstrap.candidatePlanV2);
+        }
+        this.stateService.setCurrentQuestionIndex(update.userId, 0);
+        this.stateService.markInterviewStarted(
+          update.userId,
+          this.documentService.detectDocumentType(update.fileName, update.mimeType),
+          new Date().toISOString(),
+        );
+        this.stateService.transition(update.userId, bootstrap.nextState);
       }
-      this.stateService.setCurrentQuestionIndex(update.userId, 0);
-      this.stateService.markInterviewStarted(
-        update.userId,
-        this.documentService.detectDocumentType(update.fileName, update.mimeType),
-        new Date().toISOString(),
-      );
-      this.stateService.transition(update.userId, bootstrap.nextState);
     } catch (error) {
       const latestSession = this.stateService.getSession(update.userId);
       if (latestSession?.state === extractingState) {
@@ -2582,6 +3428,100 @@ export class StateRouter {
         originalText,
         detectedLanguage: normalized.detected_language,
       };
+      const isCandidatePrescreenV2 = this.isCandidatePrescreenV2Session(session);
+      const isManagerPrescreenV2 = this.isManagerPrescreenV2Session(session);
+      if (isCandidatePrescreenV2) {
+        const prescreenResult = await this.candidatePrescreenEngine.submitAnswer(session, normalizedInput);
+        if (prescreenResult.kind === "reanswer_required") {
+          await this.sendBotMessage(session.userId, session.chatId, prescreenResult.message, {
+            source: "state_router.system.prescreen_v2_reanswer",
+          });
+          return;
+        }
+
+        if (prescreenResult.kind === "next_question") {
+          const latestSession = this.stateService.getSession(session.userId) ?? session;
+          const nextQuestionText = await this.formatInterviewQuestionForDelivery(
+            latestSession,
+            prescreenResult.questionText,
+            prescreenResult.questionIndex,
+            Boolean(prescreenResult.isFollowUp),
+          );
+          const questionBlock = prescreenResult.isFollowUp
+            ? nextQuestionText
+            : questionMessage(prescreenResult.questionIndex, nextQuestionText);
+          const outbound = prescreenResult.preQuestionMessage?.trim()
+            ? `${prescreenResult.preQuestionMessage.trim()}\n\n${questionBlock}`
+            : questionBlock;
+          await this.sendBotMessage(session.userId, session.chatId, outbound, {
+            source: "state_router.system.prescreen_v2_next_question",
+          });
+          return;
+        }
+
+        const completion = await this.interviewEngine.finishInterviewNow(session);
+        this.stateService.transition(session.userId, completion.completedState);
+        this.stateService.resetAnswersSinceConfirm(session.userId);
+        this.stateService.clearPrescreenQuestionIndex(session.userId);
+        await this.sendBotMessage(
+          session.userId,
+          session.chatId,
+          prescreenResult.completionMessage,
+          { source: "state_router.system.prescreen_v2_completed" },
+        );
+        const latestSession = this.stateService.getSession(session.userId) ?? session;
+        await this.startCandidateMandatoryFieldsFlow(latestSession, session.chatId, {
+          showIntro: true,
+        });
+        return;
+      }
+      if (isManagerPrescreenV2) {
+        const prescreenResult = await this.jobPrescreenEngine.submitAnswer(session, normalizedInput);
+        if (prescreenResult.kind === "reanswer_required") {
+          await this.sendBotMessage(session.userId, session.chatId, prescreenResult.message, {
+            source: "state_router.system.job_prescreen_v2_reanswer",
+          });
+          return;
+        }
+
+        if (prescreenResult.kind === "next_question") {
+          const latestSession = this.stateService.getSession(session.userId) ?? session;
+          const nextQuestionText = await this.formatInterviewQuestionForDelivery(
+            latestSession,
+            prescreenResult.questionText,
+            prescreenResult.questionIndex,
+            Boolean(prescreenResult.isFollowUp),
+          );
+          const questionBlock = prescreenResult.isFollowUp
+            ? nextQuestionText
+            : questionMessage(prescreenResult.questionIndex, nextQuestionText);
+          const outbound = prescreenResult.preQuestionMessage?.trim()
+            ? `${prescreenResult.preQuestionMessage.trim()}\n\n${questionBlock}`
+            : questionBlock;
+          await this.sendBotMessage(session.userId, session.chatId, outbound, {
+            source: "state_router.system.job_prescreen_v2_next_question",
+          });
+          return;
+        }
+
+        const completion = await this.interviewEngine.finishInterviewNow(session);
+        this.stateService.transition(session.userId, completion.completedState);
+        this.stateService.resetAnswersSinceConfirm(session.userId);
+        this.stateService.clearJobPrescreenQuestionIndex(session.userId);
+        await this.sendBotMessage(
+          session.userId,
+          session.chatId,
+          prescreenResult.completionMessage,
+          { source: "state_router.system.job_prescreen_v2_completed" },
+        );
+        const latestSession = this.stateService.getSession(session.userId) ?? session;
+        await this.startManagerMandatoryFieldsFlow(latestSession, session.chatId, {
+          showIntro: true,
+          runMatchingAfterComplete: true,
+        });
+        return;
+      }
+
       const result = await this.interviewEngine.submitAnswer(session, normalizedInput);
 
       if (result.kind === "reanswer_required") {
@@ -3038,6 +3978,46 @@ export class StateRouter {
     return true;
   }
 
+  private async buildStatusReplyForUser(session: UserSessionState): Promise<string> {
+    if (session.role === "candidate") {
+      const canonical = await this.profilesRepository.getCanonicalCandidateProfileV2(session.userId);
+      const mandatory = await this.usersRepository.getCandidateMandatoryFields(session.userId);
+      const flags = await this.usersRepository.getUserFlags(session.userId);
+      const profileReady = canonical.profileText.trim().length > 0 ? "ready" : "not ready";
+      const mandatoryReady = mandatory.profileComplete ? "complete" : "incomplete";
+      const contact = flags.contactShared ? "shared" : "missing";
+      return [
+        "Current candidate status:",
+        `Profile: ${profileReady}.`,
+        `Mandatory fields: ${mandatoryReady}.`,
+        `Contact: ${contact}.`,
+        session.state === "interviewing_candidate"
+          ? "Interview: in progress."
+          : `Current step: ${session.state}.`,
+      ].join("\n");
+    }
+
+    if (session.role === "manager") {
+      const canonical = await this.profilesRepository.getCanonicalJobProfileV2(session.userId);
+      const mandatory = await this.jobsRepository.getJobMandatoryFields(session.userId);
+      const flags = await this.usersRepository.getUserFlags(session.userId);
+      const profileReady = canonical.profileText.trim().length > 0 ? "ready" : "not ready";
+      const mandatoryReady = mandatory.profileComplete ? "complete" : "incomplete";
+      const contact = flags.contactShared ? "shared" : "missing";
+      return [
+        "Current manager status:",
+        `Job profile: ${profileReady}.`,
+        `Mandatory fields: ${mandatoryReady}.`,
+        `Contact: ${contact}.`,
+        session.state === "interviewing_manager"
+          ? "Interview: in progress."
+          : `Current step: ${session.state}.`,
+      ].join("\n");
+    }
+
+    return "I can show your profile status after you pick a role, candidate or manager.";
+  }
+
   private async formatStoredMatchesMessage(session: UserSessionState): Promise<string> {
     const all = await this.matchStorageService.listAll();
     if (session.role === "manager") {
@@ -3464,6 +4444,31 @@ function matchingHelpMessage(): string {
   ].join("\n");
 }
 
+function detectExplicitMatchingIntent(
+  rawText: string,
+  normalizedEnglishText: string,
+  role: UserRole | null,
+): AlwaysOnRouterDecision["matching_intent"] | null {
+  const raw = rawText.trim().toLowerCase();
+  const english = normalizedEnglishText.trim().toLowerCase();
+  if (raw === "/find_jobs" || english === "/find_jobs") {
+    return role === "manager" ? null : "run";
+  }
+  if (raw === "/find_candidates" || english === "/find_candidates") {
+    return role === "candidate" ? null : "run";
+  }
+  if (raw === "/show_matches" || english === "/show_matches") {
+    return "show";
+  }
+  if (raw === "/pause_matching" || english === "/pause_matching") {
+    return "pause";
+  }
+  if (raw === "/resume_matching" || english === "/resume_matching") {
+    return "resume";
+  }
+  return null;
+}
+
 function didRouteLikelyCallTaskPrompt(route: AlwaysOnRouterDecision["route"]): boolean {
   return (
     route === "DOC" ||
@@ -3771,6 +4776,27 @@ function localizeInterviewMetaReply(
   return trimmedReply || defaultReply;
 }
 
+function localizePrescreenMetaReply(
+  reply: string,
+  detectedLanguage: "en" | "ru" | "uk" | "other",
+): string {
+  const trimmed = reply.trim();
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized.includes("please answer the current interview question") ||
+    normalized.includes("please answer the question you are on now")
+  ) {
+    if (detectedLanguage === "ru") {
+      return "Когда будете готовы, ответьте на текущий вопрос в свободной форме. Можно текстом или голосом.";
+    }
+    if (detectedLanguage === "uk") {
+      return "Коли будете готові, дайте відповідь на поточне питання у вільній формі. Можна текстом або голосом.";
+    }
+    return "When you are ready, answer the current question in your own words. Text or voice is fine.";
+  }
+  return trimmed || reply;
+}
+
 function isGenericMetaReplyTemplate(
   reply: string,
   metaType: "timing" | "language" | "format" | "privacy" | "other" | null,
@@ -3833,6 +4859,15 @@ function buildAskBotQuestionInPreferredLanguageReply(
     return "Так, можу ставити питання українською. Дайте відповідь на поточне питання, і далі продовжу українською.";
   }
   return "Yes. I can ask questions in Russian or Ukrainian. Please answer the current question, and I will continue in your preferred language.";
+}
+
+function resolvePrescreenBootstrapLanguage(
+  preferredLanguage: UserSessionState["preferredLanguage"],
+): "en" | "ru" | "uk" {
+  if (preferredLanguage === "ru" || preferredLanguage === "uk") {
+    return preferredLanguage;
+  }
+  return "en";
 }
 
 function isJdIntakeMetaFormatQuestion(rawText: string, normalizedEnglishText: string): boolean {
@@ -4096,6 +5131,54 @@ function resolveMessageSource(
   return source;
 }
 
+function buildRouterV2PartialProfile(
+  session: UserSessionState,
+): Record<string, unknown> | null {
+  if (session.role === "candidate") {
+    return (session.candidateProfile as unknown as Record<string, unknown>) ?? null;
+  }
+  if (session.role === "manager") {
+    return (
+      (session.managerJobProfileV2 as unknown as Record<string, unknown>) ??
+      (session.jobProfile as unknown as Record<string, unknown>) ??
+      null
+    );
+  }
+  return null;
+}
+
+function buildRouterV2LastMessages(session: UserSessionState, currentUserMessage: string): string[] {
+  const previousBot = session.lastBotMessage?.trim();
+  const recentAnswers = (session.answers ?? [])
+    .slice(-4)
+    .map((item) => item.answerText.trim())
+    .filter(Boolean);
+  const merged = [
+    ...recentAnswers,
+    previousBot ?? "",
+    currentUserMessage.trim(),
+  ].filter(Boolean);
+  return merged.slice(-5);
+}
+
+function resolveRouterV2Role(session: UserSessionState): "candidate" | "manager" {
+  if (session.role === "manager") {
+    return "manager";
+  }
+  if (
+    session.state === "onboarding_manager" ||
+    session.state === "waiting_job" ||
+    session.state === "extracting_job" ||
+    session.state === "interviewing_manager" ||
+    session.state === "job_profile_ready" ||
+    session.state === "manager_mandatory_fields" ||
+    session.state === "job_published"
+  ) {
+    return "manager";
+  }
+  return "candidate";
+}
+
 function isHardSystemMessageText(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   if (!normalized) {
@@ -4114,6 +5197,29 @@ function isHardSystemMessageText(text: string): boolean {
 
 function hashMessageText(text: string): string {
   return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
+function isPrescreenOrOnboardingState(session: UserSessionState): boolean {
+  if (session.dialoguePhase) {
+    return true;
+  }
+  const state = session.state;
+  return (
+    state === "role_selection" ||
+    state === "onboarding_candidate" ||
+    state === "waiting_resume" ||
+    state === "extracting_resume" ||
+    state === "interviewing_candidate" ||
+    state === "onboarding_manager" ||
+    state === "waiting_job" ||
+    state === "extracting_job" ||
+    state === "interviewing_manager" ||
+    state === "candidate_profile_ready" ||
+    state === "job_published" ||
+    state === "waiting_candidate_decision" ||
+    state === "waiting_manager_decision" ||
+    state === "contact_shared"
+  );
 }
 
 function shouldUsePersonalName(userId: number, marker: number): boolean {

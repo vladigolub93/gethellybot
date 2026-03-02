@@ -82,6 +82,22 @@ const REQUIRED_SCHEMA: Record<string, string[]> = {
     "last_confirmation_one_liner",
     "updated_at",
   ],
+  candidate_profiles: [
+    "telegram_user_id",
+    "profile_json",
+    "profile_text",
+    "embedding",
+    "embedding_metadata",
+    "updated_at",
+  ],
+  job_profiles: [
+    "telegram_user_id",
+    "profile_json",
+    "profile_text",
+    "embedding",
+    "embedding_metadata",
+    "updated_at",
+  ],
   jobs: [
     "manager_telegram_user_id",
     "status",

@@ -43,6 +43,12 @@ interface LlmCallOptions {
   promptName?: string;
 }
 
+export interface LlmRetryOptions {
+  promptName?: string;
+  /** Retry once with this prompt on first failure. */
+  fallbackPrompt?: string;
+}
+
 export class LlmClient {
   private readonly chatModel: string;
 
@@ -81,6 +87,34 @@ export class LlmClient {
     options?: LlmCallOptions,
   ): Promise<string> {
     return this.generateJsonContent(prompt, maxTokens, options);
+  }
+
+  /**
+   * Stage 11: Try once; on failure retry once with fallbackPrompt if provided, then throw.
+   */
+  async generateStructuredJsonWithRetry(
+    prompt: string,
+    maxTokens: number,
+    options?: LlmRetryOptions,
+  ): Promise<string> {
+    try {
+      return await this.generateJsonContent(prompt, maxTokens, options);
+    } catch (first) {
+      if (options?.fallbackPrompt) {
+        this.logger.info("llm.retry_with_fallback", {
+          promptName: options.promptName ?? "structured_json",
+          error: first instanceof Error ? first.message : String(first),
+        });
+        try {
+          return await this.generateJsonContent(options.fallbackPrompt, Math.min(maxTokens, 300), {
+            promptName: `${options.promptName ?? "structured_json"}_fallback`,
+          });
+        } catch {
+          throw first;
+        }
+      }
+      throw first;
+    }
   }
 
   async generateAssistantReply(
@@ -133,6 +167,34 @@ export class LlmClient {
         error: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
+    }
+  }
+
+  /**
+   * Stage 11: Try once; on failure retry once with fallbackPrompt if provided, then throw.
+   */
+  async generateAssistantReplyWithRetry(
+    prompt: string,
+    maxTokens = 180,
+    options?: LlmCallOptions & { fallbackPrompt?: string },
+  ): Promise<string> {
+    try {
+      return await this.generateAssistantReply(prompt, maxTokens, options);
+    } catch (first) {
+      if (options?.fallbackPrompt) {
+        this.logger.info("llm.retry_with_fallback", {
+          promptName: options.promptName ?? "assistant_reply",
+          error: first instanceof Error ? first.message : String(first),
+        });
+        try {
+          return await this.generateAssistantReply(options.fallbackPrompt, Math.min(maxTokens, 80), {
+            promptName: `${options.promptName ?? "assistant_reply"}_fallback`,
+          });
+        } catch {
+          throw first;
+        }
+      }
+      throw first;
     }
   }
 

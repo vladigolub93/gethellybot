@@ -2,6 +2,10 @@ import {
   CALLBACK_CANDIDATE_APPLY_PREFIX,
   CALLBACK_CANDIDATE_ASK_PREFIX,
   CALLBACK_CANDIDATE_REJECT_PREFIX,
+  CALLBACK_CONSENT_CANDIDATE_NO_PREFIX,
+  CALLBACK_CONSENT_CANDIDATE_SHARE_PREFIX,
+  CALLBACK_CONSENT_MANAGER_NO_PREFIX,
+  CALLBACK_CONSENT_MANAGER_SHARE_PREFIX,
   CALLBACK_MANAGER_ACCEPT_PREFIX,
   CALLBACK_MANAGER_ASK_PREFIX,
   CALLBACK_MANAGER_REJECT_PREFIX,
@@ -51,6 +55,30 @@ export function buildManagerDecisionKeyboard(matchId: string): TelegramReplyMark
         { text: "Want to talk", callback_data: `${CALLBACK_MANAGER_ACCEPT_PREFIX}${matchId}` },
         { text: "Skip", callback_data: `${CALLBACK_MANAGER_REJECT_PREFIX}${matchId}` },
         { text: "Ask question", callback_data: `${CALLBACK_MANAGER_ASK_PREFIX}${matchId}` },
+      ],
+    ],
+  };
+}
+
+/** Stage 10: consent flow — candidate: Share / Not now */
+export function buildConsentCandidateKeyboard(matchId: string): TelegramReplyMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Share", callback_data: `${CALLBACK_CONSENT_CANDIDATE_SHARE_PREFIX}${matchId}` },
+        { text: "Not now", callback_data: `${CALLBACK_CONSENT_CANDIDATE_NO_PREFIX}${matchId}` },
+      ],
+    ],
+  };
+}
+
+/** Stage 10: consent flow — manager: Share / Not now */
+export function buildConsentManagerKeyboard(matchId: string): TelegramReplyMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: "Share", callback_data: `${CALLBACK_CONSENT_MANAGER_SHARE_PREFIX}${matchId}` },
+        { text: "Not now", callback_data: `${CALLBACK_CONSENT_MANAGER_NO_PREFIX}${matchId}` },
       ],
     ],
   };

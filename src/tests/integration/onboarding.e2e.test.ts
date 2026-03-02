@@ -91,6 +91,21 @@ function buildRouterHarness(): {
     {
       async classify() {
         return {
+          parseSuccess: true,
+          decision: {
+            language: "en",
+            intent: "other",
+            assistant_message: "Please continue.",
+            next_action: "none",
+            state_patch: {},
+            facts: [],
+          },
+        };
+      },
+    } as never,
+    {
+      async classify() {
+        return {
           route: "OTHER",
           conversation_intent: "OTHER",
           meta_type: null,
@@ -132,7 +147,38 @@ function buildRouterHarness(): {
       invalidate() {},
     } as never,
     {} as never,
+    false,
+    false,
+    {
+      async bootstrap() {
+        throw new Error("not used in onboarding test");
+      },
+      async submitAnswer() {
+        throw new Error("not used in onboarding test");
+      },
+      async skipCurrentQuestion() {
+        throw new Error("not used in onboarding test");
+      },
+    } as never,
+    {
+      async bootstrap() {
+        throw new Error("not used in onboarding test");
+      },
+      async submitAnswer() {
+        throw new Error("not used in onboarding test");
+      },
+      async skipCurrentQuestion() {
+        throw new Error("not used in onboarding test");
+      },
+    } as never,
     noopLogger as never,
+    false,
+    undefined,
+    false,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
   );
 
   return { router, stateService, telegram };

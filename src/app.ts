@@ -10,6 +10,8 @@ import { AdminWebappService } from "./admin/admin-webapp.service";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
 import { OutboundMessageComposerService } from "./ai/outbound-message-composer.service";
+import { RouterV2Service } from "./ai/router.v2";
+import { AdminNotifier, setDefaultAdminNotifier } from "./admin/admin-notifier";
 import { createLogger, Logger } from "./config/logger";
 import { EmbeddingsClient } from "./ai/embeddings.client";
 import { CHAT_MODEL, EMBEDDINGS_MODEL, LlmClient, TRANSCRIPTION_MODEL } from "./ai/llm.client";
@@ -40,8 +42,17 @@ import { CandidateNameExtractorService } from "./interviews/candidate-name-extra
 import { ManagerJobProfileV2Service } from "./interviews/manager-job-profile-v2.service";
 import { ManagerJobTechnicalSummaryService } from "./interviews/manager-job-technical-summary.service";
 import { AnswerEvaluatorService } from "./interviews/answer-evaluator.service";
+import { CandidateAnswerInterpreter } from "./interviews/prescreen/candidate-answer-interpreter";
+import { CandidateClaimExtractor } from "./interviews/prescreen/candidate-claim-extractor";
+import { CandidatePrescreenEngine } from "./interviews/prescreen/candidate-prescreen.engine";
+import { CandidateQuestionGenerator } from "./interviews/prescreen/candidate-question-generator";
+import { JobAnswerInterpreter } from "./interviews/prescreen/job-answer-interpreter";
+import { JobClaimExtractor } from "./interviews/prescreen/job-claim-extractor";
+import { JobPrescreenEngine } from "./interviews/prescreen/job-prescreen.engine";
+import { JobQuestionGenerator } from "./interviews/prescreen/job-question-generator";
 import { HiringScopeGuardrailsService } from "./guardrails/hiring-scope-guardrails.service";
 import { NormalizationService } from "./i18n/normalization.service";
+import { MatchCardComposerService } from "./matching/match-card-composer.service";
 import { MatchingEngine } from "./matching/matching.engine";
 import { QdrantClient } from "./matching/qdrant.client";
 import { QdrantBackfillService } from "./matching/qdrant-backfill.service";
@@ -54,6 +65,7 @@ import { RateLimitService } from "./notifications/rate-limit.service";
 import { DataDeletionService } from "./privacy/data-deletion.service";
 import { CandidateProfileBuilder } from "./profiles/candidate-profile.builder";
 import { JobProfileBuilder } from "./profiles/job-profile.builder";
+import { ProfileUpdateService } from "./profiles/profile-update.service";
 import { ProfileSummaryService } from "./profiles/profile-summary.service";
 import { CandidateMandatoryFieldsService } from "./profiles/candidate-mandatory-fields.service";
 import { JobMandatoryFieldsService } from "./jobs/job-mandatory-fields.service";
@@ -63,6 +75,12 @@ import { StateRouter } from "./router/state.router";
 import { buildLlmGateDispatcher } from "./router/dispatch/llm-gate.dispatcher";
 import { AlwaysOnRouterService } from "./router/always-on-router.service";
 import { UserRagContextService } from "./router/context/user-rag-context.service";
+import { DialogueOrchestrator } from "./router/dialogue/dialogue.orchestrator";
+import { IntentClassifier } from "./router/dialogue/intent.classifier";
+import { LanguageService } from "./router/dialogue/language.service";
+import { ReplyComposerV2 } from "./router/dialogue/reply.composer";
+import { DialogueOrchestratorV2 } from "./dialogue/dialogue.orchestrator";
+import { IntentRouterV2Service } from "./dialogue/intent-router-v2.service";
 import { InterviewStorageService } from "./storage/interview-storage.service";
 import { MatchStorageService } from "./storage/match-storage.service";
 import { StateService } from "./state/state.service";
@@ -88,6 +106,15 @@ export function createApp(env: EnvConfig): AppContext {
       batchMs: env.telegramLogsBatchMs,
     },
   });
+  if (env.adminTelegramChatId) {
+    const adminNotifier = new AdminNotifier({
+      botToken: env.telegramBotToken,
+      adminChatId: env.adminTelegramChatId,
+      minLevel: env.adminLogLevel,
+      logger,
+    });
+    setDefaultAdminNotifier(adminNotifier);
+  }
   const app = express();
 
   app.use(express.json({ limit: "2mb" }));
@@ -115,7 +142,6 @@ export function createApp(env: EnvConfig): AppContext {
   const jobProfileBuilder = new JobProfileBuilder(llmClient);
   const profileSummaryService = new ProfileSummaryService();
   const interviewStorageService = new InterviewStorageService();
-  const vectorSearchRepository = new VectorSearchRepository();
   const qdrantClient = new QdrantClient(
     {
       baseUrl: env.qdrantUrl,
@@ -137,6 +163,10 @@ export function createApp(env: EnvConfig): AppContext {
       : undefined;
   const interviewsRepository = new InterviewsRepository(logger, supabaseClient);
   const profilesRepository = new ProfilesRepository(logger, supabaseClient);
+  const vectorSearchRepository = new VectorSearchRepository(
+    profilesRepository,
+    logger,
+  );
   const jobsRepository = new JobsRepository(logger, supabaseClient);
   const matchesRepository = new MatchesRepository(logger, supabaseClient);
   const dataDeletionRepository = new DataDeletionRepository(logger, supabaseClient);
@@ -202,6 +232,17 @@ export function createApp(env: EnvConfig): AppContext {
   );
   const candidateTechnicalSummaryService = new CandidateTechnicalSummaryService(llmClient);
   const alwaysOnRouterService = new AlwaysOnRouterService(llmClient, logger);
+  const routerV2Service = new RouterV2Service(llmClient, logger);
+  const languageService = new LanguageService(usersRepository, logger);
+  const intentClassifier = new IntentClassifier(llmClient, logger);
+  const replyComposerV2 = new ReplyComposerV2(llmClient, logger, env.prescreenV3Enabled);
+  const dialogueOrchestrator = new DialogueOrchestrator(
+    intentClassifier,
+    languageService,
+    replyComposerV2,
+    logger,
+  );
+  const intentRouterV2 = new IntentRouterV2Service(llmClient, logger);
   const interviewIntentRouterService = new InterviewIntentRouterService(llmClient, logger);
   const candidateNameExtractorService = new CandidateNameExtractorService(llmClient, logger);
   const normalizationService = new NormalizationService(llmClient);
@@ -218,6 +259,43 @@ export function createApp(env: EnvConfig): AppContext {
   );
   const managerJobTechnicalSummaryService = new ManagerJobTechnicalSummaryService(llmClient);
   const answerEvaluatorService = new AnswerEvaluatorService(llmClient, logger);
+  const candidateClaimExtractor = new CandidateClaimExtractor(llmClient, logger);
+  const candidateQuestionGenerator = new CandidateQuestionGenerator(llmClient, logger);
+  const candidateAnswerInterpreter = new CandidateAnswerInterpreter(llmClient, logger);
+  const jobClaimExtractor = new JobClaimExtractor(llmClient, logger);
+  const jobQuestionGenerator = new JobQuestionGenerator(llmClient, logger);
+  const jobAnswerInterpreter = new JobAnswerInterpreter(llmClient, logger);
+  const profileUpdateService = new ProfileUpdateService(
+    llmClient,
+    embeddingsClient,
+    profilesRepository,
+    vectorSearchRepository,
+    logger,
+  );
+  const candidatePrescreenEngine = new CandidatePrescreenEngine(
+    candidateClaimExtractor,
+    candidateQuestionGenerator,
+    candidateAnswerInterpreter,
+    candidateResumeAnalysisService,
+    candidateProfileBuilder,
+    candidateProfileUpdateV2Service,
+    profileUpdateService,
+    stateService,
+    profilesRepository,
+    logger,
+  );
+  const jobPrescreenEngine = new JobPrescreenEngine(
+    jobClaimExtractor,
+    jobQuestionGenerator,
+    jobAnswerInterpreter,
+    interviewPlanService,
+    jobProfileBuilder,
+    managerJobProfileV2Service,
+    profileUpdateService,
+    stateService,
+    profilesRepository,
+    logger,
+  );
   const matchStorageService = new MatchStorageService(logger, matchesRepository);
   const matchingEngine = new MatchingEngine(
     interviewStorageService,
@@ -231,6 +309,24 @@ export function createApp(env: EnvConfig): AppContext {
     logger,
     qdrantClient,
     qualityFlagsService,
+  );
+  const matchCardComposerService = new MatchCardComposerService(llmClient, logger);
+  const dialogueOrchestratorV2 = new DialogueOrchestratorV2(
+    intentRouterV2,
+    async (input) => {
+      const result = await replyComposerV2.compose({
+        userRole: input.userRole,
+        userLanguage: input.userLanguage,
+        currentState: input.currentState,
+        lastUserMessage: input.lastUserMessage,
+        nextQuestionText: input.nextQuestionText,
+        userFrustrated: input.userFrustrated,
+      });
+      return result?.message ?? null;
+    },
+    logger,
+    matchingEngine,
+    matchCardComposerService,
   );
   const qdrantBackfillService = new QdrantBackfillService(
     profilesRepository,
@@ -342,13 +438,25 @@ export function createApp(env: EnvConfig): AppContext {
     jobsRepository,
     profilesRepository,
     llmClient,
+    routerV2Service,
     alwaysOnRouterService,
     interviewIntentRouterService,
     normalizationService,
     interviewConfirmationService,
     userRagContextService,
     candidateNameExtractorService,
+    env.prescreenV2Enabled,
+    env.jobPrescreenV2Enabled,
+    candidatePrescreenEngine,
+    jobPrescreenEngine,
     logger,
+    env.conversationStateV2Enabled,
+    dialogueOrchestratorV2,
+    env.dialogueV2Enabled,
+    replyComposerV2,
+    languageService,
+    dialogueOrchestrator,
+    env.adminUserIds,
   );
   const llmGateDispatcher = buildLlmGateDispatcher({
     stateRouter,

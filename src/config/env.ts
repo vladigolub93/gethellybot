@@ -13,6 +13,10 @@ export interface EnvConfig {
   adminSecret?: string;
   adminWebappPin: string;
   adminUserIds: number[];
+  /** Stage 11: admin Telegram group/DM for error reporting */
+  adminTelegramChatId?: string;
+  /** Stage 11: min level to send to admin (info|warn|error) */
+  adminLogLevel: "info" | "warn" | "error";
   adminWebappSessionTtlSec: number;
   adminWebappRequireTelegram: boolean;
   port: number;
@@ -28,6 +32,11 @@ export interface EnvConfig {
   telegramReactionsEnabled: boolean;
   telegramReactionsProbability: number;
   telegramButtonsEnabled: boolean;
+  prescreenV2Enabled: boolean;
+  jobPrescreenV2Enabled: boolean;
+  dialogueV2Enabled: boolean;
+  prescreenV3Enabled: boolean;
+  conversationStateV2Enabled: boolean;
   interviewReminderEnabled: boolean;
   interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
@@ -70,6 +79,11 @@ export function loadEnv(): EnvConfig {
   const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
   const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
   const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
+  const prescreenV2EnabledRaw = process.env.PRESCREEN_V2_ENABLED ?? "true";
+  const jobPrescreenV2EnabledRaw = process.env.JOB_PRESCREEN_V2_ENABLED ?? "true";
+  const dialogueV2EnabledRaw = process.env.DIALOGUE_V2_ENABLED ?? "true";
+  const prescreenV3EnabledRaw = process.env.PRESCREEN_V3_ENABLED ?? "false";
+  const conversationStateV2EnabledRaw = process.env.CONVERSATION_STATE_V2_ENABLED ?? "true";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
@@ -84,6 +98,11 @@ export function loadEnv(): EnvConfig {
   const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
   const telegramReactionsProbability = Number(reactionsProbabilityRaw);
   const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
+  const prescreenV2Enabled = parseBoolean(prescreenV2EnabledRaw);
+  const jobPrescreenV2Enabled = parseBoolean(jobPrescreenV2EnabledRaw);
+  const dialogueV2Enabled = parseBoolean(dialogueV2EnabledRaw);
+  const prescreenV3Enabled = parseBoolean(prescreenV3EnabledRaw);
+  const conversationStateV2Enabled = parseBoolean(conversationStateV2EnabledRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
   const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
@@ -132,6 +151,8 @@ export function loadEnv(): EnvConfig {
     adminSecret: getOptionalTrimmed("ADMIN_SECRET"),
     adminWebappPin: process.env.ADMIN_WEBAPP_PIN?.trim() || "21041993",
     adminUserIds: parseAdminUserIds(process.env.ADMIN_USER_IDS),
+    adminTelegramChatId: getOptionalTrimmed("ADMIN_TELEGRAM_CHAT_ID"),
+    adminLogLevel: parseAdminLogLevel(process.env.ADMIN_LOG_LEVEL ?? "warn"),
     adminWebappSessionTtlSec,
     adminWebappRequireTelegram,
     port,
@@ -147,6 +168,11 @@ export function loadEnv(): EnvConfig {
     telegramReactionsEnabled,
     telegramReactionsProbability,
     telegramButtonsEnabled,
+    prescreenV2Enabled,
+    jobPrescreenV2Enabled,
+    dialogueV2Enabled,
+    prescreenV3Enabled,
+    conversationStateV2Enabled,
     interviewReminderEnabled,
     interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),
@@ -162,10 +188,22 @@ export function loadEnv(): EnvConfig {
 
 function parseAdminUserIds(rawValue: string | undefined): number[] {
   const ownerTelegramUserId = 768517770;
-  if (rawValue && rawValue.trim().length > 0) {
+  if (!rawValue || rawValue.trim().length === 0) {
     return [ownerTelegramUserId];
   }
-  return [ownerTelegramUserId];
+  const ids = rawValue
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return ids.length > 0 ? ids : [ownerTelegramUserId];
+}
+
+function parseAdminLogLevel(value: string): "info" | "warn" | "error" {
+  const v = value.trim().toLowerCase();
+  if (v === "info" || v === "warn" || v === "error") return v;
+  return "warn";
 }
 
 function parseBoolean(value: string): boolean {

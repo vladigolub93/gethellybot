@@ -59,6 +59,26 @@ export function managerContactRequiredForExchangeMessage(): string {
   ].join("\n");
 }
 
+/** Stage 10: consent flow — ask candidate to share contact after manager accepted */
+export function consentAskCandidateShareContactMessage(): string {
+  return "The hiring manager is interested. Do you want to share your Telegram contact with them?";
+}
+
+/** Stage 10: consent flow — ask manager to share contact after candidate agreed */
+export function consentAskManagerShareContactMessage(): string {
+  return "Candidate agreed to connect. Share your Telegram contact with them?";
+}
+
+/** Stage 10: candidate declined to share contact */
+export function consentCandidateDeclinedMessage(): string {
+  return "No problem. The match stays open; you can share contact later if you change your mind.";
+}
+
+/** Stage 10: manager declined to share contact */
+export function consentManagerDeclinedMessage(): string {
+  return "No problem. The match stays open; you can share contact later if you change your mind.";
+}
+
 export function candidateResumePrompt(): string {
   return [
     "Send your resume as a PDF or DOCX file, or paste the full text here.",
@@ -289,6 +309,42 @@ export function documentUploadNotAllowedMessage(): string {
 
 export function textOnlyReplyMessage(): string {
   return "Please reply with text.";
+}
+
+/** Fallback when LLM fails (HTTP 500, invalid content). Dialogue v2. */
+export function dialogueLlmFallbackMessage(lang: "en" | "ru" | "uk" = "en"): string {
+  switch (lang) {
+    case "ru":
+      return "Не смог разобрать сообщение. Напишите, пожалуйста, одной фразой или отправьте голосовое.";
+    case "uk":
+      return "Не зміг розібрати повідомлення. Напишіть, будь ласка, однією фразою або надішліть голосове.";
+    default:
+      return "I had a hiccup reading that. Can you rephrase in one sentence or send a voice message?";
+  }
+}
+
+/** When user repeatedly refuses / skips: acknowledge and move on. Dialogue v2. */
+export function dialogueSkipAndMoveOnMessage(lang: "en" | "ru" | "uk" = "en"): string {
+  switch (lang) {
+    case "ru":
+      return "Без проблем, можем пропустить. Сохраню профиль с тем, что есть, и продолжу.";
+    case "uk":
+      return "Без проблем, можемо пропустити. Збережу профіль з тим, що є, і продовжу.";
+    default:
+      return "No problem, we can skip this. I'll keep your profile with what we have.";
+  }
+}
+
+/** Repeat loop prevention: offer skip. State redesign v2. */
+export function dialogueRepeatLoopSkipHintMessage(lang: "en" | "ru" | "uk" = "en"): string {
+  switch (lang) {
+    case "ru":
+      return "Понял. Если хочешь, напиши «пропустить» — и мы перейдём дальше.";
+    case "uk":
+      return "Зрозуміло. Якщо хочеш, напиши «пропустити» — і ми перейдемо далі.";
+    default:
+      return "Got it. If you want, you can say 'skip' and we'll move on.";
+  }
 }
 
 export function transcribingVoiceMessage(): string {

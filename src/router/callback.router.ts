@@ -2,6 +2,10 @@ import {
   CALLBACK_CANDIDATE_APPLY_PREFIX,
   CALLBACK_CANDIDATE_ASK_PREFIX,
   CALLBACK_CANDIDATE_REJECT_PREFIX,
+  CALLBACK_CONSENT_CANDIDATE_NO_PREFIX,
+  CALLBACK_CONSENT_CANDIDATE_SHARE_PREFIX,
+  CALLBACK_CONSENT_MANAGER_NO_PREFIX,
+  CALLBACK_CONSENT_MANAGER_SHARE_PREFIX,
   CALLBACK_MANAGER_ACCEPT_PREFIX,
   CALLBACK_MANAGER_ASK_PREFIX,
   CALLBACK_MANAGER_REJECT_PREFIX,
@@ -19,6 +23,8 @@ import { StateService } from "../state/state.service";
 import { StatePersistenceService } from "../state/state-persistence.service";
 import { TelegramClient } from "../telegram/telegram.client";
 import {
+  buildConsentCandidateKeyboard,
+  buildConsentManagerKeyboard,
   buildContactRequestKeyboard,
   buildRemoveReplyKeyboard,
   buildRoleLearnMoreKeyboard,
@@ -29,6 +35,10 @@ import {
   candidateOnboardingMessage,
   candidateAppliedAcknowledgement,
   candidateRejectedAcknowledgement,
+  consentAskCandidateShareContactMessage,
+  consentAskManagerShareContactMessage,
+  consentCandidateDeclinedMessage,
+  consentManagerDeclinedMessage,
   contactRequestMessage,
   onboardingLearnHowItWorksMessage,
   roleSelectionMessage,
@@ -76,6 +86,23 @@ export class CallbackRouter {
 
     if (update.data.startsWith(CALLBACK_MANAGER_REJECT_PREFIX)) {
       await this.handleManagerReject(update);
+      return;
+    }
+
+    if (update.data.startsWith(CALLBACK_CONSENT_CANDIDATE_SHARE_PREFIX)) {
+      await this.handleConsentCandidateShare(update);
+      return;
+    }
+    if (update.data.startsWith(CALLBACK_CONSENT_CANDIDATE_NO_PREFIX)) {
+      await this.handleConsentCandidateNo(update);
+      return;
+    }
+    if (update.data.startsWith(CALLBACK_CONSENT_MANAGER_SHARE_PREFIX)) {
+      await this.handleConsentManagerShare(update);
+      return;
+    }
+    if (update.data.startsWith(CALLBACK_CONSENT_MANAGER_NO_PREFIX)) {
+      await this.handleConsentManagerNo(update);
       return;
     }
 
@@ -238,12 +265,82 @@ export class CallbackRouter {
     const matchId = update.data.slice(CALLBACK_MANAGER_ACCEPT_PREFIX.length);
     try {
       const match = await this.decisionService.managerAccept(matchId, update.userId);
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Accepted");
+      await this.sendBotMessage(update.chatId, managerAcceptedAcknowledgement(), "callback_router.manager_accept");
+      const candidateSession = this.stateService.getSession(match.candidateUserId);
+      if (candidateSession) {
+        await this.telegramClient.sendUserMessage({
+          source: "callback_router.consent_ask_candidate",
+          chatId: candidateSession.chatId,
+          text: consentAskCandidateShareContactMessage(),
+          replyMarkup: buildConsentCandidateKeyboard(match.id),
+        });
+      }
+    } catch (error) {
+      await this.telegramClient.answerCallbackQuery(
+        update.callbackQueryId,
+        error instanceof Error ? error.message : "Failed",
+      );
+    }
+  }
+
+  private async handleConsentCandidateShare(update: Extract<NormalizedUpdate, { kind: "callback" }>): Promise<void> {
+    const matchId = update.data.slice(CALLBACK_CONSENT_CANDIDATE_SHARE_PREFIX.length);
+    try {
+      const match = await this.decisionService.getMatch(matchId);
+      if (!match || match.candidateUserId !== update.userId) {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Invalid or not your match.");
+        return;
+      }
+      if (match.status !== "manager_accepted") {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "This match is no longer in consent step.");
+        return;
+      }
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Thanks");
+      await this.sendBotMessage(update.chatId, "We'll ask the manager to share their contact.", "callback_router.consent_cand_share");
+      const managerSession = this.stateService.getSession(match.managerUserId);
+      if (managerSession) {
+        await this.telegramClient.sendUserMessage({
+          source: "callback_router.consent_ask_manager",
+          chatId: managerSession.chatId,
+          text: consentAskManagerShareContactMessage(),
+          replyMarkup: buildConsentManagerKeyboard(match.id),
+        });
+      }
+    } catch (error) {
+      await this.telegramClient.answerCallbackQuery(
+        update.callbackQueryId,
+        error instanceof Error ? error.message : "Failed",
+      );
+    }
+  }
+
+  private async handleConsentCandidateNo(update: Extract<NormalizedUpdate, { kind: "callback" }>): Promise<void> {
+    const matchId = update.data.slice(CALLBACK_CONSENT_CANDIDATE_NO_PREFIX.length);
+    const match = await this.decisionService.getMatch(matchId);
+    if (match && match.candidateUserId === update.userId) {
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "OK");
+      await this.sendBotMessage(update.chatId, consentCandidateDeclinedMessage(), "callback_router.consent_cand_no");
+    } else {
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Invalid.");
+    }
+  }
+
+  private async handleConsentManagerShare(update: Extract<NormalizedUpdate, { kind: "callback" }>): Promise<void> {
+    const matchId = update.data.slice(CALLBACK_CONSENT_MANAGER_SHARE_PREFIX.length);
+    try {
+      const match = await this.decisionService.getMatch(matchId);
+      if (!match || match.managerUserId !== update.userId) {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Invalid or not your match.");
+        return;
+      }
+      if (match.status !== "manager_accepted") {
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "This match is no longer in consent step.");
+        return;
+      }
       const contacts = await this.contactExchangeService.prepareExchange(match);
       if (!contacts.ready) {
-        await this.telegramClient.answerCallbackQuery(
-          update.callbackQueryId,
-          "Contact sharing is pending",
-        );
+        await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Contact sharing is pending");
         return;
       }
       await this.notificationEngine.notifyContactsShared(
@@ -252,13 +349,24 @@ export class CallbackRouter {
         contacts.candidateContact,
       );
       await this.decisionService.markContactShared(match.id, update.userId);
-      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Accepted");
-      await this.sendBotMessage(update.chatId, managerAcceptedAcknowledgement(), "callback_router.manager_accept");
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Shared");
+      await this.sendBotMessage(update.chatId, managerAcceptedAcknowledgement(), "callback_router.consent_mgr_share");
     } catch (error) {
       await this.telegramClient.answerCallbackQuery(
         update.callbackQueryId,
         error instanceof Error ? error.message : "Failed",
       );
+    }
+  }
+
+  private async handleConsentManagerNo(update: Extract<NormalizedUpdate, { kind: "callback" }>): Promise<void> {
+    const matchId = update.data.slice(CALLBACK_CONSENT_MANAGER_NO_PREFIX.length);
+    const match = await this.decisionService.getMatch(matchId);
+    if (match && match.managerUserId === update.userId) {
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "OK");
+      await this.sendBotMessage(update.chatId, consentManagerDeclinedMessage(), "callback_router.consent_mgr_no");
+    } else {
+      await this.telegramClient.answerCallbackQuery(update.callbackQueryId, "Invalid.");
     }
   }
 
@@ -307,6 +415,42 @@ export class CallbackRouter {
       }
     } catch {
       return;
+    }
+  }
+
+  /**
+   * Stage 10: Execute match action from text intent (apply/reject). Same logic as callback handlers.
+   * Does not answer callback query; caller sends replyText to user.
+   */
+  async executeMatchAction(
+    userId: number,
+    chatId: number,
+    matchAction: { type: "candidate_apply" | "candidate_reject" | "manager_accept" | "manager_reject"; matchId: string },
+  ): Promise<void> {
+    const { type, matchId } = matchAction;
+    try {
+      if (type === "candidate_apply") {
+        const match = await this.decisionService.candidateApply(matchId, userId);
+        await this.notificationEngine.notifyManagerCandidateApplied(match);
+      } else if (type === "candidate_reject") {
+        await this.decisionService.candidateReject(matchId, userId);
+      } else if (type === "manager_accept") {
+        const match = await this.decisionService.managerAccept(matchId, userId);
+        const candidateSession = this.stateService.getSession(match.candidateUserId);
+        if (candidateSession) {
+          await this.telegramClient.sendUserMessage({
+            source: "callback_router.execute_match_action.consent_ask_candidate",
+            chatId: candidateSession.chatId,
+            text: consentAskCandidateShareContactMessage(),
+            replyMarkup: buildConsentCandidateKeyboard(match.id),
+          });
+        }
+      } else {
+        const match = await this.decisionService.managerReject(matchId, userId);
+        await this.notificationEngine.notifyManagerRejected(match);
+      }
+    } catch (error) {
+      throw error;
     }
   }
 

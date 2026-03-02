@@ -12,6 +12,50 @@ import { JobProfileV2, JobTechnicalSummaryV2 } from "./job-profile.types";
 export type UserRole = "candidate" | "manager";
 export type PreferredLanguage = "en" | "ru" | "uk" | "unknown";
 
+/** Dialogue phase for state redesign v2 (dynamic prescreen, max 10). */
+export type DialoguePhase =
+  | "onboarding_contact"
+  | "onboarding_role"
+  | "collecting_document"
+  | "prescreen_active"
+  | "prescreen_paused"
+  | "profile_ready"
+  | "matching_idle";
+
+/** Current question in prescreen v2. */
+export interface PrescreenCurrentQuestionV2 {
+  id: string;
+  text: string;
+  mapsTo: string[];
+  isMandatory: boolean;
+}
+
+/** Mandatory fields for candidate (filled during prescreen, max 10 Qs). */
+export interface PrescreenMandatoryCandidateV2 {
+  location?: boolean;
+  workFormat?: boolean;
+  salary?: boolean;
+}
+
+/** Mandatory fields for manager. */
+export interface PrescreenMandatoryManagerV2 {
+  workFormat?: boolean;
+  allowedCountries?: boolean;
+  budget?: boolean;
+}
+
+/** Prescreen state v2: dynamic loop, max 10 questions, follow-ups tracked. */
+export interface PrescreenStateV2 {
+  totalQuestionsAsked: number;
+  maxQuestions: number;
+  currentQuestion: PrescreenCurrentQuestionV2 | null;
+  followUpUsedForQuestionIds: string[];
+  askedQuestionIds: string[];
+  lastMicroConfirmationAt: string | null;
+  mandatory: PrescreenMandatoryCandidateV2 | PrescreenMandatoryManagerV2;
+  lastIntent: string | null;
+}
+
 export type UserState =
   | "role_selection"
   | "onboarding_candidate"
@@ -35,6 +79,8 @@ export type CandidateWorkMode = "remote" | "hybrid" | "onsite" | "flexible";
 export type CandidateSalaryPeriod = "month" | "year";
 export type CandidateSalaryCurrency = "USD" | "EUR" | "ILS" | "GBP" | "other";
 export type CandidateMandatoryStep = "location" | "work_mode" | "salary";
+export type CandidatePrescreenVersion = "v1" | "v2";
+export type JobPrescreenVersion = "v1" | "v2";
 export type JobWorkFormat = "remote" | "hybrid" | "onsite";
 export type JobBudgetPeriod = "month" | "year";
 export type JobBudgetCurrency = "USD" | "EUR" | "ILS" | "GBP" | "other";
@@ -71,6 +117,21 @@ export interface UserSessionState {
   documentType?: DocumentType;
   interviewPlan?: InterviewPlan;
   candidateInterviewPlanV2?: CandidateInterviewPlanV2;
+  prescreenVersion?: CandidatePrescreenVersion;
+  prescreenQuestionIndex?: number;
+  prescreenPlan?: CandidatePrescreenQuestionState[];
+  prescreenAnswers?: CandidatePrescreenAnswerState[];
+  prescreenFacts?: CandidatePrescreenFactState[];
+  prescreenFollowUpsByQuestion?: Record<string, number>;
+  prescreenTotalFollowUps?: number;
+  prescreenAiRetriesByQuestion?: Record<string, number>;
+  jobPrescreenVersion?: JobPrescreenVersion;
+  jobPrescreenQuestionIndex?: number;
+  jobPrescreenPlan?: JobPrescreenQuestionState[];
+  jobPrescreenAnswers?: JobPrescreenAnswerState[];
+  jobPrescreenFacts?: JobPrescreenFactState[];
+  jobPrescreenFollowUpsByQuestion?: Record<string, number>;
+  jobPrescreenTotalFollowUps?: number;
   candidateConfidenceUpdates?: CandidateConfidenceUpdate[];
   candidateContradictionFlags?: string[];
   candidateAiAssistedStreak?: number;
@@ -128,6 +189,20 @@ export interface UserSessionState {
     needsCurrencyConfirmation: boolean;
   };
   processedUpdateIds?: number[];
+  /** Conversation state redesign v2: phase-driven flow. */
+  dialoguePhase?: DialoguePhase;
+  /** Prescreen v2: dynamic questions, max 10, mandatory tracking. */
+  prescreenV2?: PrescreenStateV2;
+  /** Stage 10: matching by request — last shown cards, for text "apply"/"reject". */
+  matching?: MatchingStateV1;
+  /** Stage 10: manager's active job id for matching (telegram user id or future job id). */
+  lastActiveJobId?: string | null;
+}
+
+/** Matching UI state: last shown match IDs and the one actionable (for text intents). */
+export interface MatchingStateV1 {
+  lastShownMatchIds: string[];
+  lastActionableMatchId: string | null;
 }
 
 export interface InterviewAnswer {
@@ -167,6 +242,56 @@ export interface CandidateConfidenceUpdate {
   previous_value: string;
   new_value: string;
   reason: string;
+}
+
+export interface CandidatePrescreenQuestionState {
+  readonly id: string;
+  readonly tech_or_topic: string;
+  readonly question: string;
+  readonly intent: "verify_claim";
+  readonly expected_answer_shape: "short_story";
+  readonly followup_policy: "at_most_one_soft_followup";
+}
+
+export interface CandidatePrescreenFactState {
+  readonly key: string;
+  readonly value: string | number | boolean | null;
+  readonly confidence: number;
+}
+
+export interface CandidatePrescreenAnswerState {
+  readonly question_id: string;
+  readonly question_text: string;
+  readonly answer_text: string;
+  readonly interpreted_facts: CandidatePrescreenFactState[];
+  readonly notes: string;
+  readonly ai_assisted_likelihood: "low" | "medium" | "high";
+  readonly ai_assisted_confidence: number;
+  readonly quality_warning?: boolean;
+  readonly created_at: string;
+}
+
+export interface JobPrescreenQuestionState {
+  readonly id: string;
+  readonly topic: string;
+  readonly question: string;
+  readonly intent: "clarify";
+  readonly followup_policy: "at_most_one_soft_followup";
+}
+
+export interface JobPrescreenFactState {
+  readonly key: string;
+  readonly value: string | number | boolean | null;
+  readonly confidence: number;
+}
+
+export interface JobPrescreenAnswerState {
+  readonly question_id: string;
+  readonly question_text: string;
+  readonly answer_text: string;
+  readonly interpreted_facts: JobPrescreenFactState[];
+  readonly notes: string;
+  readonly created_at: string;
 }
 
 export interface ManagerProfileUpdate {

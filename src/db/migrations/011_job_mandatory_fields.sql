@@ -1,14 +1,28 @@
-alter table if exists jobs
-  add column if not exists job_work_format text not null default '',
-  add column if not exists job_remote_countries text[] null,
-  add column if not exists job_remote_worldwide boolean not null default false,
-  add column if not exists job_budget_min numeric null,
-  add column if not exists job_budget_max numeric null,
-  add column if not exists job_budget_currency text null,
-  add column if not exists job_budget_period text null,
+alter table public.jobs
+  add column if not exists job_work_format text not null default '';
+
+alter table public.jobs
+  add column if not exists job_remote_countries text[] null;
+
+alter table public.jobs
+  add column if not exists job_remote_worldwide boolean not null default false;
+
+alter table public.jobs
+  add column if not exists job_budget_min numeric null;
+
+alter table public.jobs
+  add column if not exists job_budget_max numeric null;
+
+alter table public.jobs
+  add column if not exists job_budget_currency text null;
+
+alter table public.jobs
+  add column if not exists job_budget_period text null;
+
+alter table public.jobs
   add column if not exists job_profile_complete boolean not null default false;
 
-update jobs
+update public.jobs
 set job_profile_complete = (
   length(trim(coalesce(job_work_format, ''))) > 0 and
   (

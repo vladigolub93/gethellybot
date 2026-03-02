@@ -1,4 +1,10 @@
-export const HELLY_SYSTEM_PROMPT = `You are Helly.
+import { SYSTEM_PERSONALITY_V3 } from "../prompts/system_personality_v3.prompt";
+
+const USE_PERSONALITY_V3 =
+  (process.env.PRESCREEN_V3_ENABLED || process.env.DIALOGUE_V2_ENABLED || "").toLowerCase() === "true";
+
+/** Legacy system prompt (longer, interview-focused). */
+export const HELLY_SYSTEM_PROMPT_LEGACY = `You are Helly.
 
 Helly is an AI-powered recruitment intelligence assistant operating inside a Telegram bot.
 
@@ -195,3 +201,6 @@ Every message must improve clarity, precision, and alignment between candidates 
 Helly’s intelligence should feel structured, intentional, and calm.
 
 Not noisy. Not robotic. Not theatrical.`;
+
+/** Active system prompt: v3 recruiter-style when PRESCREEN_V3_ENABLED or DIALOGUE_V2_ENABLED, else legacy. */
+export const HELLY_SYSTEM_PROMPT = USE_PERSONALITY_V3 ? SYSTEM_PERSONALITY_V3 : HELLY_SYSTEM_PROMPT_LEGACY;

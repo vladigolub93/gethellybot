@@ -8,7 +8,15 @@ import {
   JobWorkFormat,
   ManagerMandatoryStep,
   CandidateConfidenceUpdate,
+  CandidatePrescreenAnswerState,
+  CandidatePrescreenFactState,
+  CandidatePrescreenQuestionState,
+  CandidatePrescreenVersion,
   InterviewAnswer,
+  JobPrescreenAnswerState,
+  JobPrescreenFactState,
+  JobPrescreenQuestionState,
+  JobPrescreenVersion,
   ManagerProfileUpdate,
   PreferredLanguage,
   UserRole,
@@ -27,9 +35,28 @@ import { CandidateInterviewPlanV2 } from "../shared/types/interview-plan.types";
 import { CandidateTechnicalSummaryV1 } from "../shared/types/candidate-summary.types";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
 
+export type TurnContext = {
+  lastUserMessage?: string;
+  language?: "en" | "ru" | "uk";
+};
+
 export class StateService {
   private readonly sessions = new Map<number, UserSessionState>();
   private readonly maxProcessedUpdates = 200;
+  /** Per-request turn context for dialogue v2 (last user message, language). Cleared after route(). */
+  private readonly turnContextByUser = new Map<number, TurnContext>();
+
+  setTurnContext(userId: number, ctx: TurnContext): void {
+    this.turnContextByUser.set(userId, ctx);
+  }
+
+  getTurnContext(userId: number): TurnContext | undefined {
+    return this.turnContextByUser.get(userId);
+  }
+
+  clearTurnContext(userId: number): void {
+    this.turnContextByUser.delete(userId);
+  }
 
   getOrCreate(userId: number, chatId: number, username?: string): UserSessionState {
     const existing = this.sessions.get(userId);
@@ -50,6 +77,8 @@ export class StateService {
       preferredLanguage: "unknown",
       candidateProfileComplete: false,
       jobProfileComplete: false,
+      prescreenVersion: undefined,
+      jobPrescreenVersion: undefined,
     };
     this.sessions.set(userId, created);
     return created;
@@ -96,6 +125,20 @@ export class StateService {
       pendingDataDeletionConfirmation: false,
       pendingDataDeletionRequestedAt: undefined,
       reanswerRequestsByQuestion: {},
+      prescreenQuestionIndex: undefined,
+      prescreenPlan: [],
+      prescreenAnswers: [],
+      prescreenFacts: [],
+      prescreenFollowUpsByQuestion: {},
+      prescreenTotalFollowUps: 0,
+      prescreenAiRetriesByQuestion: {},
+      jobPrescreenVersion: undefined,
+      jobPrescreenQuestionIndex: undefined,
+      jobPrescreenPlan: [],
+      jobPrescreenAnswers: [],
+      jobPrescreenFacts: [],
+      jobPrescreenFollowUpsByQuestion: {},
+      jobPrescreenTotalFollowUps: 0,
     };
     this.sessions.set(userId, session);
     return session;
@@ -442,6 +485,235 @@ export class StateService {
     return session;
   }
 
+  setPrescreenVersion(userId: number, version?: CandidatePrescreenVersion): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenVersion = version;
+    return session;
+  }
+
+  setJobPrescreenVersion(userId: number, version?: JobPrescreenVersion): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenVersion = version;
+    return session;
+  }
+
+  setPrescreenPlan(
+    userId: number,
+    plan: CandidatePrescreenQuestionState[],
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenPlan = plan;
+    return session;
+  }
+
+  setPrescreenQuestionIndex(userId: number, index: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenQuestionIndex = index;
+    return session;
+  }
+
+  clearPrescreenQuestionIndex(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenQuestionIndex = undefined;
+    return session;
+  }
+
+  addPrescreenAnswer(userId: number, answer: CandidatePrescreenAnswerState): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const answers = session.prescreenAnswers ?? [];
+    answers.push(answer);
+    session.prescreenAnswers = answers;
+    return session;
+  }
+
+  resetPrescreenAnswers(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenAnswers = [];
+    return session;
+  }
+
+  upsertPrescreenFacts(
+    userId: number,
+    facts: CandidatePrescreenFactState[],
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const current = session.prescreenFacts ?? [];
+    if (!facts.length) {
+      session.prescreenFacts = current;
+      return session;
+    }
+
+    const map = new Map<string, CandidatePrescreenFactState>();
+    for (const item of current) {
+      map.set(item.key, item);
+    }
+    for (const fact of facts) {
+      const existing = map.get(fact.key);
+      if (!existing || fact.confidence >= existing.confidence) {
+        map.set(fact.key, fact);
+      }
+    }
+    session.prescreenFacts = Array.from(map.values());
+    return session;
+  }
+
+  resetPrescreenFacts(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenFacts = [];
+    return session;
+  }
+
+  getPrescreenFollowUpCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    return session.prescreenFollowUpsByQuestion?.[String(questionIndex)] ?? 0;
+  }
+
+  incrementPrescreenFollowUpCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    if (!session.prescreenFollowUpsByQuestion) {
+      session.prescreenFollowUpsByQuestion = {};
+    }
+    const key = String(questionIndex);
+    const next = (session.prescreenFollowUpsByQuestion[key] ?? 0) + 1;
+    session.prescreenFollowUpsByQuestion[key] = next;
+    return next;
+  }
+
+  incrementPrescreenTotalFollowUps(userId: number): number {
+    const session = this.getRequiredSession(userId);
+    const next = (session.prescreenTotalFollowUps ?? 0) + 1;
+    session.prescreenTotalFollowUps = next;
+    return next;
+  }
+
+  getPrescreenAiRetryCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    return session.prescreenAiRetriesByQuestion?.[String(questionIndex)] ?? 0;
+  }
+
+  incrementPrescreenAiRetryCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    if (!session.prescreenAiRetriesByQuestion) {
+      session.prescreenAiRetriesByQuestion = {};
+    }
+    const key = String(questionIndex);
+    const next = (session.prescreenAiRetriesByQuestion[key] ?? 0) + 1;
+    session.prescreenAiRetriesByQuestion[key] = next;
+    return next;
+  }
+
+  clearPrescreenAiRetryCount(userId: number, questionIndex: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    if (session.prescreenAiRetriesByQuestion) {
+      delete session.prescreenAiRetriesByQuestion[String(questionIndex)];
+    }
+    return session;
+  }
+
+  resetPrescreenRetryMaps(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.prescreenFollowUpsByQuestion = {};
+    session.prescreenAiRetriesByQuestion = {};
+    session.prescreenTotalFollowUps = 0;
+    return session;
+  }
+
+  setJobPrescreenPlan(
+    userId: number,
+    plan: JobPrescreenQuestionState[],
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenPlan = plan;
+    return session;
+  }
+
+  setJobPrescreenQuestionIndex(userId: number, index: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenQuestionIndex = index;
+    return session;
+  }
+
+  clearJobPrescreenQuestionIndex(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenQuestionIndex = undefined;
+    return session;
+  }
+
+  addJobPrescreenAnswer(userId: number, answer: JobPrescreenAnswerState): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const answers = session.jobPrescreenAnswers ?? [];
+    answers.push(answer);
+    session.jobPrescreenAnswers = answers;
+    return session;
+  }
+
+  resetJobPrescreenAnswers(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenAnswers = [];
+    return session;
+  }
+
+  upsertJobPrescreenFacts(
+    userId: number,
+    facts: JobPrescreenFactState[],
+  ): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    const current = session.jobPrescreenFacts ?? [];
+    if (!facts.length) {
+      session.jobPrescreenFacts = current;
+      return session;
+    }
+
+    const map = new Map<string, JobPrescreenFactState>();
+    for (const item of current) {
+      map.set(item.key, item);
+    }
+    for (const fact of facts) {
+      const existing = map.get(fact.key);
+      if (!existing || fact.confidence >= existing.confidence) {
+        map.set(fact.key, fact);
+      }
+    }
+    session.jobPrescreenFacts = Array.from(map.values());
+    return session;
+  }
+
+  resetJobPrescreenFacts(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenFacts = [];
+    return session;
+  }
+
+  getJobPrescreenFollowUpCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    return session.jobPrescreenFollowUpsByQuestion?.[String(questionIndex)] ?? 0;
+  }
+
+  incrementJobPrescreenFollowUpCount(userId: number, questionIndex: number): number {
+    const session = this.getRequiredSession(userId);
+    if (!session.jobPrescreenFollowUpsByQuestion) {
+      session.jobPrescreenFollowUpsByQuestion = {};
+    }
+    const key = String(questionIndex);
+    const next = (session.jobPrescreenFollowUpsByQuestion[key] ?? 0) + 1;
+    session.jobPrescreenFollowUpsByQuestion[key] = next;
+    return next;
+  }
+
+  incrementJobPrescreenTotalFollowUps(userId: number): number {
+    const session = this.getRequiredSession(userId);
+    const next = (session.jobPrescreenTotalFollowUps ?? 0) + 1;
+    session.jobPrescreenTotalFollowUps = next;
+    return next;
+  }
+
+  resetJobPrescreenRetryMaps(userId: number): UserSessionState {
+    const session = this.getRequiredSession(userId);
+    session.jobPrescreenFollowUpsByQuestion = {};
+    session.jobPrescreenTotalFollowUps = 0;
+    return session;
+  }
+
   setJobDescriptionText(userId: number, text: string): UserSessionState {
     const session = this.getRequiredSession(userId);
     session.jobDescriptionText = text;
@@ -471,6 +743,19 @@ export class StateService {
     session.interviewMessageWithoutAnswerCount = 0;
     session.interviewMessageWithoutAnswerQuestionIndex = undefined;
     session.answersSinceConfirm = 0;
+    session.prescreenQuestionIndex = undefined;
+    session.prescreenPlan = [];
+    session.prescreenAnswers = [];
+    session.prescreenFacts = [];
+    session.prescreenFollowUpsByQuestion = {};
+    session.prescreenAiRetriesByQuestion = {};
+    session.prescreenTotalFollowUps = 0;
+    session.jobPrescreenQuestionIndex = undefined;
+    session.jobPrescreenPlan = [];
+    session.jobPrescreenAnswers = [];
+    session.jobPrescreenFacts = [];
+    session.jobPrescreenFollowUpsByQuestion = {};
+    session.jobPrescreenTotalFollowUps = 0;
     return session;
   }
 

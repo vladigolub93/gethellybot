@@ -1,4 +1,7 @@
+import { recordFailure } from "../admin/admin-debug.store";
+import { safeNotifyAdmin } from "../admin/admin-notifier";
 import { Logger } from "../config/logger";
+import { hashOutboundText, sendOnce } from "./outbound-sender";
 import { TELEGRAM_PARSE_MODE } from "../shared/constants";
 import { TelegramApiResponse, TelegramReplyMarkup } from "../shared/types/telegram.types";
 import { isHardSystemSource } from "../shared/utils/message-source";
@@ -80,6 +83,7 @@ export class TelegramClient {
     const textHash = hashText(input.text);
     if (guardApplies && !canSendReply(kind)) {
       const context = updateContext!;
+      recordFailure(context.telegramUserId, "guard_block", { source: input.source });
       this.logger.warn("reply_guard_blocked", {
         source: input.source,
         chatId: input.chatId,
@@ -87,6 +91,13 @@ export class TelegramClient {
         textHash,
         updateId: context.updateId,
         telegramUserId: context.telegramUserId,
+      });
+      safeNotifyAdmin("warn", "reply_guard_blocked", undefined, {
+        userId: context.telegramUserId,
+        chatId: input.chatId,
+        source: input.source,
+        updateId: context.updateId,
+        lastOutboundHashes: [textHash],
       });
       return;
     }
@@ -97,10 +108,37 @@ export class TelegramClient {
       kind,
       textPreview: input.text.slice(0, 140),
     });
-    await this.sendMessage(input.chatId, input.text, {
-      replyMarkup: input.replyMarkup,
-      source: input.source,
-    });
+
+    if (updateContext) {
+      const result = await sendOnce({
+        chatId: input.chatId,
+        updateId: updateContext.updateId,
+        textHash: hashOutboundText(input.text),
+        payload: {
+          chatId: input.chatId,
+          text: input.text,
+          replyMarkup: input.replyMarkup,
+          source: input.source,
+        },
+        send: async (p) => {
+          await this.sendMessage(p.chatId, p.text, {
+            replyMarkup: p.replyMarkup as TelegramReplyMarkup | undefined,
+            source: p.source,
+          });
+        },
+        logger: this.logger,
+      });
+      if (!result.sent) {
+        recordFailure(updateContext.telegramUserId, "duplicate_reply", { source: input.source });
+        if (guardApplies) markSent(kind);
+        return;
+      }
+    } else {
+      await this.sendMessage(input.chatId, input.text, {
+        replyMarkup: input.replyMarkup,
+        source: input.source,
+      });
+    }
     if (guardApplies) {
       markSent(kind);
     }
