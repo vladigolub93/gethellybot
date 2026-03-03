@@ -13,7 +13,9 @@
     "seed:test-jobs": "ts-node scripts/seed-test-jobs.ts",
     "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts",
     "test:normalization": "ts-node src/tests/unit/normalization.service.smoke.ts",
-    "test:prescreen-v3-schemas": "ts-node src/tests/unit/prescreen-v3-schemas.test.ts"
+    "test:prescreen-v3-schemas": "ts-node src/tests/unit/prescreen-v3-schemas.test.ts",
+    "check:connections": "ts-node scripts/check-connections.ts",
+    "verify:prod": "ts-node scripts/verify-prod.ts"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

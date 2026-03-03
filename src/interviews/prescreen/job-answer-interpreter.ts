@@ -33,7 +33,7 @@ Output JSON:
 Rules:
 - Follow-up is only when matching-critical info is still unclear.
 - Keep follow-up short and friendly.
-- Use language from input for follow_up_question.
+- follow_up_question MUST be in the same language as input.language: if \"ru\" then Russian, if \"uk\" then Ukrainian, else English.
 - Never ask aggressive multi-part follow-ups.
 `;
 

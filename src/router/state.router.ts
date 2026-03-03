@@ -1232,6 +1232,28 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_job") {
+      // Short messages are never treated as job description — insist on full JD or file
+      if (isClearlyTooShortForJd(normalizedEnglishText)) {
+        const counterSession = this.stateService.incrementWaitingShortTextCounter(
+          session.userId,
+          "waiting_job",
+        );
+        if ((counterSession.waitingShortTextCount ?? 0) >= 3) {
+          await this.sendRouterReplyWithLoopGuard(
+            session,
+            update.chatId,
+            "Please send the full job description. Example: role overview, responsibilities, requirements, tech stack, and domain context.",
+          );
+          return;
+        }
+        await this.sendRouterReplyWithLoopGuard(
+          session,
+          update.chatId,
+          "Please paste the full job description text, or send a PDF or DOCX file.",
+        );
+        return;
+      }
+
       if (session.jobDescriptionText?.trim()) {
         if (isRetryProcessingSignal(rawText, normalizedEnglishText)) {
           await this.sendRouterReplyWithLoopGuard(
@@ -1315,30 +1337,31 @@ export class StateRouter {
         });
         return;
       }
+    }
 
-      if (isClearlyTooShortForJd(normalizedEnglishText)) {
+    if (session.state === "waiting_resume") {
+      // Short messages are never treated as resume — insist on full paste or file
+      if (isClearlyTooShortForResume(normalizedEnglishText)) {
         const counterSession = this.stateService.incrementWaitingShortTextCounter(
           session.userId,
-          "waiting_job",
+          "waiting_resume",
         );
         if ((counterSession.waitingShortTextCount ?? 0) >= 3) {
           await this.sendRouterReplyWithLoopGuard(
             session,
             update.chatId,
-            "Please send the full job description. Example: role overview, responsibilities, requirements, tech stack, and domain context.",
+            "Please send the full resume text. Example: experience, skills, projects, education, and links.",
           );
           return;
         }
         await this.sendRouterReplyWithLoopGuard(
           session,
           update.chatId,
-          "Please paste the full job description text, or send a PDF or DOCX file.",
+          "Please paste the full resume text, or send a PDF or DOCX file.",
         );
         return;
       }
-    }
 
-    if (session.state === "waiting_resume") {
       if (session.candidateResumeText?.trim()) {
         if (isRetryProcessingSignal(rawText, normalizedEnglishText)) {
           await this.sendRouterReplyWithLoopGuard(
@@ -1429,27 +1452,6 @@ export class StateRouter {
           sourceTextOriginal: rawText,
           sourceTextEnglish: normalizedEnglishText,
         });
-        return;
-      }
-
-      if (isClearlyTooShortForResume(normalizedEnglishText)) {
-        const counterSession = this.stateService.incrementWaitingShortTextCounter(
-          session.userId,
-          "waiting_resume",
-        );
-        if ((counterSession.waitingShortTextCount ?? 0) >= 3) {
-          await this.sendRouterReplyWithLoopGuard(
-            session,
-            update.chatId,
-            "Please send the full resume text. Example: experience, skills, projects, education, and links.",
-          );
-          return;
-        }
-        await this.sendRouterReplyWithLoopGuard(
-          session,
-          update.chatId,
-          "Please paste the full resume text, or send a PDF or DOCX file.",
-        );
         return;
       }
     }
@@ -2182,7 +2184,11 @@ export class StateRouter {
     sourceType: "file" | "text";
     documentType: "pdf" | "docx" | "unknown";
   }): Promise<void> {
-    const language = resolvePrescreenBootstrapLanguage(input.session.preferredLanguage);
+    const detectedFromResume = detectLanguageQuick(input.resumeText.slice(0, 1500));
+    const language = resolvePrescreenBootstrapLanguage(
+      input.session.preferredLanguage,
+      detectedFromResume === "ru" || detectedFromResume === "uk" ? detectedFromResume : undefined,
+    );
     const result = await this.candidatePrescreenEngine.bootstrap(
       input.session,
       input.resumeText,
@@ -2228,7 +2234,11 @@ export class StateRouter {
     sourceType: "file" | "text";
     documentType: "pdf" | "docx" | "unknown";
   }): Promise<void> {
-    const language = resolvePrescreenBootstrapLanguage(input.session.preferredLanguage);
+    const detectedFromJd = detectLanguageQuick(input.jdText.slice(0, 1500));
+    const language = resolvePrescreenBootstrapLanguage(
+      input.session.preferredLanguage,
+      detectedFromJd === "ru" || detectedFromJd === "uk" ? detectedFromJd : undefined,
+    );
     const result = await this.jobPrescreenEngine.bootstrap(
       input.session,
       input.jdText,
@@ -4863,9 +4873,13 @@ function buildAskBotQuestionInPreferredLanguageReply(
 
 function resolvePrescreenBootstrapLanguage(
   preferredLanguage: UserSessionState["preferredLanguage"],
+  detectedFromText?: "ru" | "uk",
 ): "en" | "ru" | "uk" {
   if (preferredLanguage === "ru" || preferredLanguage === "uk") {
     return preferredLanguage;
+  }
+  if (detectedFromText === "ru" || detectedFromText === "uk") {
+    return detectedFromText;
   }
   return "en";
 }
@@ -5204,14 +5218,16 @@ function isPrescreenOrOnboardingState(session: UserSessionState): boolean {
     return true;
   }
   const state = session.state;
+  // Exclude waiting_resume / waiting_job: only strict document intake (paste full text or file), no free chat
+  if (state === "waiting_resume" || state === "waiting_job") {
+    return false;
+  }
   return (
     state === "role_selection" ||
     state === "onboarding_candidate" ||
-    state === "waiting_resume" ||
     state === "extracting_resume" ||
     state === "interviewing_candidate" ||
     state === "onboarding_manager" ||
-    state === "waiting_job" ||
     state === "extracting_job" ||
     state === "interviewing_manager" ||
     state === "candidate_profile_ready" ||

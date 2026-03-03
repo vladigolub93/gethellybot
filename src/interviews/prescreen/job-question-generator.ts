@@ -75,8 +75,10 @@ export class JobQuestionGenerator {
         2,
       ),
       "",
-      "Language rule:",
-      "Write questions in the same language as input language.",
+      "Language rule (strict):",
+      "Every \"question\" field in the JSON MUST be in the same language as input.language.",
+      "If input.language is \"ru\", write all questions in Russian. If \"uk\", write in Ukrainian. Otherwise English.",
+      "Do not mix languages.",
     ].join("\n");
 
     const safe = await callJsonPromptSafe<JobQuestionGeneratorResult>({

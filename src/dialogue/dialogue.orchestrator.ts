@@ -74,6 +74,10 @@ export class DialogueOrchestratorV2 {
     const phase = session.dialoguePhase ?? inferPhaseFromState(session.state);
     const role = session.role ?? "candidate";
     let language = (ctx.language ?? resolveLanguage(session)) as DialogueLanguage;
+    // Keep replying in user's preferred language; short replies like "qa" must not switch to English
+    if (session.preferredLanguage === "ru" || session.preferredLanguage === "uk") {
+      language = session.preferredLanguage;
+    }
     const switchToEnglish = wantsEnglishOnly(userMessage);
     if (switchToEnglish) {
       language = "en";
@@ -507,7 +511,12 @@ export class DialogueOrchestratorV2 {
       patch.dialoguePhase = "profile_ready";
     }
 
-    const microConfirm = "Got it, I noted that.";
+    const microConfirm =
+      language === "ru"
+        ? "Понял, записал."
+        : language === "uk"
+          ? "Зрозуміло, записав."
+          : "Got it, I noted that.";
     const nextQ = atCap ? null : getCurrentQuestionText(ctx.session);
     const reply = await this.replyComposer({
       userRole: ctx.session.role ?? "candidate",
@@ -520,8 +529,16 @@ export class DialogueOrchestratorV2 {
     const replyText = reply
       ? `${microConfirm} ${reply}`
       : atCap
-        ? `${microConfirm} Profile ready. You can ask me to find jobs anytime.`
-        : `${microConfirm} Next question.`;
+        ? language === "ru"
+          ? `${microConfirm} Профиль готов. Можете попросить подобрать вакансии в любой момент.`
+          : language === "uk"
+            ? `${microConfirm} Профіль готовий. Можете попросити підібрати вакансії в будь-який момент.`
+            : `${microConfirm} Profile ready. You can ask me to find jobs anytime.`
+        : language === "ru"
+          ? `${microConfirm} Следующий вопрос.`
+          : language === "uk"
+            ? `${microConfirm} Наступне питання.`
+            : `${microConfirm} Next question.`;
 
     return {
       replyText,
