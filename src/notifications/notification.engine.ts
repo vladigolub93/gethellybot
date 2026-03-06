@@ -153,6 +153,20 @@ export class NotificationEngine {
       candidateTechnicalSummary: match.candidateTechnicalSummary ?? null,
       explanationMessage:
         match.explanationJson?.message_for_manager ?? match.explanation,
+      matchLifecycle: {
+        status: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+      },
+      evaluation: {
+        interviewConfidenceLevel:
+          match.candidateTechnicalSummary?.interview_confidence_level ?? null,
+        matchScore: match.score,
+      },
+      verification: {
+        contactShared: match.status === "contact_shared",
+      },
     });
   }
 

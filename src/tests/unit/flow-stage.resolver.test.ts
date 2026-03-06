@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  ONBOARDING_STAGES,
-  resolveOnboardingStage,
-} from "../../router/onboarding-stage.resolver";
+  FLOW_STAGES,
+  resolveFlowStage,
+} from "../../router/flow-stage.resolver";
 import { StateService } from "../../state/state.service";
 
 function createSession(userId: number, chatId: number) {
@@ -15,8 +15,8 @@ function testRoleSelectionStage(): void {
   session.state = "role_selection";
   session.awaitingContactChoice = false;
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.ROLE_SELECTION);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.ROLE_SELECTION);
 }
 
 function testContactIdentityStage(): void {
@@ -24,16 +24,16 @@ function testContactIdentityStage(): void {
   session.state = "role_selection";
   session.awaitingContactChoice = true;
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.CONTACT_IDENTITY);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.CONTACT_IDENTITY);
 }
 
 function testCandidateCvIntakeStage(): void {
   const session = createSession(3, 3);
   session.state = "waiting_resume";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_CV_INTAKE);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.CANDIDATE_CV_INTAKE);
 }
 
 function testCandidateMandatoryStage(): void {
@@ -41,8 +41,8 @@ function testCandidateMandatoryStage(): void {
   session.state = "candidate_mandatory_fields";
   session.role = "candidate";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_MANDATORY);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.CANDIDATE_MANDATORY);
 }
 
 function testCandidateReviewStage(): void {
@@ -53,7 +53,7 @@ function testCandidateReviewStage(): void {
   session.pendingFollowUp = undefined;
   session.answers = [];
 
-  const stage = resolveOnboardingStage({
+  const stage = resolveFlowStage({
     session,
     context: {
       currentQuestionText: "Please confirm your profile summary.",
@@ -61,15 +61,15 @@ function testCandidateReviewStage(): void {
       hasFinalAnswers: false,
     },
   });
-  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_REVIEW);
+  assert.equal(stage, FLOW_STAGES.CANDIDATE_REVIEW);
 }
 
 function testManagerJdIntakeStage(): void {
   const session = createSession(5, 5);
   session.state = "waiting_job";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.MANAGER_JD_INTAKE);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.MANAGER_JD_INTAKE);
 }
 
 function testManagerMandatoryStage(): void {
@@ -77,8 +77,8 @@ function testManagerMandatoryStage(): void {
   session.state = "manager_mandatory_fields";
   session.role = "manager";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.MANAGER_MANDATORY);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.MANAGER_MANDATORY);
 }
 
 function testCandidateDecisionStage(): void {
@@ -86,8 +86,8 @@ function testCandidateDecisionStage(): void {
   session.state = "waiting_candidate_decision";
   session.role = "candidate";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_DECISION);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.CANDIDATE_DECISION);
 }
 
 function testInterviewInvitationStage(): void {
@@ -99,8 +99,8 @@ function testInterviewInvitationStage(): void {
     lastActionableMatchId: "match_1",
   };
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_INVITATION);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.INTERVIEW_INVITATION);
 }
 
 function testManagerDecisionStage(): void {
@@ -108,8 +108,8 @@ function testManagerDecisionStage(): void {
   session.state = "waiting_manager_decision";
   session.role = "manager";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.MANAGER_DECISION);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.MANAGER_DECISION);
 }
 
 function testManagerReviewStage(): void {
@@ -120,7 +120,7 @@ function testManagerReviewStage(): void {
   session.pendingFollowUp = undefined;
   session.answers = [];
 
-  const stage = resolveOnboardingStage({
+  const stage = resolveFlowStage({
     session,
     context: {
       currentQuestionText: "Please confirm your vacancy summary.",
@@ -128,7 +128,7 @@ function testManagerReviewStage(): void {
       hasFinalAnswers: false,
     },
   });
-  assert.equal(stage, ONBOARDING_STAGES.MANAGER_REVIEW);
+  assert.equal(stage, FLOW_STAGES.MANAGER_REVIEW);
 }
 
 function testCandidateInterviewAnswerStage(): void {
@@ -138,7 +138,7 @@ function testCandidateInterviewAnswerStage(): void {
   session.currentQuestionIndex = 1;
   session.answers = [];
 
-  const stage = resolveOnboardingStage({
+  const stage = resolveFlowStage({
     session,
     context: {
       currentQuestionText: "Describe a recent migration project you led.",
@@ -146,7 +146,7 @@ function testCandidateInterviewAnswerStage(): void {
       hasFinalAnswers: true,
     },
   });
-  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_ANSWER);
+  assert.equal(stage, FLOW_STAGES.INTERVIEW_ANSWER);
 }
 
 function testManagerInterviewAnswerStage(): void {
@@ -156,7 +156,7 @@ function testManagerInterviewAnswerStage(): void {
   session.currentQuestionIndex = 1;
   session.answers = [];
 
-  const stage = resolveOnboardingStage({
+  const stage = resolveFlowStage({
     session,
     context: {
       currentQuestionText: "What delivery timeline is acceptable?",
@@ -164,15 +164,15 @@ function testManagerInterviewAnswerStage(): void {
       hasFinalAnswers: true,
     },
   });
-  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_ANSWER);
+  assert.equal(stage, FLOW_STAGES.INTERVIEW_ANSWER);
 }
 
 function testOutOfScopeStage(): void {
   const session = createSession(7, 7);
   session.state = "candidate_profile_ready";
 
-  const stage = resolveOnboardingStage({ session });
-  assert.equal(stage, ONBOARDING_STAGES.OUT_OF_SCOPE);
+  const stage = resolveFlowStage({ session });
+  assert.equal(stage, FLOW_STAGES.OUT_OF_SCOPE);
 }
 
 function run(): void {
@@ -190,7 +190,7 @@ function run(): void {
   testCandidateInterviewAnswerStage();
   testManagerInterviewAnswerStage();
   testOutOfScopeStage();
-  process.stdout.write("onboarding-stage.resolver tests passed.\n");
+  process.stdout.write("flow-stage.resolver tests passed.\n");
 }
 
 run();

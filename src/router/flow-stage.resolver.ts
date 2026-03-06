@@ -1,6 +1,6 @@
 import { UserSessionState } from "../shared/types/state.types";
 
-export const ONBOARDING_STAGES = {
+export const FLOW_STAGES = {
   ROLE_SELECTION: "ROLE_SELECTION",
   CONTACT_IDENTITY: "CONTACT_IDENTITY",
   CANDIDATE_CV_INTAKE: "CANDIDATE_CV_INTAKE",
@@ -16,9 +16,9 @@ export const ONBOARDING_STAGES = {
   OUT_OF_SCOPE: "OUT_OF_SCOPE",
 } as const;
 
-export type OnboardingStage = (typeof ONBOARDING_STAGES)[keyof typeof ONBOARDING_STAGES];
+export type FlowStage = (typeof FLOW_STAGES)[keyof typeof FLOW_STAGES];
 
-export type OnboardingStageResolverInput = {
+export type FlowStageResolverInput = {
   session: UserSessionState;
   context?: {
     awaitingContactChoice?: boolean;
@@ -29,30 +29,30 @@ export type OnboardingStageResolverInput = {
   };
 };
 
-export function resolveOnboardingStage(input: OnboardingStageResolverInput): OnboardingStage {
+export function resolveFlowStage(input: FlowStageResolverInput): FlowStage {
   const session = input.session;
 
   if (session.state === "role_selection") {
     const awaitingContactChoice = input.context?.awaitingContactChoice ?? session.awaitingContactChoice === true;
     return awaitingContactChoice
-      ? ONBOARDING_STAGES.CONTACT_IDENTITY
-      : ONBOARDING_STAGES.ROLE_SELECTION;
+      ? FLOW_STAGES.CONTACT_IDENTITY
+      : FLOW_STAGES.ROLE_SELECTION;
   }
 
   if (session.state === "waiting_resume") {
-    return ONBOARDING_STAGES.CANDIDATE_CV_INTAKE;
+    return FLOW_STAGES.CANDIDATE_CV_INTAKE;
   }
 
   if (session.state === "candidate_mandatory_fields") {
-    return ONBOARDING_STAGES.CANDIDATE_MANDATORY;
+    return FLOW_STAGES.CANDIDATE_MANDATORY;
   }
 
   if (session.state === "waiting_job") {
-    return ONBOARDING_STAGES.MANAGER_JD_INTAKE;
+    return FLOW_STAGES.MANAGER_JD_INTAKE;
   }
 
   if (session.state === "manager_mandatory_fields") {
-    return ONBOARDING_STAGES.MANAGER_MANDATORY;
+    return FLOW_STAGES.MANAGER_MANDATORY;
   }
 
   if (session.state === "waiting_candidate_decision") {
@@ -60,13 +60,13 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
       input.context?.hasMatchForInterviewInvite ??
       hasInterviewInvitationMatch(session);
     if (hasMatchForInterviewInvite) {
-      return ONBOARDING_STAGES.INTERVIEW_INVITATION;
+      return FLOW_STAGES.INTERVIEW_INVITATION;
     }
-    return ONBOARDING_STAGES.CANDIDATE_DECISION;
+    return FLOW_STAGES.CANDIDATE_DECISION;
   }
 
   if (session.state === "waiting_manager_decision") {
-    return ONBOARDING_STAGES.MANAGER_DECISION;
+    return FLOW_STAGES.MANAGER_DECISION;
   }
 
   if (session.state === "interviewing_candidate") {
@@ -82,7 +82,7 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
       !hasFinalAnswers &&
       isSummaryReviewQuestion(currentQuestionText)
     ) {
-      return ONBOARDING_STAGES.CANDIDATE_REVIEW;
+      return FLOW_STAGES.CANDIDATE_REVIEW;
     }
   }
 
@@ -99,15 +99,21 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
       !hasFinalAnswers &&
       isSummaryReviewQuestion(currentQuestionText)
     ) {
-      return ONBOARDING_STAGES.MANAGER_REVIEW;
+      return FLOW_STAGES.MANAGER_REVIEW;
     }
   }
 
   if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
-    return ONBOARDING_STAGES.INTERVIEW_ANSWER;
+    return FLOW_STAGES.INTERVIEW_ANSWER;
   }
 
-  return ONBOARDING_STAGES.OUT_OF_SCOPE;
+  return FLOW_STAGES.OUT_OF_SCOPE;
+}
+
+export class FlowStageResolver {
+  static resolve(input: FlowStageResolverInput): FlowStage {
+    return resolveFlowStage(input);
+  }
 }
 
 function hasInterviewInvitationMatch(session: UserSessionState): boolean {

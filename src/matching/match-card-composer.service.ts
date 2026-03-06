@@ -13,6 +13,7 @@ import { isMatchCardComposeV3OutputSchema } from "../ai/schemas/llm-json-schemas
 import { Logger } from "../config/logger";
 import { MatchRecord } from "../decisions/match.types";
 import { LlmClient } from "../ai/llm.client";
+import { buildManagerReviewReadModel } from "../core/matching/manager-review-read-model";
 
 export type CardLanguage = "en" | "ru" | "uk";
 
@@ -53,11 +54,58 @@ export class MatchCardComposerService {
     match: MatchRecord,
     language: CardLanguage,
   ): Promise<MatchCardComposerResult> {
+    const managerReadModel = buildManagerReviewReadModel({
+      candidate: {
+        summary: match.candidateSummary,
+        technicalSummary: match.candidateTechnicalSummary
+          ? (match.candidateTechnicalSummary as unknown as Record<string, unknown>)
+          : null,
+      },
+      match: {
+        id: match.id,
+        status: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+        score: match.score,
+        candidateSummary: match.candidateSummary,
+        explanation: match.explanationJson?.message_for_manager ?? match.explanation,
+      },
+      evaluation: {
+        interviewConfidenceLevel:
+          match.candidateTechnicalSummary?.interview_confidence_level ?? null,
+        matchScore: match.score,
+      },
+      verification: {
+        contactShared: match.status === "contact_shared",
+      },
+    });
+
+    this.logger.debug("manager_card.normalized_built", {
+      matchId: match.id,
+      managerUserId: match.managerUserId,
+      candidateUserId: match.candidateUserId,
+      matchStatus: managerReadModel.matchStatus,
+      interviewStatus: managerReadModel.interviewStatus,
+      evaluationStatus: managerReadModel.evaluationStatus,
+      isCandidateSentToManager: managerReadModel.isCandidateSentToManager,
+    });
+
+    if (managerReadModel.notes.length > 0) {
+      this.logger.debug("manager_card.normalization_notes", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        candidateUserId: match.candidateUserId,
+        notes: managerReadModel.notes,
+        risks: managerReadModel.risks,
+      });
+    }
+
     const cand = match.candidateTechnicalSummary;
     const input: MatchCardComposeV3InputManager = {
       role: "manager",
       language,
-      candidateSummary: match.candidateSummary,
+      candidateSummary: managerReadModel.candidateSummary || match.candidateSummary,
       roleSeniority: cand?.headline ?? null,
       yearsExperience: null,
       coreStack: cand ? [cand.technical_depth_summary].filter(Boolean) : [],

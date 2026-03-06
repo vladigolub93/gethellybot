@@ -11,10 +11,10 @@ import {
   TypedRouteReason,
 } from "./helpers/typed-route.helper";
 import {
-  ONBOARDING_STAGES,
-  OnboardingStage,
-  resolveOnboardingStage,
-} from "./onboarding-stage.resolver";
+  FLOW_STAGES,
+  FlowStage,
+  resolveFlowStage,
+} from "./flow-stage.resolver";
 
 const DEFAULT_FALLBACK_MESSAGE = "Please continue with the current step.";
 
@@ -70,7 +70,7 @@ export class TypedFlowCoordinator {
     session: UserSessionState;
     userMessage: string;
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
+    const stage = resolveFlowStage({ session: input.session });
     return this.runIfInScope(input.session.state === "role_selection", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedRoleSelectionRouter,
@@ -80,7 +80,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_ROLE,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SELECT_ROLE_CANDIDATE,
           HELLY_ACTIONS.SELECT_ROLE_MANAGER,
@@ -97,7 +97,7 @@ export class TypedFlowCoordinator {
     userMessage: string;
     awaitingContactChoice: boolean;
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({
+    const stage = resolveFlowStage({
       session: input.session,
       context: {
         awaitingContactChoice: input.awaitingContactChoice,
@@ -112,7 +112,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_CONTACT,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SHARE_PHONE_TEXT,
           HELLY_ACTIONS.SHARE_CONTACT,
@@ -129,7 +129,7 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
+    const stage = resolveFlowStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_resume", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedCvRouter,
@@ -140,7 +140,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.C_WAIT_CV,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SUBMIT_CV,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -159,8 +159,8 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text" | "location";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
-    return this.runIfInScope(stage === ONBOARDING_STAGES.CANDIDATE_MANDATORY, () =>
+    const stage = resolveFlowStage({ session: input.session });
+    return this.runIfInScope(stage === FLOW_STAGES.CANDIDATE_MANDATORY, () =>
       runTypedRoute({
         enabled: this.flags.enableTypedCandidateMandatoryRouter,
         logPrefix: "typed_candidate_mandatory",
@@ -170,7 +170,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.C_MANDATORY_QUESTIONNAIRE,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.ANSWER_QUESTION,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -188,7 +188,7 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
+    const stage = resolveFlowStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_job", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedJdRouter,
@@ -199,7 +199,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.HM_WAIT_JD,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SUBMIT_JD,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -219,8 +219,8 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
-    return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_MANDATORY, () =>
+    const stage = resolveFlowStage({ session: input.session });
+    return this.runIfInScope(stage === FLOW_STAGES.MANAGER_MANDATORY, () =>
       runTypedRoute({
         enabled: this.flags.enableTypedManagerMandatoryRouter,
         logPrefix: "typed_manager_mandatory",
@@ -230,7 +230,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.HM_QUESTIONNAIRE,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.ANSWER_QUESTION,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -247,10 +247,10 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
+    const stage = resolveFlowStage({ session: input.session });
     return this.runIfInScope(
-      stage === ONBOARDING_STAGES.CANDIDATE_DECISION ||
-      stage === ONBOARDING_STAGES.INTERVIEW_INVITATION,
+      stage === FLOW_STAGES.CANDIDATE_DECISION ||
+      stage === FLOW_STAGES.INTERVIEW_INVITATION,
       () =>
         runTypedRoute({
           enabled: this.flags.enableTypedCandidateDecisionRouter,
@@ -261,7 +261,7 @@ export class TypedFlowCoordinator {
           userMessage: input.userMessage,
           expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
           resolveCanonicalState: (runtimeState) =>
-            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+            this.resolveCanonicalStateForFlowStage(runtimeState, stage),
           acceptedActions: [
             HELLY_ACTIONS.YES,
             HELLY_ACTIONS.NO,
@@ -279,8 +279,8 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
-    return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_DECISION, () =>
+    const stage = resolveFlowStage({ session: input.session });
+    return this.runIfInScope(stage === FLOW_STAGES.MANAGER_DECISION, () =>
       runTypedRoute({
         enabled: this.flags.enableTypedManagerDecisionRouter,
         logPrefix: "typed_manager_decision",
@@ -290,7 +290,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_MANAGER_DECISION,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.YES,
           HELLY_ACTIONS.NO,
@@ -308,8 +308,8 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
-    return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_INVITATION, () =>
+    const stage = resolveFlowStage({ session: input.session });
+    return this.runIfInScope(stage === FLOW_STAGES.INTERVIEW_INVITATION, () =>
       runTypedRoute({
         enabled: this.flags.enableTypedInterviewInviteRouter,
         logPrefix: "typed_interview_invite",
@@ -319,7 +319,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.YES,
           HELLY_ACTIONS.NO,
@@ -336,10 +336,10 @@ export class TypedFlowCoordinator {
     userMessage: string;
     source: "text" | "voice";
   }): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({ session: input.session });
+    const stage = resolveFlowStage({ session: input.session });
 
     if (input.session.state === "interviewing_candidate") {
-      return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_ANSWER, () =>
+      return this.runIfInScope(stage === FLOW_STAGES.INTERVIEW_ANSWER, () =>
         runTypedRoute({
           enabled: this.flags.enableTypedInterviewAnswerRouter,
           logPrefix: "typed_interview_answer",
@@ -349,7 +349,7 @@ export class TypedFlowCoordinator {
           userMessage: input.userMessage,
           expectedCanonicalState: HELLY_STATES.C_INTERVIEW_IN_PROGRESS,
           resolveCanonicalState: (runtimeState) =>
-            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+            this.resolveCanonicalStateForFlowStage(runtimeState, stage),
           acceptedActions: [
             HELLY_ACTIONS.ANSWER_QUESTION,
             HELLY_ACTIONS.SUBMIT_TEXT,
@@ -365,7 +365,7 @@ export class TypedFlowCoordinator {
     }
 
     if (input.session.state === "interviewing_manager") {
-      return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_ANSWER, () =>
+      return this.runIfInScope(stage === FLOW_STAGES.INTERVIEW_ANSWER, () =>
         runTypedRoute({
           enabled: this.flags.enableTypedInterviewAnswerRouter,
           logPrefix: "typed_interview_answer",
@@ -375,7 +375,7 @@ export class TypedFlowCoordinator {
           userMessage: input.userMessage,
           expectedCanonicalState: HELLY_STATES.HM_INTERVIEW_IN_PROGRESS,
           resolveCanonicalState: (runtimeState) =>
-            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+            this.resolveCanonicalStateForFlowStage(runtimeState, stage),
           acceptedActions: [
             HELLY_ACTIONS.ANSWER_QUESTION,
             HELLY_ACTIONS.SUBMIT_TEXT,
@@ -401,7 +401,7 @@ export class TypedFlowCoordinator {
   }
 
   async attemptCandidateReview(input: TypedCandidateReviewInput): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({
+    const stage = resolveFlowStage({
       session: input.session,
       context: {
         currentQuestionText: input.currentQuestion,
@@ -419,7 +419,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.C_SUMMARY_REVIEW,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.APPROVE,
           HELLY_ACTIONS.EDIT,
@@ -433,7 +433,7 @@ export class TypedFlowCoordinator {
   }
 
   async attemptManagerReview(input: TypedManagerReviewInput): Promise<TypedFlowCoordinatorResult> {
-    const stage = resolveOnboardingStage({
+    const stage = resolveFlowStage({
       session: input.session,
       context: {
         currentQuestionText: input.currentQuestion,
@@ -451,7 +451,7 @@ export class TypedFlowCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.HM_JD_REVIEW,
         resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          this.resolveCanonicalStateForFlowStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.APPROVE,
           HELLY_ACTIONS.EDIT,
@@ -485,28 +485,28 @@ export class TypedFlowCoordinator {
     };
   }
 
-  private resolveCanonicalStateForOnboardingStage(
+  private resolveCanonicalStateForFlowStage(
     runtimeState: string,
-    stage: OnboardingStage,
+    stage: FlowStage,
   ) {
     const canonicalState = mapRuntimeStateToHellyState(runtimeState);
     if (!canonicalState) {
       return null;
     }
     if (
-      stage === ONBOARDING_STAGES.CONTACT_IDENTITY &&
+      stage === FLOW_STAGES.CONTACT_IDENTITY &&
       canonicalState === HELLY_STATES.WAIT_ROLE
     ) {
       return HELLY_STATES.WAIT_CONTACT;
     }
     if (
-      stage === ONBOARDING_STAGES.CANDIDATE_REVIEW &&
+      stage === FLOW_STAGES.CANDIDATE_REVIEW &&
       canonicalState === HELLY_STATES.C_INTERVIEW_IN_PROGRESS
     ) {
       return HELLY_STATES.C_SUMMARY_REVIEW;
     }
     if (
-      stage === ONBOARDING_STAGES.MANAGER_REVIEW &&
+      stage === FLOW_STAGES.MANAGER_REVIEW &&
       canonicalState === HELLY_STATES.HM_INTERVIEW_IN_PROGRESS
     ) {
       return HELLY_STATES.HM_JD_REVIEW;

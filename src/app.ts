@@ -346,7 +346,7 @@ export function createApp(env: EnvConfig): AppContext {
     logger,
   );
   const candidateNotifier = new CandidateNotifier(telegramClient);
-  const managerNotifier = new ManagerNotifier(telegramClient);
+  const managerNotifier = new ManagerNotifier(telegramClient, logger);
   const notificationEngine = new NotificationEngine(
     stateService,
     statePersistenceService,
