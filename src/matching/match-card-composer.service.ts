@@ -11,6 +11,7 @@ import {
 } from "../ai/prompts/matching/match_card_compose_v3.prompt";
 import { isMatchCardComposeV3OutputSchema } from "../ai/schemas/llm-json-schemas";
 import { Logger } from "../config/logger";
+import { ManagerExposureService } from "../core/matching/manager-exposure.service";
 import { MatchRecord } from "../decisions/match.types";
 import { LlmClient } from "../ai/llm.client";
 import { buildManagerReviewReadModel } from "../core/matching/manager-review-read-model";
@@ -26,6 +27,7 @@ export class MatchCardComposerService {
   constructor(
     private readonly llmClient: LlmClient,
     private readonly logger: Logger,
+    private readonly managerExposureService: ManagerExposureService = new ManagerExposureService(logger),
   ) {}
 
   async composeForCandidate(
@@ -54,6 +56,27 @@ export class MatchCardComposerService {
     match: MatchRecord,
     language: CardLanguage,
   ): Promise<MatchCardComposerResult> {
+    try {
+      this.managerExposureService.exposeCandidateToManager({
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+        source: "match_card_pull",
+      });
+    } catch (error) {
+      this.logger.warn("manager_exposure.failed", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        source: "match_card_pull",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+
     const managerReadModel = buildManagerReviewReadModel({
       candidate: {
         summary: match.candidateSummary,

@@ -1,4 +1,5 @@
 import { Logger } from "../config/logger";
+import { ManagerExposureService } from "../core/matching/manager-exposure.service";
 import { JobsRepository } from "../db/repositories/jobs.repo";
 import { UsersRepository } from "../db/repositories/users.repo";
 import { MatchRecord } from "../decisions/match.types";
@@ -24,6 +25,7 @@ export class NotificationEngine {
     private readonly jobsRepository: JobsRepository,
     private readonly usersRepository: UsersRepository,
     private readonly logger: Logger,
+    private readonly managerExposureService: ManagerExposureService = new ManagerExposureService(logger),
   ) {}
 
   async notifyCandidateOpportunity(match: MatchRecord): Promise<void> {
@@ -168,6 +170,27 @@ export class NotificationEngine {
         contactShared: match.status === "contact_shared",
       },
     });
+
+    try {
+      this.managerExposureService.exposeCandidateToManager({
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+        source: "notification_push",
+      });
+    } catch (error) {
+      this.logger.warn("manager_exposure.failed", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        source: "notification_push",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 
   async notifyManagerRejected(match: MatchRecord): Promise<void> {

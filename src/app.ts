@@ -189,7 +189,7 @@ export function createApp(env: EnvConfig): AppContext {
     repository: telegramUpdatesRepository,
     logger,
   });
-  const stateService = new StateService();
+  const stateService = new StateService(logger);
   const statePersistenceService = new StatePersistenceService(
     logger,
     usersRepository,

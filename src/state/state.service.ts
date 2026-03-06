@@ -34,6 +34,9 @@ import {
 import { CandidateInterviewPlanV2 } from "../shared/types/interview-plan.types";
 import { CandidateTechnicalSummaryV1 } from "../shared/types/candidate-summary.types";
 import { JobProfileV2, JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
+import { Logger } from "../config/logger";
+import { InterviewLifecycleService } from "../core/matching/interview-lifecycle.service";
+import { INTERVIEW_STATUSES } from "../core/matching/interview-statuses";
 
 export type TurnContext = {
   lastUserMessage?: string;
@@ -45,6 +48,11 @@ export class StateService {
   private readonly maxProcessedUpdates = 200;
   /** Per-request turn context for dialogue v2 (last user message, language). Cleared after route(). */
   private readonly turnContextByUser = new Map<number, TurnContext>();
+
+  constructor(
+    private readonly logger?: Logger,
+    private readonly interviewLifecycleService: InterviewLifecycleService = new InterviewLifecycleService(),
+  ) {}
 
   setTurnContext(userId: number, ctx: TurnContext): void {
     this.turnContextByUser.set(userId, ctx);
@@ -772,6 +780,7 @@ export class StateService {
     const session = this.getRequiredSession(userId);
     session.documentType = documentType;
     session.interviewStartedAt = startedAt;
+    this.tryLogInterviewLifecycleStart(session, documentType);
     return session;
   }
 
@@ -1073,5 +1082,31 @@ export class StateService {
       throw new Error(`Session not found for user: ${userId}`);
     }
     return session;
+  }
+
+  private tryLogInterviewLifecycleStart(
+    session: UserSessionState,
+    documentType: DocumentType,
+  ): void {
+    try {
+      const next = this.interviewLifecycleService.startInterview(
+        INTERVIEW_STATUSES.INVITED,
+      );
+      this.logger?.debug("interview_lifecycle.start.transition", {
+        userId: session.userId,
+        currentState: session.state,
+        documentType,
+        canonicalFrom: INTERVIEW_STATUSES.INVITED,
+        canonicalTo: next,
+      });
+    } catch (error) {
+      this.logger?.warn("interview_lifecycle.transition_failed", {
+        action: "start_interview",
+        userId: session.userId,
+        currentState: session.state,
+        documentType,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   }
 }

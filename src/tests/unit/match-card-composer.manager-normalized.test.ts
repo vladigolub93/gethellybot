@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { LlmClient } from "../../ai/llm.client";
 import { Logger } from "../../config/logger";
+import { ManagerExposureService } from "../../core/matching/manager-exposure.service";
 import { MatchRecord } from "../../decisions/match.types";
 import { MatchCardComposerService } from "../../matching/match-card-composer.service";
 import { CandidateTechnicalSummaryV1 } from "../../shared/types/candidate-summary.types";
@@ -38,6 +39,12 @@ class LoggerMock implements Logger {
 
   error(): void {
     return;
+  }
+}
+
+class ThrowingManagerExposureService {
+  exposeCandidateToManager(): never {
+    throw new Error("forced pull exposure failure");
   }
 }
 
@@ -109,6 +116,10 @@ async function testCleanNormalizedCardPath(): Promise<void> {
   assert.equal(builtLogs.length, 1);
   assert.equal(builtLogs[0]?.meta?.matchStatus, "SENT_TO_MANAGER");
   assert.equal(builtLogs[0]?.meta?.evaluationStatus, "STRONG");
+  const lifecycleLogs = findDebug(logger, "match_lifecycle.send_to_manager.transition");
+  assert.equal(lifecycleLogs.length, 1);
+  const pullPathLogs = findDebug(logger, "manager_exposure.pull_path_used");
+  assert.equal(pullPathLogs.length, 1);
 }
 
 async function testAmbiguousNormalizationStillRendersSafely(): Promise<void> {
@@ -198,11 +209,34 @@ async function testSentToManagerCaseStillWorks(): Promise<void> {
   assert.equal(builtLogs[0]?.meta?.isCandidateSentToManager, true);
 }
 
+async function testPullExposureFailureDoesNotBreakCardFlow(): Promise<void> {
+  const llm = new LlmClientMock(
+    JSON.stringify({
+      title: "Manager Card",
+      body: "Safe fallback despite exposure sidecar failure.",
+      keyFacts: { ok: "yes" },
+    }),
+  );
+  const logger = new LoggerMock();
+  const service = new MatchCardComposerService(
+    llm as unknown as LlmClient,
+    logger,
+    new ThrowingManagerExposureService() as unknown as ManagerExposureService,
+  );
+
+  const result = await service.composeForManager(makeMatch(), "en");
+  assert.match(result.text, /Manager Card/);
+
+  const failures = logger.warnCalls.filter((entry) => entry.message === "manager_exposure.failed");
+  assert.equal(failures.length, 1);
+}
+
 async function run(): Promise<void> {
   await testCleanNormalizedCardPath();
   await testAmbiguousNormalizationStillRendersSafely();
   await testMissingEvaluationStillSafe();
   await testSentToManagerCaseStillWorks();
+  await testPullExposureFailureDoesNotBreakCardFlow();
   process.stdout.write("match-card-composer.manager-normalized tests passed.\n");
 }
 

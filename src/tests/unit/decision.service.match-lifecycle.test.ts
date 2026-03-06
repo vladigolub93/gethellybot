@@ -91,11 +91,6 @@ class FailingManagerLifecycleService extends MatchLifecycleService {
   }
 }
 
-class FailingSendToManagerLifecycleService extends MatchLifecycleService {
-  override sendToManager(): never {
-    throw new Error("forced send-to-manager lifecycle failure");
-  }
-}
 
 function makeMatch(overrides: Partial<MatchRecord> = {}): MatchRecord {
   return {
@@ -307,41 +302,6 @@ async function testFailedManagerCanonicalTransitionDoesNotBreakLegacyFlow(): Pro
   assert.equal(failures[0]?.meta?.action, "manager_approve");
 }
 
-async function testSendToManagerPathStillWorks(): Promise<void> {
-  const initial = makeMatch();
-  const storage = new MatchStorageMock(initial);
-  const logger = new LoggerMock();
-  const service = new DecisionService(
-    storage as unknown as never,
-    new JobsRepoMock() as unknown as never,
-    logger,
-  );
-
-  const updated = await service.candidateApply(initial.id, initial.candidateUserId);
-
-  assert.equal(updated.candidateDecision, "applied");
-  assert.equal(updated.status, "candidate_applied");
-  assert.equal(storage.candidateDecisions.length, 1);
-}
-
-async function testSendToManagerCanonicalTransitionComputedCorrectly(): Promise<void> {
-  const initial = makeMatch();
-  const storage = new MatchStorageMock(initial);
-  const logger = new LoggerMock();
-  const service = new DecisionService(
-    storage as unknown as never,
-    new JobsRepoMock() as unknown as never,
-    logger,
-  );
-
-  await service.candidateApply(initial.id, initial.candidateUserId);
-
-  const logs = findDebug(logger, "match_lifecycle.send_to_manager.transition");
-  assert.equal(logs.length, 1);
-  assert.equal(logs[0]?.meta?.canonicalFrom, MATCH_STATUSES.INTERVIEW_COMPLETED);
-  assert.equal(logs[0]?.meta?.canonicalTo, MATCH_STATUSES.SENT_TO_MANAGER);
-}
-
 async function testManagerDecisionPathDoesNotOwnSendToManagerTransitionYet(): Promise<void> {
   const initial = makeMatch({
     status: "candidate_applied",
@@ -362,28 +322,6 @@ async function testManagerDecisionPathDoesNotOwnSendToManagerTransitionYet(): Pr
   assert.equal(sendLogs.length, 0);
 }
 
-async function testFailedSendToManagerCanonicalTransitionDoesNotBreakLegacyFlow(): Promise<void> {
-  const initial = makeMatch();
-  const storage = new MatchStorageMock(initial);
-  const logger = new LoggerMock();
-  const service = new DecisionService(
-    storage as unknown as never,
-    new JobsRepoMock() as unknown as never,
-    logger,
-    new FailingSendToManagerLifecycleService(),
-  );
-
-  const updated = await service.candidateApply(initial.id, initial.candidateUserId);
-
-  assert.equal(updated.candidateDecision, "applied");
-  assert.equal(updated.status, "candidate_applied");
-  assert.equal(storage.candidateDecisions.length, 1);
-
-  const failures = findWarn(logger, "match_lifecycle.transition_failed");
-  assert.equal(failures.length, 1);
-  assert.equal(failures[0]?.meta?.action, "send_to_manager");
-}
-
 async function run(): Promise<void> {
   await testCandidateAcceptPathStillWorks();
   await testCandidateDeclinePathStillWorks();
@@ -393,10 +331,7 @@ async function run(): Promise<void> {
   await testManagerRejectPathStillWorks();
   await testManagerCanonicalTransitionComputedCorrectly();
   await testFailedManagerCanonicalTransitionDoesNotBreakLegacyFlow();
-  await testSendToManagerPathStillWorks();
-  await testSendToManagerCanonicalTransitionComputedCorrectly();
   await testManagerDecisionPathDoesNotOwnSendToManagerTransitionYet();
-  await testFailedSendToManagerCanonicalTransitionDoesNotBreakLegacyFlow();
   process.stdout.write("decision.service.match-lifecycle tests passed.\n");
 }
 

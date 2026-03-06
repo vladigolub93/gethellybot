@@ -36,15 +36,6 @@ export class DecisionService {
       throw new Error("Failed to save candidate decision.");
     }
 
-    // TODO(helly-match-lifecycle): Temporary seam.
-    // Canonical SEND_TO_MANAGER should be computed at a single runtime seam where
-    // candidate package delivery to manager is finalized. Today this is split across:
-    // 1) push notify path: CallbackRouter -> NotificationEngine.notifyManagerCandidateApplied
-    // 2) pull read path: StateRouter.showTopMatchesWithActions (manager "show matches")
-    // Until these paths are unified behind one orchestration seam, keep this as
-    // sidecar telemetry only and never block legacy behavior.
-    this.tryLogSendToManagerLifecycleTransition(updated);
-
     return updated;
   }
 
@@ -273,54 +264,4 @@ export class DecisionService {
     }
   }
 
-  private tryLogSendToManagerLifecycleTransition(match: MatchRecord): void {
-    try {
-      const normalizedCurrent = normalizeLegacyMatchStatus({
-        status: match.status,
-        candidateDecision: match.candidateDecision,
-        managerDecision: match.managerDecision,
-        contactShared: match.status === "contact_shared",
-      });
-      const transitionFrom = this.resolveSendToManagerEntryStatus(normalizedCurrent);
-      if (!transitionFrom) {
-        throw new Error("Canonical entry status for send-to-manager is unknown.");
-      }
-
-      const next = this.matchLifecycleService.sendToManager(transitionFrom);
-      this.logger?.debug("match_lifecycle.send_to_manager.transition", {
-        matchId: match.id,
-        candidateUserId: match.candidateUserId,
-        managerUserId: match.managerUserId,
-        legacyStatus: match.status,
-        canonicalObserved: normalizedCurrent,
-        canonicalFrom: transitionFrom,
-        canonicalTo: next,
-      });
-    } catch (error) {
-      this.logger?.warn("match_lifecycle.transition_failed", {
-        action: "send_to_manager",
-        matchId: match.id,
-        candidateUserId: match.candidateUserId,
-        managerUserId: match.managerUserId,
-        legacyStatus: match.status,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  private resolveSendToManagerEntryStatus(
-    normalizedCurrent: MatchStatus | null,
-  ): MatchStatus | null {
-    if (normalizedCurrent === MATCH_STATUSES.INTERVIEW_COMPLETED) {
-      return MATCH_STATUSES.INTERVIEW_COMPLETED;
-    }
-    if (normalizedCurrent === MATCH_STATUSES.SENT_TO_MANAGER) {
-      // Legacy flow stores `candidate_applied` before manager gets notified.
-      // This temporary mapping exists only for sidecar telemetry.
-      // Real SEND_TO_MANAGER ownership must move to a dedicated runtime seam that
-      // owns manager-delivery decision after interview/evaluation readiness.
-      return MATCH_STATUSES.INTERVIEW_COMPLETED;
-    }
-    return null;
-  }
 }
