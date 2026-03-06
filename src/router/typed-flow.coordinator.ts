@@ -18,7 +18,7 @@ import {
 
 const DEFAULT_FALLBACK_MESSAGE = "Please continue with the current step.";
 
-type TypedOnboardingFlags = {
+type TypedFlowFlags = {
   enableTypedRoleSelectionRouter: boolean;
   enableTypedContactRouter: boolean;
   enableTypedCvRouter: boolean;
@@ -27,11 +27,13 @@ type TypedOnboardingFlags = {
   enableTypedManagerMandatoryRouter: boolean;
   enableTypedCandidateDecisionRouter: boolean;
   enableTypedManagerDecisionRouter: boolean;
+  enableTypedInterviewInviteRouter: boolean;
+  enableTypedInterviewAnswerRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
   enableTypedManagerReviewRouter: boolean;
 };
 
-export type TypedOnboardingCoordinatorResult = {
+export type TypedFlowCoordinatorResult = {
   attempted: boolean;
   usedTypedPath: boolean;
   accepted: boolean;
@@ -56,9 +58,9 @@ type TypedManagerReviewInput = {
   hasFinalAnswers: boolean;
 };
 
-export class TypedOnboardingCoordinator {
+export class TypedFlowCoordinator {
   constructor(
-    private readonly flags: TypedOnboardingFlags,
+    private readonly flags: TypedFlowFlags,
     private readonly actionRouterService: ActionRouterService | undefined,
     private readonly gatekeeperService: GatekeeperService | undefined,
     private readonly logger: Pick<Logger, "debug" | "warn">,
@@ -67,7 +69,7 @@ export class TypedOnboardingCoordinator {
   async attemptRoleSelection(input: {
     session: UserSessionState;
     userMessage: string;
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "role_selection", () =>
       runTypedRoute({
@@ -94,7 +96,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     awaitingContactChoice: boolean;
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({
       session: input.session,
       context: {
@@ -126,7 +128,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text" | "document" | "voice";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_resume", () =>
       runTypedRoute({
@@ -156,7 +158,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text" | "location";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(stage === ONBOARDING_STAGES.CANDIDATE_MANDATORY, () =>
       runTypedRoute({
@@ -185,7 +187,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text" | "document" | "voice";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_job", () =>
       runTypedRoute({
@@ -216,7 +218,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_MANDATORY, () =>
       runTypedRoute({
@@ -244,28 +246,31 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
-    return this.runIfInScope(stage === ONBOARDING_STAGES.CANDIDATE_DECISION, () =>
-      runTypedRoute({
-        enabled: this.flags.enableTypedCandidateDecisionRouter,
-        logPrefix: "typed_candidate_decision",
-        userId: input.session.userId,
-        source: input.source,
-        runtimeState: input.session.state,
-        userMessage: input.userMessage,
-        expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
-        resolveCanonicalState: (runtimeState) =>
-          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
-        acceptedActions: [
-          HELLY_ACTIONS.YES,
-          HELLY_ACTIONS.NO,
-          HELLY_ACTIONS.SHARE_CONTACT,
-        ],
-        actionRouterService: this.actionRouterService,
-        gatekeeperService: this.gatekeeperService,
-        logger: this.logger,
-      }),
+    return this.runIfInScope(
+      stage === ONBOARDING_STAGES.CANDIDATE_DECISION ||
+      stage === ONBOARDING_STAGES.INTERVIEW_INVITATION,
+      () =>
+        runTypedRoute({
+          enabled: this.flags.enableTypedCandidateDecisionRouter,
+          logPrefix: "typed_candidate_decision",
+          userId: input.session.userId,
+          source: input.source,
+          runtimeState: input.session.state,
+          userMessage: input.userMessage,
+          expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
+          resolveCanonicalState: (runtimeState) =>
+            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          acceptedActions: [
+            HELLY_ACTIONS.YES,
+            HELLY_ACTIONS.NO,
+            HELLY_ACTIONS.SHARE_CONTACT,
+          ],
+          actionRouterService: this.actionRouterService,
+          gatekeeperService: this.gatekeeperService,
+          logger: this.logger,
+        }),
     );
   }
 
@@ -273,7 +278,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
     source: "text";
-  }): Promise<TypedOnboardingCoordinatorResult> {
+  }): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_DECISION, () =>
       runTypedRoute({
@@ -298,7 +303,104 @@ export class TypedOnboardingCoordinator {
     );
   }
 
-  async attemptCandidateReview(input: TypedCandidateReviewInput): Promise<TypedOnboardingCoordinatorResult> {
+  async attemptInterviewInvitation(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<TypedFlowCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+    return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_INVITATION, () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedInterviewInviteRouter,
+        logPrefix: "typed_interview_invite",
+        userId: input.session.userId,
+        source: input.source,
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.YES,
+          HELLY_ACTIONS.NO,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
+  async attemptInterviewAnswer(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "voice";
+  }): Promise<TypedFlowCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+
+    if (input.session.state === "interviewing_candidate") {
+      return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_ANSWER, () =>
+        runTypedRoute({
+          enabled: this.flags.enableTypedInterviewAnswerRouter,
+          logPrefix: "typed_interview_answer",
+          userId: input.session.userId,
+          source: input.source,
+          runtimeState: input.session.state,
+          userMessage: input.userMessage,
+          expectedCanonicalState: HELLY_STATES.C_INTERVIEW_IN_PROGRESS,
+          resolveCanonicalState: (runtimeState) =>
+            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          acceptedActions: [
+            HELLY_ACTIONS.ANSWER_QUESTION,
+            HELLY_ACTIONS.SUBMIT_TEXT,
+            HELLY_ACTIONS.SUBMIT_VOICE,
+            HELLY_ACTIONS.SKIP_QUESTION,
+            HELLY_ACTIONS.FINISH_INTERVIEW,
+          ],
+          actionRouterService: this.actionRouterService,
+          gatekeeperService: this.gatekeeperService,
+          logger: this.logger,
+        }),
+      );
+    }
+
+    if (input.session.state === "interviewing_manager") {
+      return this.runIfInScope(stage === ONBOARDING_STAGES.INTERVIEW_ANSWER, () =>
+        runTypedRoute({
+          enabled: this.flags.enableTypedInterviewAnswerRouter,
+          logPrefix: "typed_interview_answer",
+          userId: input.session.userId,
+          source: input.source,
+          runtimeState: input.session.state,
+          userMessage: input.userMessage,
+          expectedCanonicalState: HELLY_STATES.HM_INTERVIEW_IN_PROGRESS,
+          resolveCanonicalState: (runtimeState) =>
+            this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+          acceptedActions: [
+            HELLY_ACTIONS.ANSWER_QUESTION,
+            HELLY_ACTIONS.SUBMIT_TEXT,
+            HELLY_ACTIONS.SUBMIT_VOICE,
+            HELLY_ACTIONS.SKIP_QUESTION,
+            HELLY_ACTIONS.FINISH_INTERVIEW,
+          ],
+          actionRouterService: this.actionRouterService,
+          gatekeeperService: this.gatekeeperService,
+          logger: this.logger,
+        }),
+      );
+    }
+
+    return {
+      attempted: false,
+      usedTypedPath: false,
+      accepted: false,
+      action: null,
+      reason: "OUT_OF_SCOPE",
+      message: DEFAULT_FALLBACK_MESSAGE,
+    };
+  }
+
+  async attemptCandidateReview(input: TypedCandidateReviewInput): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({
       session: input.session,
       context: {
@@ -330,7 +432,7 @@ export class TypedOnboardingCoordinator {
     );
   }
 
-  async attemptManagerReview(input: TypedManagerReviewInput): Promise<TypedOnboardingCoordinatorResult> {
+  async attemptManagerReview(input: TypedManagerReviewInput): Promise<TypedFlowCoordinatorResult> {
     const stage = resolveOnboardingStage({
       session: input.session,
       context: {
@@ -365,7 +467,7 @@ export class TypedOnboardingCoordinator {
   private async runIfInScope(
     inScope: boolean,
     execute: () => Promise<RunTypedRouteResult>,
-  ): Promise<TypedOnboardingCoordinatorResult> {
+  ): Promise<TypedFlowCoordinatorResult> {
     if (!inScope) {
       return {
         attempted: false,

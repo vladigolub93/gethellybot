@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { HELLY_ACTIONS } from "../../core/state/actions";
 import { StateService } from "../../state/state.service";
-import { TypedOnboardingCoordinator } from "../../router/typed-onboarding.coordinator";
+import { TypedFlowCoordinator } from "../../router/typed-flow.coordinator";
 
 type LogEntry = {
   level: "debug" | "warn";
@@ -30,6 +30,8 @@ function createCoordinator(input?: {
     enableTypedManagerMandatoryRouter: boolean;
     enableTypedCandidateDecisionRouter: boolean;
     enableTypedManagerDecisionRouter: boolean;
+    enableTypedInterviewInviteRouter: boolean;
+    enableTypedInterviewAnswerRouter: boolean;
     enableTypedCandidateReviewRouter: boolean;
     enableTypedManagerReviewRouter: boolean;
   }>;
@@ -45,7 +47,7 @@ function createCoordinator(input?: {
     message: string;
   };
 }): {
-  coordinator: TypedOnboardingCoordinator;
+  coordinator: TypedFlowCoordinator;
   actionRouterCalls: () => number;
   gatekeeperCalls: () => number;
   logs: LogEntry[];
@@ -55,7 +57,7 @@ function createCoordinator(input?: {
   let gatekeeperCalls = 0;
   const logs: LogEntry[] = [];
   const logger = createLogger(logs);
-  const coordinator = new TypedOnboardingCoordinator(
+  const coordinator = new TypedFlowCoordinator(
     {
       enableTypedRoleSelectionRouter: opts.flags?.enableTypedRoleSelectionRouter ?? true,
       enableTypedContactRouter: opts.flags?.enableTypedContactRouter ?? true,
@@ -69,6 +71,10 @@ function createCoordinator(input?: {
         opts.flags?.enableTypedCandidateDecisionRouter ?? true,
       enableTypedManagerDecisionRouter:
         opts.flags?.enableTypedManagerDecisionRouter ?? true,
+      enableTypedInterviewInviteRouter:
+        opts.flags?.enableTypedInterviewInviteRouter ?? true,
+      enableTypedInterviewAnswerRouter:
+        opts.flags?.enableTypedInterviewAnswerRouter ?? true,
       enableTypedCandidateReviewRouter:
         opts.flags?.enableTypedCandidateReviewRouter ?? true,
       enableTypedManagerReviewRouter:
@@ -393,6 +399,131 @@ async function testManagerDecisionUsesCoordinatorRules(): Promise<void> {
   assert.equal(harness.gatekeeperCalls(), 1);
 }
 
+async function testInterviewInvitationUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.YES,
+      confidence: 0.91,
+      message: "Interview invite accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.YES,
+      message: "Interview invite accepted.",
+    },
+  });
+  const session = createSession(9, 9);
+  session.state = "waiting_candidate_decision";
+  session.role = "candidate";
+  session.matching = {
+    lastShownMatchIds: ["match_1"],
+    lastActionableMatchId: "match_1",
+  };
+
+  const result = await harness.coordinator.attemptInterviewInvitation({
+    session,
+    userMessage: "yes",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.YES);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
+async function testInterviewAnswerUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.ANSWER_QUESTION,
+      confidence: 0.9,
+      message: "Interview answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.ANSWER_QUESTION,
+      message: "Interview answer accepted.",
+    },
+  });
+  const session = createSession(10, 10);
+  session.state = "interviewing_candidate";
+  session.role = "candidate";
+  session.interviewPlan = {
+    summary: "Candidate interview",
+    questions: [
+      {
+        id: "q2",
+        question: "Describe a recent migration project you led.",
+        goal: "depth",
+        gapToClarify: "details",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.answers = [];
+  session.pendingFollowUp = undefined;
+
+  const result = await harness.coordinator.attemptInterviewAnswer({
+    session,
+    userMessage: "I led a zero-downtime migration of 40 services.",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.ANSWER_QUESTION);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
+async function testInterviewAnswerSkipUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.SKIP_QUESTION,
+      confidence: 0.89,
+      message: "Skip accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.SKIP_QUESTION,
+      message: "Skip accepted.",
+    },
+  });
+  const session = createSession(11, 11);
+  session.state = "interviewing_candidate";
+  session.role = "candidate";
+  session.interviewPlan = {
+    summary: "Candidate interview",
+    questions: [
+      {
+        id: "q2",
+        question: "Describe a production incident and resolution.",
+        goal: "depth",
+        gapToClarify: "ownership",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.answers = [];
+  session.pendingFollowUp = undefined;
+
+  const result = await harness.coordinator.attemptInterviewAnswer({
+    session,
+    userMessage: "skip",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.SKIP_QUESTION);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
 async function run(): Promise<void> {
   await testRoleSelectionRunsThroughCoordinator();
   await testOutOfScopeSkipsAttempt();
@@ -402,8 +533,11 @@ async function run(): Promise<void> {
   await testManagerMandatoryUsesCoordinatorRules();
   await testCandidateDecisionUsesCoordinatorRules();
   await testManagerDecisionUsesCoordinatorRules();
+  await testInterviewInvitationUsesCoordinatorRules();
+  await testInterviewAnswerUsesCoordinatorRules();
+  await testInterviewAnswerSkipUsesCoordinatorRules();
   await testManagerReviewContextUsesCoordinatorRules();
-  process.stdout.write("typed-onboarding.coordinator tests passed.\n");
+  process.stdout.write("typed-flow.coordinator tests passed.\n");
 }
 
 void run();

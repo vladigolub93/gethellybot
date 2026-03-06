@@ -45,6 +45,8 @@ export interface EnvConfig {
   enableTypedManagerMandatoryRouter: boolean;
   enableTypedCandidateDecisionRouter: boolean;
   enableTypedManagerDecisionRouter: boolean;
+  enableTypedInterviewInviteRouter: boolean;
+  enableTypedInterviewAnswerRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
   enableTypedManagerReviewRouter: boolean;
   interviewReminderEnabled: boolean;
@@ -102,6 +104,8 @@ export function loadEnv(): EnvConfig {
   const enableTypedManagerMandatoryRouterRaw = process.env.ENABLE_TYPED_MANAGER_MANDATORY_ROUTER ?? "false";
   const enableTypedCandidateDecisionRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_DECISION_ROUTER ?? "false";
   const enableTypedManagerDecisionRouterRaw = process.env.ENABLE_TYPED_MANAGER_DECISION_ROUTER ?? "false";
+  const enableTypedInterviewInviteRouterRaw = process.env.ENABLE_TYPED_INTERVIEW_INVITE_ROUTER ?? "false";
+  const enableTypedInterviewAnswerRouterRaw = process.env.ENABLE_TYPED_INTERVIEW_ANSWER_ROUTER ?? "false";
   const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
   const enableTypedManagerReviewRouterRaw = process.env.ENABLE_TYPED_MANAGER_REVIEW_ROUTER ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
@@ -131,6 +135,8 @@ export function loadEnv(): EnvConfig {
   const enableTypedManagerMandatoryRouter = parseBoolean(enableTypedManagerMandatoryRouterRaw);
   const enableTypedCandidateDecisionRouter = parseBoolean(enableTypedCandidateDecisionRouterRaw);
   const enableTypedManagerDecisionRouter = parseBoolean(enableTypedManagerDecisionRouterRaw);
+  const enableTypedInterviewInviteRouter = parseBoolean(enableTypedInterviewInviteRouterRaw);
+  const enableTypedInterviewAnswerRouter = parseBoolean(enableTypedInterviewAnswerRouterRaw);
   const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
   const enableTypedManagerReviewRouter = parseBoolean(enableTypedManagerReviewRouterRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
@@ -211,6 +217,8 @@ export function loadEnv(): EnvConfig {
     enableTypedManagerMandatoryRouter,
     enableTypedCandidateDecisionRouter,
     enableTypedManagerDecisionRouter,
+    enableTypedInterviewInviteRouter,
+    enableTypedInterviewAnswerRouter,
     enableTypedCandidateReviewRouter,
     enableTypedManagerReviewRouter,
     interviewReminderEnabled,

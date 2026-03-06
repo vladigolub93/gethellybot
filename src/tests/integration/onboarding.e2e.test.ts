@@ -39,6 +39,8 @@ interface BuildRouterHarnessOptions {
   enableTypedManagerMandatoryRouter?: boolean;
   enableTypedCandidateDecisionRouter?: boolean;
   enableTypedManagerDecisionRouter?: boolean;
+  enableTypedInterviewInviteRouter?: boolean;
+  enableTypedInterviewAnswerRouter?: boolean;
   enableTypedCandidateReviewRouter?: boolean;
   enableTypedManagerReviewRouter?: boolean;
   documentExtractedText?: string;
@@ -329,6 +331,8 @@ function buildRouterHarness(options?: BuildRouterHarnessOptions): {
     opts.enableTypedManagerMandatoryRouter ?? false,
     opts.enableTypedCandidateDecisionRouter ?? false,
     opts.enableTypedManagerDecisionRouter ?? false,
+    opts.enableTypedInterviewInviteRouter ?? false,
+    opts.enableTypedInterviewAnswerRouter ?? false,
     opts.enableTypedCandidateReviewRouter ?? false,
     opts.enableTypedManagerReviewRouter ?? false,
     {
@@ -1460,6 +1464,112 @@ async function testTypedCandidateDecisionRejectedFallsBackToLegacy(): Promise<vo
   assert.equal(harness.gatekeeperCalls, 1);
 }
 
+async function testTypedInterviewInviteFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewInviteRouter: false,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.95,
+      message: "Interview invitation yes.",
+    },
+  });
+  const userId = 91052;
+  const chatId = 91052;
+  seedInterviewInvitationSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(511, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedInterviewInviteYesWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewInviteRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.94,
+      message: "Interview invitation yes.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "YES",
+      message: "Interview invitation yes.",
+    },
+  });
+  const userId = 91053;
+  const chatId = 91053;
+  seedInterviewInvitationSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(521, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewInviteNoWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewInviteRouter: true,
+    actionRouterResult: {
+      action: "NO",
+      confidence: 0.93,
+      message: "Interview invitation no.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "NO",
+      message: "Interview invitation no.",
+    },
+  });
+  const userId = 91054;
+  const chatId = 91054;
+  seedInterviewInvitationSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(531, userId, chatId, "no"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewInviteRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewInviteRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.2,
+      message: "Maybe yes.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "YES",
+      message: "Maybe yes.",
+    },
+  });
+  const userId = 91055;
+  const chatId = 91055;
+  seedInterviewInvitationSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(541, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
 async function testTypedManagerDecisionFlagOffKeepsLegacyPath(): Promise<void> {
   const harness = buildRouterHarness({
     enableTypedManagerDecisionRouter: false,
@@ -1838,6 +1948,171 @@ async function testTypedManagerReviewRejectedFallsBackToLegacy(): Promise<void> 
   assert.equal(harness.gatekeeperCalls, 1);
 }
 
+async function testTypedInterviewAnswerFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: false,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.95,
+      message: "Interview answer detected.",
+    },
+  });
+  const userId = 91056;
+  const chatId = 91056;
+  seedCandidateInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(551, userId, chatId, "I improved API latency by 40%."));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_candidate");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedInterviewAnswerTextWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: true,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.94,
+      message: "Interview answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "ANSWER_QUESTION",
+      message: "Interview answer accepted.",
+    },
+  });
+  const userId = 91057;
+  const chatId = 91057;
+  seedCandidateInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(561, userId, chatId, "I led migration of 30 services with zero downtime."));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_candidate");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewAnswerManagerTextWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: true,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.93,
+      message: "Manager interview answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "ANSWER_QUESTION",
+      message: "Manager interview answer accepted.",
+    },
+  });
+  const userId = 91058;
+  const chatId = 91058;
+  seedManagerInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(571, userId, chatId, "Delivery can start in two weeks with staged rollout."));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewAnswerVoiceWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_VOICE",
+      confidence: 0.92,
+      message: "Voice interview answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SUBMIT_VOICE",
+      message: "Voice interview answer accepted.",
+    },
+  });
+  const userId = 91059;
+  const chatId = 91059;
+  seedCandidateInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(voiceUpdate(581, userId, chatId, "voice-file-1", 24));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_candidate");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewAnswerSkipWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: true,
+    actionRouterResult: {
+      action: "SKIP_QUESTION",
+      confidence: 0.93,
+      message: "Skip accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SKIP_QUESTION",
+      message: "Skip accepted.",
+    },
+  });
+  const userId = 91060;
+  const chatId = 91060;
+  seedCandidateInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(591, userId, chatId, "skip"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(
+    session?.state === "candidate_mandatory_fields" || session?.state === "interviewing_candidate",
+    true,
+  );
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedInterviewAnswerRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedInterviewAnswerRouter: true,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.2,
+      message: "Maybe answer.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "ANSWER_QUESTION",
+      message: "Maybe answer.",
+    },
+  });
+  const userId = 91061;
+  const chatId = 91061;
+  seedCandidateInterviewAnswerSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(601, userId, chatId, "I improved test coverage from 35% to 82%."));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_candidate");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
 function seedCandidateSummaryReviewSession(
   stateService: StateService,
   userId: number,
@@ -1854,6 +2129,54 @@ function seedCandidateSummaryReviewSession(
         question: "Please confirm your profile summary is correct.",
         goal: "summary confirmation",
         gapToClarify: "profile fit",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.pendingFollowUp = undefined;
+  session.answers = [];
+}
+
+function seedCandidateInterviewAnswerSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "candidate";
+  session.state = "interviewing_candidate";
+  session.interviewPlan = {
+    summary: "Candidate interview",
+    questions: [
+      {
+        id: "q2",
+        question: "Describe a recent migration project you led.",
+        goal: "depth",
+        gapToClarify: "details",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.pendingFollowUp = undefined;
+  session.answers = [];
+}
+
+function seedManagerInterviewAnswerSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "manager";
+  session.state = "interviewing_manager";
+  session.interviewPlan = {
+    summary: "Manager interview",
+    questions: [
+      {
+        id: "q2",
+        question: "What timeline and constraints do you have for delivery?",
+        goal: "clarify",
+        gapToClarify: "timeline",
       },
     ],
   };
@@ -1908,6 +2231,21 @@ function seedCandidateDecisionSession(
   const session = stateService.getOrCreate(userId, chatId);
   session.role = "candidate";
   session.state = "waiting_candidate_decision";
+  session.pendingFollowUp = undefined;
+}
+
+function seedInterviewInvitationSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "candidate";
+  session.state = "waiting_candidate_decision";
+  session.matching = {
+    lastShownMatchIds: ["match_1"],
+    lastActionableMatchId: "match_1",
+  };
   session.pendingFollowUp = undefined;
 }
 
@@ -2069,6 +2407,10 @@ async function run(): Promise<void> {
   await testTypedCandidateDecisionYesWhenEnabled();
   await testTypedCandidateDecisionNoWhenEnabled();
   await testTypedCandidateDecisionRejectedFallsBackToLegacy();
+  await testTypedInterviewInviteFlagOffKeepsLegacyPath();
+  await testTypedInterviewInviteYesWhenEnabled();
+  await testTypedInterviewInviteNoWhenEnabled();
+  await testTypedInterviewInviteRejectedFallsBackToLegacy();
   await testTypedManagerDecisionFlagOffKeepsLegacyPath();
   await testTypedManagerDecisionYesWhenEnabled();
   await testTypedManagerDecisionNoWhenEnabled();
@@ -2083,6 +2425,11 @@ async function run(): Promise<void> {
   await testTypedManagerReviewEditWhenEnabled();
   await testTypedManagerReviewFreeTextWhenEnabled();
   await testTypedManagerReviewRejectedFallsBackToLegacy();
+  await testTypedInterviewAnswerFlagOffKeepsLegacyPath();
+  await testTypedInterviewAnswerTextWhenEnabled();
+  await testTypedInterviewAnswerManagerTextWhenEnabled();
+  await testTypedInterviewAnswerVoiceWhenEnabled();
+  await testTypedInterviewAnswerRejectedFallsBackToLegacy();
   process.stdout.write("Onboarding e2e tests passed.\n");
 }
 

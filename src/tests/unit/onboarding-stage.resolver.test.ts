@@ -90,6 +90,19 @@ function testCandidateDecisionStage(): void {
   assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_DECISION);
 }
 
+function testInterviewInvitationStage(): void {
+  const session = createSession(12, 12);
+  session.state = "waiting_candidate_decision";
+  session.role = "candidate";
+  session.matching = {
+    lastShownMatchIds: ["match_1"],
+    lastActionableMatchId: "match_1",
+  };
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_INVITATION);
+}
+
 function testManagerDecisionStage(): void {
   const session = createSession(11, 11);
   session.state = "waiting_manager_decision";
@@ -118,6 +131,42 @@ function testManagerReviewStage(): void {
   assert.equal(stage, ONBOARDING_STAGES.MANAGER_REVIEW);
 }
 
+function testCandidateInterviewAnswerStage(): void {
+  const session = createSession(13, 13);
+  session.state = "interviewing_candidate";
+  session.role = "candidate";
+  session.currentQuestionIndex = 1;
+  session.answers = [];
+
+  const stage = resolveOnboardingStage({
+    session,
+    context: {
+      currentQuestionText: "Describe a recent migration project you led.",
+      currentQuestionIndex: 1,
+      hasFinalAnswers: true,
+    },
+  });
+  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_ANSWER);
+}
+
+function testManagerInterviewAnswerStage(): void {
+  const session = createSession(14, 14);
+  session.state = "interviewing_manager";
+  session.role = "manager";
+  session.currentQuestionIndex = 1;
+  session.answers = [];
+
+  const stage = resolveOnboardingStage({
+    session,
+    context: {
+      currentQuestionText: "What delivery timeline is acceptable?",
+      currentQuestionIndex: 1,
+      hasFinalAnswers: true,
+    },
+  });
+  assert.equal(stage, ONBOARDING_STAGES.INTERVIEW_ANSWER);
+}
+
 function testOutOfScopeStage(): void {
   const session = createSession(7, 7);
   session.state = "candidate_profile_ready";
@@ -135,8 +184,11 @@ function run(): void {
   testManagerJdIntakeStage();
   testManagerMandatoryStage();
   testCandidateDecisionStage();
+  testInterviewInvitationStage();
   testManagerDecisionStage();
   testManagerReviewStage();
+  testCandidateInterviewAnswerStage();
+  testManagerInterviewAnswerStage();
   testOutOfScopeStage();
   process.stdout.write("onboarding-stage.resolver tests passed.\n");
 }

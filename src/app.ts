@@ -469,6 +469,8 @@ export function createApp(env: EnvConfig): AppContext {
     env.enableTypedManagerMandatoryRouter,
     env.enableTypedCandidateDecisionRouter,
     env.enableTypedManagerDecisionRouter,
+    env.enableTypedInterviewInviteRouter,
+    env.enableTypedInterviewAnswerRouter,
     env.enableTypedCandidateReviewRouter,
     env.enableTypedManagerReviewRouter,
     actionRouterService,

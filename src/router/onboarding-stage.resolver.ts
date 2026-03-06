@@ -11,6 +11,8 @@ export const ONBOARDING_STAGES = {
   MANAGER_REVIEW: "MANAGER_REVIEW",
   CANDIDATE_DECISION: "CANDIDATE_DECISION",
   MANAGER_DECISION: "MANAGER_DECISION",
+  INTERVIEW_INVITATION: "INTERVIEW_INVITATION",
+  INTERVIEW_ANSWER: "INTERVIEW_ANSWER",
   OUT_OF_SCOPE: "OUT_OF_SCOPE",
 } as const;
 
@@ -23,6 +25,7 @@ export type OnboardingStageResolverInput = {
     currentQuestionText?: string | null;
     currentQuestionIndex?: number | null;
     hasFinalAnswers?: boolean;
+    hasMatchForInterviewInvite?: boolean;
   };
 };
 
@@ -53,6 +56,12 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
   }
 
   if (session.state === "waiting_candidate_decision") {
+    const hasMatchForInterviewInvite =
+      input.context?.hasMatchForInterviewInvite ??
+      hasInterviewInvitationMatch(session);
+    if (hasMatchForInterviewInvite) {
+      return ONBOARDING_STAGES.INTERVIEW_INVITATION;
+    }
     return ONBOARDING_STAGES.CANDIDATE_DECISION;
   }
 
@@ -94,7 +103,19 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
     }
   }
 
+  if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
+    return ONBOARDING_STAGES.INTERVIEW_ANSWER;
+  }
+
   return ONBOARDING_STAGES.OUT_OF_SCOPE;
+}
+
+function hasInterviewInvitationMatch(session: UserSessionState): boolean {
+  const actionableMatchId = session.matching?.lastActionableMatchId?.trim();
+  if (actionableMatchId) {
+    return true;
+  }
+  return (session.matching?.lastShownMatchIds?.length ?? 0) > 0;
 }
 
 function resolveCurrentQuestionIndex(session: UserSessionState): number | null {

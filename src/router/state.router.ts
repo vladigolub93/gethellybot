@@ -146,11 +146,11 @@ import type { DialogueOrchestratorV2 } from "../dialogue/dialogue.orchestrator";
 import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
 import { GatekeeperService } from "../core/state/gatekeeper/gatekeeper.service";
 import { HELLY_ACTIONS } from "../core/state/actions";
-import { TypedOnboardingCoordinator } from "./typed-onboarding.coordinator";
+import { TypedFlowCoordinator, TypedFlowCoordinatorResult } from "./typed-flow.coordinator";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
-  private readonly typedOnboardingCoordinator: TypedOnboardingCoordinator;
+  private readonly typedFlowCoordinator: TypedFlowCoordinator;
   private readonly answerProcessingStatusAt = new Map<number, number>();
 
   constructor(
@@ -205,6 +205,8 @@ export class StateRouter {
     private readonly enableTypedManagerMandatoryRouter = false,
     private readonly enableTypedCandidateDecisionRouter = false,
     private readonly enableTypedManagerDecisionRouter = false,
+    private readonly enableTypedInterviewInviteRouter = false,
+    private readonly enableTypedInterviewAnswerRouter = false,
     private readonly enableTypedCandidateReviewRouter = false,
     private readonly enableTypedManagerReviewRouter = false,
     private readonly actionRouterService?: ActionRouterService,
@@ -218,7 +220,7 @@ export class StateRouter {
       this.notificationEngine,
       this.contactExchangeService,
     );
-    this.typedOnboardingCoordinator = new TypedOnboardingCoordinator(
+    this.typedFlowCoordinator = new TypedFlowCoordinator(
       {
         enableTypedRoleSelectionRouter: this.enableTypedRoleSelectionRouter,
         enableTypedContactRouter: this.enableTypedContactRouter,
@@ -228,6 +230,8 @@ export class StateRouter {
         enableTypedManagerMandatoryRouter: this.enableTypedManagerMandatoryRouter,
         enableTypedCandidateDecisionRouter: this.enableTypedCandidateDecisionRouter,
         enableTypedManagerDecisionRouter: this.enableTypedManagerDecisionRouter,
+        enableTypedInterviewInviteRouter: this.enableTypedInterviewInviteRouter,
+        enableTypedInterviewAnswerRouter: this.enableTypedInterviewAnswerRouter,
         enableTypedCandidateReviewRouter: this.enableTypedCandidateReviewRouter,
         enableTypedManagerReviewRouter: this.enableTypedManagerReviewRouter,
       },
@@ -898,7 +902,7 @@ export class StateRouter {
     const explicitContactIntent = isContactShareTextIntent(rawText, normalizedEnglishText);
     const extractedPhone = extractPhoneNumber(rawText);
     if (isAwaitingContactChoice(session)) {
-      const typedContactResult = await this.typedOnboardingCoordinator.attemptContactIdentity({
+      const typedContactResult = await this.typedFlowCoordinator.attemptContactIdentity({
         session,
         userMessage: normalizedEnglishText,
         awaitingContactChoice: session.awaitingContactChoice === true,
@@ -964,7 +968,7 @@ export class StateRouter {
         );
         return;
       }
-      const typedRoleResult = await this.typedOnboardingCoordinator.attemptRoleSelection({
+      const typedRoleResult = await this.typedFlowCoordinator.attemptRoleSelection({
         session,
         userMessage: normalizedEnglishText,
       });
@@ -1052,11 +1056,18 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_candidate_decision") {
-      await this.maybeRunTypedCandidateDecisionRouter({
+      const interviewInvitationResult = await this.maybeRunTypedInterviewInvitationRouter({
         session,
         userMessage: normalizedEnglishText,
         source: "text",
       });
+      if (!interviewInvitationResult.attempted || interviewInvitationResult.reason === "FEATURE_FLAG_OFF") {
+        await this.maybeRunTypedCandidateDecisionRouter({
+          session,
+          userMessage: normalizedEnglishText,
+          source: "text",
+        });
+      }
     }
 
     if (session.state === "waiting_manager_decision") {
@@ -1071,6 +1082,12 @@ export class StateRouter {
       const isCandidatePrescreenV2 = this.isCandidatePrescreenV2Session(session);
       const isManagerPrescreenV2 = this.isManagerPrescreenV2Session(session);
       const isAnyPrescreenV2 = isCandidatePrescreenV2 || isManagerPrescreenV2;
+
+      await this.maybeRunTypedInterviewAnswerRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
 
       if (isEnglishPreferenceSignal(rawText, normalizedEnglishText)) {
         this.stateService.setPreferredLanguage(session.userId, "en");
@@ -1859,7 +1876,7 @@ export class StateRouter {
   }): Promise<void> {
     const currentQuestionIndex = resolveCurrentQuestionIndexValue(input.session);
     const hasFinalAnswers = (input.session.answers ?? []).some((item) => item.status !== "draft");
-    await this.typedOnboardingCoordinator.attemptCandidateReview({
+    await this.typedFlowCoordinator.attemptCandidateReview({
       session: input.session,
       userMessage: input.userMessage,
       currentQuestion: input.currentQuestion,
@@ -1873,7 +1890,7 @@ export class StateRouter {
     userMessage: string;
     source: "text" | "location";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptCandidateMandatory({
+    await this.typedFlowCoordinator.attemptCandidateMandatory({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
@@ -1885,7 +1902,7 @@ export class StateRouter {
     userMessage: string;
     source: "text";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptManagerMandatory({
+    await this.typedFlowCoordinator.attemptManagerMandatory({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
@@ -1897,7 +1914,31 @@ export class StateRouter {
     userMessage: string;
     source: "text";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptCandidateDecision({
+    await this.typedFlowCoordinator.attemptCandidateDecision({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedInterviewInvitationRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<TypedFlowCoordinatorResult> {
+    return this.typedFlowCoordinator.attemptInterviewInvitation({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedInterviewAnswerRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "voice";
+  }): Promise<void> {
+    await this.typedFlowCoordinator.attemptInterviewAnswer({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
@@ -1909,7 +1950,7 @@ export class StateRouter {
     userMessage: string;
     source: "text";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptManagerDecision({
+    await this.typedFlowCoordinator.attemptManagerDecision({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
@@ -1923,7 +1964,7 @@ export class StateRouter {
   }): Promise<void> {
     const currentQuestionIndex = resolveCurrentQuestionIndexValue(input.session);
     const hasFinalAnswers = (input.session.answers ?? []).some((item) => item.status !== "draft");
-    await this.typedOnboardingCoordinator.attemptManagerReview({
+    await this.typedFlowCoordinator.attemptManagerReview({
       session: input.session,
       userMessage: input.userMessage,
       currentQuestion: input.currentQuestion,
@@ -1937,7 +1978,7 @@ export class StateRouter {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptCandidateCvIntake({
+    await this.typedFlowCoordinator.attemptCandidateCvIntake({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
@@ -1949,7 +1990,7 @@ export class StateRouter {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<void> {
-    await this.typedOnboardingCoordinator.attemptManagerJdIntake({
+    await this.typedFlowCoordinator.attemptManagerJdIntake({
       session: input.session,
       userMessage: input.userMessage,
       source: input.source,
