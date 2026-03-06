@@ -278,6 +278,52 @@ Inference note: these mappings are compatibility heuristics until a dedicated ev
 - This closes `PROPOSED` vs `INVITED` ambiguity.
 
 5. Centralize interview status derivation
+
+## 7. Runtime Seam Analysis: `SEND_TO_MANAGER`
+
+### 7.1 Interview completion finalized
+
+Interview completion is finalized in interview orchestration and then persisted into session/profile-ready state:
+- `InterviewEngine` returns `completedState` (`candidate_profile_ready` / `job_profile_ready`)
+- `StateRouter` applies that transition and follow-up messaging
+
+Relevant points:
+- `src/interviews/interview.engine.ts`
+- `src/router/state.router.ts` (`result.completedState` handling)
+
+### 7.2 Evaluation readiness considered
+
+Evaluation-like readiness signals are distributed:
+- candidate technical summary / confidence
+- answer evaluator signals
+- profile status (`analysis_ready`, `rejected_non_technical`)
+
+There is no single persisted canonical "evaluation ready" flag that owns manager-delivery gating yet.
+
+### 7.3 Candidate actually sent/shown to manager
+
+Current manager-review delivery is split across at least two runtime paths:
+
+1. Push notification path
+- `CallbackRouter.handleCandidateApply` / `executeMatchAction(candidate_apply)`
+- `DecisionService.candidateApply`
+- `NotificationEngine.notifyManagerCandidateApplied`
+
+2. Pull/read path for manager
+- `StateRouter.showTopMatchesWithActions` when manager requests "show matches"
+- manager can be shown candidate cards from stored matches independently of push notify
+
+### 7.4 Conclusion for current step
+
+No single safe seam currently owns `INTERVIEW_COMPLETED -> SENT_TO_MANAGER` end-to-end.
+Because delivery is split across push and pull paths and evaluation readiness is not centralized, canonical `sendToManager(...)` remains temporary sidecar telemetry at candidate-apply time for now.
+
+Planned future owner seam:
+- a dedicated match/interview orchestration layer that:
+  - receives interview/evaluation-ready signal
+  - decides manager-delivery once
+  - emits one canonical `SEND_TO_MANAGER` transition
+  - drives both push notify and manager read visibility consistently
 - Add one resolver that derives canonical interview status from session + interview_runs.
 - Keep current interview engine/router behavior unchanged.
 
@@ -299,4 +345,3 @@ Inference note: these mappings are compatibility heuristics until a dedicated ev
 
 10. Only then wire canonical statuses into runtime state engine
 - Switch from inferred shadow mapping to canonical source-of-truth fields.
-

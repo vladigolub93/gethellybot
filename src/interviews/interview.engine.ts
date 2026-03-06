@@ -31,6 +31,11 @@ import { QualityFlagsService } from "../qa/quality-flags.service";
 import { InterviewConfirmationService } from "../confirmations/interview-confirmation.service";
 import { QdrantBackfillService } from "../matching/qdrant-backfill.service";
 import { AnswerEvaluatorService } from "./answer-evaluator.service";
+import { InterviewLifecycleService } from "../core/matching/interview-lifecycle.service";
+import {
+  INTERVIEW_STATUSES,
+  InterviewStatus,
+} from "../core/matching/interview-statuses";
 
 export interface InterviewBootstrapResult {
   nextState: UserState;
@@ -94,6 +99,7 @@ export class InterviewEngine {
     private readonly logger: Logger,
     private readonly qualityFlagsService?: QualityFlagsService,
     private readonly qdrantBackfillService?: QdrantBackfillService,
+    private readonly interviewLifecycleService: InterviewLifecycleService = new InterviewLifecycleService(),
   ) {}
 
   async bootstrapInterview(
@@ -559,6 +565,8 @@ export class InterviewEngine {
     let candidateTechnicalSummary: CandidateTechnicalSummaryV1 | null = null;
     let managerTechnicalSummary: JobTechnicalSummaryV2 | null = null;
 
+    this.tryLogInterviewLifecycleCompletion(session, role, answers);
+
     if (role === "candidate") {
       try {
         const latestAnalysis = await this.profilesRepository.getCandidateResumeAnalysis(session.userId);
@@ -888,6 +896,48 @@ export class InterviewEngine {
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
+  }
+
+  private tryLogInterviewLifecycleCompletion(
+    session: UserSessionState,
+    role: "candidate" | "manager",
+    answers: ReadonlyArray<InterviewAnswer>,
+  ): void {
+    try {
+      const transitionFrom = this.resolveInterviewCompletionEntryStatus(session, answers);
+      const next = this.interviewLifecycleService.completeInterview(transitionFrom);
+      this.logger.debug("interview_lifecycle.complete.transition", {
+        userId: session.userId,
+        role,
+        currentState: session.state,
+        canonicalFrom: transitionFrom,
+        canonicalTo: next,
+        answerCount: answers.length,
+      });
+    } catch (error) {
+      this.logger.warn("interview_lifecycle.transition_failed", {
+        action: "complete_interview",
+        userId: session.userId,
+        role,
+        currentState: session.state,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  private resolveInterviewCompletionEntryStatus(
+    session: UserSessionState,
+    answers: ReadonlyArray<InterviewAnswer>,
+  ): InterviewStatus {
+    if (answers.length > 0 || (session.currentQuestionIndex ?? 0) > 0) {
+      return INTERVIEW_STATUSES.IN_PROGRESS;
+    }
+    if (session.interviewStartedAt) {
+      return INTERVIEW_STATUSES.STARTED;
+    }
+    // Interview is active in runtime state, but startedAt can be absent in edge cases.
+    // Use STARTED as safe canonical fallback for completion sidecar logging.
+    return INTERVIEW_STATUSES.STARTED;
   }
 }
 

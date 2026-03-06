@@ -1,11 +1,17 @@
 import { MatchRecord } from "./match.types";
 import { MatchStorageService } from "../storage/match-storage.service";
 import { JobsRepository } from "../db/repositories/jobs.repo";
+import { Logger } from "../config/logger";
+import { normalizeLegacyMatchStatus } from "../core/matching/lifecycle-normalizers";
+import { MatchLifecycleService } from "../core/matching/match-lifecycle.service";
+import { MATCH_STATUSES, MatchStatus } from "../core/matching/match-statuses";
 
 export class DecisionService {
   constructor(
     private readonly matchStorageService: MatchStorageService,
     private readonly jobsRepository: JobsRepository,
+    private readonly logger?: Logger,
+    private readonly matchLifecycleService: MatchLifecycleService = new MatchLifecycleService(),
   ) {}
 
   async getMatch(matchId: string): Promise<MatchRecord | null> {
@@ -23,10 +29,22 @@ export class DecisionService {
       return match;
     }
 
+    this.tryLogCandidateLifecycleTransition("candidate_accept", match);
+
     const updated = await this.matchStorageService.applyCandidateDecision(matchId, "applied");
     if (!updated) {
       throw new Error("Failed to save candidate decision.");
     }
+
+    // TODO(helly-match-lifecycle): Temporary seam.
+    // Canonical SEND_TO_MANAGER should be computed at a single runtime seam where
+    // candidate package delivery to manager is finalized. Today this is split across:
+    // 1) push notify path: CallbackRouter -> NotificationEngine.notifyManagerCandidateApplied
+    // 2) pull read path: StateRouter.showTopMatchesWithActions (manager "show matches")
+    // Until these paths are unified behind one orchestration seam, keep this as
+    // sidecar telemetry only and never block legacy behavior.
+    this.tryLogSendToManagerLifecycleTransition(updated);
+
     return updated;
   }
 
@@ -39,6 +57,8 @@ export class DecisionService {
     if (match.candidateDecision !== "pending") {
       return match;
     }
+
+    this.tryLogCandidateLifecycleTransition("candidate_decline", match);
 
     const updated = await this.matchStorageService.applyCandidateDecision(matchId, "rejected");
     if (!updated) {
@@ -61,6 +81,8 @@ export class DecisionService {
       throw new Error("Candidate has not applied for this match.");
     }
 
+    this.tryLogManagerLifecycleTransition("manager_approve", match);
+
     const updated = await this.matchStorageService.applyManagerDecision(matchId, "accepted");
     if (!updated) {
       throw new Error("Failed to save manager decision.");
@@ -77,6 +99,8 @@ export class DecisionService {
     if (match.managerDecision !== "pending") {
       return match;
     }
+
+    this.tryLogManagerLifecycleTransition("manager_reject", match);
 
     const updated = await this.matchStorageService.applyManagerDecision(matchId, "rejected");
     if (!updated) {
@@ -149,5 +173,154 @@ export class DecisionService {
     if (match.status !== "candidate_applied") {
       throw new Error("Candidate has not applied for this match, or it is no longer available.");
     }
+  }
+
+  private tryLogCandidateLifecycleTransition(
+    action: "candidate_accept" | "candidate_decline",
+    match: MatchRecord,
+  ): void {
+    try {
+      const normalizedCurrent = normalizeLegacyMatchStatus({
+        status: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+      });
+      const transitionFrom = this.resolveCandidateDecisionEntryStatus(normalizedCurrent);
+      if (!transitionFrom) {
+        throw new Error("Canonical current status is unknown.");
+      }
+
+      const next =
+        action === "candidate_accept"
+          ? this.matchLifecycleService.candidateAcceptsMatch(transitionFrom)
+          : this.matchLifecycleService.candidateDeclinesMatch(transitionFrom);
+
+      const logName =
+        action === "candidate_accept"
+          ? "match_lifecycle.candidate_accept.transition"
+          : "match_lifecycle.candidate_decline.transition";
+
+      this.logger?.debug(logName, {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        canonicalFrom: transitionFrom,
+        canonicalTo: next,
+      });
+    } catch (error) {
+      this.logger?.warn("match_lifecycle.transition_failed", {
+        action,
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  private resolveCandidateDecisionEntryStatus(
+    normalizedCurrent: MatchStatus | null,
+  ): MatchStatus | null {
+    if (normalizedCurrent === MATCH_STATUSES.PROPOSED) {
+      // In current legacy flow, actionable candidate decisions happen on `proposed`.
+      // Canonically this is closest to an invitation already visible to candidate.
+      return MATCH_STATUSES.INVITED;
+    }
+    return normalizedCurrent;
+  }
+
+  private tryLogManagerLifecycleTransition(
+    action: "manager_approve" | "manager_reject",
+    match: MatchRecord,
+  ): void {
+    try {
+      const transitionFrom = normalizeLegacyMatchStatus({
+        status: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+      });
+      if (!transitionFrom) {
+        throw new Error("Canonical current status is unknown.");
+      }
+
+      const next =
+        action === "manager_approve"
+          ? this.matchLifecycleService.managerApprovesCandidate(transitionFrom)
+          : this.matchLifecycleService.managerRejectsCandidate(transitionFrom);
+
+      const logName =
+        action === "manager_approve"
+          ? "match_lifecycle.manager_approve.transition"
+          : "match_lifecycle.manager_reject.transition";
+
+      this.logger?.debug(logName, {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalFrom: transitionFrom,
+        canonicalTo: next,
+      });
+    } catch (error) {
+      this.logger?.warn("match_lifecycle.transition_failed", {
+        action,
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  private tryLogSendToManagerLifecycleTransition(match: MatchRecord): void {
+    try {
+      const normalizedCurrent = normalizeLegacyMatchStatus({
+        status: match.status,
+        candidateDecision: match.candidateDecision,
+        managerDecision: match.managerDecision,
+        contactShared: match.status === "contact_shared",
+      });
+      const transitionFrom = this.resolveSendToManagerEntryStatus(normalizedCurrent);
+      if (!transitionFrom) {
+        throw new Error("Canonical entry status for send-to-manager is unknown.");
+      }
+
+      const next = this.matchLifecycleService.sendToManager(transitionFrom);
+      this.logger?.debug("match_lifecycle.send_to_manager.transition", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalObserved: normalizedCurrent,
+        canonicalFrom: transitionFrom,
+        canonicalTo: next,
+      });
+    } catch (error) {
+      this.logger?.warn("match_lifecycle.transition_failed", {
+        action: "send_to_manager",
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  private resolveSendToManagerEntryStatus(
+    normalizedCurrent: MatchStatus | null,
+  ): MatchStatus | null {
+    if (normalizedCurrent === MATCH_STATUSES.INTERVIEW_COMPLETED) {
+      return MATCH_STATUSES.INTERVIEW_COMPLETED;
+    }
+    if (normalizedCurrent === MATCH_STATUSES.SENT_TO_MANAGER) {
+      // Legacy flow stores `candidate_applied` before manager gets notified.
+      // This temporary mapping exists only for sidecar telemetry.
+      // Real SEND_TO_MANAGER ownership must move to a dedicated runtime seam that
+      // owns manager-delivery decision after interview/evaluation readiness.
+      return MATCH_STATUSES.INTERVIEW_COMPLETED;
+    }
+    return null;
   }
 }
