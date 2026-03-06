@@ -42,6 +42,7 @@ export interface EnvConfig {
   enableTypedCvRouter: boolean;
   enableTypedJdRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
+  enableTypedManagerReviewRouter: boolean;
   interviewReminderEnabled: boolean;
   interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
@@ -94,6 +95,7 @@ export function loadEnv(): EnvConfig {
   const enableTypedCvRouterRaw = process.env.ENABLE_TYPED_CV_ROUTER ?? "false";
   const enableTypedJdRouterRaw = process.env.ENABLE_TYPED_JD_ROUTER ?? "false";
   const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
+  const enableTypedManagerReviewRouterRaw = process.env.ENABLE_TYPED_MANAGER_REVIEW_ROUTER ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
@@ -118,6 +120,7 @@ export function loadEnv(): EnvConfig {
   const enableTypedCvRouter = parseBoolean(enableTypedCvRouterRaw);
   const enableTypedJdRouter = parseBoolean(enableTypedJdRouterRaw);
   const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
+  const enableTypedManagerReviewRouter = parseBoolean(enableTypedManagerReviewRouterRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
   const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
@@ -193,6 +196,7 @@ export function loadEnv(): EnvConfig {
     enableTypedCvRouter,
     enableTypedJdRouter,
     enableTypedCandidateReviewRouter,
+    enableTypedManagerReviewRouter,
     interviewReminderEnabled,
     interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),

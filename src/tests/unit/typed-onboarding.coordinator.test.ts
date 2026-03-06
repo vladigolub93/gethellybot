@@ -27,6 +27,7 @@ function createCoordinator(input?: {
     enableTypedCvRouter: boolean;
     enableTypedJdRouter: boolean;
     enableTypedCandidateReviewRouter: boolean;
+    enableTypedManagerReviewRouter: boolean;
   }>;
   actionRouterResult?: {
     action: typeof HELLY_ACTIONS[keyof typeof HELLY_ACTIONS] | null;
@@ -58,6 +59,8 @@ function createCoordinator(input?: {
       enableTypedJdRouter: opts.flags?.enableTypedJdRouter ?? true,
       enableTypedCandidateReviewRouter:
         opts.flags?.enableTypedCandidateReviewRouter ?? true,
+      enableTypedManagerReviewRouter:
+        opts.flags?.enableTypedManagerReviewRouter ?? true,
     },
     {
       async classify() {
@@ -207,11 +210,59 @@ async function testCandidateReviewContextUsesCoordinatorRules(): Promise<void> {
   assert.equal(harness.gatekeeperCalls(), 1);
 }
 
+async function testManagerReviewContextUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.APPROVE,
+      confidence: 0.9,
+      message: "Vacancy summary approved.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.APPROVE,
+      message: "Vacancy summary approved.",
+    },
+  });
+  const session = createSession(5, 5);
+  session.state = "interviewing_manager";
+  session.role = "manager";
+  session.interviewPlan = {
+    summary: "Manager",
+    questions: [
+      {
+        id: "q1",
+        question: "Please confirm your vacancy summary is correct.",
+        goal: "summary",
+        gapToClarify: "fit",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.answers = [];
+  session.pendingFollowUp = undefined;
+
+  const result = await harness.coordinator.attemptManagerReview({
+    session,
+    userMessage: "approve",
+    currentQuestion: "Please confirm your vacancy summary is correct.",
+    currentQuestionIndex: 0,
+    hasFinalAnswers: false,
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.APPROVE);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
 async function run(): Promise<void> {
   await testRoleSelectionRunsThroughCoordinator();
   await testOutOfScopeSkipsAttempt();
   await testFeatureFlagOffStillPreservesFallback();
   await testCandidateReviewContextUsesCoordinatorRules();
+  await testManagerReviewContextUsesCoordinatorRules();
   process.stdout.write("typed-onboarding.coordinator tests passed.\n");
 }
 

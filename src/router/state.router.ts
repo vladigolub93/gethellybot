@@ -202,6 +202,7 @@ export class StateRouter {
     private readonly enableTypedCvRouter = false,
     private readonly enableTypedJdRouter = false,
     private readonly enableTypedCandidateReviewRouter = false,
+    private readonly enableTypedManagerReviewRouter = false,
     private readonly actionRouterService?: ActionRouterService,
     private readonly gatekeeperService?: GatekeeperService,
   ) {
@@ -220,6 +221,7 @@ export class StateRouter {
         enableTypedCvRouter: this.enableTypedCvRouter,
         enableTypedJdRouter: this.enableTypedJdRouter,
         enableTypedCandidateReviewRouter: this.enableTypedCandidateReviewRouter,
+        enableTypedManagerReviewRouter: this.enableTypedManagerReviewRouter,
       },
       this.actionRouterService,
       this.gatekeeperService,
@@ -1168,6 +1170,13 @@ export class StateRouter {
           currentQuestion,
         });
       }
+      if (session.state === "interviewing_manager") {
+        await this.maybeRunTypedManagerReviewRouter({
+          session,
+          userMessage: normalizedEnglishText,
+          currentQuestion,
+        });
+      }
       const interviewRag = await this.userRagContextService.buildInterviewContext(
         session,
         currentQuestion,
@@ -1817,6 +1826,22 @@ export class StateRouter {
     const currentQuestionIndex = resolveCurrentQuestionIndexValue(input.session);
     const hasFinalAnswers = (input.session.answers ?? []).some((item) => item.status !== "draft");
     await this.typedOnboardingCoordinator.attemptCandidateReview({
+      session: input.session,
+      userMessage: input.userMessage,
+      currentQuestion: input.currentQuestion,
+      currentQuestionIndex,
+      hasFinalAnswers,
+    });
+  }
+
+  private async maybeRunTypedManagerReviewRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    currentQuestion: string;
+  }): Promise<void> {
+    const currentQuestionIndex = resolveCurrentQuestionIndexValue(input.session);
+    const hasFinalAnswers = (input.session.answers ?? []).some((item) => item.status !== "draft");
+    await this.typedOnboardingCoordinator.attemptManagerReview({
       session: input.session,
       userMessage: input.userMessage,
       currentQuestion: input.currentQuestion,

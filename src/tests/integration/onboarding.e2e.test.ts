@@ -36,6 +36,7 @@ interface BuildRouterHarnessOptions {
   enableTypedCvRouter?: boolean;
   enableTypedJdRouter?: boolean;
   enableTypedCandidateReviewRouter?: boolean;
+  enableTypedManagerReviewRouter?: boolean;
   documentExtractedText?: string;
   voiceTranscriptionText?: string;
   actionRouterResult?: {
@@ -291,6 +292,7 @@ function buildRouterHarness(options?: BuildRouterHarnessOptions): {
     opts.enableTypedCvRouter ?? false,
     opts.enableTypedJdRouter ?? false,
     opts.enableTypedCandidateReviewRouter ?? false,
+    opts.enableTypedManagerReviewRouter ?? false,
     {
       async classify() {
         actionRouterCalls += 1;
@@ -1199,6 +1201,142 @@ async function testTypedCandidateReviewRejectedFallsBackToLegacy(): Promise<void
   assert.equal(harness.gatekeeperCalls, 1);
 }
 
+async function testTypedManagerReviewFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerReviewRouter: false,
+    actionRouterResult: {
+      action: "APPROVE",
+      confidence: 0.96,
+      message: "Vacancy summary approved.",
+    },
+  });
+  const userId = 91030;
+  const chatId = 91030;
+  seedManagerSummaryReviewSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(291, userId, chatId, "approve"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedManagerReviewApproveWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerReviewRouter: true,
+    actionRouterResult: {
+      action: "APPROVE",
+      confidence: 0.94,
+      message: "Vacancy summary approved.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "APPROVE",
+      message: "Vacancy summary approved.",
+    },
+  });
+  const userId = 91031;
+  const chatId = 91031;
+  seedManagerSummaryReviewSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(301, userId, chatId, "approve"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerReviewEditWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerReviewRouter: true,
+    actionRouterResult: {
+      action: "EDIT",
+      confidence: 0.93,
+      message: "Vacancy summary edit requested.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "EDIT",
+      message: "Vacancy summary edit requested.",
+    },
+  });
+  const userId = 91032;
+  const chatId = 91032;
+  seedManagerSummaryReviewSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(311, userId, chatId, "edit"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerReviewFreeTextWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerReviewRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.9,
+      message: "Vacancy summary corrections provided.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SUBMIT_TEXT",
+      message: "Vacancy summary corrections provided.",
+    },
+  });
+  const userId = 91033;
+  const chatId = 91033;
+  seedManagerSummaryReviewSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(
+    textUpdate(321, userId, chatId, "Please update summary: remote-first team, payment domain, and Node.js microservices."),
+  );
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerReviewRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerReviewRouter: true,
+    actionRouterResult: {
+      action: "APPROVE",
+      confidence: 0.2,
+      message: "Maybe approve.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "APPROVE",
+      message: "Maybe approve.",
+    },
+  });
+  const userId = 91034;
+  const chatId = 91034;
+  seedManagerSummaryReviewSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(331, userId, chatId, "approve"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "interviewing_manager");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
 function seedCandidateSummaryReviewSession(
   stateService: StateService,
   userId: number,
@@ -1215,6 +1353,30 @@ function seedCandidateSummaryReviewSession(
         question: "Please confirm your profile summary is correct.",
         goal: "summary confirmation",
         gapToClarify: "profile fit",
+      },
+    ],
+  };
+  session.currentQuestionIndex = 0;
+  session.pendingFollowUp = undefined;
+  session.answers = [];
+}
+
+function seedManagerSummaryReviewSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "manager";
+  session.state = "interviewing_manager";
+  session.interviewPlan = {
+    summary: "Manager intake",
+    questions: [
+      {
+        id: "q1",
+        question: "Please confirm your vacancy summary is correct.",
+        goal: "summary confirmation",
+        gapToClarify: "vacancy fit",
       },
     ],
   };
@@ -1321,6 +1483,11 @@ async function run(): Promise<void> {
   await testTypedCandidateReviewEditWhenEnabled();
   await testTypedCandidateReviewFreeTextWhenEnabled();
   await testTypedCandidateReviewRejectedFallsBackToLegacy();
+  await testTypedManagerReviewFlagOffKeepsLegacyPath();
+  await testTypedManagerReviewApproveWhenEnabled();
+  await testTypedManagerReviewEditWhenEnabled();
+  await testTypedManagerReviewFreeTextWhenEnabled();
+  await testTypedManagerReviewRejectedFallsBackToLegacy();
   process.stdout.write("Onboarding e2e tests passed.\n");
 }
 

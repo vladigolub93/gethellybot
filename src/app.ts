@@ -466,6 +466,7 @@ export function createApp(env: EnvConfig): AppContext {
     env.enableTypedCvRouter,
     env.enableTypedJdRouter,
     env.enableTypedCandidateReviewRouter,
+    env.enableTypedManagerReviewRouter,
     actionRouterService,
     gatekeeperService,
   );
