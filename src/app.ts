@@ -462,6 +462,10 @@ export function createApp(env: EnvConfig): AppContext {
     dialogueOrchestrator,
     env.adminUserIds,
     env.enableTypedRoleSelectionRouter,
+    env.enableTypedContactRouter,
+    env.enableTypedCvRouter,
+    env.enableTypedJdRouter,
+    env.enableTypedCandidateReviewRouter,
     actionRouterService,
     gatekeeperService,
   );

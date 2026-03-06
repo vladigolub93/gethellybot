@@ -38,6 +38,10 @@ export interface EnvConfig {
   prescreenV3Enabled: boolean;
   conversationStateV2Enabled: boolean;
   enableTypedRoleSelectionRouter: boolean;
+  enableTypedContactRouter: boolean;
+  enableTypedCvRouter: boolean;
+  enableTypedJdRouter: boolean;
+  enableTypedCandidateReviewRouter: boolean;
   interviewReminderEnabled: boolean;
   interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
@@ -86,6 +90,10 @@ export function loadEnv(): EnvConfig {
   const prescreenV3EnabledRaw = process.env.PRESCREEN_V3_ENABLED ?? "false";
   const conversationStateV2EnabledRaw = process.env.CONVERSATION_STATE_V2_ENABLED ?? "true";
   const enableTypedRoleSelectionRouterRaw = process.env.ENABLE_TYPED_ROLE_SELECTION_ROUTER ?? "false";
+  const enableTypedContactRouterRaw = process.env.ENABLE_TYPED_CONTACT_ROUTER ?? "false";
+  const enableTypedCvRouterRaw = process.env.ENABLE_TYPED_CV_ROUTER ?? "false";
+  const enableTypedJdRouterRaw = process.env.ENABLE_TYPED_JD_ROUTER ?? "false";
+  const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
@@ -106,6 +114,10 @@ export function loadEnv(): EnvConfig {
   const prescreenV3Enabled = parseBoolean(prescreenV3EnabledRaw);
   const conversationStateV2Enabled = parseBoolean(conversationStateV2EnabledRaw);
   const enableTypedRoleSelectionRouter = parseBoolean(enableTypedRoleSelectionRouterRaw);
+  const enableTypedContactRouter = parseBoolean(enableTypedContactRouterRaw);
+  const enableTypedCvRouter = parseBoolean(enableTypedCvRouterRaw);
+  const enableTypedJdRouter = parseBoolean(enableTypedJdRouterRaw);
+  const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
   const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
@@ -177,6 +189,10 @@ export function loadEnv(): EnvConfig {
     prescreenV3Enabled,
     conversationStateV2Enabled,
     enableTypedRoleSelectionRouter,
+    enableTypedContactRouter,
+    enableTypedCvRouter,
+    enableTypedJdRouter,
+    enableTypedCandidateReviewRouter,
     interviewReminderEnabled,
     interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),

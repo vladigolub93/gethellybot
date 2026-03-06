@@ -146,11 +146,11 @@ import type { DialogueOrchestratorV2 } from "../dialogue/dialogue.orchestrator";
 import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
 import { GatekeeperService } from "../core/state/gatekeeper/gatekeeper.service";
 import { HELLY_ACTIONS } from "../core/state/actions";
-import { HELLY_STATES } from "../core/state/states";
-import { mapRuntimeStateToHellyState } from "../core/state/runtime-state.adapter";
+import { TypedOnboardingCoordinator } from "./typed-onboarding.coordinator";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
+  private readonly typedOnboardingCoordinator: TypedOnboardingCoordinator;
   private readonly answerProcessingStatusAt = new Map<number, number>();
 
   constructor(
@@ -198,6 +198,10 @@ export class StateRouter {
     private readonly dialogueOrchestrator?: DialogueOrchestrator,
     private readonly adminUserIds?: number[],
     private readonly enableTypedRoleSelectionRouter = false,
+    private readonly enableTypedContactRouter = false,
+    private readonly enableTypedCvRouter = false,
+    private readonly enableTypedJdRouter = false,
+    private readonly enableTypedCandidateReviewRouter = false,
     private readonly actionRouterService?: ActionRouterService,
     private readonly gatekeeperService?: GatekeeperService,
   ) {
@@ -208,6 +212,18 @@ export class StateRouter {
       this.decisionService,
       this.notificationEngine,
       this.contactExchangeService,
+    );
+    this.typedOnboardingCoordinator = new TypedOnboardingCoordinator(
+      {
+        enableTypedRoleSelectionRouter: this.enableTypedRoleSelectionRouter,
+        enableTypedContactRouter: this.enableTypedContactRouter,
+        enableTypedCvRouter: this.enableTypedCvRouter,
+        enableTypedJdRouter: this.enableTypedJdRouter,
+        enableTypedCandidateReviewRouter: this.enableTypedCandidateReviewRouter,
+      },
+      this.actionRouterService,
+      this.gatekeeperService,
+      this.logger,
     );
   }
 
@@ -871,6 +887,32 @@ export class StateRouter {
 
     const explicitContactIntent = isContactShareTextIntent(rawText, normalizedEnglishText);
     const extractedPhone = extractPhoneNumber(rawText);
+    if (isAwaitingContactChoice(session)) {
+      const typedContactResult = await this.typedOnboardingCoordinator.attemptContactIdentity({
+        session,
+        userMessage: normalizedEnglishText,
+        awaitingContactChoice: session.awaitingContactChoice === true,
+      });
+      if (typedContactResult.accepted) {
+        if (extractedPhone && canAcceptTextContactByState(session.state)) {
+          await this.saveTextContact(session, update.chatId, extractedPhone);
+          return;
+        }
+        this.logger.debug("typed_contact.path", {
+          userId: session.userId,
+          path: "typed",
+          action: typedContactResult.action,
+          outcome: "request_phone_text",
+        });
+        await this.sendBotMessage(
+          session.userId,
+          update.chatId,
+          "Please send your phone number in one message. Example, +380991112233. Or type Skip for now.",
+          { replyMarkup: buildContactRequestKeyboard() },
+        );
+        return;
+      }
+    }
     if (extractedPhone && canAcceptTextContactByState(session.state)) {
       await this.saveTextContact(session, update.chatId, extractedPhone);
       return;
@@ -912,84 +954,18 @@ export class StateRouter {
         );
         return;
       }
-      if (this.enableTypedRoleSelectionRouter) {
-        const canonicalState = mapRuntimeStateToHellyState(session.state);
-        if (
-          canonicalState === HELLY_STATES.WAIT_ROLE &&
-          this.actionRouterService &&
-          this.gatekeeperService
-        ) {
-          try {
-            const actionRouterResult = await this.actionRouterService.classify({
-              userMessage: normalizedEnglishText,
-              currentState: canonicalState,
-            });
-            this.logger.debug("typed_role_selection.action_router_result", {
-              userId: session.userId,
-              currentState: session.state,
-              action: actionRouterResult.action,
-              confidence: actionRouterResult.confidence,
-            });
+      const typedRoleResult = await this.typedOnboardingCoordinator.attemptRoleSelection({
+        session,
+        userMessage: normalizedEnglishText,
+      });
+      if (typedRoleResult.accepted && typedRoleResult.action === HELLY_ACTIONS.SELECT_ROLE_CANDIDATE) {
+        await this.startRoleFlowFromText(session, update.chatId, "candidate");
+        return;
+      }
 
-            const gatekeeperResult = this.gatekeeperService.evaluate({
-              currentState: canonicalState,
-              action: actionRouterResult.action,
-              confidence: actionRouterResult.confidence,
-              message: actionRouterResult.message,
-            });
-            this.logger.debug("typed_role_selection.gatekeeper_result", {
-              userId: session.userId,
-              accepted: gatekeeperResult.accepted,
-              reason: gatekeeperResult.reason,
-              action: gatekeeperResult.action,
-            });
-
-            if (
-              gatekeeperResult.accepted &&
-              gatekeeperResult.action === HELLY_ACTIONS.SELECT_ROLE_CANDIDATE
-            ) {
-              this.logger.debug("typed_role_selection.path", {
-                userId: session.userId,
-                path: "typed",
-                selectedRole: "candidate",
-              });
-              await this.startRoleFlowFromText(session, update.chatId, "candidate");
-              return;
-            }
-
-            if (
-              gatekeeperResult.accepted &&
-              gatekeeperResult.action === HELLY_ACTIONS.SELECT_ROLE_MANAGER
-            ) {
-              this.logger.debug("typed_role_selection.path", {
-                userId: session.userId,
-                path: "typed",
-                selectedRole: "manager",
-              });
-              await this.startRoleFlowFromText(session, update.chatId, "manager");
-              return;
-            }
-
-            this.logger.debug("typed_role_selection.path", {
-              userId: session.userId,
-              path: "legacy_fallback",
-              reason: gatekeeperResult.reason,
-              action: gatekeeperResult.action,
-            });
-          } catch (error) {
-            this.logger.warn("typed_role_selection.failed_legacy_fallback", {
-              userId: session.userId,
-              error: error instanceof Error ? error.message : "Unknown error",
-            });
-          }
-        } else {
-          this.logger.debug("typed_role_selection.path", {
-            userId: session.userId,
-            path: "legacy_fallback",
-            reason: "UNMAPPED_STATE_OR_MISSING_DEPS",
-            canonicalState,
-          });
-        }
+      if (typedRoleResult.accepted && typedRoleResult.action === HELLY_ACTIONS.SELECT_ROLE_MANAGER) {
+        await this.startRoleFlowFromText(session, update.chatId, "manager");
+        return;
       }
       const selectedRole = detectRoleSelectionFromText(rawText, normalizedEnglishText);
       if (selectedRole) {
@@ -1185,6 +1161,13 @@ export class StateRouter {
         await this.sendBotMessage(session.userId, update.chatId, missingInterviewContextMessage());
         return;
       }
+      if (session.state === "interviewing_candidate") {
+        await this.maybeRunTypedCandidateReviewRouter({
+          session,
+          userMessage: normalizedEnglishText,
+          currentQuestion,
+        });
+      }
       const interviewRag = await this.userRagContextService.buildInterviewContext(
         session,
         currentQuestion,
@@ -1319,6 +1302,11 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_job") {
+      await this.maybeRunTypedJdRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
       // Short messages are never treated as job description — insist on full JD or file
       if (isClearlyTooShortForJd(normalizedEnglishText)) {
         const counterSession = this.stateService.incrementWaitingShortTextCounter(
@@ -1427,6 +1415,11 @@ export class StateRouter {
     }
 
     if (session.state === "waiting_resume") {
+      await this.maybeRunTypedCvRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
       // Short messages are never treated as resume — insist on full paste or file
       if (isClearlyTooShortForResume(normalizedEnglishText)) {
         const counterSession = this.stateService.incrementWaitingShortTextCounter(
@@ -1814,6 +1807,46 @@ export class StateRouter {
     }
 
     await this.sendRouterReplyWithLoopGuard(session, chatId, reply);
+  }
+
+  private async maybeRunTypedCandidateReviewRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    currentQuestion: string;
+  }): Promise<void> {
+    const currentQuestionIndex = resolveCurrentQuestionIndexValue(input.session);
+    const hasFinalAnswers = (input.session.answers ?? []).some((item) => item.status !== "draft");
+    await this.typedOnboardingCoordinator.attemptCandidateReview({
+      session: input.session,
+      userMessage: input.userMessage,
+      currentQuestion: input.currentQuestion,
+      currentQuestionIndex,
+      hasFinalAnswers,
+    });
+  }
+
+  private async maybeRunTypedCvRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "document" | "voice";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptCandidateCvIntake({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedJdRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "document" | "voice";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptManagerJdIntake({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
   }
 
   private async restartFlow(
@@ -3313,6 +3346,40 @@ export class StateRouter {
     }
 
     const intakeState = session.state;
+    if (intakeState === "waiting_resume") {
+      const typedCvRawMessage = `resume file ${update.fileName ?? ""} ${update.mimeType ?? ""}`.trim();
+      try {
+        const normalizedTypedCvMessage = await this.normalizeGeneralText(typedCvRawMessage);
+        await this.maybeRunTypedCvRouter({
+          session: { ...session, state: intakeState },
+          userMessage: normalizedTypedCvMessage,
+          source: "document",
+        });
+      } catch (error) {
+        this.logger.warn("typed_cv.failed_legacy_fallback", {
+          userId: session.userId,
+          source: "document",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+    if (intakeState === "waiting_job") {
+      const typedJdRawMessage = `job description file ${update.fileName ?? ""} ${update.mimeType ?? ""}`.trim();
+      try {
+        const normalizedTypedJdMessage = await this.normalizeGeneralText(typedJdRawMessage);
+        await this.maybeRunTypedJdRouter({
+          session: { ...session, state: intakeState },
+          userMessage: normalizedTypedJdMessage,
+          source: "document",
+        });
+      } catch (error) {
+        this.logger.warn("typed_jd.failed_legacy_fallback", {
+          userId: session.userId,
+          source: "document",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
     const extractingState = intakeState === "waiting_resume" ? "extracting_resume" : "extracting_job";
     this.stateService.transition(update.userId, extractingState);
 
@@ -3726,6 +3793,20 @@ export class StateRouter {
       const normalized = await this.normalizeInterviewInput(transcription);
       this.stateService.recordPreferredLanguageSample(update.userId, toPreferredLanguage(normalized.detected_language));
       const latestSession = this.stateService.getSession(update.userId) ?? session;
+      if (latestSession.state === "waiting_resume") {
+        await this.maybeRunTypedCvRouter({
+          session: latestSession,
+          userMessage: normalized.english_text,
+          source: "voice",
+        });
+      }
+      if (latestSession.state === "waiting_job") {
+        await this.maybeRunTypedJdRouter({
+          session: latestSession,
+          userMessage: normalized.english_text,
+          source: "voice",
+        });
+      }
       const syntheticTextUpdate: Extract<NormalizedUpdate, { kind: "text" }> = {
         kind: "text",
         updateId: update.updateId,
