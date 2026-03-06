@@ -338,7 +338,16 @@ export function createApp(env: EnvConfig): AppContext {
     qdrantClient,
     logger,
   );
-  const decisionService = new DecisionService(matchStorageService, jobsRepository, logger);
+  const decisionService = new DecisionService(
+    matchStorageService,
+    jobsRepository,
+    logger,
+    undefined,
+    env.enableCanonicalCandidateRejectGate,
+    env.enableCanonicalCandidateAcceptGate,
+    env.enableCanonicalManagerRejectGate,
+    env.enableCanonicalManagerAcceptGate,
+  );
   const contactExchangeService = new ContactExchangeService(
     stateService,
     usersRepository,

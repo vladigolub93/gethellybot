@@ -49,6 +49,10 @@ export interface EnvConfig {
   enableTypedInterviewAnswerRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
   enableTypedManagerReviewRouter: boolean;
+  enableCanonicalCandidateAcceptGate: boolean;
+  enableCanonicalCandidateRejectGate: boolean;
+  enableCanonicalManagerAcceptGate: boolean;
+  enableCanonicalManagerRejectGate: boolean;
   interviewReminderEnabled: boolean;
   interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
@@ -108,6 +112,10 @@ export function loadEnv(): EnvConfig {
   const enableTypedInterviewAnswerRouterRaw = process.env.ENABLE_TYPED_INTERVIEW_ANSWER_ROUTER ?? "false";
   const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
   const enableTypedManagerReviewRouterRaw = process.env.ENABLE_TYPED_MANAGER_REVIEW_ROUTER ?? "false";
+  const enableCanonicalCandidateAcceptGateRaw = process.env.ENABLE_CANONICAL_CANDIDATE_ACCEPT_GATE ?? "false";
+  const enableCanonicalCandidateRejectGateRaw = process.env.ENABLE_CANONICAL_CANDIDATE_REJECT_GATE ?? "false";
+  const enableCanonicalManagerAcceptGateRaw = process.env.ENABLE_CANONICAL_MANAGER_ACCEPT_GATE ?? "false";
+  const enableCanonicalManagerRejectGateRaw = process.env.ENABLE_CANONICAL_MANAGER_REJECT_GATE ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
@@ -139,6 +147,10 @@ export function loadEnv(): EnvConfig {
   const enableTypedInterviewAnswerRouter = parseBoolean(enableTypedInterviewAnswerRouterRaw);
   const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
   const enableTypedManagerReviewRouter = parseBoolean(enableTypedManagerReviewRouterRaw);
+  const enableCanonicalCandidateAcceptGate = parseBoolean(enableCanonicalCandidateAcceptGateRaw);
+  const enableCanonicalCandidateRejectGate = parseBoolean(enableCanonicalCandidateRejectGateRaw);
+  const enableCanonicalManagerAcceptGate = parseBoolean(enableCanonicalManagerAcceptGateRaw);
+  const enableCanonicalManagerRejectGate = parseBoolean(enableCanonicalManagerRejectGateRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
   const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
@@ -221,6 +233,10 @@ export function loadEnv(): EnvConfig {
     enableTypedInterviewAnswerRouter,
     enableTypedCandidateReviewRouter,
     enableTypedManagerReviewRouter,
+    enableCanonicalCandidateAcceptGate,
+    enableCanonicalCandidateRejectGate,
+    enableCanonicalManagerAcceptGate,
+    enableCanonicalManagerRejectGate,
     interviewReminderEnabled,
     interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),

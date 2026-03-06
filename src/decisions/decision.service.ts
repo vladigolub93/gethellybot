@@ -6,12 +6,18 @@ import { normalizeLegacyMatchStatus } from "../core/matching/lifecycle-normalize
 import { MatchLifecycleService } from "../core/matching/match-lifecycle.service";
 import { MATCH_STATUSES, MatchStatus } from "../core/matching/match-statuses";
 
+const CANONICAL_MATCH_STATUSES = new Set<MatchStatus>(Object.values(MATCH_STATUSES));
+
 export class DecisionService {
   constructor(
     private readonly matchStorageService: MatchStorageService,
     private readonly jobsRepository: JobsRepository,
     private readonly logger?: Logger,
     private readonly matchLifecycleService: MatchLifecycleService = new MatchLifecycleService(),
+    private readonly enableCanonicalCandidateRejectGate = false,
+    private readonly enableCanonicalCandidateAcceptGate = false,
+    private readonly enableCanonicalManagerRejectGate = false,
+    private readonly enableCanonicalManagerAcceptGate = false,
   ) {}
 
   async getMatch(matchId: string): Promise<MatchRecord | null> {
@@ -23,7 +29,7 @@ export class DecisionService {
     candidateUserId: number,
   ): Promise<MatchRecord> {
     const match = await this.requireMatchForCandidate(matchId, candidateUserId);
-    await this.ensureCandidateCanActOnMatch(match);
+    await this.ensureCandidateCanAccept(match);
     await this.ensureJobActive(match);
     if (match.candidateDecision !== "pending") {
       return match;
@@ -46,7 +52,7 @@ export class DecisionService {
     candidateUserId: number,
   ): Promise<MatchRecord> {
     const match = await this.requireMatchForCandidate(matchId, candidateUserId);
-    await this.ensureCandidateCanActOnMatch(match);
+    await this.ensureCandidateCanReject(match);
     if (match.candidateDecision !== "pending") {
       return match;
     }
@@ -67,7 +73,7 @@ export class DecisionService {
     managerUserId: number,
   ): Promise<MatchRecord> {
     const match = await this.requireMatchForManager(matchId, managerUserId);
-    await this.ensureManagerCanActOnMatch(match);
+    await this.ensureManagerCanAccept(match);
     await this.ensureJobActive(match);
     if (match.managerDecision !== "pending") {
       return match;
@@ -92,7 +98,7 @@ export class DecisionService {
     managerUserId: number,
   ): Promise<MatchRecord> {
     const match = await this.requireMatchForManager(matchId, managerUserId);
-    await this.ensureManagerCanActOnMatch(match);
+    await this.ensureManagerCanReject(match);
     if (match.managerDecision !== "pending") {
       return match;
     }
@@ -168,10 +174,292 @@ export class DecisionService {
     }
   }
 
+  private async ensureCandidateCanAccept(match: MatchRecord): Promise<void> {
+    const legacyAllowed = this.isLegacyCandidateAcceptAllowed(match);
+    if (!this.enableCanonicalCandidateAcceptGate) {
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    const canonicalFrom = this.resolvePersistedCanonicalMatchStatus(match);
+    if (!canonicalFrom) {
+      this.logger?.debug("decision_gate.candidate_accept.legacy_fallback", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+        reason: "CANONICAL_STATUS_UNAVAILABLE",
+      });
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    const canonicalAllowed = this.matchLifecycleService.tryTransition(
+      "CANDIDATE_ACCEPTS_MATCH",
+      canonicalFrom,
+    ) !== null;
+
+    if (canonicalAllowed !== legacyAllowed) {
+      this.logger?.warn("decision_gate.candidate_accept.divergence", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        legacyAllowed,
+        canonicalFrom,
+        canonicalAllowed,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+      });
+      this.logger?.debug("decision_gate.candidate_accept.legacy_fallback", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        canonicalFrom,
+        reason: "DIVERGENCE_FALLBACK_TO_LEGACY",
+      });
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    this.logger?.debug("decision_gate.candidate_accept.canonical_used", {
+      matchId: match.id,
+      candidateUserId: match.candidateUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "CANDIDATE_ACCEPTS_MATCH",
+    });
+    if (!canonicalAllowed) {
+      throw new Error("This match is no longer available for this action.");
+    }
+  }
+
+  private async ensureCandidateCanReject(match: MatchRecord): Promise<void> {
+    const legacyAllowed = this.isLegacyCandidateRejectAllowed(match);
+    if (!this.enableCanonicalCandidateRejectGate) {
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    const canonicalFrom = this.resolvePersistedCanonicalMatchStatus(match);
+    if (!canonicalFrom) {
+      this.logger?.debug("decision_gate.candidate_reject.legacy_fallback", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+        reason: "CANONICAL_STATUS_UNAVAILABLE",
+      });
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    const canonicalAllowed = this.matchLifecycleService.tryTransition(
+      "CANDIDATE_DECLINES_MATCH",
+      canonicalFrom,
+    ) !== null;
+
+    if (canonicalAllowed !== legacyAllowed) {
+      this.logger?.warn("decision_gate.candidate_reject.divergence", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        legacyAllowed,
+        canonicalFrom,
+        canonicalAllowed,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+      });
+      this.logger?.debug("decision_gate.candidate_reject.legacy_fallback", {
+        matchId: match.id,
+        candidateUserId: match.candidateUserId,
+        legacyStatus: match.status,
+        canonicalFrom,
+        reason: "DIVERGENCE_FALLBACK_TO_LEGACY",
+      });
+      if (!legacyAllowed) {
+        throw new Error("This match is no longer available for this action.");
+      }
+      return;
+    }
+
+    this.logger?.debug("decision_gate.candidate_reject.canonical_used", {
+      matchId: match.id,
+      candidateUserId: match.candidateUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "CANDIDATE_DECLINES_MATCH",
+    });
+    if (!canonicalAllowed) {
+      throw new Error("This match is no longer available for this action.");
+    }
+  }
+
   private async ensureManagerCanActOnMatch(match: MatchRecord): Promise<void> {
     if (match.status !== "candidate_applied") {
       throw new Error("Candidate has not applied for this match, or it is no longer available.");
     }
+  }
+
+  private async ensureManagerCanAccept(match: MatchRecord): Promise<void> {
+    const legacyAllowed = this.isLegacyManagerAcceptAllowed(match);
+    if (!this.enableCanonicalManagerAcceptGate) {
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    const canonicalFrom = this.resolvePersistedCanonicalMatchStatus(match);
+    if (!canonicalFrom) {
+      this.logger?.debug("decision_gate.manager_accept.legacy_fallback", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+        reason: "CANONICAL_STATUS_UNAVAILABLE",
+      });
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    const canonicalAllowed = this.matchLifecycleService.tryTransition(
+      "MANAGER_APPROVES_CANDIDATE",
+      canonicalFrom,
+    ) !== null;
+
+    if (canonicalAllowed !== legacyAllowed) {
+      this.logger?.warn("decision_gate.manager_accept.divergence", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        legacyAllowed,
+        canonicalFrom,
+        canonicalAllowed,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+      });
+      this.logger?.debug("decision_gate.manager_accept.legacy_fallback", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalFrom,
+        reason: "DIVERGENCE_FALLBACK_TO_LEGACY",
+      });
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    this.logger?.debug("decision_gate.manager_accept.canonical_used", {
+      matchId: match.id,
+      managerUserId: match.managerUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "MANAGER_APPROVES_CANDIDATE",
+    });
+    if (!canonicalAllowed) {
+      throw new Error("Candidate has not applied for this match, or it is no longer available.");
+    }
+  }
+
+  private async ensureManagerCanReject(match: MatchRecord): Promise<void> {
+    const legacyAllowed = this.isLegacyManagerRejectAllowed(match);
+    if (!this.enableCanonicalManagerRejectGate) {
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    const canonicalFrom = this.resolvePersistedCanonicalMatchStatus(match);
+    if (!canonicalFrom) {
+      this.logger?.debug("decision_gate.manager_reject.legacy_fallback", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+        reason: "CANONICAL_STATUS_UNAVAILABLE",
+      });
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    const canonicalAllowed = this.matchLifecycleService.tryTransition(
+      "MANAGER_REJECTS_CANDIDATE",
+      canonicalFrom,
+    ) !== null;
+
+    if (canonicalAllowed !== legacyAllowed) {
+      this.logger?.warn("decision_gate.manager_reject.divergence", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        legacyAllowed,
+        canonicalFrom,
+        canonicalAllowed,
+        canonicalMatchStatus: match.canonicalMatchStatus ?? null,
+      });
+      this.logger?.debug("decision_gate.manager_reject.legacy_fallback", {
+        matchId: match.id,
+        managerUserId: match.managerUserId,
+        legacyStatus: match.status,
+        canonicalFrom,
+        reason: "DIVERGENCE_FALLBACK_TO_LEGACY",
+      });
+      if (!legacyAllowed) {
+        throw new Error("Candidate has not applied for this match, or it is no longer available.");
+      }
+      return;
+    }
+
+    this.logger?.debug("decision_gate.manager_reject.canonical_used", {
+      matchId: match.id,
+      managerUserId: match.managerUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "MANAGER_REJECTS_CANDIDATE",
+    });
+    if (!canonicalAllowed) {
+      throw new Error("Candidate has not applied for this match, or it is no longer available.");
+    }
+  }
+
+  private isLegacyCandidateRejectAllowed(match: MatchRecord): boolean {
+    return match.status === "proposed";
+  }
+
+  private isLegacyCandidateAcceptAllowed(match: MatchRecord): boolean {
+    return match.status === "proposed";
+  }
+
+  private isLegacyManagerAcceptAllowed(match: MatchRecord): boolean {
+    return match.status === "candidate_applied";
+  }
+
+  private isLegacyManagerRejectAllowed(match: MatchRecord): boolean {
+    return match.status === "candidate_applied";
+  }
+
+  private resolvePersistedCanonicalMatchStatus(match: MatchRecord): MatchStatus | null {
+    if (
+      typeof match.canonicalMatchStatus === "string" &&
+      CANONICAL_MATCH_STATUSES.has(match.canonicalMatchStatus)
+    ) {
+      return match.canonicalMatchStatus;
+    }
+    return null;
   }
 
   private tryLogCandidateLifecycleTransition(
