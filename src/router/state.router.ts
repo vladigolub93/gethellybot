@@ -3,6 +3,7 @@ import { safeNotifyAdmin } from "../admin/admin-notifier";
 import { logContext, Logger } from "../config/logger";
 import { createHash } from "node:crypto";
 import { RouterV2Decision, RouterV2Service } from "../ai/router.v2";
+import { ActionRouterService } from "../ai/action-router/action-router.service";
 import { ContactExchangeService } from "../decisions/contact-exchange.service";
 import { DecisionService } from "../decisions/decision.service";
 import { LlmClient } from "../ai/llm.client";
@@ -143,6 +144,10 @@ import type { LanguageService } from "./dialogue/language.service";
 import type { ReplyComposerV2 } from "./dialogue/reply.composer";
 import type { DialogueOrchestratorV2 } from "../dialogue/dialogue.orchestrator";
 import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
+import { GatekeeperService } from "../core/state/gatekeeper/gatekeeper.service";
+import { HELLY_ACTIONS } from "../core/state/actions";
+import { HELLY_STATES } from "../core/state/states";
+import { mapRuntimeStateToHellyState } from "../core/state/runtime-state.adapter";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
@@ -192,6 +197,9 @@ export class StateRouter {
     private readonly languageService?: LanguageService,
     private readonly dialogueOrchestrator?: DialogueOrchestrator,
     private readonly adminUserIds?: number[],
+    private readonly enableTypedRoleSelectionRouter = false,
+    private readonly actionRouterService?: ActionRouterService,
+    private readonly gatekeeperService?: GatekeeperService,
   ) {
     this.callbackRouter = new CallbackRouter(
       this.stateService,
@@ -903,6 +911,85 @@ export class StateRouter {
           { replyMarkup: buildRoleSelectionKeyboard() },
         );
         return;
+      }
+      if (this.enableTypedRoleSelectionRouter) {
+        const canonicalState = mapRuntimeStateToHellyState(session.state);
+        if (
+          canonicalState === HELLY_STATES.WAIT_ROLE &&
+          this.actionRouterService &&
+          this.gatekeeperService
+        ) {
+          try {
+            const actionRouterResult = await this.actionRouterService.classify({
+              userMessage: normalizedEnglishText,
+              currentState: canonicalState,
+            });
+            this.logger.debug("typed_role_selection.action_router_result", {
+              userId: session.userId,
+              currentState: session.state,
+              action: actionRouterResult.action,
+              confidence: actionRouterResult.confidence,
+            });
+
+            const gatekeeperResult = this.gatekeeperService.evaluate({
+              currentState: canonicalState,
+              action: actionRouterResult.action,
+              confidence: actionRouterResult.confidence,
+              message: actionRouterResult.message,
+            });
+            this.logger.debug("typed_role_selection.gatekeeper_result", {
+              userId: session.userId,
+              accepted: gatekeeperResult.accepted,
+              reason: gatekeeperResult.reason,
+              action: gatekeeperResult.action,
+            });
+
+            if (
+              gatekeeperResult.accepted &&
+              gatekeeperResult.action === HELLY_ACTIONS.SELECT_ROLE_CANDIDATE
+            ) {
+              this.logger.debug("typed_role_selection.path", {
+                userId: session.userId,
+                path: "typed",
+                selectedRole: "candidate",
+              });
+              await this.startRoleFlowFromText(session, update.chatId, "candidate");
+              return;
+            }
+
+            if (
+              gatekeeperResult.accepted &&
+              gatekeeperResult.action === HELLY_ACTIONS.SELECT_ROLE_MANAGER
+            ) {
+              this.logger.debug("typed_role_selection.path", {
+                userId: session.userId,
+                path: "typed",
+                selectedRole: "manager",
+              });
+              await this.startRoleFlowFromText(session, update.chatId, "manager");
+              return;
+            }
+
+            this.logger.debug("typed_role_selection.path", {
+              userId: session.userId,
+              path: "legacy_fallback",
+              reason: gatekeeperResult.reason,
+              action: gatekeeperResult.action,
+            });
+          } catch (error) {
+            this.logger.warn("typed_role_selection.failed_legacy_fallback", {
+              userId: session.userId,
+              error: error instanceof Error ? error.message : "Unknown error",
+            });
+          }
+        } else {
+          this.logger.debug("typed_role_selection.path", {
+            userId: session.userId,
+            path: "legacy_fallback",
+            reason: "UNMAPPED_STATE_OR_MISSING_DEPS",
+            canonicalState,
+          });
+        }
       }
       const selectedRole = detectRoleSelectionFromText(rawText, normalizedEnglishText);
       if (selectedRole) {
@@ -5214,16 +5301,19 @@ function hashMessageText(text: string): string {
 }
 
 function isPrescreenOrOnboardingState(session: UserSessionState): boolean {
-  if (session.dialoguePhase) {
-    return true;
-  }
   const state = session.state;
-  // Exclude waiting_resume / waiting_job: only strict document intake (paste full text or file), no free chat
+  // role_selection: must use deterministic flow so "I am a Candidate" / "I am Hiring" actually transition to waiting_resume/waiting_job
+  if (state === "role_selection") {
+    return false;
+  }
+  // waiting_resume / waiting_job: only strict document intake (paste full text or file), no free chat
   if (state === "waiting_resume" || state === "waiting_job") {
     return false;
   }
+  if (session.dialoguePhase) {
+    return true;
+  }
   return (
-    state === "role_selection" ||
     state === "onboarding_candidate" ||
     state === "extracting_resume" ||
     state === "interviewing_candidate" ||

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { StateRouter } from "../../router/state.router";
 import { StateService } from "../../state/state.service";
 import { NormalizedUpdate, TelegramReplyMarkup } from "../../shared/types/telegram.types";
+import { HellyAction } from "../../core/state/actions";
+import { GatekeeperReason } from "../../core/state/gatekeeper/gatekeeper.types";
 
 interface SentMessage {
   source: string;
@@ -28,13 +30,47 @@ class TelegramClientMock {
   }
 }
 
+interface BuildRouterHarnessOptions {
+  enableTypedRoleSelectionRouter?: boolean;
+  actionRouterResult?: {
+    action: HellyAction | null;
+    confidence: number;
+    message: string;
+  };
+  gatekeeperResult?: {
+    accepted: boolean;
+    reason: GatekeeperReason;
+    action: HellyAction | null;
+    message: string;
+  };
+}
+
 function buildRouterHarness(): {
   router: StateRouter;
   stateService: StateService;
   telegram: TelegramClientMock;
+  actionRouterCalls: number;
+  gatekeeperCalls: number;
+} 
+function buildRouterHarness(options: BuildRouterHarnessOptions): {
+  router: StateRouter;
+  stateService: StateService;
+  telegram: TelegramClientMock;
+  actionRouterCalls: number;
+  gatekeeperCalls: number;
+}
+function buildRouterHarness(options?: BuildRouterHarnessOptions): {
+  router: StateRouter;
+  stateService: StateService;
+  telegram: TelegramClientMock;
+  actionRouterCalls: number;
+  gatekeeperCalls: number;
 } {
+  const opts = options ?? {};
   const stateService = new StateService();
   const telegram = new TelegramClientMock();
+  let actionRouterCalls = 0;
+  let gatekeeperCalls = 0;
   const noopLogger = {
     debug() {},
     info() {},
@@ -179,9 +215,49 @@ function buildRouterHarness(): {
     undefined,
     undefined,
     undefined,
+    opts.enableTypedRoleSelectionRouter ?? false,
+    {
+      async classify() {
+        actionRouterCalls += 1;
+        return (
+          opts.actionRouterResult ?? {
+            action: null,
+            confidence: 0,
+            message: "Please continue.",
+          }
+        );
+      },
+    } as never,
+    {
+      evaluate(input: {
+        action: HellyAction | null;
+        confidence: number;
+        message: string;
+      }) {
+        gatekeeperCalls += 1;
+        return (
+          opts.gatekeeperResult ?? {
+            accepted: false,
+            reason: "NO_ACTION",
+            action: input.action,
+            message: input.message,
+          }
+        );
+      },
+    } as never,
   );
 
-  return { router, stateService, telegram };
+  return {
+    router,
+    stateService,
+    telegram,
+    get actionRouterCalls() {
+      return actionRouterCalls;
+    },
+    get gatekeeperCalls() {
+      return gatekeeperCalls;
+    },
+  };
 }
 
 async function testOnboardingSkipRoleAndRestart(): Promise<void> {
@@ -347,6 +423,120 @@ async function testDeleteConfirmationEverythingResetsToStart(): Promise<void> {
   assert.equal(session?.pendingDataDeletionConfirmation, false);
 }
 
+async function testTypedRoleSelectionFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedRoleSelectionRouter: false,
+    actionRouterResult: {
+      action: "SELECT_ROLE_MANAGER",
+      confidence: 0.99,
+      message: "Selecting manager role.",
+    },
+  });
+  const userId = 91007;
+  const chatId = 91007;
+
+  await harness.router.route(textUpdate(61, userId, chatId, "/start"));
+  await harness.router.route(textUpdate(62, userId, chatId, "Skip for now"));
+  await harness.router.route(textUpdate(63, userId, chatId, "I am a Candidate"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.role, "candidate");
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedRoleSelectionCandidateWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedRoleSelectionRouter: true,
+    actionRouterResult: {
+      action: "SELECT_ROLE_CANDIDATE",
+      confidence: 0.95,
+      message: "I can set candidate role.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SELECT_ROLE_CANDIDATE",
+      message: "I can set candidate role.",
+    },
+  });
+  const userId = 91008;
+  const chatId = 91008;
+
+  await harness.router.route(textUpdate(71, userId, chatId, "/start"));
+  await harness.router.route(textUpdate(72, userId, chatId, "Skip for now"));
+  await harness.router.route(textUpdate(73, userId, chatId, "I am a Candidate"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.role, "candidate");
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedRoleSelectionManagerWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedRoleSelectionRouter: true,
+    actionRouterResult: {
+      action: "SELECT_ROLE_MANAGER",
+      confidence: 0.92,
+      message: "I can set manager role.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SELECT_ROLE_MANAGER",
+      message: "I can set manager role.",
+    },
+  });
+  const userId = 91009;
+  const chatId = 91009;
+
+  await harness.router.route(textUpdate(81, userId, chatId, "/start"));
+  await harness.router.route(textUpdate(82, userId, chatId, "Skip for now"));
+  await harness.router.route(textUpdate(83, userId, chatId, "I am Hiring"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.role, "manager");
+  assert.equal(session?.state, "waiting_job");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedRoleSelectionRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedRoleSelectionRouter: true,
+    actionRouterResult: {
+      action: "SELECT_ROLE_MANAGER",
+      confidence: 0.2,
+      message: "Maybe manager role.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "SELECT_ROLE_MANAGER",
+      message: "Maybe manager role.",
+    },
+  });
+  const userId = 91010;
+  const chatId = 91010;
+
+  await harness.router.route(textUpdate(91, userId, chatId, "/start"));
+  await harness.router.route(textUpdate(92, userId, chatId, "Skip for now"));
+  await harness.router.route(textUpdate(93, userId, chatId, "I am a Candidate"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.role, "candidate");
+  assert.equal(session?.state, "waiting_resume");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
 function textUpdate(
   updateId: number,
   userId: number,
@@ -386,6 +576,10 @@ async function run(): Promise<void> {
   await testDeleteAllDataResetsToStart();
   await testDeleteTypoResetsToStart();
   await testDeleteConfirmationEverythingResetsToStart();
+  await testTypedRoleSelectionFlagOffKeepsLegacyPath();
+  await testTypedRoleSelectionCandidateWhenEnabled();
+  await testTypedRoleSelectionManagerWhenEnabled();
+  await testTypedRoleSelectionRejectedFallsBackToLegacy();
   process.stdout.write("Onboarding e2e tests passed.\n");
 }
 

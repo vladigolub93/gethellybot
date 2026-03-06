@@ -1,0 +1,61 @@
+/**
+ * Canonical user/system actions recognized by Helly state contracts.
+ * This layer is declarative only and is not wired into runtime routing yet.
+ */
+export const HELLY_ACTIONS = {
+  // Session / navigation
+  START: "START",
+  CANCEL: "CANCEL",
+  HELP: "HELP",
+  SKIP_FOR_NOW: "SKIP_FOR_NOW",
+
+  // Identity and role
+  SHARE_CONTACT: "SHARE_CONTACT",
+  SHARE_PHONE_TEXT: "SHARE_PHONE_TEXT",
+  SELECT_ROLE_CANDIDATE: "SELECT_ROLE_CANDIDATE",
+  SELECT_ROLE_MANAGER: "SELECT_ROLE_MANAGER",
+
+  // Generic input modalities
+  SUBMIT_TEXT: "SUBMIT_TEXT",
+  SUBMIT_FILE: "SUBMIT_FILE",
+  SUBMIT_VOICE: "SUBMIT_VOICE",
+  SUBMIT_VIDEO: "SUBMIT_VIDEO",
+  SHARE_LOCATION: "SHARE_LOCATION",
+
+  // Candidate document and profile actions
+  SUBMIT_CV: "SUBMIT_CV",
+  APPROVE: "APPROVE",
+  EDIT: "EDIT",
+  UPDATE_LOCATION: "UPDATE_LOCATION",
+  UPDATE_WORK_MODE: "UPDATE_WORK_MODE",
+  UPDATE_SALARY: "UPDATE_SALARY",
+
+  // Manager vacancy actions
+  SUBMIT_JD: "SUBMIT_JD",
+  UPDATE_WORK_FORMAT: "UPDATE_WORK_FORMAT",
+  UPDATE_COUNTRIES: "UPDATE_COUNTRIES",
+  UPDATE_BUDGET: "UPDATE_BUDGET",
+
+  // Interview / questionnaire actions
+  ANSWER_QUESTION: "ANSWER_QUESTION",
+  SKIP_QUESTION: "SKIP_QUESTION",
+  FINISH_INTERVIEW: "FINISH_INTERVIEW",
+
+  // Matching controls
+  RUN_MATCHING: "RUN_MATCHING",
+  SHOW_MATCHES: "SHOW_MATCHES",
+  PAUSE_MATCHING: "PAUSE_MATCHING",
+  RESUME_MATCHING: "RESUME_MATCHING",
+
+  // Generic confirmations
+  YES: "YES",
+  NO: "NO",
+
+  // Deletion actions
+  DELETE_PROFILE: "DELETE_PROFILE",
+  CONFIRM_DELETE_PROFILE: "CONFIRM_DELETE_PROFILE",
+  DELETE_VACANCY: "DELETE_VACANCY",
+  CONFIRM_DELETE_VACANCY: "CONFIRM_DELETE_VACANCY",
+} as const;
+
+export type HellyAction = (typeof HELLY_ACTIONS)[keyof typeof HELLY_ACTIONS];

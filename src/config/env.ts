@@ -37,6 +37,7 @@ export interface EnvConfig {
   dialogueV2Enabled: boolean;
   prescreenV3Enabled: boolean;
   conversationStateV2Enabled: boolean;
+  enableTypedRoleSelectionRouter: boolean;
   interviewReminderEnabled: boolean;
   interviewReminderCheckIntervalMinutes: number;
   supabaseUrl?: string;
@@ -84,6 +85,7 @@ export function loadEnv(): EnvConfig {
   const dialogueV2EnabledRaw = process.env.DIALOGUE_V2_ENABLED ?? "true";
   const prescreenV3EnabledRaw = process.env.PRESCREEN_V3_ENABLED ?? "false";
   const conversationStateV2EnabledRaw = process.env.CONVERSATION_STATE_V2_ENABLED ?? "true";
+  const enableTypedRoleSelectionRouterRaw = process.env.ENABLE_TYPED_ROLE_SELECTION_ROUTER ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
   const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
   const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
@@ -103,6 +105,7 @@ export function loadEnv(): EnvConfig {
   const dialogueV2Enabled = parseBoolean(dialogueV2EnabledRaw);
   const prescreenV3Enabled = parseBoolean(prescreenV3EnabledRaw);
   const conversationStateV2Enabled = parseBoolean(conversationStateV2EnabledRaw);
+  const enableTypedRoleSelectionRouter = parseBoolean(enableTypedRoleSelectionRouterRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
   const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
   const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
@@ -173,6 +176,7 @@ export function loadEnv(): EnvConfig {
     dialogueV2Enabled,
     prescreenV3Enabled,
     conversationStateV2Enabled,
+    enableTypedRoleSelectionRouter,
     interviewReminderEnabled,
     interviewReminderCheckIntervalMinutes,
     supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),

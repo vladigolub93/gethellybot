@@ -10,6 +10,7 @@ import { AdminWebappService } from "./admin/admin-webapp.service";
 import { DbStatusService } from "./admin/db-status.service";
 import { EnvConfig } from "./config/env";
 import { OutboundMessageComposerService } from "./ai/outbound-message-composer.service";
+import { ActionRouterService } from "./ai/action-router/action-router.service";
 import { RouterV2Service } from "./ai/router.v2";
 import { AdminNotifier, setDefaultAdminNotifier } from "./admin/admin-notifier";
 import { createLogger, Logger } from "./config/logger";
@@ -72,6 +73,7 @@ import { JobMandatoryFieldsService } from "./jobs/job-mandatory-fields.service";
 import { InterviewConfirmationService } from "./confirmations/interview-confirmation.service";
 import { QualityFlagsService } from "./qa/quality-flags.service";
 import { StateRouter } from "./router/state.router";
+import { GatekeeperService } from "./core/state/gatekeeper/gatekeeper.service";
 import { buildLlmGateDispatcher } from "./router/dispatch/llm-gate.dispatcher";
 import { AlwaysOnRouterService } from "./router/always-on-router.service";
 import { UserRagContextService } from "./router/context/user-rag-context.service";
@@ -232,6 +234,8 @@ export function createApp(env: EnvConfig): AppContext {
   );
   const candidateTechnicalSummaryService = new CandidateTechnicalSummaryService(llmClient);
   const alwaysOnRouterService = new AlwaysOnRouterService(llmClient, logger);
+  const actionRouterService = new ActionRouterService(llmClient, logger);
+  const gatekeeperService = new GatekeeperService();
   const routerV2Service = new RouterV2Service(llmClient, logger);
   const languageService = new LanguageService(usersRepository, logger);
   const intentClassifier = new IntentClassifier(llmClient, logger);
@@ -457,6 +461,9 @@ export function createApp(env: EnvConfig): AppContext {
     languageService,
     dialogueOrchestrator,
     env.adminUserIds,
+    env.enableTypedRoleSelectionRouter,
+    actionRouterService,
+    gatekeeperService,
   );
   const llmGateDispatcher = buildLlmGateDispatcher({
     stateRouter,
