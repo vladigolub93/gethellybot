@@ -99,6 +99,13 @@ export class MatchStorageService {
     });
   }
 
+  /**
+   * @deprecated Legacy helper retained for backward compatibility only.
+   *
+   * Current runtime does not actively use `contact_pending` as a canonical lifecycle step.
+   * Do not add new callers. Future cleanup should replace this with explicit canonical
+   * lifecycle ownership around manager exposure/consent flow.
+   */
   async setContactPending(matchId: string): Promise<MatchRecord | null> {
     return this.updateDecision(matchId, { status: "contact_pending" });
   }

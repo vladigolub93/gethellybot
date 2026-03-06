@@ -43,6 +43,23 @@ export const LEGACY_MATCH_STATUS_TO_CANONICAL: Record<LegacyMatchStatus, MatchSt
   [LEGACY_MATCH_STATUSES.CLOSED]: MATCH_STATUSES.REJECTED_BY_SYSTEM,
 };
 
+/**
+ * @deprecated Legacy match statuses that are currently placeholders/drift-only.
+ * Keep only for backward compatibility during migration.
+ */
+export const LEGACY_DEPRECATED_MATCH_STATUSES = [
+  LEGACY_MATCH_STATUSES.CONTACT_PENDING,
+  LEGACY_MATCH_STATUSES.CLOSED,
+] as const;
+
+/**
+ * Legacy overloaded status values that currently represent more than one lifecycle meaning.
+ * `candidate_applied` is used as both candidate decision and manager exposure proxy.
+ */
+export const LEGACY_OVERLOADED_MATCH_STATUSES = [
+  LEGACY_MATCH_STATUSES.CANDIDATE_APPLIED,
+] as const;
+
 export const LEGACY_INTERVIEW_DB_STATUSES = {
   ACTIVE: "active",
   COMPLETED: "completed",

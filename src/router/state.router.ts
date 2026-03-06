@@ -147,6 +147,7 @@ import { resolveRouterDispatchAction } from "./intent-action.dispatcher";
 import { GatekeeperService } from "../core/state/gatekeeper/gatekeeper.service";
 import { HELLY_ACTIONS } from "../core/state/actions";
 import { TypedFlowCoordinator, TypedFlowCoordinatorResult } from "./typed-flow.coordinator";
+import { ManagerExposureService } from "../core/matching/manager-exposure.service";
 
 export class StateRouter {
   private readonly callbackRouter: CallbackRouter;
@@ -211,6 +212,7 @@ export class StateRouter {
     private readonly enableTypedManagerReviewRouter = false,
     private readonly actionRouterService?: ActionRouterService,
     private readonly gatekeeperService?: GatekeeperService,
+    private readonly managerExposureService: ManagerExposureService = new ManagerExposureService(logger),
   ) {
     this.callbackRouter = new CallbackRouter(
       this.stateService,
@@ -4254,6 +4256,33 @@ export class StateRouter {
       }
 
       const match = managerMatches[0];
+      try {
+        this.managerExposureService.exposeCandidateToManager({
+          matchId: match.id,
+          candidateUserId: match.candidateUserId,
+          managerUserId: match.managerUserId,
+          legacyStatus: match.status,
+          candidateDecision: match.candidateDecision,
+          managerDecision: match.managerDecision,
+          contactShared: match.status === "contact_shared",
+          source: "match_card_pull",
+        });
+        this.logger.debug("manager_exposure.pull_path_routed", {
+          matchId: match.id,
+          candidateUserId: match.candidateUserId,
+          managerUserId: match.managerUserId,
+          sourcePath: "state_router.showTopMatchesWithActions",
+        });
+      } catch (error) {
+        this.logger.warn("manager_exposure.pull_path_fallback", {
+          matchId: match.id,
+          candidateUserId: match.candidateUserId,
+          managerUserId: match.managerUserId,
+          sourcePath: "state_router.showTopMatchesWithActions",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+
       const message = managerCandidateSuggestionMessage({
         candidateUserId: match.candidateUserId,
         score: match.score,

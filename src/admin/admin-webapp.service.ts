@@ -1,4 +1,8 @@
 import { Logger } from "../config/logger";
+import { EvaluationStatus } from "../core/matching/evaluation-statuses";
+import { InterviewStatus } from "../core/matching/interview-statuses";
+import { resolveLifecycleSnapshot } from "../core/matching/lifecycle-snapshot.resolver";
+import { MatchStatus } from "../core/matching/match-statuses";
 import { SupabaseRestClient } from "../db/supabase.client";
 import { QdrantClient } from "../matching/qdrant.client";
 import { DataDeletionService } from "../privacy/data-deletion.service";
@@ -152,6 +156,26 @@ export interface AdminDashboardData {
     candidateDecision?: string;
     managerDecision?: string;
     createdAt?: string;
+    lifecycleSnapshot?: {
+      matchStatus: MatchStatus | null;
+      interviewStatus: InterviewStatus | null;
+      evaluationStatus: EvaluationStatus | null;
+      notes: string[];
+      risks: string[];
+      raw: {
+        matchId: string | null;
+        status: string | null;
+        candidateDecision: string | null;
+        managerDecision: string | null;
+        interviewSessionState: string | null;
+        interviewRunStatus: string | null;
+        profileStatus: string | null;
+        interviewConfidenceLevel: string | null;
+        recommendation: string | null;
+        managerVisibleHint: boolean | null;
+        exposureSource: string | null;
+      };
+    };
   }>;
   qualityFlags: Array<{
     id: string;
@@ -323,6 +347,20 @@ export class AdminWebappService {
     const candidateProfiles = profiles
       .filter((profile) => profile.kind === "candidate")
       .sort((a, b) => safeTime(b.updated_at) - safeTime(a.updated_at));
+    const candidateProfileByUserId = new Map<number, AdminProfileRow>();
+    for (const profile of candidateProfiles) {
+      candidateProfileByUserId.set(profile.telegram_user_id, profile);
+    }
+    const candidateInterviewCompletedAtByUserId = new Map<number, string>();
+    for (const run of interviews) {
+      if (run.role !== "candidate" || !run.completed_at) {
+        continue;
+      }
+      const current = candidateInterviewCompletedAtByUserId.get(run.telegram_user_id);
+      if (!current || safeTime(run.completed_at) > safeTime(current)) {
+        candidateInterviewCompletedAtByUserId.set(run.telegram_user_id, run.completed_at);
+      }
+    }
 
     const now = Date.now();
     const oneDayMs = 24 * 60 * 60 * 1000;
@@ -475,27 +513,92 @@ export class AdminWebappService {
           updatedAt: item.updated_at ?? undefined,
         };
       }),
-      matches: matchesSorted.slice(0, 150).map((item) => ({
-        id: item.id,
-        jobId:
-          item.job_id !== null && item.job_id !== undefined
-            ? String(item.job_id)
-            : undefined,
-        candidateId:
-          item.candidate_id !== null && item.candidate_id !== undefined
-            ? String(item.candidate_id)
-            : undefined,
-        managerTelegramUserId: item.manager_telegram_user_id,
-        candidateTelegramUserId: item.candidate_telegram_user_id,
-        totalScore:
-          typeof item.total_score === "number" && Number.isFinite(item.total_score)
-            ? item.total_score
-            : undefined,
-        status: item.status,
-        candidateDecision: item.candidate_decision ?? undefined,
-        managerDecision: item.manager_decision ?? undefined,
-        createdAt: item.created_at ?? undefined,
-      })),
+      matches: matchesSorted.slice(0, 150).map((item) => {
+        const candidateState = userStateById.get(item.candidate_telegram_user_id)?.state;
+        const candidateProfile = candidateProfileByUserId.get(item.candidate_telegram_user_id);
+        const candidateTechnicalSummary = asRecord(candidateProfile?.technical_summary_json);
+        const interviewConfidenceLevel = extractInterviewConfidenceLevel(candidateTechnicalSummary);
+        const managerVisibleByLegacyStatus = new Set([
+          "candidate_applied",
+          "manager_accepted",
+          "manager_rejected",
+          "contact_shared",
+        ]).has(toText(item.status).toLowerCase());
+        const lifecycleSnapshot = resolveLifecycleSnapshot({
+          match: {
+            id: item.id,
+            status: item.status,
+            candidateDecision: item.candidate_decision,
+            managerDecision: item.manager_decision,
+            contactShared: item.status === "contact_shared",
+          },
+          interview: {
+            sessionState: candidateState,
+            interviewRunStatus: candidateInterviewCompleted.has(item.candidate_telegram_user_id)
+              ? "completed"
+              : null,
+            hasInterviewRunRow: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
+            interviewRunCompletedAt:
+              candidateInterviewCompletedAtByUserId.get(item.candidate_telegram_user_id) ?? null,
+          },
+          evaluation: {
+            profileStatus: candidateProfile?.profile_status ?? null,
+            interviewConfidenceLevel,
+            matchScore:
+              typeof item.total_score === "number" && Number.isFinite(item.total_score)
+                ? item.total_score
+                : null,
+          },
+          exposure: {
+            managerVisible: managerVisibleByLegacyStatus,
+            source: "admin_webapp.matches",
+          },
+        });
+
+        this.logger.debug("lifecycle_snapshot.resolved", {
+          matchId: item.id,
+          managerTelegramUserId: item.manager_telegram_user_id,
+          candidateTelegramUserId: item.candidate_telegram_user_id,
+          matchStatus: lifecycleSnapshot.matchStatus,
+          interviewStatus: lifecycleSnapshot.interviewStatus,
+          evaluationStatus: lifecycleSnapshot.evaluationStatus,
+        });
+        if (lifecycleSnapshot.notes.length > 0) {
+          this.logger.debug("lifecycle_snapshot.notes", {
+            matchId: item.id,
+            notes: lifecycleSnapshot.notes,
+          });
+        }
+        if (lifecycleSnapshot.risks.length > 0) {
+          this.logger.debug("lifecycle_snapshot.risks", {
+            matchId: item.id,
+            risks: lifecycleSnapshot.risks,
+          });
+        }
+
+        return {
+          id: item.id,
+          jobId:
+            item.job_id !== null && item.job_id !== undefined
+              ? String(item.job_id)
+              : undefined,
+          candidateId:
+            item.candidate_id !== null && item.candidate_id !== undefined
+              ? String(item.candidate_id)
+              : undefined,
+          managerTelegramUserId: item.manager_telegram_user_id,
+          candidateTelegramUserId: item.candidate_telegram_user_id,
+          totalScore:
+            typeof item.total_score === "number" && Number.isFinite(item.total_score)
+              ? item.total_score
+              : undefined,
+          status: item.status,
+          candidateDecision: item.candidate_decision ?? undefined,
+          managerDecision: item.manager_decision ?? undefined,
+          createdAt: item.created_at ?? undefined,
+          lifecycleSnapshot,
+        };
+      }),
       qualityFlags: flagsSorted.slice(0, 200).map((item) => ({
         id: item.id,
         entityType: item.entity_type,
@@ -759,6 +862,16 @@ function toText(value: unknown): string {
     return "";
   }
   return value.trim();
+}
+
+function extractInterviewConfidenceLevel(
+  technicalSummary: Record<string, unknown> | null,
+): string | null {
+  const value = toText(technicalSummary?.interview_confidence_level);
+  if (!value) {
+    return null;
+  }
+  return value;
 }
 
 function stringifyUnknown(value: unknown): string | undefined {
