@@ -85,6 +85,14 @@ interface AdminInterviewRunRow {
 
 type InterviewProgressStatus = "not_started" | "in_progress" | "completed";
 
+interface AdminNormalizedLifecycle {
+  matchStatus: MatchStatus | null;
+  interviewStatus: InterviewStatus | null;
+  evaluationStatus: EvaluationStatus | null;
+  fallbackUsed: boolean;
+  fallbackReasons: string[];
+}
+
 export interface AdminDashboardData {
   generatedAt: string;
   consistency: {
@@ -176,6 +184,7 @@ export interface AdminDashboardData {
         exposureSource: string | null;
       };
     };
+    normalizedLifecycle?: AdminNormalizedLifecycle;
   }>;
   qualityFlags: Array<{
     id: string;
@@ -575,6 +584,31 @@ export class AdminWebappService {
             risks: lifecycleSnapshot.risks,
           });
         }
+        const normalizedLifecycle = resolveNormalizedLifecycleForAdmin({
+          lifecycleSnapshot,
+          legacy: {
+            status: item.status,
+            candidateDecision: item.candidate_decision,
+            managerDecision: item.manager_decision,
+            candidateSessionState: candidateState,
+            candidateInterviewCompleted: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
+            profileStatus: candidateProfile?.profile_status ?? null,
+            interviewConfidenceLevel,
+            matchScore:
+              typeof item.total_score === "number" && Number.isFinite(item.total_score)
+                ? item.total_score
+                : null,
+          },
+        });
+        if (normalizedLifecycle.fallbackUsed) {
+          this.logger.debug("lifecycle_snapshot.fallback", {
+            matchId: item.id,
+            fallbackReasons: normalizedLifecycle.fallbackReasons,
+            matchStatus: normalizedLifecycle.matchStatus,
+            interviewStatus: normalizedLifecycle.interviewStatus,
+            evaluationStatus: normalizedLifecycle.evaluationStatus,
+          });
+        }
 
         return {
           id: item.id,
@@ -597,6 +631,7 @@ export class AdminWebappService {
           managerDecision: item.manager_decision ?? undefined,
           createdAt: item.created_at ?? undefined,
           lifecycleSnapshot,
+          normalizedLifecycle,
         };
       }),
       qualityFlags: flagsSorted.slice(0, 200).map((item) => ({
@@ -872,6 +907,160 @@ function extractInterviewConfidenceLevel(
     return null;
   }
   return value;
+}
+
+function resolveNormalizedLifecycleForAdmin(input: {
+  lifecycleSnapshot: {
+    matchStatus: MatchStatus | null;
+    interviewStatus: InterviewStatus | null;
+    evaluationStatus: EvaluationStatus | null;
+  };
+  legacy: {
+    status: string | null;
+    candidateDecision: string | null;
+    managerDecision: string | null;
+    candidateSessionState: string | undefined;
+    candidateInterviewCompleted: boolean;
+    profileStatus: string | null;
+    interviewConfidenceLevel: string | null;
+    matchScore: number | null;
+  };
+}): AdminNormalizedLifecycle {
+  const fallbackReasons: string[] = [];
+  let fallbackUsed = false;
+
+  let matchStatus = input.lifecycleSnapshot.matchStatus;
+  let interviewStatus = input.lifecycleSnapshot.interviewStatus;
+  let evaluationStatus = input.lifecycleSnapshot.evaluationStatus;
+
+  if (matchStatus === null) {
+    fallbackUsed = true;
+    fallbackReasons.push("MATCH_STATUS_SNAPSHOT_NULL");
+    matchStatus = deriveMatchStatusFromLegacyForAdmin(input.legacy);
+  }
+
+  if (interviewStatus === null) {
+    fallbackUsed = true;
+    fallbackReasons.push("INTERVIEW_STATUS_SNAPSHOT_NULL");
+    interviewStatus = deriveInterviewStatusFromLegacyForAdmin(input.legacy);
+  }
+
+  if (evaluationStatus === null) {
+    fallbackUsed = true;
+    fallbackReasons.push("EVALUATION_STATUS_SNAPSHOT_NULL");
+    evaluationStatus = deriveEvaluationStatusFromLegacyForAdmin(input.legacy);
+  }
+
+  return {
+    matchStatus,
+    interviewStatus,
+    evaluationStatus,
+    fallbackUsed,
+    fallbackReasons,
+  };
+}
+
+function deriveMatchStatusFromLegacyForAdmin(legacy: {
+  status: string | null;
+  candidateDecision: string | null;
+  managerDecision: string | null;
+}): MatchStatus | null {
+  const normalizedStatus = toText(legacy.status).toLowerCase();
+  if (normalizedStatus === "contact_shared" || normalizedStatus === "manager_accepted") {
+    return "APPROVED";
+  }
+  if (normalizedStatus === "manager_rejected") {
+    return "REJECTED";
+  }
+  if (normalizedStatus === "candidate_rejected") {
+    return "DECLINED";
+  }
+  if (normalizedStatus === "candidate_applied") {
+    return "SENT_TO_MANAGER";
+  }
+
+  const normalizedCandidateDecision = toText(legacy.candidateDecision).toLowerCase();
+  if (
+    normalizedCandidateDecision === "applied" ||
+    normalizedCandidateDecision === "apply"
+  ) {
+    return "SENT_TO_MANAGER";
+  }
+  if (
+    normalizedCandidateDecision === "rejected" ||
+    normalizedCandidateDecision === "reject" ||
+    normalizedCandidateDecision === "declined"
+  ) {
+    return "DECLINED";
+  }
+
+  const normalizedManagerDecision = toText(legacy.managerDecision).toLowerCase();
+  if (
+    normalizedManagerDecision === "accepted" ||
+    normalizedManagerDecision === "accept" ||
+    normalizedManagerDecision === "approved"
+  ) {
+    return "APPROVED";
+  }
+  if (
+    normalizedManagerDecision === "rejected" ||
+    normalizedManagerDecision === "reject" ||
+    normalizedManagerDecision === "declined"
+  ) {
+    return "REJECTED";
+  }
+
+  return null;
+}
+
+function deriveInterviewStatusFromLegacyForAdmin(legacy: {
+  candidateSessionState: string | undefined;
+  candidateInterviewCompleted: boolean;
+}): InterviewStatus | null {
+  if (legacy.candidateInterviewCompleted) {
+    return "COMPLETED";
+  }
+
+  const normalizedState = toText(legacy.candidateSessionState).toLowerCase();
+  if (normalizedState === "interviewing_candidate" || normalizedState === "interviewing_manager") {
+    return "STARTED";
+  }
+
+  return null;
+}
+
+function deriveEvaluationStatusFromLegacyForAdmin(legacy: {
+  profileStatus: string | null;
+  interviewConfidenceLevel: string | null;
+  matchScore: number | null;
+}): EvaluationStatus | null {
+  const normalizedProfileStatus = toText(legacy.profileStatus).toLowerCase();
+  if (normalizedProfileStatus === "rejected_non_technical") {
+    return "WEAK";
+  }
+
+  const normalizedConfidence = toText(legacy.interviewConfidenceLevel).toLowerCase();
+  if (normalizedConfidence === "high") {
+    return "STRONG";
+  }
+  if (normalizedConfidence === "medium") {
+    return "POSSIBLE";
+  }
+  if (normalizedConfidence === "low") {
+    return "WEAK";
+  }
+
+  if (typeof legacy.matchScore === "number" && Number.isFinite(legacy.matchScore)) {
+    if (legacy.matchScore >= 0.75) {
+      return "STRONG";
+    }
+    if (legacy.matchScore >= 0.5) {
+      return "POSSIBLE";
+    }
+    return "WEAK";
+  }
+
+  return null;
 }
 
 function stringifyUnknown(value: unknown): string | undefined {

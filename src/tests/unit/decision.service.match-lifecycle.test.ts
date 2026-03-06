@@ -27,8 +27,16 @@ class LoggerMock implements Logger {
 }
 
 class MatchStorageMock {
-  public readonly candidateDecisions: Array<{ matchId: string; decision: "applied" | "rejected" }> = [];
-  public readonly managerDecisions: Array<{ matchId: string; decision: "accepted" | "rejected" }> = [];
+  public readonly candidateDecisions: Array<{
+    matchId: string;
+    decision: "applied" | "rejected";
+    canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+  }> = [];
+  public readonly managerDecisions: Array<{
+    matchId: string;
+    decision: "accepted" | "rejected";
+    canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+  }> = [];
 
   constructor(private readonly match: MatchRecord) {}
 
@@ -39,16 +47,24 @@ class MatchStorageMock {
   async applyCandidateDecision(
     matchId: string,
     decision: "applied" | "rejected",
+    options?: {
+      canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+    },
   ): Promise<MatchRecord | null> {
     if (matchId !== this.match.id) {
       return null;
     }
-    this.candidateDecisions.push({ matchId, decision });
+    this.candidateDecisions.push({
+      matchId,
+      decision,
+      canonicalMatchStatus: options?.canonicalMatchStatus,
+    });
 
     return {
       ...this.match,
       candidateDecision: decision,
       status: decision === "applied" ? "candidate_applied" : "candidate_rejected",
+      canonicalMatchStatus: options?.canonicalMatchStatus ?? null,
       updatedAt: "2026-03-06T20:00:00.000Z",
     };
   }
@@ -56,16 +72,24 @@ class MatchStorageMock {
   async applyManagerDecision(
     matchId: string,
     decision: "accepted" | "rejected",
+    options?: {
+      canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+    },
   ): Promise<MatchRecord | null> {
     if (matchId !== this.match.id) {
       return null;
     }
-    this.managerDecisions.push({ matchId, decision });
+    this.managerDecisions.push({
+      matchId,
+      decision,
+      canonicalMatchStatus: options?.canonicalMatchStatus,
+    });
 
     return {
       ...this.match,
       managerDecision: decision,
       status: decision === "accepted" ? "manager_accepted" : "manager_rejected",
+      canonicalMatchStatus: options?.canonicalMatchStatus ?? null,
       updatedAt: "2026-03-06T20:00:00.000Z",
     };
   }
@@ -132,8 +156,13 @@ async function testCandidateAcceptPathStillWorks(): Promise<void> {
 
   assert.equal(updated.candidateDecision, "applied");
   assert.equal(updated.status, "candidate_applied");
+  assert.equal(updated.canonicalMatchStatus, MATCH_STATUSES.INTERVIEW_STARTED);
   assert.equal(storage.candidateDecisions.length, 1);
   assert.equal(storage.candidateDecisions[0]?.decision, "applied");
+  assert.equal(
+    storage.candidateDecisions[0]?.canonicalMatchStatus,
+    MATCH_STATUSES.INTERVIEW_STARTED,
+  );
 }
 
 async function testCandidateDeclinePathStillWorks(): Promise<void> {
@@ -150,8 +179,10 @@ async function testCandidateDeclinePathStillWorks(): Promise<void> {
 
   assert.equal(updated.candidateDecision, "rejected");
   assert.equal(updated.status, "candidate_rejected");
+  assert.equal(updated.canonicalMatchStatus, MATCH_STATUSES.DECLINED);
   assert.equal(storage.candidateDecisions.length, 1);
   assert.equal(storage.candidateDecisions[0]?.decision, "rejected");
+  assert.equal(storage.candidateDecisions[0]?.canonicalMatchStatus, MATCH_STATUSES.DECLINED);
 }
 
 async function testCanonicalTransitionComputedCorrectly(): Promise<void> {
@@ -196,6 +227,7 @@ async function testFailedCanonicalTransitionDoesNotBreakLegacyFlow(): Promise<vo
   assert.equal(updated.candidateDecision, "applied");
   assert.equal(updated.status, "candidate_applied");
   assert.equal(storage.candidateDecisions.length, 1);
+  assert.equal(storage.candidateDecisions[0]?.canonicalMatchStatus, undefined);
 
   const failures = findWarn(logger, "match_lifecycle.transition_failed");
   assert.equal(failures.length, 1);
@@ -220,8 +252,10 @@ async function testManagerApprovePathStillWorks(): Promise<void> {
 
   assert.equal(updated.managerDecision, "accepted");
   assert.equal(updated.status, "manager_accepted");
+  assert.equal(updated.canonicalMatchStatus, MATCH_STATUSES.APPROVED);
   assert.equal(storage.managerDecisions.length, 1);
   assert.equal(storage.managerDecisions[0]?.decision, "accepted");
+  assert.equal(storage.managerDecisions[0]?.canonicalMatchStatus, MATCH_STATUSES.APPROVED);
 }
 
 async function testManagerRejectPathStillWorks(): Promise<void> {
@@ -242,8 +276,10 @@ async function testManagerRejectPathStillWorks(): Promise<void> {
 
   assert.equal(updated.managerDecision, "rejected");
   assert.equal(updated.status, "manager_rejected");
+  assert.equal(updated.canonicalMatchStatus, MATCH_STATUSES.REJECTED);
   assert.equal(storage.managerDecisions.length, 1);
   assert.equal(storage.managerDecisions[0]?.decision, "rejected");
+  assert.equal(storage.managerDecisions[0]?.canonicalMatchStatus, MATCH_STATUSES.REJECTED);
 }
 
 async function testManagerCanonicalTransitionComputedCorrectly(): Promise<void> {
@@ -296,6 +332,7 @@ async function testFailedManagerCanonicalTransitionDoesNotBreakLegacyFlow(): Pro
   assert.equal(updated.managerDecision, "accepted");
   assert.equal(updated.status, "manager_accepted");
   assert.equal(storage.managerDecisions.length, 1);
+  assert.equal(storage.managerDecisions[0]?.canonicalMatchStatus, undefined);
 
   const failures = findWarn(logger, "match_lifecycle.transition_failed");
   assert.equal(failures.length, 1);

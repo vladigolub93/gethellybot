@@ -40,11 +40,13 @@ function buildInterviewEngineHarness(options?: {
   logger: LoggerMock;
   storageSaves: number;
   supabaseSaves: number;
+  savedSupabaseRecords: Array<{ canonicalInterviewStatus?: string | null }>;
 } {
   const stateService = new StateService();
   const logger = new LoggerMock();
   let storageSaves = 0;
   let supabaseSaves = 0;
+  const savedSupabaseRecords: Array<{ canonicalInterviewStatus?: string | null }> = [];
 
   const engine = new InterviewEngine(
     {} as never,
@@ -60,8 +62,11 @@ function buildInterviewEngineHarness(options?: {
       },
     } as never,
     {
-      async saveCompletedInterview() {
+      async saveCompletedInterview(record: { canonicalInterviewStatus?: string | null }) {
         supabaseSaves += 1;
+        savedSupabaseRecords.push({
+          canonicalInterviewStatus: record.canonicalInterviewStatus,
+        });
       },
     } as never,
     {} as never,
@@ -105,6 +110,9 @@ function buildInterviewEngineHarness(options?: {
     },
     get supabaseSaves() {
       return supabaseSaves;
+    },
+    get savedSupabaseRecords() {
+      return savedSupabaseRecords;
     },
   };
 }
@@ -164,6 +172,10 @@ async function testInterviewCompletionPathStillWorksAndCanonicalComputed(): Prom
   assert.equal(result.completedState, "candidate_profile_ready");
   assert.equal(harness.storageSaves, 1);
   assert.equal(harness.supabaseSaves, 1);
+  assert.equal(
+    harness.savedSupabaseRecords[0]?.canonicalInterviewStatus,
+    INTERVIEW_STATUSES.COMPLETED,
+  );
 
   const transitions = findDebug(harness.logger, "interview_lifecycle.complete.transition");
   assert.equal(transitions.length, 1);
@@ -187,6 +199,7 @@ async function testFailedCanonicalCompletionDoesNotBreakLegacyFlow(): Promise<vo
   assert.equal(result.completedState, "candidate_profile_ready");
   assert.equal(harness.storageSaves, 1);
   assert.equal(harness.supabaseSaves, 1);
+  assert.equal(harness.savedSupabaseRecords[0]?.canonicalInterviewStatus, null);
 
   const failures = findWarn(harness.logger, "interview_lifecycle.transition_failed");
   assert.equal(failures.length, 1);

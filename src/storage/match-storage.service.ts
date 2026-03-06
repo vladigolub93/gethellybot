@@ -11,6 +11,7 @@ interface MatchDecisionUpdate {
   candidateDecision?: MatchRecord["candidateDecision"];
   managerDecision?: MatchRecord["managerDecision"];
   status?: MatchRecord["status"];
+  canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
 }
 
 export class MatchStorageService {
@@ -68,34 +69,52 @@ export class MatchStorageService {
   async applyCandidateDecision(
     matchId: string,
     decision: "applied" | "rejected",
+    options?: {
+      canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+    },
   ): Promise<MatchRecord | null> {
+    const canonicalUpdate =
+      options?.canonicalMatchStatus !== undefined
+        ? { canonicalMatchStatus: options.canonicalMatchStatus }
+        : {};
     if (decision === "applied") {
       return this.updateDecision(matchId, {
         candidateDecision: "applied",
         status: "candidate_applied",
+        ...canonicalUpdate,
       });
     }
 
     return this.updateDecision(matchId, {
       candidateDecision: "rejected",
       status: "candidate_rejected",
+      ...canonicalUpdate,
     });
   }
 
   async applyManagerDecision(
     matchId: string,
     decision: "accepted" | "rejected",
+    options?: {
+      canonicalMatchStatus?: MatchRecord["canonicalMatchStatus"];
+    },
   ): Promise<MatchRecord | null> {
+    const canonicalUpdate =
+      options?.canonicalMatchStatus !== undefined
+        ? { canonicalMatchStatus: options.canonicalMatchStatus }
+        : {};
     if (decision === "accepted") {
       return this.updateDecision(matchId, {
         managerDecision: "accepted",
         status: "manager_accepted",
+        ...canonicalUpdate,
       });
     }
 
     return this.updateDecision(matchId, {
       managerDecision: "rejected",
       status: "manager_rejected",
+      ...canonicalUpdate,
     });
   }
 

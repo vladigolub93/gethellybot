@@ -169,6 +169,7 @@ export interface UserSessionState {
   pendingFollowUp?: InterviewFollowUpState;
   reanswerRequestsByQuestion?: Record<string, number>;
   answers?: InterviewAnswer[];
+  canonicalInterviewStatus?: string;
   interviewStartedAt?: string;
   interviewCompletedAt?: string;
   finalArtifact?: InterviewResultArtifact;

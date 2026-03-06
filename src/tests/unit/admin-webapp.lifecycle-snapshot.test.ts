@@ -143,6 +143,10 @@ async function testCleanSnapshotPath(): Promise<void> {
   assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, "SENT_TO_MANAGER");
   assert.equal(data.matches[0]?.lifecycleSnapshot?.interviewStatus, "COMPLETED");
   assert.equal(data.matches[0]?.lifecycleSnapshot?.evaluationStatus, "STRONG");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "SENT_TO_MANAGER");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.interviewStatus, "COMPLETED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.evaluationStatus, "STRONG");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, false);
 
   const resolvedLogs = findDebug(logger, "lifecycle_snapshot.resolved");
   assert.equal(resolvedLogs.length, 1);
@@ -182,6 +186,8 @@ async function testAmbiguousLifecyclePathStillRendersSafely(): Promise<void> {
   assert.equal(data.matches.length, 1);
   assert.equal(data.matches[0]?.id, "match_ambiguous");
   assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, null);
+  assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, true);
+  assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "DECLINED");
   assert.equal(
     data.matches[0]?.lifecycleSnapshot?.notes.includes("MATCH_STATUS_UNCLEAR"),
     true,
@@ -189,6 +195,8 @@ async function testAmbiguousLifecyclePathStillRendersSafely(): Promise<void> {
 
   const notesLogs = findDebug(logger, "lifecycle_snapshot.notes");
   assert.equal(notesLogs.length >= 1, true);
+  const fallbackLogs = findDebug(logger, "lifecycle_snapshot.fallback");
+  assert.equal(fallbackLogs.length >= 1, true);
 }
 
 async function testMissingEvaluationStillSafe(): Promise<void> {
@@ -239,6 +247,12 @@ async function testMissingEvaluationStillSafe(): Promise<void> {
     data.matches[0]?.lifecycleSnapshot?.notes.includes("INTERVIEW_COMPLETED_WITHOUT_EVALUATION"),
     true,
   );
+  assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, true);
+  assert.equal(data.matches[0]?.normalizedLifecycle?.evaluationStatus, null);
+  assert.equal(
+    data.matches[0]?.normalizedLifecycle?.fallbackReasons.includes("EVALUATION_STATUS_SNAPSHOT_NULL"),
+    true,
+  );
 }
 
 async function testOverloadedLegacyValuePathStillSafe(): Promise<void> {
@@ -276,6 +290,7 @@ async function testOverloadedLegacyValuePathStillSafe(): Promise<void> {
   assert.equal(data.matches[0]?.status, "candidate_applied");
   assert.equal(data.matches[0]?.candidateDecision, "apply");
   assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, "SENT_TO_MANAGER");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "SENT_TO_MANAGER");
   assert.equal(
     data.matches[0]?.lifecycleSnapshot?.notes.includes("LEGACY_CANDIDATE_APPLIED_OVERLOADED"),
     true,
@@ -286,11 +301,53 @@ async function testOverloadedLegacyValuePathStillSafe(): Promise<void> {
   );
 }
 
+async function testAdminOutputShapeBackwardCompatible(): Promise<void> {
+  const logger = new LoggerMock();
+  const service = new AdminWebappService(
+    logger,
+    {
+      async requestDeletion() {
+        return { requested: true, confirmationMessage: "ok" };
+      },
+    } as never,
+    new SupabaseClientMock(
+      makeBaseData({
+        matches: [
+          {
+            id: "match_shape",
+            job_id: "job_shape",
+            candidate_id: "cand_shape",
+            manager_telegram_user_id: 2001,
+            candidate_telegram_user_id: 1001,
+            total_score: 60,
+            status: "candidate_applied",
+            candidate_decision: "applied",
+            manager_decision: "pending",
+            created_at: "2026-03-06T12:00:00.000Z",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+      }),
+    ) as never,
+  );
+
+  const data = await service.getDashboardData();
+  const match = data.matches[0];
+  assert.ok(match);
+  assert.equal(match?.id, "match_shape");
+  assert.equal(match?.status, "candidate_applied");
+  assert.equal(match?.candidateDecision, "applied");
+  assert.equal(match?.managerDecision, "pending");
+  assert.ok(match?.lifecycleSnapshot);
+  assert.ok(match?.normalizedLifecycle);
+}
+
 async function run(): Promise<void> {
   await testCleanSnapshotPath();
   await testAmbiguousLifecyclePathStillRendersSafely();
   await testMissingEvaluationStillSafe();
   await testOverloadedLegacyValuePathStillSafe();
+  await testAdminOutputShapeBackwardCompatible();
   process.stdout.write("admin-webapp.lifecycle-snapshot tests passed.\n");
 }
 

@@ -11,6 +11,7 @@ interface UserStateRow {
   role: string | null;
   state: string;
   state_payload: Record<string, unknown> | null;
+  canonical_interview_status: string | null;
   last_bot_message: string | null;
   updated_at: string;
 }
@@ -33,7 +34,7 @@ export class StatesRepository {
     const row = await this.supabaseClient.selectOne<UserStateRow>(
       USER_STATES_TABLE,
       { telegram_user_id: telegramUserId },
-      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,last_bot_message,updated_at",
+      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,canonical_interview_status,last_bot_message,updated_at",
     );
     if (!row) {
       return null;
@@ -48,6 +49,12 @@ export class StatesRepository {
       role: normalizeRole(row.role),
       state: row.state as UserSessionState["state"],
       ...payload,
+      canonicalInterviewStatus:
+        normalizeCanonicalInterviewStatus(
+          (payload.canonicalInterviewStatus as string | undefined) ?? undefined,
+        ) ??
+        normalizeCanonicalInterviewStatus(row.canonical_interview_status ?? undefined) ??
+        undefined,
       lastBotMessage: row.last_bot_message ?? undefined,
     };
 
@@ -67,20 +74,55 @@ export class StatesRepository {
     delete payload.state;
     delete payload.lastBotMessage;
 
-    await this.supabaseClient.upsert(
-      USER_STATES_TABLE,
-      {
-        telegram_user_id: session.userId,
-        chat_id: session.chatId,
-        telegram_username: session.username ?? null,
-        role: session.role ?? null,
-        state: session.state,
-        state_payload: payload,
-        last_bot_message: session.lastBotMessage ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "telegram_user_id" },
+    const basePayload = {
+      telegram_user_id: session.userId,
+      chat_id: session.chatId,
+      telegram_username: session.username ?? null,
+      role: session.role ?? null,
+      state: session.state,
+      state_payload: payload,
+      last_bot_message: session.lastBotMessage ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const canonicalInterviewStatus = normalizeCanonicalInterviewStatus(
+      session.canonicalInterviewStatus,
     );
+    if (canonicalInterviewStatus) {
+      try {
+        await this.supabaseClient.upsert(
+          USER_STATES_TABLE,
+          {
+            ...basePayload,
+            canonical_interview_status: canonicalInterviewStatus,
+          },
+          { onConflict: "telegram_user_id" },
+        );
+        this.logger.debug("interview_lifecycle.canonical_persisted", {
+          telegramUserId: session.userId,
+          canonicalInterviewStatus,
+          source: "user_states",
+        });
+      } catch (error) {
+        this.logger.warn("interview_lifecycle.canonical_persist_failed", {
+          telegramUserId: session.userId,
+          canonicalInterviewStatus,
+          source: "user_states",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        await this.supabaseClient.upsert(
+          USER_STATES_TABLE,
+          basePayload,
+          { onConflict: "telegram_user_id" },
+        );
+      }
+    } else {
+      await this.supabaseClient.upsert(
+        USER_STATES_TABLE,
+        basePayload,
+        { onConflict: "telegram_user_id" },
+      );
+    }
 
     this.logger.debug("User state persisted in Supabase", { telegramUserId: session.userId });
   }
@@ -93,7 +135,7 @@ export class StatesRepository {
     const rows = await this.supabaseClient.selectMany<UserStateRow>(
       USER_STATES_TABLE,
       {},
-      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,last_bot_message,updated_at",
+      "telegram_user_id,chat_id,telegram_username,role,state,state_payload,canonical_interview_status,last_bot_message,updated_at",
     );
 
     return rows.map((row) => {
@@ -105,6 +147,12 @@ export class StatesRepository {
         role: normalizeRole(row.role),
         state: row.state as UserSessionState["state"],
         ...payload,
+        canonicalInterviewStatus:
+          normalizeCanonicalInterviewStatus(
+            (payload.canonicalInterviewStatus as string | undefined) ?? undefined,
+          ) ??
+          normalizeCanonicalInterviewStatus(row.canonical_interview_status ?? undefined) ??
+          undefined,
         lastBotMessage: row.last_bot_message ?? undefined,
       };
       return {
@@ -120,4 +168,14 @@ function normalizeRole(role: string | null): UserSessionState["role"] {
     return role;
   }
   return undefined;
+}
+
+function normalizeCanonicalInterviewStatus(
+  status: string | null | undefined,
+): string | null {
+  if (typeof status !== "string") {
+    return null;
+  }
+  const trimmed = status.trim();
+  return trimmed ? trimmed : null;
 }

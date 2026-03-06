@@ -6,6 +6,7 @@ import {
   MatchingExplanationV1,
 } from "../shared/types/matching.types";
 import { MatchingDecisionV1 } from "../shared/types/matching-decision.types";
+import { MatchStatus as CanonicalMatchStatus } from "../core/matching/match-statuses";
 
 export type CandidateDecision = "pending" | "applied" | "rejected";
 export type ManagerDecision = "pending" | "accepted" | "rejected";
@@ -71,6 +72,7 @@ export interface MatchRecord {
   candidateDecision: CandidateDecision;
   managerDecision: ManagerDecision;
   status: MatchStatus;
+  canonicalMatchStatus?: CanonicalMatchStatus | null;
   createdAt: string;
   updatedAt: string;
 }

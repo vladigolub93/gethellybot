@@ -52,6 +52,7 @@ function testInterviewStartPathStillWorks(): void {
 
   assert.equal(started.documentType, "pdf");
   assert.equal(started.interviewStartedAt, "2026-03-06T12:00:00.000Z");
+  assert.equal(started.canonicalInterviewStatus, INTERVIEW_STATUSES.STARTED);
 }
 
 function testCanonicalStartTransitionComputedCorrectly(): void {
@@ -88,6 +89,7 @@ function testLifecycleFailureDoesNotBreakLegacyFlow(): void {
 
   assert.equal(started.documentType, "unknown");
   assert.equal(started.interviewStartedAt, "2026-03-06T12:10:00.000Z");
+  assert.equal(started.canonicalInterviewStatus, undefined);
 
   const failures = findWarn(logger, "interview_lifecycle.transition_failed");
   assert.equal(failures.length, 1);

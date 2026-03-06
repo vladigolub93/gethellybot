@@ -29,9 +29,11 @@ export class DecisionService {
       return match;
     }
 
-    this.tryLogCandidateLifecycleTransition("candidate_accept", match);
+    const canonicalNext = this.tryLogCandidateLifecycleTransition("candidate_accept", match);
 
-    const updated = await this.matchStorageService.applyCandidateDecision(matchId, "applied");
+    const updated = await this.matchStorageService.applyCandidateDecision(matchId, "applied", {
+      canonicalMatchStatus: canonicalNext ?? undefined,
+    });
     if (!updated) {
       throw new Error("Failed to save candidate decision.");
     }
@@ -49,9 +51,11 @@ export class DecisionService {
       return match;
     }
 
-    this.tryLogCandidateLifecycleTransition("candidate_decline", match);
+    const canonicalNext = this.tryLogCandidateLifecycleTransition("candidate_decline", match);
 
-    const updated = await this.matchStorageService.applyCandidateDecision(matchId, "rejected");
+    const updated = await this.matchStorageService.applyCandidateDecision(matchId, "rejected", {
+      canonicalMatchStatus: canonicalNext ?? undefined,
+    });
     if (!updated) {
       throw new Error("Failed to save candidate decision.");
     }
@@ -72,9 +76,11 @@ export class DecisionService {
       throw new Error("Candidate has not applied for this match.");
     }
 
-    this.tryLogManagerLifecycleTransition("manager_approve", match);
+    const canonicalNext = this.tryLogManagerLifecycleTransition("manager_approve", match);
 
-    const updated = await this.matchStorageService.applyManagerDecision(matchId, "accepted");
+    const updated = await this.matchStorageService.applyManagerDecision(matchId, "accepted", {
+      canonicalMatchStatus: canonicalNext ?? undefined,
+    });
     if (!updated) {
       throw new Error("Failed to save manager decision.");
     }
@@ -91,9 +97,11 @@ export class DecisionService {
       return match;
     }
 
-    this.tryLogManagerLifecycleTransition("manager_reject", match);
+    const canonicalNext = this.tryLogManagerLifecycleTransition("manager_reject", match);
 
-    const updated = await this.matchStorageService.applyManagerDecision(matchId, "rejected");
+    const updated = await this.matchStorageService.applyManagerDecision(matchId, "rejected", {
+      canonicalMatchStatus: canonicalNext ?? undefined,
+    });
     if (!updated) {
       throw new Error("Failed to save manager decision.");
     }
@@ -169,7 +177,7 @@ export class DecisionService {
   private tryLogCandidateLifecycleTransition(
     action: "candidate_accept" | "candidate_decline",
     match: MatchRecord,
-  ): void {
+  ): MatchStatus | null {
     try {
       const normalizedCurrent = normalizeLegacyMatchStatus({
         status: match.status,
@@ -199,6 +207,7 @@ export class DecisionService {
         canonicalFrom: transitionFrom,
         canonicalTo: next,
       });
+      return next;
     } catch (error) {
       this.logger?.warn("match_lifecycle.transition_failed", {
         action,
@@ -207,6 +216,7 @@ export class DecisionService {
         legacyStatus: match.status,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return null;
     }
   }
 
@@ -224,7 +234,7 @@ export class DecisionService {
   private tryLogManagerLifecycleTransition(
     action: "manager_approve" | "manager_reject",
     match: MatchRecord,
-  ): void {
+  ): MatchStatus | null {
     try {
       const transitionFrom = normalizeLegacyMatchStatus({
         status: match.status,
@@ -253,6 +263,7 @@ export class DecisionService {
         canonicalFrom: transitionFrom,
         canonicalTo: next,
       });
+      return next;
     } catch (error) {
       this.logger?.warn("match_lifecycle.transition_failed", {
         action,
@@ -261,6 +272,7 @@ export class DecisionService {
         legacyStatus: match.status,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return null;
     }
   }
 

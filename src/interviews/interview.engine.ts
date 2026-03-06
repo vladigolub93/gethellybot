@@ -565,7 +565,7 @@ export class InterviewEngine {
     let candidateTechnicalSummary: CandidateTechnicalSummaryV1 | null = null;
     let managerTechnicalSummary: JobTechnicalSummaryV2 | null = null;
 
-    this.tryLogInterviewLifecycleCompletion(session, role, answers);
+    const canonicalInterviewStatus = this.tryLogInterviewLifecycleCompletion(session, role, answers);
 
     if (role === "candidate") {
       try {
@@ -649,6 +649,7 @@ export class InterviewEngine {
       managerTechnicalSummary,
       managerProfileUpdates: session.managerProfileUpdates ?? [],
       managerContradictionFlags: session.managerContradictionFlags ?? [],
+      canonicalInterviewStatus,
     } as const;
 
     try {
@@ -686,6 +687,7 @@ export class InterviewEngine {
         answers: record.answers,
         finalArtifact: record.finalArtifact,
         finalProfile: record.finalProfile,
+        canonicalInterviewStatus: record.canonicalInterviewStatus,
       });
     } catch (error) {
       this.logger.error("Failed to persist interview record to Supabase", {
@@ -902,7 +904,7 @@ export class InterviewEngine {
     session: UserSessionState,
     role: "candidate" | "manager",
     answers: ReadonlyArray<InterviewAnswer>,
-  ): void {
+  ): InterviewStatus | null {
     try {
       const transitionFrom = this.resolveInterviewCompletionEntryStatus(session, answers);
       const next = this.interviewLifecycleService.completeInterview(transitionFrom);
@@ -914,6 +916,7 @@ export class InterviewEngine {
         canonicalTo: next,
         answerCount: answers.length,
       });
+      return next;
     } catch (error) {
       this.logger.warn("interview_lifecycle.transition_failed", {
         action: "complete_interview",
@@ -922,6 +925,7 @@ export class InterviewEngine {
         currentState: session.state,
         error: error instanceof Error ? error.message : "Unknown error",
       });
+      return null;
     }
   }
 

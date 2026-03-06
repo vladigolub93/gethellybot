@@ -3,6 +3,7 @@ import path from "node:path";
 import { CandidateProfile, DocumentType, InterviewResultArtifact, JobProfile } from "../shared/types/domain.types";
 import { InterviewAnswer, UserRole } from "../shared/types/state.types";
 import { JobTechnicalSummaryV2 } from "../shared/types/job-profile.types";
+import { InterviewStatus } from "../core/matching/interview-statuses";
 
 export interface PersistedInterviewRecord {
   role: UserRole;
@@ -23,6 +24,7 @@ export interface PersistedInterviewRecord {
     reason: string;
   }>;
   managerContradictionFlags?: ReadonlyArray<string>;
+  canonicalInterviewStatus?: InterviewStatus | null;
 }
 
 const STORAGE_DIR = path.resolve(process.cwd(), "data", "interviews");
@@ -51,6 +53,7 @@ export class InterviewStorageService {
       managerTechnicalSummary: record.managerTechnicalSummary ?? null,
       managerProfileUpdates: record.managerProfileUpdates ?? [],
       managerContradictionFlags: record.managerContradictionFlags ?? [],
+      canonicalInterviewStatus: record.canonicalInterviewStatus ?? null,
     };
 
     await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
