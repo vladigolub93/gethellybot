@@ -1,8 +1,17 @@
 import { Logger } from "../config/logger";
 import { EvaluationStatus } from "../core/matching/evaluation-statuses";
-import { InterviewStatus } from "../core/matching/interview-statuses";
+import { INTERVIEW_STATUSES, InterviewStatus } from "../core/matching/interview-statuses";
+import {
+  DecisionGateSnapshot,
+  resolveDecisionGateSnapshot,
+} from "../core/matching/decision-gate-snapshot";
+import {
+  normalizeLegacyEvaluationStatus,
+  normalizeLegacyInterviewStatus,
+  normalizeLegacyMatchStatus,
+} from "../core/matching/lifecycle-normalizers";
 import { resolveLifecycleSnapshot } from "../core/matching/lifecycle-snapshot.resolver";
-import { MatchStatus } from "../core/matching/match-statuses";
+import { MATCH_STATUSES, MatchStatus } from "../core/matching/match-statuses";
 import { SupabaseRestClient } from "../db/supabase.client";
 import { QdrantClient } from "../matching/qdrant.client";
 import { DataDeletionService } from "../privacy/data-deletion.service";
@@ -51,6 +60,7 @@ interface AdminMatchRow {
   status: string;
   candidate_decision: string | null;
   manager_decision: string | null;
+  canonical_match_status?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -80,7 +90,15 @@ interface DataDeletionRequestRow {
 interface AdminInterviewRunRow {
   telegram_user_id: number;
   role: string;
+  canonical_interview_status?: string | null;
   completed_at: string | null;
+}
+
+interface AdminUserStateRow {
+  telegram_user_id: number;
+  state: string;
+  canonical_interview_status?: string | null;
+  updated_at: string;
 }
 
 type InterviewProgressStatus = "not_started" | "in_progress" | "completed";
@@ -91,6 +109,25 @@ interface AdminNormalizedLifecycle {
   evaluationStatus: EvaluationStatus | null;
   fallbackUsed: boolean;
   fallbackReasons: string[];
+}
+
+interface AdminDecisionGateSummary {
+  total: number;
+  aligned: number;
+  diverged: number;
+  unresolved: number;
+  overloadedLegacy: number;
+  canonicalMismatch: number;
+}
+
+interface AdminDecisionGateObservability {
+  total: number;
+  canonicalGateEligible: number;
+  canonicalGateUsed: number;
+  legacyFallbackUsed: number;
+  divergenceDetected: number;
+  canonicalMissing: number;
+  unresolved: number;
 }
 
 export interface AdminDashboardData {
@@ -119,6 +156,8 @@ export interface AdminDashboardData {
     managerInterviewsCompleted: number;
     managerInterviewsInProgress: number;
   };
+  decisionGateSummary: AdminDecisionGateSummary;
+  decisionGateObservability: AdminDecisionGateObservability;
   users: Array<{
     telegramUserId: number;
     username?: string;
@@ -185,6 +224,7 @@ export interface AdminDashboardData {
       };
     };
     normalizedLifecycle?: AdminNormalizedLifecycle;
+    decisionGateSnapshot?: DecisionGateSnapshot;
   }>;
   qualityFlags: Array<{
     id: string;
@@ -269,6 +309,23 @@ export class AdminWebappService {
         candidates: [],
         jobs: [],
         matches: [],
+        decisionGateSummary: {
+          total: 0,
+          aligned: 0,
+          diverged: 0,
+          unresolved: 0,
+          overloadedLegacy: 0,
+          canonicalMismatch: 0,
+        },
+        decisionGateObservability: {
+          total: 0,
+          canonicalGateEligible: 0,
+          canonicalGateUsed: 0,
+          legacyFallbackUsed: 0,
+          divergenceDetected: 0,
+          canonicalMissing: 0,
+          unresolved: 0,
+        },
         qualityFlags: [],
         deletionRequests: [],
         interviewProgress: {
@@ -294,9 +351,9 @@ export class AdminWebappService {
         {},
         "id,manager_telegram_user_id,status,job_summary,job_profile_json,job_work_format,job_profile_complete,created_at,updated_at",
       ),
-      this.supabaseClient.selectMany<AdminMatchRow>(
+      this.selectManyWithCanonicalFallback<AdminMatchRow>(
         "matches",
-        {},
+        "id,job_id,candidate_id,manager_telegram_user_id,candidate_telegram_user_id,total_score,status,candidate_decision,manager_decision,canonical_match_status,created_at,updated_at",
         "id,job_id,candidate_id,manager_telegram_user_id,candidate_telegram_user_id,total_score,status,candidate_decision,manager_decision,created_at,updated_at",
       ),
       this.supabaseClient.selectMany<AdminQualityFlagRow>(
@@ -309,18 +366,14 @@ export class AdminWebappService {
         {},
         "telegram_user_id,reason,status,requested_at,updated_at",
       ),
-      this.supabaseClient.selectMany<AdminInterviewRunRow>(
+      this.selectManyWithCanonicalFallback<AdminInterviewRunRow>(
         "interview_runs",
-        {},
+        "telegram_user_id,role,canonical_interview_status,completed_at",
         "telegram_user_id,role,completed_at",
       ),
-      this.supabaseClient.selectMany<{
-        telegram_user_id: number;
-        state: string;
-        updated_at: string;
-      }>(
+      this.selectManyWithCanonicalFallback<AdminUserStateRow>(
         "user_states",
-        {},
+        "telegram_user_id,state,canonical_interview_status,updated_at",
         "telegram_user_id,state,updated_at",
       ),
     ]);
@@ -335,10 +388,11 @@ export class AdminWebappService {
     for (const user of users) {
       userById.set(user.telegram_user_id, user);
     }
-    const userStateById = new Map<number, { state: string; updatedAt: string }>();
+    const userStateById = new Map<number, { state: string; canonicalInterviewStatus: InterviewStatus | null; updatedAt: string }>();
     for (const row of userStates) {
       userStateById.set(row.telegram_user_id, {
         state: row.state,
+        canonicalInterviewStatus: parseCanonicalInterviewStatus(row.canonical_interview_status),
         updatedAt: row.updated_at,
       });
     }
@@ -361,13 +415,37 @@ export class AdminWebappService {
       candidateProfileByUserId.set(profile.telegram_user_id, profile);
     }
     const candidateInterviewCompletedAtByUserId = new Map<number, string>();
+    const candidateCanonicalInterviewStatusFromCompletedRunByUserId = new Map<number, InterviewStatus>();
+    const candidateCanonicalInterviewStatusFromActiveRunByUserId = new Map<number, InterviewStatus>();
     for (const run of interviews) {
-      if (run.role !== "candidate" || !run.completed_at) {
+      if (run.role !== "candidate") {
         continue;
       }
-      const current = candidateInterviewCompletedAtByUserId.get(run.telegram_user_id);
-      if (!current || safeTime(run.completed_at) > safeTime(current)) {
-        candidateInterviewCompletedAtByUserId.set(run.telegram_user_id, run.completed_at);
+
+      if (run.completed_at) {
+        const current = candidateInterviewCompletedAtByUserId.get(run.telegram_user_id);
+        if (!current || safeTime(run.completed_at) > safeTime(current)) {
+          candidateInterviewCompletedAtByUserId.set(run.telegram_user_id, run.completed_at);
+        }
+
+        const status = parseCanonicalInterviewStatus(run.canonical_interview_status);
+        if (status) {
+          const previousCompletedAt = candidateInterviewCompletedAtByUserId.get(run.telegram_user_id);
+          if (!previousCompletedAt || safeTime(run.completed_at) >= safeTime(previousCompletedAt)) {
+            candidateCanonicalInterviewStatusFromCompletedRunByUserId.set(
+              run.telegram_user_id,
+              status,
+            );
+          }
+        }
+      } else {
+        const status = parseCanonicalInterviewStatus(run.canonical_interview_status);
+        if (status) {
+          candidateCanonicalInterviewStatusFromActiveRunByUserId.set(
+            run.telegram_user_id,
+            status,
+          );
+        }
       }
     }
 
@@ -437,6 +515,187 @@ export class AdminWebappService {
       .sort((a, b) => safeTime(b.updatedAt ?? null) - safeTime(a.updatedAt ?? null))
       .slice(0, 150);
 
+    const matchesWithDiagnostics = matchesSorted.slice(0, 150).map((item) => {
+      const candidateStateRow = userStateById.get(item.candidate_telegram_user_id);
+      const candidateState = candidateStateRow?.state;
+      const canonicalInterviewStatusFromCompletedRun =
+        candidateCanonicalInterviewStatusFromCompletedRunByUserId.get(
+          item.candidate_telegram_user_id,
+        ) ?? null;
+      const canonicalInterviewStatusFromActiveSession =
+        candidateStateRow?.canonicalInterviewStatus ??
+        candidateCanonicalInterviewStatusFromActiveRunByUserId.get(
+          item.candidate_telegram_user_id,
+        ) ??
+        null;
+      const canonicalInterviewStatus =
+        canonicalInterviewStatusFromCompletedRun ??
+        canonicalInterviewStatusFromActiveSession ??
+        null;
+      const canonicalMatchStatus = parseCanonicalMatchStatus(item.canonical_match_status);
+      const candidateProfile = candidateProfileByUserId.get(item.candidate_telegram_user_id);
+      const candidateTechnicalSummary = asRecord(candidateProfile?.technical_summary_json);
+      const interviewConfidenceLevel = extractInterviewConfidenceLevel(candidateTechnicalSummary);
+      const managerVisibleByLegacyStatus = new Set([
+        "candidate_applied",
+        "manager_accepted",
+        "manager_rejected",
+        "contact_shared",
+      ]).has(toText(item.status).toLowerCase());
+      const lifecycleSnapshot = resolveLifecycleSnapshot({
+        canonicalMatchStatus,
+        canonicalInterviewStatus,
+        match: {
+          id: item.id,
+          status: item.status,
+          candidateDecision: item.candidate_decision,
+          managerDecision: item.manager_decision,
+          contactShared: item.status === "contact_shared",
+        },
+        interview: {
+          sessionState: candidateState,
+          interviewRunStatus: candidateInterviewCompleted.has(item.candidate_telegram_user_id)
+            ? "completed"
+            : null,
+          hasInterviewRunRow: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
+          interviewRunCompletedAt:
+            candidateInterviewCompletedAtByUserId.get(item.candidate_telegram_user_id) ?? null,
+        },
+        evaluation: {
+          profileStatus: candidateProfile?.profile_status ?? null,
+          interviewConfidenceLevel,
+          matchScore:
+            typeof item.total_score === "number" && Number.isFinite(item.total_score)
+              ? item.total_score
+              : null,
+        },
+        exposure: {
+          managerVisible: managerVisibleByLegacyStatus,
+          source: "admin_webapp.matches",
+        },
+      });
+
+      this.logger.debug("lifecycle_snapshot.resolved", {
+        matchId: item.id,
+        managerTelegramUserId: item.manager_telegram_user_id,
+        candidateTelegramUserId: item.candidate_telegram_user_id,
+        canonicalMatchStatusProvided: Boolean(canonicalMatchStatus),
+        canonicalInterviewStatusProvided: Boolean(canonicalInterviewStatus),
+        canonicalInterviewStatusSource: canonicalInterviewStatusFromCompletedRun
+          ? "completed_interview_run"
+          : canonicalInterviewStatusFromActiveSession
+          ? "active_session_or_run"
+          : "none",
+        matchStatus: lifecycleSnapshot.matchStatus,
+        interviewStatus: lifecycleSnapshot.interviewStatus,
+        evaluationStatus: lifecycleSnapshot.evaluationStatus,
+      });
+      if (lifecycleSnapshot.notes.length > 0) {
+        this.logger.debug("lifecycle_snapshot.notes", {
+          matchId: item.id,
+          notes: lifecycleSnapshot.notes,
+        });
+      }
+      if (lifecycleSnapshot.risks.length > 0) {
+        this.logger.debug("lifecycle_snapshot.risks", {
+          matchId: item.id,
+          risks: lifecycleSnapshot.risks,
+        });
+      }
+      const normalizedLifecycle = resolveNormalizedLifecycleForAdmin({
+        lifecycleSnapshot,
+        legacy: {
+          status: item.status,
+          candidateDecision: item.candidate_decision,
+          managerDecision: item.manager_decision,
+          candidateSessionState: candidateState,
+          candidateInterviewCompleted: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
+          profileStatus: candidateProfile?.profile_status ?? null,
+          interviewConfidenceLevel,
+          matchScore:
+            typeof item.total_score === "number" && Number.isFinite(item.total_score)
+              ? item.total_score
+              : null,
+        },
+      });
+      const decisionGateSnapshot = resolveDecisionGateSnapshot({
+        status: item.status,
+        candidateDecision: item.candidate_decision,
+        managerDecision: item.manager_decision,
+        contactShared: item.status === "contact_shared",
+        canonicalMatchStatus,
+        hints: {
+          managerVisible: managerVisibleByLegacyStatus,
+          interviewCompleted: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
+        },
+      });
+      this.logger.debug("decision_gate_snapshot.resolved", {
+        matchId: item.id,
+        managerTelegramUserId: item.manager_telegram_user_id,
+        candidateTelegramUserId: item.candidate_telegram_user_id,
+        canonicalMatchStatus: decisionGateSnapshot.canonicalMatchStatus,
+        legacyGateState: decisionGateSnapshot.legacyGateState,
+        candidateMayAccept: decisionGateSnapshot.candidateMayAccept,
+        candidateMayReject: decisionGateSnapshot.candidateMayReject,
+        managerMayApprove: decisionGateSnapshot.managerMayApprove,
+        managerMayReject: decisionGateSnapshot.managerMayReject,
+      });
+      if (decisionGateSnapshot.divergenceNotes.length > 0) {
+        this.logger.debug("decision_gate_snapshot.divergence", {
+          matchId: item.id,
+          divergenceNotes: decisionGateSnapshot.divergenceNotes,
+          risks: decisionGateSnapshot.risks,
+        });
+      }
+      if (normalizedLifecycle.fallbackUsed) {
+        this.logger.debug("lifecycle_snapshot.fallback", {
+          matchId: item.id,
+          fallbackReasons: normalizedLifecycle.fallbackReasons,
+          matchStatus: normalizedLifecycle.matchStatus,
+          interviewStatus: normalizedLifecycle.interviewStatus,
+          evaluationStatus: normalizedLifecycle.evaluationStatus,
+        });
+      }
+
+      return {
+        id: item.id,
+        jobId:
+          item.job_id !== null && item.job_id !== undefined
+            ? String(item.job_id)
+            : undefined,
+        candidateId:
+          item.candidate_id !== null && item.candidate_id !== undefined
+            ? String(item.candidate_id)
+            : undefined,
+        managerTelegramUserId: item.manager_telegram_user_id,
+        candidateTelegramUserId: item.candidate_telegram_user_id,
+        totalScore:
+          typeof item.total_score === "number" && Number.isFinite(item.total_score)
+            ? item.total_score
+            : undefined,
+        status: item.status,
+        candidateDecision: item.candidate_decision ?? undefined,
+        managerDecision: item.manager_decision ?? undefined,
+        createdAt: item.created_at ?? undefined,
+        lifecycleSnapshot,
+        normalizedLifecycle,
+        decisionGateSnapshot,
+      };
+    });
+    const decisionGateSummary = summarizeDecisionGateSnapshots(matchesWithDiagnostics);
+    const decisionGateObservability = summarizeDecisionGateObservability(matchesWithDiagnostics);
+    this.logger.debug("decision_gate_snapshot.summary_resolved", {
+      total: decisionGateSummary.total,
+      aligned: decisionGateSummary.aligned,
+      diverged: decisionGateSummary.diverged,
+      unresolved: decisionGateSummary.unresolved,
+      overloadedLegacy: decisionGateSummary.overloadedLegacy,
+      canonicalMismatch: decisionGateSummary.canonicalMismatch,
+    });
+    this.logger.debug("decision_gate_snapshot.observability_resolved", {
+      ...decisionGateObservability,
+    });
+
     return {
       generatedAt: new Date().toISOString(),
       consistency: {
@@ -471,6 +730,8 @@ export class AdminWebappService {
           (item) => item.role === "manager" && item.managerInterviewStatus === "in_progress",
         ).length,
       },
+      decisionGateSummary,
+      decisionGateObservability,
       users: usersWithInterviewStatus.slice(0, 120),
       candidates: candidateProfiles.slice(0, 120).map((profile) => {
         const user = userById.get(profile.telegram_user_id);
@@ -522,118 +783,7 @@ export class AdminWebappService {
           updatedAt: item.updated_at ?? undefined,
         };
       }),
-      matches: matchesSorted.slice(0, 150).map((item) => {
-        const candidateState = userStateById.get(item.candidate_telegram_user_id)?.state;
-        const candidateProfile = candidateProfileByUserId.get(item.candidate_telegram_user_id);
-        const candidateTechnicalSummary = asRecord(candidateProfile?.technical_summary_json);
-        const interviewConfidenceLevel = extractInterviewConfidenceLevel(candidateTechnicalSummary);
-        const managerVisibleByLegacyStatus = new Set([
-          "candidate_applied",
-          "manager_accepted",
-          "manager_rejected",
-          "contact_shared",
-        ]).has(toText(item.status).toLowerCase());
-        const lifecycleSnapshot = resolveLifecycleSnapshot({
-          match: {
-            id: item.id,
-            status: item.status,
-            candidateDecision: item.candidate_decision,
-            managerDecision: item.manager_decision,
-            contactShared: item.status === "contact_shared",
-          },
-          interview: {
-            sessionState: candidateState,
-            interviewRunStatus: candidateInterviewCompleted.has(item.candidate_telegram_user_id)
-              ? "completed"
-              : null,
-            hasInterviewRunRow: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
-            interviewRunCompletedAt:
-              candidateInterviewCompletedAtByUserId.get(item.candidate_telegram_user_id) ?? null,
-          },
-          evaluation: {
-            profileStatus: candidateProfile?.profile_status ?? null,
-            interviewConfidenceLevel,
-            matchScore:
-              typeof item.total_score === "number" && Number.isFinite(item.total_score)
-                ? item.total_score
-                : null,
-          },
-          exposure: {
-            managerVisible: managerVisibleByLegacyStatus,
-            source: "admin_webapp.matches",
-          },
-        });
-
-        this.logger.debug("lifecycle_snapshot.resolved", {
-          matchId: item.id,
-          managerTelegramUserId: item.manager_telegram_user_id,
-          candidateTelegramUserId: item.candidate_telegram_user_id,
-          matchStatus: lifecycleSnapshot.matchStatus,
-          interviewStatus: lifecycleSnapshot.interviewStatus,
-          evaluationStatus: lifecycleSnapshot.evaluationStatus,
-        });
-        if (lifecycleSnapshot.notes.length > 0) {
-          this.logger.debug("lifecycle_snapshot.notes", {
-            matchId: item.id,
-            notes: lifecycleSnapshot.notes,
-          });
-        }
-        if (lifecycleSnapshot.risks.length > 0) {
-          this.logger.debug("lifecycle_snapshot.risks", {
-            matchId: item.id,
-            risks: lifecycleSnapshot.risks,
-          });
-        }
-        const normalizedLifecycle = resolveNormalizedLifecycleForAdmin({
-          lifecycleSnapshot,
-          legacy: {
-            status: item.status,
-            candidateDecision: item.candidate_decision,
-            managerDecision: item.manager_decision,
-            candidateSessionState: candidateState,
-            candidateInterviewCompleted: candidateInterviewCompleted.has(item.candidate_telegram_user_id),
-            profileStatus: candidateProfile?.profile_status ?? null,
-            interviewConfidenceLevel,
-            matchScore:
-              typeof item.total_score === "number" && Number.isFinite(item.total_score)
-                ? item.total_score
-                : null,
-          },
-        });
-        if (normalizedLifecycle.fallbackUsed) {
-          this.logger.debug("lifecycle_snapshot.fallback", {
-            matchId: item.id,
-            fallbackReasons: normalizedLifecycle.fallbackReasons,
-            matchStatus: normalizedLifecycle.matchStatus,
-            interviewStatus: normalizedLifecycle.interviewStatus,
-            evaluationStatus: normalizedLifecycle.evaluationStatus,
-          });
-        }
-
-        return {
-          id: item.id,
-          jobId:
-            item.job_id !== null && item.job_id !== undefined
-              ? String(item.job_id)
-              : undefined,
-          candidateId:
-            item.candidate_id !== null && item.candidate_id !== undefined
-              ? String(item.candidate_id)
-              : undefined,
-          managerTelegramUserId: item.manager_telegram_user_id,
-          candidateTelegramUserId: item.candidate_telegram_user_id,
-          totalScore:
-            typeof item.total_score === "number" && Number.isFinite(item.total_score)
-              ? item.total_score
-              : undefined,
-          status: item.status,
-          candidateDecision: item.candidate_decision ?? undefined,
-          managerDecision: item.manager_decision ?? undefined,
-          createdAt: item.created_at ?? undefined,
-          lifecycleSnapshot,
-          normalizedLifecycle,
-        };
-      }),
+      matches: matchesWithDiagnostics,
       qualityFlags: flagsSorted.slice(0, 200).map((item) => ({
         id: item.id,
         entityType: item.entity_type,
@@ -679,6 +829,22 @@ export class AdminWebappService {
           : "Deletion requested, but some references are still present",
       verification,
     };
+  }
+
+  private async selectManyWithCanonicalFallback<T>(
+    table: string,
+    columnsWithCanonical: string,
+    fallbackColumns: string,
+  ): Promise<T[]> {
+    try {
+      return await this.supabaseClient!.selectMany<T>(table, {}, columnsWithCanonical);
+    } catch (error) {
+      this.logger.warn("admin.read.canonical_columns_unavailable", {
+        table,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return this.supabaseClient!.selectMany<T>(table, {}, fallbackColumns);
+    }
   }
 
   async deleteCandidate(telegramUserId: number): Promise<AdminDeleteResult> {
@@ -909,6 +1075,24 @@ function extractInterviewConfidenceLevel(
   return value;
 }
 
+function parseCanonicalMatchStatus(value: string | null | undefined): MatchStatus | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toUpperCase();
+  const allowed = new Set<string>(Object.values(MATCH_STATUSES));
+  return allowed.has(normalized) ? (normalized as MatchStatus) : null;
+}
+
+function parseCanonicalInterviewStatus(value: string | null | undefined): InterviewStatus | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toUpperCase();
+  const allowed = new Set<string>(Object.values(INTERVIEW_STATUSES));
+  return allowed.has(normalized) ? (normalized as InterviewStatus) : null;
+}
+
 function resolveNormalizedLifecycleForAdmin(input: {
   lifecycleSnapshot: {
     matchStatus: MatchStatus | null;
@@ -929,6 +1113,28 @@ function resolveNormalizedLifecycleForAdmin(input: {
   const fallbackReasons: string[] = [];
   let fallbackUsed = false;
 
+  const legacyNormalized = {
+    matchStatus: normalizeLegacyMatchStatus({
+      status: input.legacy.status,
+      candidateDecision: input.legacy.candidateDecision,
+      managerDecision: input.legacy.managerDecision,
+      contactShared: toText(input.legacy.status).toLowerCase() === "contact_shared",
+    }),
+    interviewStatus: normalizeLegacyInterviewStatus({
+      sessionState: input.legacy.candidateSessionState ?? null,
+      interviewRunStatus: input.legacy.candidateInterviewCompleted ? "completed" : null,
+      hasInterviewRunRow: input.legacy.candidateInterviewCompleted,
+      interviewRunCompletedAt: input.legacy.candidateInterviewCompleted
+        ? "completed"
+        : null,
+    }),
+    evaluationStatus: normalizeLegacyEvaluationStatus({
+      profileStatus: input.legacy.profileStatus,
+      interviewConfidenceLevel: input.legacy.interviewConfidenceLevel,
+      matchScore: input.legacy.matchScore,
+    }),
+  };
+
   let matchStatus = input.lifecycleSnapshot.matchStatus;
   let interviewStatus = input.lifecycleSnapshot.interviewStatus;
   let evaluationStatus = input.lifecycleSnapshot.evaluationStatus;
@@ -936,19 +1142,25 @@ function resolveNormalizedLifecycleForAdmin(input: {
   if (matchStatus === null) {
     fallbackUsed = true;
     fallbackReasons.push("MATCH_STATUS_SNAPSHOT_NULL");
-    matchStatus = deriveMatchStatusFromLegacyForAdmin(input.legacy);
+    matchStatus =
+      legacyNormalized.matchStatus ??
+      deriveMatchStatusFromLegacyForAdmin(input.legacy);
   }
 
   if (interviewStatus === null) {
     fallbackUsed = true;
     fallbackReasons.push("INTERVIEW_STATUS_SNAPSHOT_NULL");
-    interviewStatus = deriveInterviewStatusFromLegacyForAdmin(input.legacy);
+    interviewStatus =
+      legacyNormalized.interviewStatus ??
+      deriveInterviewStatusFromLegacyForAdmin(input.legacy);
   }
 
   if (evaluationStatus === null) {
     fallbackUsed = true;
     fallbackReasons.push("EVALUATION_STATUS_SNAPSHOT_NULL");
-    evaluationStatus = deriveEvaluationStatusFromLegacyForAdmin(input.legacy);
+    evaluationStatus =
+      legacyNormalized.evaluationStatus ??
+      deriveEvaluationStatusFromLegacyForAdmin(input.legacy);
   }
 
   return {
@@ -1061,6 +1273,110 @@ function deriveEvaluationStatusFromLegacyForAdmin(legacy: {
   }
 
   return null;
+}
+
+function summarizeDecisionGateSnapshots(matches: Array<{
+  decisionGateSnapshot?: DecisionGateSnapshot;
+}>): AdminDecisionGateSummary {
+  let total = 0;
+  let aligned = 0;
+  let diverged = 0;
+  let unresolved = 0;
+  let overloadedLegacy = 0;
+  let canonicalMismatch = 0;
+
+  for (const item of matches) {
+    const snapshot = item.decisionGateSnapshot;
+    if (!snapshot) {
+      continue;
+    }
+    total += 1;
+
+    const hasDivergence = snapshot.divergenceNotes.length > 0;
+    if (hasDivergence) {
+      diverged += 1;
+    } else {
+      aligned += 1;
+    }
+
+    if (snapshot.risks.includes("CANONICAL_STATUS_UNRESOLVED")) {
+      unresolved += 1;
+    }
+    if (snapshot.risks.includes("LEGACY_STATUS_OVERLOADED_CANDIDATE_APPLIED")) {
+      overloadedLegacy += 1;
+    }
+    if (
+      snapshot.divergenceNotes.includes(
+        "CANONICAL_PERSISTED_DIFFERS_FROM_LEGACY_NORMALIZED",
+      )
+    ) {
+      canonicalMismatch += 1;
+    }
+  }
+
+  return {
+    total,
+    aligned,
+    diverged,
+    unresolved,
+    overloadedLegacy,
+    canonicalMismatch,
+  };
+}
+
+function summarizeDecisionGateObservability(matches: Array<{
+  decisionGateSnapshot?: DecisionGateSnapshot;
+}>): AdminDecisionGateObservability {
+  let total = 0;
+  let canonicalGateEligible = 0;
+  let canonicalGateUsed = 0;
+  let legacyFallbackUsed = 0;
+  let divergenceDetected = 0;
+  let canonicalMissing = 0;
+  let unresolved = 0;
+
+  for (const item of matches) {
+    const snapshot = item.decisionGateSnapshot;
+    if (!snapshot) {
+      continue;
+    }
+    total += 1;
+
+    const hasCanonical = snapshot.canonicalMatchStatus !== null;
+    const hasDivergence = snapshot.divergenceNotes.length > 0;
+    const isUnresolved =
+      snapshot.risks.includes("CANONICAL_STATUS_UNRESOLVED") ||
+      snapshot.risks.includes("LEGACY_GATE_STATE_UNRESOLVED");
+
+    if (hasCanonical) {
+      canonicalGateEligible += 1;
+      if (!hasDivergence) {
+        canonicalGateUsed += 1;
+      } else {
+        legacyFallbackUsed += 1;
+      }
+    } else {
+      canonicalMissing += 1;
+      legacyFallbackUsed += 1;
+    }
+
+    if (hasDivergence) {
+      divergenceDetected += 1;
+    }
+    if (isUnresolved) {
+      unresolved += 1;
+    }
+  }
+
+  return {
+    total,
+    canonicalGateEligible,
+    canonicalGateUsed,
+    legacyFallbackUsed,
+    divergenceDetected,
+    canonicalMissing,
+    unresolved,
+  };
 }
 
 function stringifyUnknown(value: unknown): string | undefined {

@@ -147,9 +147,28 @@ async function testCleanSnapshotPath(): Promise<void> {
   assert.equal(data.matches[0]?.normalizedLifecycle?.interviewStatus, "COMPLETED");
   assert.equal(data.matches[0]?.normalizedLifecycle?.evaluationStatus, "STRONG");
   assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, false);
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.legacyGateState, "MANAGER_DECISION_OPEN");
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.managerMayApprove, true);
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.managerMayReject, true);
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.divergenceNotes.length, 0);
+  assert.equal(data.decisionGateSummary.total, 1);
+  assert.equal(data.decisionGateSummary.aligned, 1);
+  assert.equal(data.decisionGateSummary.diverged, 0);
+  assert.equal(data.decisionGateSummary.unresolved, 0);
+  assert.equal(data.decisionGateSummary.overloadedLegacy, 1);
+  assert.equal(data.decisionGateSummary.canonicalMismatch, 0);
+  assert.equal(data.decisionGateObservability.total, 1);
+  assert.equal(data.decisionGateObservability.canonicalGateEligible, 1);
+  assert.equal(data.decisionGateObservability.canonicalGateUsed, 1);
+  assert.equal(data.decisionGateObservability.legacyFallbackUsed, 0);
+  assert.equal(data.decisionGateObservability.divergenceDetected, 0);
+  assert.equal(data.decisionGateObservability.canonicalMissing, 0);
+  assert.equal(data.decisionGateObservability.unresolved, 0);
 
   const resolvedLogs = findDebug(logger, "lifecycle_snapshot.resolved");
   assert.equal(resolvedLogs.length, 1);
+  const gateLogs = findDebug(logger, "decision_gate_snapshot.resolved");
+  assert.equal(gateLogs.length, 1);
 }
 
 async function testAmbiguousLifecyclePathStillRendersSafely(): Promise<void> {
@@ -188,6 +207,17 @@ async function testAmbiguousLifecyclePathStillRendersSafely(): Promise<void> {
   assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, null);
   assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, true);
   assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "DECLINED");
+  assert.equal(data.decisionGateSummary.total, 1);
+  assert.equal(data.decisionGateSummary.aligned, 1);
+  assert.equal(data.decisionGateSummary.diverged, 0);
+  assert.equal(data.decisionGateSummary.unresolved, 1);
+  assert.equal(data.decisionGateObservability.total, 1);
+  assert.equal(data.decisionGateObservability.canonicalGateEligible, 0);
+  assert.equal(data.decisionGateObservability.canonicalGateUsed, 0);
+  assert.equal(data.decisionGateObservability.legacyFallbackUsed, 1);
+  assert.equal(data.decisionGateObservability.divergenceDetected, 0);
+  assert.equal(data.decisionGateObservability.canonicalMissing, 1);
+  assert.equal(data.decisionGateObservability.unresolved, 1);
   assert.equal(
     data.matches[0]?.lifecycleSnapshot?.notes.includes("MATCH_STATUS_UNCLEAR"),
     true,
@@ -291,6 +321,13 @@ async function testOverloadedLegacyValuePathStillSafe(): Promise<void> {
   assert.equal(data.matches[0]?.candidateDecision, "apply");
   assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, "SENT_TO_MANAGER");
   assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "SENT_TO_MANAGER");
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.managerMayApprove, true);
+  assert.equal(
+    data.matches[0]?.decisionGateSnapshot?.risks.includes(
+      "LEGACY_STATUS_OVERLOADED_CANDIDATE_APPLIED",
+    ),
+    true,
+  );
   assert.equal(
     data.matches[0]?.lifecycleSnapshot?.notes.includes("LEGACY_CANDIDATE_APPLIED_OVERLOADED"),
     true,
@@ -299,6 +336,9 @@ async function testOverloadedLegacyValuePathStillSafe(): Promise<void> {
     data.matches[0]?.lifecycleSnapshot?.notes.includes("LEGACY_APPLY_ALIAS_USED"),
     true,
   );
+  assert.equal(data.decisionGateSummary.total, 1);
+  assert.equal(data.decisionGateSummary.overloadedLegacy, 1);
+  assert.equal(data.decisionGateSummary.diverged, 0);
 }
 
 async function testAdminOutputShapeBackwardCompatible(): Promise<void> {
@@ -340,6 +380,239 @@ async function testAdminOutputShapeBackwardCompatible(): Promise<void> {
   assert.equal(match?.managerDecision, "pending");
   assert.ok(match?.lifecycleSnapshot);
   assert.ok(match?.normalizedLifecycle);
+  assert.ok(match?.decisionGateSnapshot);
+  assert.ok(data.decisionGateSummary);
+  assert.ok(data.decisionGateObservability);
+  assert.equal(typeof data.decisionGateSummary.total, "number");
+  assert.equal(typeof data.decisionGateSummary.aligned, "number");
+  assert.equal(typeof data.decisionGateSummary.diverged, "number");
+  assert.equal(typeof data.decisionGateObservability.total, "number");
+  assert.equal(typeof data.decisionGateObservability.canonicalGateEligible, "number");
+  assert.equal(typeof data.decisionGateObservability.canonicalGateUsed, "number");
+  assert.equal(typeof data.decisionGateObservability.legacyFallbackUsed, "number");
+}
+
+async function testCanonicalPersistedMatchStatusOverridesLegacyInference(): Promise<void> {
+  const logger = new LoggerMock();
+  const service = new AdminWebappService(
+    logger,
+    {
+      async requestDeletion() {
+        return { requested: true, confirmationMessage: "ok" };
+      },
+    } as never,
+    new SupabaseClientMock(
+      makeBaseData({
+        matches: [
+          {
+            id: "match_canonical_match",
+            job_id: null,
+            candidate_id: null,
+            manager_telegram_user_id: 2001,
+            candidate_telegram_user_id: 1001,
+            total_score: 50,
+            status: "candidate_rejected",
+            candidate_decision: "rejected",
+            manager_decision: "pending",
+            canonical_match_status: "APPROVED",
+            created_at: "2026-03-06T12:00:00.000Z",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+      }),
+    ) as never,
+  );
+
+  const data = await service.getDashboardData();
+  assert.equal(data.matches.length, 1);
+  assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, "APPROVED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "APPROVED");
+  assert.equal(data.matches[0]?.decisionGateSnapshot?.canonicalMatchStatus, "APPROVED");
+  assert.equal(
+    data.matches[0]?.decisionGateSnapshot?.divergenceNotes.includes(
+      "CANONICAL_PERSISTED_DIFFERS_FROM_LEGACY_NORMALIZED",
+    ),
+    true,
+  );
+  assert.equal(data.decisionGateSummary.total, 1);
+  assert.equal(data.decisionGateSummary.diverged, 1);
+  assert.equal(data.decisionGateSummary.canonicalMismatch, 1);
+  assert.equal(data.decisionGateSummary.aligned, 0);
+  assert.equal(data.decisionGateObservability.total, 1);
+  assert.equal(data.decisionGateObservability.canonicalGateEligible, 1);
+  assert.equal(data.decisionGateObservability.canonicalGateUsed, 0);
+  assert.equal(data.decisionGateObservability.legacyFallbackUsed, 1);
+  assert.equal(data.decisionGateObservability.divergenceDetected, 1);
+  assert.equal(data.decisionGateObservability.canonicalMissing, 0);
+  assert.equal(data.decisionGateObservability.unresolved, 0);
+  assert.equal(
+    data.matches[0]?.lifecycleSnapshot?.notes.includes("MATCH_STATUS_CANONICAL_OVERRIDE_LEGACY"),
+    true,
+  );
+  const divergenceLogs = findDebug(logger, "decision_gate_snapshot.divergence");
+  assert.equal(divergenceLogs.length >= 1, true);
+}
+
+async function testCanonicalPersistedInterviewStatusOverridesLegacyInference(): Promise<void> {
+  const logger = new LoggerMock();
+  const service = new AdminWebappService(
+    logger,
+    {
+      async requestDeletion() {
+        return { requested: true, confirmationMessage: "ok" };
+      },
+    } as never,
+    new SupabaseClientMock(
+      makeBaseData({
+        matches: [
+          {
+            id: "match_canonical_interview",
+            job_id: null,
+            candidate_id: null,
+            manager_telegram_user_id: 2001,
+            candidate_telegram_user_id: 1001,
+            total_score: null,
+            status: "candidate_applied",
+            candidate_decision: "applied",
+            manager_decision: "pending",
+            canonical_match_status: null,
+            created_at: "2026-03-06T12:00:00.000Z",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+        userStates: [
+          {
+            telegram_user_id: 1001,
+            state: "interviewing_candidate",
+            canonical_interview_status: "COMPLETED",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+      }),
+    ) as never,
+  );
+
+  const data = await service.getDashboardData();
+  assert.equal(data.matches.length, 1);
+  assert.equal(data.matches[0]?.lifecycleSnapshot?.interviewStatus, "COMPLETED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.interviewStatus, "COMPLETED");
+  assert.equal(
+    data.matches[0]?.lifecycleSnapshot?.notes.includes("INTERVIEW_STATUS_CANONICAL_OVERRIDE_LEGACY"),
+    true,
+  );
+  const resolvedLogs = findDebug(logger, "lifecycle_snapshot.resolved");
+  assert.equal(resolvedLogs.length, 1);
+  assert.equal(
+    resolvedLogs[0]?.meta?.canonicalInterviewStatusSource,
+    "active_session_or_run",
+  );
+}
+
+async function testCompletedInterviewRunCanonicalOverridesStaleUserStateCanonical(): Promise<void> {
+  const logger = new LoggerMock();
+  const service = new AdminWebappService(
+    logger,
+    {
+      async requestDeletion() {
+        return { requested: true, confirmationMessage: "ok" };
+      },
+    } as never,
+    new SupabaseClientMock(
+      makeBaseData({
+        matches: [
+          {
+            id: "match_completed_run_precedence",
+            job_id: null,
+            candidate_id: null,
+            manager_telegram_user_id: 2001,
+            candidate_telegram_user_id: 1001,
+            total_score: 80,
+            status: "candidate_applied",
+            candidate_decision: "applied",
+            manager_decision: "pending",
+            canonical_match_status: null,
+            created_at: "2026-03-06T12:00:00.000Z",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+        interviews: [
+          {
+            telegram_user_id: 1001,
+            role: "candidate",
+            canonical_interview_status: "COMPLETED",
+            completed_at: "2026-03-06T11:59:00.000Z",
+          },
+        ],
+        userStates: [
+          {
+            telegram_user_id: 1001,
+            state: "interviewing_candidate",
+            canonical_interview_status: "STARTED",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+      }),
+    ) as never,
+  );
+
+  const data = await service.getDashboardData();
+  assert.equal(data.matches.length, 1);
+  assert.equal(data.matches[0]?.lifecycleSnapshot?.interviewStatus, "COMPLETED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.interviewStatus, "COMPLETED");
+
+  const resolvedLogs = findDebug(logger, "lifecycle_snapshot.resolved");
+  assert.equal(resolvedLogs.length, 1);
+  assert.equal(
+    resolvedLogs[0]?.meta?.canonicalInterviewStatusSource,
+    "completed_interview_run",
+  );
+}
+
+async function testLegacyFallbackStillWorksWhenCanonicalAbsent(): Promise<void> {
+  const logger = new LoggerMock();
+  const service = new AdminWebappService(
+    logger,
+    {
+      async requestDeletion() {
+        return { requested: true, confirmationMessage: "ok" };
+      },
+    } as never,
+    new SupabaseClientMock(
+      makeBaseData({
+        matches: [
+          {
+            id: "match_legacy_fallback",
+            job_id: null,
+            candidate_id: null,
+            manager_telegram_user_id: 2001,
+            candidate_telegram_user_id: 1001,
+            total_score: null,
+            status: "manager_rejected",
+            candidate_decision: "applied",
+            manager_decision: "rejected",
+            canonical_match_status: null,
+            created_at: "2026-03-06T12:00:00.000Z",
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+        userStates: [
+          {
+            telegram_user_id: 1001,
+            state: "candidate_profile_ready",
+            canonical_interview_status: null,
+            updated_at: "2026-03-06T12:00:00.000Z",
+          },
+        ],
+      }),
+    ) as never,
+  );
+
+  const data = await service.getDashboardData();
+  assert.equal(data.matches.length, 1);
+  assert.equal(data.matches[0]?.lifecycleSnapshot?.matchStatus, "REJECTED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.matchStatus, "REJECTED");
+  assert.equal(data.matches[0]?.normalizedLifecycle?.fallbackUsed, true);
+  assert.equal(data.matches[0]?.lifecycleSnapshot?.interviewStatus, null);
 }
 
 async function run(): Promise<void> {
@@ -347,6 +620,10 @@ async function run(): Promise<void> {
   await testAmbiguousLifecyclePathStillRendersSafely();
   await testMissingEvaluationStillSafe();
   await testOverloadedLegacyValuePathStillSafe();
+  await testCanonicalPersistedMatchStatusOverridesLegacyInference();
+  await testCanonicalPersistedInterviewStatusOverridesLegacyInference();
+  await testCompletedInterviewRunCanonicalOverridesStaleUserStateCanonical();
+  await testLegacyFallbackStillWorksWhenCanonicalAbsent();
   await testAdminOutputShapeBackwardCompatible();
   process.stdout.write("admin-webapp.lifecycle-snapshot tests passed.\n");
 }

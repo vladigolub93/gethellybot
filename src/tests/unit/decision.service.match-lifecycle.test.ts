@@ -400,8 +400,11 @@ async function testCandidateRejectUsesCanonicalGateWhenEnabledAndValid(): Promis
   const updated = await service.candidateReject(initial.id, initial.candidateUserId);
   assert.equal(updated.status, "candidate_rejected");
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_reject.canonical_primary");
   const canonicalUsed = findDebug(logger, "decision_gate.candidate_reject.canonical_used");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_reject.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 1);
+  assert.equal(canonicalPrimary[0]?.meta?.canonicalAllowed, true);
   assert.equal(canonicalUsed.length, 1);
   assert.equal(fallbackLogs.length, 0);
 }
@@ -426,7 +429,9 @@ async function testCandidateRejectFallsBackWhenCanonicalMissing(): Promise<void>
   assert.equal(updated.status, "candidate_rejected");
   assert.equal(storage.candidateDecisions.length, 1);
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_reject.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_reject.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "CANONICAL_STATUS_UNAVAILABLE");
 }
@@ -453,8 +458,10 @@ async function testCandidateRejectDivergenceFallsBackToLegacyGate(): Promise<voi
   );
 
   const divergenceLogs = findWarn(logger, "decision_gate.candidate_reject.divergence");
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_reject.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_reject.legacy_fallback");
   assert.equal(divergenceLogs.length, 1);
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "DIVERGENCE_FALLBACK_TO_LEGACY");
   assert.equal(storage.candidateDecisions.length, 0);
@@ -502,8 +509,11 @@ async function testCandidateAcceptUsesCanonicalGateWhenEnabledAndValid(): Promis
   const updated = await service.candidateApply(initial.id, initial.candidateUserId);
   assert.equal(updated.status, "candidate_applied");
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_accept.canonical_primary");
   const canonicalUsed = findDebug(logger, "decision_gate.candidate_accept.canonical_used");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_accept.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 1);
+  assert.equal(canonicalPrimary[0]?.meta?.canonicalAllowed, true);
   assert.equal(canonicalUsed.length, 1);
   assert.equal(fallbackLogs.length, 0);
 }
@@ -529,7 +539,9 @@ async function testCandidateAcceptFallsBackWhenCanonicalMissing(): Promise<void>
   assert.equal(updated.status, "candidate_applied");
   assert.equal(storage.candidateDecisions.length, 1);
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_accept.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_accept.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "CANONICAL_STATUS_UNAVAILABLE");
 }
@@ -557,8 +569,10 @@ async function testCandidateAcceptDivergenceFallsBackToLegacyGate(): Promise<voi
   );
 
   const divergenceLogs = findWarn(logger, "decision_gate.candidate_accept.divergence");
+  const canonicalPrimary = findDebug(logger, "decision_gate.candidate_accept.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.candidate_accept.legacy_fallback");
   assert.equal(divergenceLogs.length, 1);
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "DIVERGENCE_FALLBACK_TO_LEGACY");
   assert.equal(storage.candidateDecisions.length, 0);
@@ -610,8 +624,11 @@ async function testManagerRejectUsesCanonicalGateWhenEnabledAndValid(): Promise<
   const updated = await service.managerReject(initial.id, initial.managerUserId);
   assert.equal(updated.status, "manager_rejected");
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_reject.canonical_primary");
   const canonicalUsed = findDebug(logger, "decision_gate.manager_reject.canonical_used");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_reject.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 1);
+  assert.equal(canonicalPrimary[0]?.meta?.canonicalAllowed, true);
   assert.equal(canonicalUsed.length, 1);
   assert.equal(fallbackLogs.length, 0);
 }
@@ -640,7 +657,9 @@ async function testManagerRejectFallsBackWhenCanonicalMissing(): Promise<void> {
   assert.equal(updated.status, "manager_rejected");
   assert.equal(storage.managerDecisions.length, 1);
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_reject.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_reject.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "CANONICAL_STATUS_UNAVAILABLE");
 }
@@ -670,8 +689,10 @@ async function testManagerRejectDivergenceFallsBackToLegacyGate(): Promise<void>
   assert.equal(storage.managerDecisions.length, 1);
 
   const divergenceLogs = findWarn(logger, "decision_gate.manager_reject.divergence");
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_reject.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_reject.legacy_fallback");
   assert.equal(divergenceLogs.length, 1);
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "DIVERGENCE_FALLBACK_TO_LEGACY");
 }
@@ -722,8 +743,11 @@ async function testManagerAcceptUsesCanonicalGateWhenEnabledAndValid(): Promise<
   const updated = await service.managerAccept(initial.id, initial.managerUserId);
   assert.equal(updated.status, "manager_accepted");
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_accept.canonical_primary");
   const canonicalUsed = findDebug(logger, "decision_gate.manager_accept.canonical_used");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_accept.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 1);
+  assert.equal(canonicalPrimary[0]?.meta?.canonicalAllowed, true);
   assert.equal(canonicalUsed.length, 1);
   assert.equal(fallbackLogs.length, 0);
 }
@@ -752,7 +776,9 @@ async function testManagerAcceptFallsBackWhenCanonicalMissing(): Promise<void> {
   assert.equal(updated.status, "manager_accepted");
   assert.equal(storage.managerDecisions.length, 1);
 
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_accept.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_accept.legacy_fallback");
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "CANONICAL_STATUS_UNAVAILABLE");
 }
@@ -782,8 +808,10 @@ async function testManagerAcceptDivergenceFallsBackToLegacyGate(): Promise<void>
   assert.equal(storage.managerDecisions.length, 1);
 
   const divergenceLogs = findWarn(logger, "decision_gate.manager_accept.divergence");
+  const canonicalPrimary = findDebug(logger, "decision_gate.manager_accept.canonical_primary");
   const fallbackLogs = findDebug(logger, "decision_gate.manager_accept.legacy_fallback");
   assert.equal(divergenceLogs.length, 1);
+  assert.equal(canonicalPrimary.length, 0);
   assert.equal(fallbackLogs.length, 1);
   assert.equal(fallbackLogs[0]?.meta?.reason, "DIVERGENCE_FALLBACK_TO_LEGACY");
 }

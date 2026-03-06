@@ -175,8 +175,8 @@ export class DecisionService {
   }
 
   private async ensureCandidateCanAccept(match: MatchRecord): Promise<void> {
-    const legacyAllowed = this.isLegacyCandidateAcceptAllowed(match);
     if (!this.enableCanonicalCandidateAcceptGate) {
+      const legacyAllowed = this.isLegacyCandidateAcceptAllowed(match);
       if (!legacyAllowed) {
         throw new Error("This match is no longer available for this action.");
       }
@@ -192,6 +192,7 @@ export class DecisionService {
         canonicalMatchStatus: match.canonicalMatchStatus ?? null,
         reason: "CANONICAL_STATUS_UNAVAILABLE",
       });
+      const legacyAllowed = this.isLegacyCandidateAcceptAllowed(match);
       if (!legacyAllowed) {
         throw new Error("This match is no longer available for this action.");
       }
@@ -202,6 +203,7 @@ export class DecisionService {
       "CANDIDATE_ACCEPTS_MATCH",
       canonicalFrom,
     ) !== null;
+    const legacyAllowed = this.isLegacyCandidateAcceptAllowed(match);
 
     if (canonicalAllowed !== legacyAllowed) {
       this.logger?.warn("decision_gate.candidate_accept.divergence", {
@@ -226,6 +228,14 @@ export class DecisionService {
       return;
     }
 
+    this.logger?.debug("decision_gate.candidate_accept.canonical_primary", {
+      matchId: match.id,
+      candidateUserId: match.candidateUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "CANDIDATE_ACCEPTS_MATCH",
+      canonicalAllowed,
+    });
     this.logger?.debug("decision_gate.candidate_accept.canonical_used", {
       matchId: match.id,
       candidateUserId: match.candidateUserId,
@@ -239,8 +249,8 @@ export class DecisionService {
   }
 
   private async ensureCandidateCanReject(match: MatchRecord): Promise<void> {
-    const legacyAllowed = this.isLegacyCandidateRejectAllowed(match);
     if (!this.enableCanonicalCandidateRejectGate) {
+      const legacyAllowed = this.isLegacyCandidateRejectAllowed(match);
       if (!legacyAllowed) {
         throw new Error("This match is no longer available for this action.");
       }
@@ -256,6 +266,7 @@ export class DecisionService {
         canonicalMatchStatus: match.canonicalMatchStatus ?? null,
         reason: "CANONICAL_STATUS_UNAVAILABLE",
       });
+      const legacyAllowed = this.isLegacyCandidateRejectAllowed(match);
       if (!legacyAllowed) {
         throw new Error("This match is no longer available for this action.");
       }
@@ -266,6 +277,7 @@ export class DecisionService {
       "CANDIDATE_DECLINES_MATCH",
       canonicalFrom,
     ) !== null;
+    const legacyAllowed = this.isLegacyCandidateRejectAllowed(match);
 
     if (canonicalAllowed !== legacyAllowed) {
       this.logger?.warn("decision_gate.candidate_reject.divergence", {
@@ -290,6 +302,14 @@ export class DecisionService {
       return;
     }
 
+    this.logger?.debug("decision_gate.candidate_reject.canonical_primary", {
+      matchId: match.id,
+      candidateUserId: match.candidateUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "CANDIDATE_DECLINES_MATCH",
+      canonicalAllowed,
+    });
     this.logger?.debug("decision_gate.candidate_reject.canonical_used", {
       matchId: match.id,
       candidateUserId: match.candidateUserId,
@@ -309,8 +329,8 @@ export class DecisionService {
   }
 
   private async ensureManagerCanAccept(match: MatchRecord): Promise<void> {
-    const legacyAllowed = this.isLegacyManagerAcceptAllowed(match);
     if (!this.enableCanonicalManagerAcceptGate) {
+      const legacyAllowed = this.isLegacyManagerAcceptAllowed(match);
       if (!legacyAllowed) {
         throw new Error("Candidate has not applied for this match, or it is no longer available.");
       }
@@ -326,6 +346,7 @@ export class DecisionService {
         canonicalMatchStatus: match.canonicalMatchStatus ?? null,
         reason: "CANONICAL_STATUS_UNAVAILABLE",
       });
+      const legacyAllowed = this.isLegacyManagerAcceptAllowed(match);
       if (!legacyAllowed) {
         throw new Error("Candidate has not applied for this match, or it is no longer available.");
       }
@@ -336,6 +357,7 @@ export class DecisionService {
       "MANAGER_APPROVES_CANDIDATE",
       canonicalFrom,
     ) !== null;
+    const legacyAllowed = this.isLegacyManagerAcceptAllowed(match);
 
     if (canonicalAllowed !== legacyAllowed) {
       this.logger?.warn("decision_gate.manager_accept.divergence", {
@@ -360,6 +382,14 @@ export class DecisionService {
       return;
     }
 
+    this.logger?.debug("decision_gate.manager_accept.canonical_primary", {
+      matchId: match.id,
+      managerUserId: match.managerUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "MANAGER_APPROVES_CANDIDATE",
+      canonicalAllowed,
+    });
     this.logger?.debug("decision_gate.manager_accept.canonical_used", {
       matchId: match.id,
       managerUserId: match.managerUserId,
@@ -373,8 +403,8 @@ export class DecisionService {
   }
 
   private async ensureManagerCanReject(match: MatchRecord): Promise<void> {
-    const legacyAllowed = this.isLegacyManagerRejectAllowed(match);
     if (!this.enableCanonicalManagerRejectGate) {
+      const legacyAllowed = this.isLegacyManagerRejectAllowed(match);
       if (!legacyAllowed) {
         throw new Error("Candidate has not applied for this match, or it is no longer available.");
       }
@@ -390,6 +420,7 @@ export class DecisionService {
         canonicalMatchStatus: match.canonicalMatchStatus ?? null,
         reason: "CANONICAL_STATUS_UNAVAILABLE",
       });
+      const legacyAllowed = this.isLegacyManagerRejectAllowed(match);
       if (!legacyAllowed) {
         throw new Error("Candidate has not applied for this match, or it is no longer available.");
       }
@@ -400,6 +431,7 @@ export class DecisionService {
       "MANAGER_REJECTS_CANDIDATE",
       canonicalFrom,
     ) !== null;
+    const legacyAllowed = this.isLegacyManagerRejectAllowed(match);
 
     if (canonicalAllowed !== legacyAllowed) {
       this.logger?.warn("decision_gate.manager_reject.divergence", {
@@ -424,6 +456,14 @@ export class DecisionService {
       return;
     }
 
+    this.logger?.debug("decision_gate.manager_reject.canonical_primary", {
+      matchId: match.id,
+      managerUserId: match.managerUserId,
+      legacyStatus: match.status,
+      canonicalFrom,
+      canonicalAction: "MANAGER_REJECTS_CANDIDATE",
+      canonicalAllowed,
+    });
     this.logger?.debug("decision_gate.manager_reject.canonical_used", {
       matchId: match.id,
       managerUserId: match.managerUserId,
