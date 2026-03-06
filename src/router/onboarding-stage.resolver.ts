@@ -1,0 +1,107 @@
+import { UserSessionState } from "../shared/types/state.types";
+
+export const ONBOARDING_STAGES = {
+  ROLE_SELECTION: "ROLE_SELECTION",
+  CONTACT_IDENTITY: "CONTACT_IDENTITY",
+  CANDIDATE_CV_INTAKE: "CANDIDATE_CV_INTAKE",
+  CANDIDATE_REVIEW: "CANDIDATE_REVIEW",
+  MANAGER_JD_INTAKE: "MANAGER_JD_INTAKE",
+  MANAGER_REVIEW: "MANAGER_REVIEW",
+  OUT_OF_SCOPE: "OUT_OF_SCOPE",
+} as const;
+
+export type OnboardingStage = (typeof ONBOARDING_STAGES)[keyof typeof ONBOARDING_STAGES];
+
+export type OnboardingStageResolverInput = {
+  session: UserSessionState;
+  context?: {
+    awaitingContactChoice?: boolean;
+    currentQuestionText?: string | null;
+    currentQuestionIndex?: number | null;
+    hasFinalAnswers?: boolean;
+  };
+};
+
+export function resolveOnboardingStage(input: OnboardingStageResolverInput): OnboardingStage {
+  const session = input.session;
+
+  if (session.state === "role_selection") {
+    const awaitingContactChoice = input.context?.awaitingContactChoice ?? session.awaitingContactChoice === true;
+    return awaitingContactChoice
+      ? ONBOARDING_STAGES.CONTACT_IDENTITY
+      : ONBOARDING_STAGES.ROLE_SELECTION;
+  }
+
+  if (session.state === "waiting_resume") {
+    return ONBOARDING_STAGES.CANDIDATE_CV_INTAKE;
+  }
+
+  if (session.state === "waiting_job") {
+    return ONBOARDING_STAGES.MANAGER_JD_INTAKE;
+  }
+
+  if (session.state === "interviewing_candidate") {
+    const currentQuestionText = input.context?.currentQuestionText ?? resolveCurrentQuestionText(session);
+    const currentQuestionIndex = input.context?.currentQuestionIndex ?? resolveCurrentQuestionIndex(session);
+    const hasFinalAnswers =
+      input.context?.hasFinalAnswers ??
+      (session.answers ?? []).some((answer) => answer.status !== "draft");
+    if (
+      session.role === "candidate" &&
+      currentQuestionIndex === 0 &&
+      !session.pendingFollowUp &&
+      !hasFinalAnswers &&
+      isSummaryReviewQuestion(currentQuestionText)
+    ) {
+      return ONBOARDING_STAGES.CANDIDATE_REVIEW;
+    }
+  }
+
+  if (session.state === "interviewing_manager") {
+    const currentQuestionText = input.context?.currentQuestionText ?? resolveCurrentQuestionText(session);
+    const currentQuestionIndex = input.context?.currentQuestionIndex ?? resolveCurrentQuestionIndex(session);
+    const hasFinalAnswers =
+      input.context?.hasFinalAnswers ??
+      (session.answers ?? []).some((answer) => answer.status !== "draft");
+    if (
+      session.role === "manager" &&
+      currentQuestionIndex === 0 &&
+      !session.pendingFollowUp &&
+      !hasFinalAnswers &&
+      isSummaryReviewQuestion(currentQuestionText)
+    ) {
+      return ONBOARDING_STAGES.MANAGER_REVIEW;
+    }
+  }
+
+  return ONBOARDING_STAGES.OUT_OF_SCOPE;
+}
+
+function resolveCurrentQuestionIndex(session: UserSessionState): number | null {
+  if (session.pendingFollowUp && typeof session.pendingFollowUp.questionIndex === "number") {
+    return session.pendingFollowUp.questionIndex;
+  }
+  if (typeof session.currentQuestionIndex === "number") {
+    return session.currentQuestionIndex;
+  }
+  return null;
+}
+
+function resolveCurrentQuestionText(session: UserSessionState): string | null {
+  if (session.pendingFollowUp?.questionText?.trim()) {
+    return session.pendingFollowUp.questionText.trim();
+  }
+  if (!session.interviewPlan) {
+    return null;
+  }
+  const index = resolveCurrentQuestionIndex(session);
+  if (typeof index !== "number" || index < 0 || index >= session.interviewPlan.questions.length) {
+    return null;
+  }
+  return session.interviewPlan.questions[index]?.question?.trim() || null;
+}
+
+function isSummaryReviewQuestion(currentQuestionText: string | null): boolean {
+  const normalized = (currentQuestionText ?? "").trim().toLowerCase();
+  return normalized.includes("summary") || normalized.includes("confirm");
+}

@@ -2,11 +2,7 @@ import { ActionRouterService } from "../ai/action-router/action-router.service";
 import { Logger } from "../config/logger";
 import { HELLY_ACTIONS, HellyAction } from "../core/state/actions";
 import { GatekeeperService } from "../core/state/gatekeeper/gatekeeper.service";
-import {
-  mapRuntimeStateToCandidateSummaryReviewStepHellyState,
-  mapRuntimeStateToContactStepHellyState,
-  mapRuntimeStateToHellyState,
-} from "../core/state/runtime-state.adapter";
+import { mapRuntimeStateToHellyState } from "../core/state/runtime-state.adapter";
 import { HELLY_STATES } from "../core/state/states";
 import { UserSessionState } from "../shared/types/state.types";
 import {
@@ -14,6 +10,11 @@ import {
   RunTypedRouteResult,
   TypedRouteReason,
 } from "./helpers/typed-route.helper";
+import {
+  ONBOARDING_STAGES,
+  OnboardingStage,
+  resolveOnboardingStage,
+} from "./onboarding-stage.resolver";
 
 const DEFAULT_FALLBACK_MESSAGE = "Please continue with the current step.";
 
@@ -23,6 +24,7 @@ type TypedOnboardingFlags = {
   enableTypedCvRouter: boolean;
   enableTypedJdRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
+  enableTypedManagerReviewRouter: boolean;
 };
 
 export type TypedOnboardingCoordinatorResult = {
@@ -42,6 +44,14 @@ type TypedCandidateReviewInput = {
   hasFinalAnswers: boolean;
 };
 
+type TypedManagerReviewInput = {
+  session: UserSessionState;
+  userMessage: string;
+  currentQuestion: string;
+  currentQuestionIndex: number | null;
+  hasFinalAnswers: boolean;
+};
+
 export class TypedOnboardingCoordinator {
   constructor(
     private readonly flags: TypedOnboardingFlags,
@@ -54,6 +64,7 @@ export class TypedOnboardingCoordinator {
     session: UserSessionState;
     userMessage: string;
   }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "role_selection", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedRoleSelectionRouter,
@@ -62,7 +73,8 @@ export class TypedOnboardingCoordinator {
         runtimeState: input.session.state,
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_ROLE,
-        resolveCanonicalState: mapRuntimeStateToHellyState,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SELECT_ROLE_CANDIDATE,
           HELLY_ACTIONS.SELECT_ROLE_MANAGER,
@@ -79,6 +91,12 @@ export class TypedOnboardingCoordinator {
     userMessage: string;
     awaitingContactChoice: boolean;
   }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({
+      session: input.session,
+      context: {
+        awaitingContactChoice: input.awaitingContactChoice,
+      },
+    });
     return this.runIfInScope(input.awaitingContactChoice, () =>
       runTypedRoute({
         enabled: this.flags.enableTypedContactRouter,
@@ -88,10 +106,7 @@ export class TypedOnboardingCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.WAIT_CONTACT,
         resolveCanonicalState: (runtimeState) =>
-          mapRuntimeStateToContactStepHellyState(
-            runtimeState,
-            input.awaitingContactChoice,
-          ),
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SHARE_PHONE_TEXT,
           HELLY_ACTIONS.SHARE_CONTACT,
@@ -108,6 +123,7 @@ export class TypedOnboardingCoordinator {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_resume", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedCvRouter,
@@ -117,7 +133,8 @@ export class TypedOnboardingCoordinator {
         runtimeState: input.session.state,
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.C_WAIT_CV,
-        resolveCanonicalState: mapRuntimeStateToHellyState,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SUBMIT_CV,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -136,6 +153,7 @@ export class TypedOnboardingCoordinator {
     userMessage: string;
     source: "text" | "document" | "voice";
   }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
     return this.runIfInScope(input.session.state === "waiting_job", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedJdRouter,
@@ -145,7 +163,8 @@ export class TypedOnboardingCoordinator {
         runtimeState: input.session.state,
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.HM_WAIT_JD,
-        resolveCanonicalState: mapRuntimeStateToHellyState,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.SUBMIT_JD,
           HELLY_ACTIONS.SUBMIT_TEXT,
@@ -161,6 +180,14 @@ export class TypedOnboardingCoordinator {
   }
 
   async attemptCandidateReview(input: TypedCandidateReviewInput): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({
+      session: input.session,
+      context: {
+        currentQuestionText: input.currentQuestion,
+        currentQuestionIndex: input.currentQuestionIndex,
+        hasFinalAnswers: input.hasFinalAnswers,
+      },
+    });
     return this.runIfInScope(input.session.state === "interviewing_candidate", () =>
       runTypedRoute({
         enabled: this.flags.enableTypedCandidateReviewRouter,
@@ -171,13 +198,39 @@ export class TypedOnboardingCoordinator {
         userMessage: input.userMessage,
         expectedCanonicalState: HELLY_STATES.C_SUMMARY_REVIEW,
         resolveCanonicalState: (runtimeState) =>
-          mapRuntimeStateToCandidateSummaryReviewStepHellyState(runtimeState, {
-            isCandidateRole: input.session.role === "candidate",
-            currentQuestionIndex: input.currentQuestionIndex,
-            hasPendingFollowUp: Boolean(input.session.pendingFollowUp),
-            hasFinalAnswers: input.hasFinalAnswers,
-            currentQuestionText: input.currentQuestion,
-          }),
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.APPROVE,
+          HELLY_ACTIONS.EDIT,
+          HELLY_ACTIONS.SUBMIT_TEXT,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
+  async attemptManagerReview(input: TypedManagerReviewInput): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({
+      session: input.session,
+      context: {
+        currentQuestionText: input.currentQuestion,
+        currentQuestionIndex: input.currentQuestionIndex,
+        hasFinalAnswers: input.hasFinalAnswers,
+      },
+    });
+    return this.runIfInScope(input.session.state === "interviewing_manager", () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedManagerReviewRouter,
+        logPrefix: "typed_manager_review",
+        userId: input.session.userId,
+        source: "text",
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.HM_JD_REVIEW,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
         acceptedActions: [
           HELLY_ACTIONS.APPROVE,
           HELLY_ACTIONS.EDIT,
@@ -209,5 +262,34 @@ export class TypedOnboardingCoordinator {
       attempted: true,
       ...result,
     };
+  }
+
+  private resolveCanonicalStateForOnboardingStage(
+    runtimeState: string,
+    stage: OnboardingStage,
+  ) {
+    const canonicalState = mapRuntimeStateToHellyState(runtimeState);
+    if (!canonicalState) {
+      return null;
+    }
+    if (
+      stage === ONBOARDING_STAGES.CONTACT_IDENTITY &&
+      canonicalState === HELLY_STATES.WAIT_ROLE
+    ) {
+      return HELLY_STATES.WAIT_CONTACT;
+    }
+    if (
+      stage === ONBOARDING_STAGES.CANDIDATE_REVIEW &&
+      canonicalState === HELLY_STATES.C_INTERVIEW_IN_PROGRESS
+    ) {
+      return HELLY_STATES.C_SUMMARY_REVIEW;
+    }
+    if (
+      stage === ONBOARDING_STAGES.MANAGER_REVIEW &&
+      canonicalState === HELLY_STATES.HM_INTERVIEW_IN_PROGRESS
+    ) {
+      return HELLY_STATES.HM_JD_REVIEW;
+    }
+    return canonicalState;
   }
 }

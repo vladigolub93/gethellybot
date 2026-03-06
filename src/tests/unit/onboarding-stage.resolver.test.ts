@@ -1,0 +1,104 @@
+import assert from "node:assert/strict";
+import {
+  ONBOARDING_STAGES,
+  resolveOnboardingStage,
+} from "../../router/onboarding-stage.resolver";
+import { StateService } from "../../state/state.service";
+
+function createSession(userId: number, chatId: number) {
+  const stateService = new StateService();
+  return stateService.getOrCreate(userId, chatId);
+}
+
+function testRoleSelectionStage(): void {
+  const session = createSession(1, 1);
+  session.state = "role_selection";
+  session.awaitingContactChoice = false;
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.ROLE_SELECTION);
+}
+
+function testContactIdentityStage(): void {
+  const session = createSession(2, 2);
+  session.state = "role_selection";
+  session.awaitingContactChoice = true;
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.CONTACT_IDENTITY);
+}
+
+function testCandidateCvIntakeStage(): void {
+  const session = createSession(3, 3);
+  session.state = "waiting_resume";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_CV_INTAKE);
+}
+
+function testCandidateReviewStage(): void {
+  const session = createSession(4, 4);
+  session.state = "interviewing_candidate";
+  session.role = "candidate";
+  session.currentQuestionIndex = 0;
+  session.pendingFollowUp = undefined;
+  session.answers = [];
+
+  const stage = resolveOnboardingStage({
+    session,
+    context: {
+      currentQuestionText: "Please confirm your profile summary.",
+      currentQuestionIndex: 0,
+      hasFinalAnswers: false,
+    },
+  });
+  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_REVIEW);
+}
+
+function testManagerJdIntakeStage(): void {
+  const session = createSession(5, 5);
+  session.state = "waiting_job";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.MANAGER_JD_INTAKE);
+}
+
+function testManagerReviewStage(): void {
+  const session = createSession(6, 6);
+  session.state = "interviewing_manager";
+  session.role = "manager";
+  session.currentQuestionIndex = 0;
+  session.pendingFollowUp = undefined;
+  session.answers = [];
+
+  const stage = resolveOnboardingStage({
+    session,
+    context: {
+      currentQuestionText: "Please confirm your vacancy summary.",
+      currentQuestionIndex: 0,
+      hasFinalAnswers: false,
+    },
+  });
+  assert.equal(stage, ONBOARDING_STAGES.MANAGER_REVIEW);
+}
+
+function testOutOfScopeStage(): void {
+  const session = createSession(7, 7);
+  session.state = "candidate_profile_ready";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.OUT_OF_SCOPE);
+}
+
+function run(): void {
+  testRoleSelectionStage();
+  testContactIdentityStage();
+  testCandidateCvIntakeStage();
+  testCandidateReviewStage();
+  testManagerJdIntakeStage();
+  testManagerReviewStage();
+  testOutOfScopeStage();
+  process.stdout.write("onboarding-stage.resolver tests passed.\n");
+}
+
+run();
