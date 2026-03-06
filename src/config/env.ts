@@ -41,6 +41,10 @@ export interface EnvConfig {
   enableTypedContactRouter: boolean;
   enableTypedCvRouter: boolean;
   enableTypedJdRouter: boolean;
+  enableTypedCandidateMandatoryRouter: boolean;
+  enableTypedManagerMandatoryRouter: boolean;
+  enableTypedCandidateDecisionRouter: boolean;
+  enableTypedManagerDecisionRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
   enableTypedManagerReviewRouter: boolean;
   interviewReminderEnabled: boolean;
@@ -94,6 +98,10 @@ export function loadEnv(): EnvConfig {
   const enableTypedContactRouterRaw = process.env.ENABLE_TYPED_CONTACT_ROUTER ?? "false";
   const enableTypedCvRouterRaw = process.env.ENABLE_TYPED_CV_ROUTER ?? "false";
   const enableTypedJdRouterRaw = process.env.ENABLE_TYPED_JD_ROUTER ?? "false";
+  const enableTypedCandidateMandatoryRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_MANDATORY_ROUTER ?? "false";
+  const enableTypedManagerMandatoryRouterRaw = process.env.ENABLE_TYPED_MANAGER_MANDATORY_ROUTER ?? "false";
+  const enableTypedCandidateDecisionRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_DECISION_ROUTER ?? "false";
+  const enableTypedManagerDecisionRouterRaw = process.env.ENABLE_TYPED_MANAGER_DECISION_ROUTER ?? "false";
   const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
   const enableTypedManagerReviewRouterRaw = process.env.ENABLE_TYPED_MANAGER_REVIEW_ROUTER ?? "false";
   const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
@@ -119,6 +127,10 @@ export function loadEnv(): EnvConfig {
   const enableTypedContactRouter = parseBoolean(enableTypedContactRouterRaw);
   const enableTypedCvRouter = parseBoolean(enableTypedCvRouterRaw);
   const enableTypedJdRouter = parseBoolean(enableTypedJdRouterRaw);
+  const enableTypedCandidateMandatoryRouter = parseBoolean(enableTypedCandidateMandatoryRouterRaw);
+  const enableTypedManagerMandatoryRouter = parseBoolean(enableTypedManagerMandatoryRouterRaw);
+  const enableTypedCandidateDecisionRouter = parseBoolean(enableTypedCandidateDecisionRouterRaw);
+  const enableTypedManagerDecisionRouter = parseBoolean(enableTypedManagerDecisionRouterRaw);
   const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
   const enableTypedManagerReviewRouter = parseBoolean(enableTypedManagerReviewRouterRaw);
   const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
@@ -195,6 +207,10 @@ export function loadEnv(): EnvConfig {
     enableTypedContactRouter,
     enableTypedCvRouter,
     enableTypedJdRouter,
+    enableTypedCandidateMandatoryRouter,
+    enableTypedManagerMandatoryRouter,
+    enableTypedCandidateDecisionRouter,
+    enableTypedManagerDecisionRouter,
     enableTypedCandidateReviewRouter,
     enableTypedManagerReviewRouter,
     interviewReminderEnabled,

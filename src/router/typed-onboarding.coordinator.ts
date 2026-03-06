@@ -23,6 +23,10 @@ type TypedOnboardingFlags = {
   enableTypedContactRouter: boolean;
   enableTypedCvRouter: boolean;
   enableTypedJdRouter: boolean;
+  enableTypedCandidateMandatoryRouter: boolean;
+  enableTypedManagerMandatoryRouter: boolean;
+  enableTypedCandidateDecisionRouter: boolean;
+  enableTypedManagerDecisionRouter: boolean;
   enableTypedCandidateReviewRouter: boolean;
   enableTypedManagerReviewRouter: boolean;
 };
@@ -148,6 +152,35 @@ export class TypedOnboardingCoordinator {
     );
   }
 
+  async attemptCandidateMandatory(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "location";
+  }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+    return this.runIfInScope(stage === ONBOARDING_STAGES.CANDIDATE_MANDATORY, () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedCandidateMandatoryRouter,
+        logPrefix: "typed_candidate_mandatory",
+        userId: input.session.userId,
+        source: input.source,
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.C_MANDATORY_QUESTIONNAIRE,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.ANSWER_QUESTION,
+          HELLY_ACTIONS.SUBMIT_TEXT,
+          HELLY_ACTIONS.SHARE_LOCATION,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
   async attemptManagerJdIntake(input: {
     session: UserSessionState;
     userMessage: string;
@@ -171,6 +204,92 @@ export class TypedOnboardingCoordinator {
           HELLY_ACTIONS.SUBMIT_FILE,
           HELLY_ACTIONS.SUBMIT_VOICE,
           HELLY_ACTIONS.SUBMIT_VIDEO,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
+  async attemptManagerMandatory(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+    return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_MANDATORY, () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedManagerMandatoryRouter,
+        logPrefix: "typed_manager_mandatory",
+        userId: input.session.userId,
+        source: input.source,
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.HM_QUESTIONNAIRE,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.ANSWER_QUESTION,
+          HELLY_ACTIONS.SUBMIT_TEXT,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
+  async attemptCandidateDecision(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+    return this.runIfInScope(stage === ONBOARDING_STAGES.CANDIDATE_DECISION, () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedCandidateDecisionRouter,
+        logPrefix: "typed_candidate_decision",
+        userId: input.session.userId,
+        source: input.source,
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.WAIT_CANDIDATE_DECISION,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.YES,
+          HELLY_ACTIONS.NO,
+          HELLY_ACTIONS.SHARE_CONTACT,
+        ],
+        actionRouterService: this.actionRouterService,
+        gatekeeperService: this.gatekeeperService,
+        logger: this.logger,
+      }),
+    );
+  }
+
+  async attemptManagerDecision(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<TypedOnboardingCoordinatorResult> {
+    const stage = resolveOnboardingStage({ session: input.session });
+    return this.runIfInScope(stage === ONBOARDING_STAGES.MANAGER_DECISION, () =>
+      runTypedRoute({
+        enabled: this.flags.enableTypedManagerDecisionRouter,
+        logPrefix: "typed_manager_decision",
+        userId: input.session.userId,
+        source: input.source,
+        runtimeState: input.session.state,
+        userMessage: input.userMessage,
+        expectedCanonicalState: HELLY_STATES.WAIT_MANAGER_DECISION,
+        resolveCanonicalState: (runtimeState) =>
+          this.resolveCanonicalStateForOnboardingStage(runtimeState, stage),
+        acceptedActions: [
+          HELLY_ACTIONS.YES,
+          HELLY_ACTIONS.NO,
+          HELLY_ACTIONS.SHARE_CONTACT,
         ],
         actionRouterService: this.actionRouterService,
         gatekeeperService: this.gatekeeperService,

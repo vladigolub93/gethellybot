@@ -26,6 +26,10 @@ function createCoordinator(input?: {
     enableTypedContactRouter: boolean;
     enableTypedCvRouter: boolean;
     enableTypedJdRouter: boolean;
+    enableTypedCandidateMandatoryRouter: boolean;
+    enableTypedManagerMandatoryRouter: boolean;
+    enableTypedCandidateDecisionRouter: boolean;
+    enableTypedManagerDecisionRouter: boolean;
     enableTypedCandidateReviewRouter: boolean;
     enableTypedManagerReviewRouter: boolean;
   }>;
@@ -57,6 +61,14 @@ function createCoordinator(input?: {
       enableTypedContactRouter: opts.flags?.enableTypedContactRouter ?? true,
       enableTypedCvRouter: opts.flags?.enableTypedCvRouter ?? true,
       enableTypedJdRouter: opts.flags?.enableTypedJdRouter ?? true,
+      enableTypedCandidateMandatoryRouter:
+        opts.flags?.enableTypedCandidateMandatoryRouter ?? true,
+      enableTypedManagerMandatoryRouter:
+        opts.flags?.enableTypedManagerMandatoryRouter ?? true,
+      enableTypedCandidateDecisionRouter:
+        opts.flags?.enableTypedCandidateDecisionRouter ?? true,
+      enableTypedManagerDecisionRouter:
+        opts.flags?.enableTypedManagerDecisionRouter ?? true,
       enableTypedCandidateReviewRouter:
         opts.flags?.enableTypedCandidateReviewRouter ?? true,
       enableTypedManagerReviewRouter:
@@ -210,6 +222,37 @@ async function testCandidateReviewContextUsesCoordinatorRules(): Promise<void> {
   assert.equal(harness.gatekeeperCalls(), 1);
 }
 
+async function testCandidateMandatoryUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.SHARE_LOCATION,
+      confidence: 0.92,
+      message: "Location shared.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.SHARE_LOCATION,
+      message: "Location shared.",
+    },
+  });
+  const session = createSession(5, 5);
+  session.state = "candidate_mandatory_fields";
+  session.role = "candidate";
+
+  const result = await harness.coordinator.attemptCandidateMandatory({
+    session,
+    userMessage: "share my location",
+    source: "location",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.SHARE_LOCATION);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
 async function testManagerReviewContextUsesCoordinatorRules(): Promise<void> {
   const harness = createCoordinator({
     actionRouterResult: {
@@ -257,11 +300,108 @@ async function testManagerReviewContextUsesCoordinatorRules(): Promise<void> {
   assert.equal(harness.gatekeeperCalls(), 1);
 }
 
+async function testManagerMandatoryUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.ANSWER_QUESTION,
+      confidence: 0.9,
+      message: "Manager mandatory answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.ANSWER_QUESTION,
+      message: "Manager mandatory answer accepted.",
+    },
+  });
+  const session = createSession(6, 6);
+  session.state = "manager_mandatory_fields";
+  session.role = "manager";
+
+  const result = await harness.coordinator.attemptManagerMandatory({
+    session,
+    userMessage: "remote",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.ANSWER_QUESTION);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
+async function testCandidateDecisionUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.YES,
+      confidence: 0.92,
+      message: "Candidate decision accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.YES,
+      message: "Candidate decision accepted.",
+    },
+  });
+  const session = createSession(7, 7);
+  session.state = "waiting_candidate_decision";
+  session.role = "candidate";
+
+  const result = await harness.coordinator.attemptCandidateDecision({
+    session,
+    userMessage: "yes",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.YES);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
+async function testManagerDecisionUsesCoordinatorRules(): Promise<void> {
+  const harness = createCoordinator({
+    actionRouterResult: {
+      action: HELLY_ACTIONS.NO,
+      confidence: 0.9,
+      message: "Manager decision accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: HELLY_ACTIONS.NO,
+      message: "Manager decision accepted.",
+    },
+  });
+  const session = createSession(8, 8);
+  session.state = "waiting_manager_decision";
+  session.role = "manager";
+
+  const result = await harness.coordinator.attemptManagerDecision({
+    session,
+    userMessage: "no",
+    source: "text",
+  });
+
+  assert.equal(result.attempted, true);
+  assert.equal(result.accepted, true);
+  assert.equal(result.action, HELLY_ACTIONS.NO);
+  assert.equal(harness.actionRouterCalls(), 1);
+  assert.equal(harness.gatekeeperCalls(), 1);
+}
+
 async function run(): Promise<void> {
   await testRoleSelectionRunsThroughCoordinator();
   await testOutOfScopeSkipsAttempt();
   await testFeatureFlagOffStillPreservesFallback();
   await testCandidateReviewContextUsesCoordinatorRules();
+  await testCandidateMandatoryUsesCoordinatorRules();
+  await testManagerMandatoryUsesCoordinatorRules();
+  await testCandidateDecisionUsesCoordinatorRules();
+  await testManagerDecisionUsesCoordinatorRules();
   await testManagerReviewContextUsesCoordinatorRules();
   process.stdout.write("typed-onboarding.coordinator tests passed.\n");
 }

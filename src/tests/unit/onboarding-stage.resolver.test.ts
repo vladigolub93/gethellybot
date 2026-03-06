@@ -36,6 +36,15 @@ function testCandidateCvIntakeStage(): void {
   assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_CV_INTAKE);
 }
 
+function testCandidateMandatoryStage(): void {
+  const session = createSession(8, 8);
+  session.state = "candidate_mandatory_fields";
+  session.role = "candidate";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_MANDATORY);
+}
+
 function testCandidateReviewStage(): void {
   const session = createSession(4, 4);
   session.state = "interviewing_candidate";
@@ -61,6 +70,33 @@ function testManagerJdIntakeStage(): void {
 
   const stage = resolveOnboardingStage({ session });
   assert.equal(stage, ONBOARDING_STAGES.MANAGER_JD_INTAKE);
+}
+
+function testManagerMandatoryStage(): void {
+  const session = createSession(9, 9);
+  session.state = "manager_mandatory_fields";
+  session.role = "manager";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.MANAGER_MANDATORY);
+}
+
+function testCandidateDecisionStage(): void {
+  const session = createSession(10, 10);
+  session.state = "waiting_candidate_decision";
+  session.role = "candidate";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.CANDIDATE_DECISION);
+}
+
+function testManagerDecisionStage(): void {
+  const session = createSession(11, 11);
+  session.state = "waiting_manager_decision";
+  session.role = "manager";
+
+  const stage = resolveOnboardingStage({ session });
+  assert.equal(stage, ONBOARDING_STAGES.MANAGER_DECISION);
 }
 
 function testManagerReviewStage(): void {
@@ -94,8 +130,12 @@ function run(): void {
   testRoleSelectionStage();
   testContactIdentityStage();
   testCandidateCvIntakeStage();
+  testCandidateMandatoryStage();
   testCandidateReviewStage();
   testManagerJdIntakeStage();
+  testManagerMandatoryStage();
+  testCandidateDecisionStage();
+  testManagerDecisionStage();
   testManagerReviewStage();
   testOutOfScopeStage();
   process.stdout.write("onboarding-stage.resolver tests passed.\n");

@@ -4,9 +4,13 @@ export const ONBOARDING_STAGES = {
   ROLE_SELECTION: "ROLE_SELECTION",
   CONTACT_IDENTITY: "CONTACT_IDENTITY",
   CANDIDATE_CV_INTAKE: "CANDIDATE_CV_INTAKE",
+  CANDIDATE_MANDATORY: "CANDIDATE_MANDATORY",
   CANDIDATE_REVIEW: "CANDIDATE_REVIEW",
   MANAGER_JD_INTAKE: "MANAGER_JD_INTAKE",
+  MANAGER_MANDATORY: "MANAGER_MANDATORY",
   MANAGER_REVIEW: "MANAGER_REVIEW",
+  CANDIDATE_DECISION: "CANDIDATE_DECISION",
+  MANAGER_DECISION: "MANAGER_DECISION",
   OUT_OF_SCOPE: "OUT_OF_SCOPE",
 } as const;
 
@@ -36,8 +40,24 @@ export function resolveOnboardingStage(input: OnboardingStageResolverInput): Onb
     return ONBOARDING_STAGES.CANDIDATE_CV_INTAKE;
   }
 
+  if (session.state === "candidate_mandatory_fields") {
+    return ONBOARDING_STAGES.CANDIDATE_MANDATORY;
+  }
+
   if (session.state === "waiting_job") {
     return ONBOARDING_STAGES.MANAGER_JD_INTAKE;
+  }
+
+  if (session.state === "manager_mandatory_fields") {
+    return ONBOARDING_STAGES.MANAGER_MANDATORY;
+  }
+
+  if (session.state === "waiting_candidate_decision") {
+    return ONBOARDING_STAGES.CANDIDATE_DECISION;
+  }
+
+  if (session.state === "waiting_manager_decision") {
+    return ONBOARDING_STAGES.MANAGER_DECISION;
   }
 
   if (session.state === "interviewing_candidate") {

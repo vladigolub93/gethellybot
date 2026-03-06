@@ -35,6 +35,10 @@ interface BuildRouterHarnessOptions {
   enableTypedContactRouter?: boolean;
   enableTypedCvRouter?: boolean;
   enableTypedJdRouter?: boolean;
+  enableTypedCandidateMandatoryRouter?: boolean;
+  enableTypedManagerMandatoryRouter?: boolean;
+  enableTypedCandidateDecisionRouter?: boolean;
+  enableTypedManagerDecisionRouter?: boolean;
   enableTypedCandidateReviewRouter?: boolean;
   enableTypedManagerReviewRouter?: boolean;
   documentExtractedText?: string;
@@ -173,8 +177,38 @@ function buildRouterHarness(options?: BuildRouterHarnessOptions): {
       },
     } as never,
     {} as never,
-    {} as never,
-    {} as never,
+    {
+      async getMandatoryFields() {
+        return {
+          country: "",
+          city: "",
+          workMode: null,
+          salaryAmount: null,
+          salaryCurrency: null,
+          salaryPeriod: null,
+        };
+      },
+      async saveLocation() {},
+      async saveWorkMode() {},
+      async saveSalary() {},
+    } as never,
+    {
+      async getMandatoryFields() {
+        return {
+          workFormat: null,
+          remoteCountries: [],
+          remoteWorldwide: false,
+          budgetMin: null,
+          budgetMax: null,
+          budgetCurrency: null,
+          budgetPeriod: null,
+          profileComplete: false,
+        };
+      },
+      async saveWorkFormat() {},
+      async saveCountries() {},
+      async saveBudget() {},
+    } as never,
     {} as never,
     {} as never,
     {} as never,
@@ -291,6 +325,10 @@ function buildRouterHarness(options?: BuildRouterHarnessOptions): {
     opts.enableTypedContactRouter ?? false,
     opts.enableTypedCvRouter ?? false,
     opts.enableTypedJdRouter ?? false,
+    opts.enableTypedCandidateMandatoryRouter ?? false,
+    opts.enableTypedManagerMandatoryRouter ?? false,
+    opts.enableTypedCandidateDecisionRouter ?? false,
+    opts.enableTypedManagerDecisionRouter ?? false,
     opts.enableTypedCandidateReviewRouter ?? false,
     opts.enableTypedManagerReviewRouter ?? false,
     {
@@ -1065,6 +1103,469 @@ async function testTypedJdRejectedFallsBackToLegacy(): Promise<void> {
   assert.equal(harness.gatekeeperCalls, 1);
 }
 
+async function testTypedCandidateMandatoryFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateMandatoryRouter: false,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.95,
+      message: "Candidate mandatory answer detected.",
+    },
+  });
+  const userId = 91035;
+  const chatId = 91035;
+  seedCandidateMandatorySession(harness.stateService, userId, chatId, { step: "location" });
+
+  await harness.router.route(textUpdate(341, userId, chatId, "Berlin, Germany"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "candidate_mandatory_fields");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedCandidateMandatoryLocationSharingWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateMandatoryRouter: true,
+    actionRouterResult: {
+      action: "SHARE_LOCATION",
+      confidence: 0.93,
+      message: "Location shared.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SHARE_LOCATION",
+      message: "Location shared.",
+    },
+  });
+  const userId = 91036;
+  const chatId = 91036;
+  seedCandidateMandatorySession(harness.stateService, userId, chatId, { step: "location" });
+
+  await harness.router.route(locationUpdate(351, userId, chatId, 52.52, 13.405));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "candidate_mandatory_fields");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateMandatoryTextAnswerWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateMandatoryRouter: true,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.91,
+      message: "Mandatory answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "ANSWER_QUESTION",
+      message: "Mandatory answer accepted.",
+    },
+  });
+  const userId = 91037;
+  const chatId = 91037;
+  seedCandidateMandatorySession(harness.stateService, userId, chatId, {
+    step: "work_mode",
+    country: "Germany",
+    city: "Berlin",
+  });
+
+  await harness.router.route(textUpdate(361, userId, chatId, "remote"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "candidate_mandatory_fields");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateMandatoryFreeTextWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateMandatoryRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.9,
+      message: "Mandatory free text accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SUBMIT_TEXT",
+      message: "Mandatory free text accepted.",
+    },
+  });
+  const userId = 91038;
+  const chatId = 91038;
+  seedCandidateMandatorySession(harness.stateService, userId, chatId, { step: "location" });
+
+  await harness.router.route(textUpdate(371, userId, chatId, "Warsaw, Poland"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "candidate_mandatory_fields");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateMandatoryRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateMandatoryRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.2,
+      message: "Maybe mandatory answer.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "SUBMIT_TEXT",
+      message: "Maybe mandatory answer.",
+    },
+  });
+  const userId = 91039;
+  const chatId = 91039;
+  seedCandidateMandatorySession(harness.stateService, userId, chatId, { step: "location" });
+
+  await harness.router.route(textUpdate(381, userId, chatId, "Kyiv, Ukraine"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "candidate_mandatory_fields");
+  assert.equal(session?.candidateCountry, "Ukraine");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerMandatoryFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerMandatoryRouter: false,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.95,
+      message: "Manager mandatory answer detected.",
+    },
+  });
+  const userId = 91040;
+  const chatId = 91040;
+  seedManagerMandatorySession(harness.stateService, userId, chatId, { step: "work_format" });
+
+  await harness.router.route(textUpdate(391, userId, chatId, "remote"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "manager_mandatory_fields");
+  assert.equal(session?.managerMandatoryStep, "countries");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedManagerMandatoryTextAnswerWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerMandatoryRouter: true,
+    actionRouterResult: {
+      action: "ANSWER_QUESTION",
+      confidence: 0.92,
+      message: "Manager mandatory answer accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "ANSWER_QUESTION",
+      message: "Manager mandatory answer accepted.",
+    },
+  });
+  const userId = 91041;
+  const chatId = 91041;
+  seedManagerMandatorySession(harness.stateService, userId, chatId, { step: "work_format" });
+
+  await harness.router.route(textUpdate(401, userId, chatId, "remote"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "manager_mandatory_fields");
+  assert.equal(session?.managerMandatoryStep, "countries");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerMandatoryFreeTextWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerMandatoryRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.9,
+      message: "Manager mandatory free text accepted.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "SUBMIT_TEXT",
+      message: "Manager mandatory free text accepted.",
+    },
+  });
+  const userId = 91042;
+  const chatId = 91042;
+  seedManagerMandatorySession(harness.stateService, userId, chatId, {
+    step: "countries",
+    workFormat: "remote",
+  });
+
+  await harness.router.route(textUpdate(411, userId, chatId, "worldwide"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "manager_mandatory_fields");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerMandatoryRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerMandatoryRouter: true,
+    actionRouterResult: {
+      action: "SUBMIT_TEXT",
+      confidence: 0.2,
+      message: "Maybe manager mandatory answer.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "SUBMIT_TEXT",
+      message: "Maybe manager mandatory answer.",
+    },
+  });
+  const userId = 91043;
+  const chatId = 91043;
+  seedManagerMandatorySession(harness.stateService, userId, chatId, { step: "work_format" });
+
+  await harness.router.route(textUpdate(421, userId, chatId, "remote"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "manager_mandatory_fields");
+  assert.equal(session?.managerMandatoryStep, "countries");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateDecisionFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateDecisionRouter: false,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.95,
+      message: "Candidate decision yes.",
+    },
+  });
+  const userId = 91044;
+  const chatId = 91044;
+  seedCandidateDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(431, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedCandidateDecisionYesWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateDecisionRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.94,
+      message: "Candidate decision yes.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "YES",
+      message: "Candidate decision yes.",
+    },
+  });
+  const userId = 91045;
+  const chatId = 91045;
+  seedCandidateDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(441, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateDecisionNoWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateDecisionRouter: true,
+    actionRouterResult: {
+      action: "NO",
+      confidence: 0.93,
+      message: "Candidate decision no.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "NO",
+      message: "Candidate decision no.",
+    },
+  });
+  const userId = 91046;
+  const chatId = 91046;
+  seedCandidateDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(451, userId, chatId, "no"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedCandidateDecisionRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedCandidateDecisionRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.2,
+      message: "Maybe yes.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "YES",
+      message: "Maybe yes.",
+    },
+  });
+  const userId = 91047;
+  const chatId = 91047;
+  seedCandidateDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(461, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_candidate_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerDecisionFlagOffKeepsLegacyPath(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerDecisionRouter: false,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.95,
+      message: "Manager decision yes.",
+    },
+  });
+  const userId = 91048;
+  const chatId = 91048;
+  seedManagerDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(471, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_manager_decision");
+  assert.equal(harness.actionRouterCalls, 0);
+  assert.equal(harness.gatekeeperCalls, 0);
+}
+
+async function testTypedManagerDecisionYesWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerDecisionRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.94,
+      message: "Manager decision yes.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "YES",
+      message: "Manager decision yes.",
+    },
+  });
+  const userId = 91049;
+  const chatId = 91049;
+  seedManagerDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(481, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_manager_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerDecisionNoWhenEnabled(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerDecisionRouter: true,
+    actionRouterResult: {
+      action: "NO",
+      confidence: 0.93,
+      message: "Manager decision no.",
+    },
+    gatekeeperResult: {
+      accepted: true,
+      reason: "ACCEPTED",
+      action: "NO",
+      message: "Manager decision no.",
+    },
+  });
+  const userId = 91050;
+  const chatId = 91050;
+  seedManagerDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(491, userId, chatId, "no"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_manager_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
+async function testTypedManagerDecisionRejectedFallsBackToLegacy(): Promise<void> {
+  const harness = buildRouterHarness({
+    enableTypedManagerDecisionRouter: true,
+    actionRouterResult: {
+      action: "YES",
+      confidence: 0.2,
+      message: "Maybe yes.",
+    },
+    gatekeeperResult: {
+      accepted: false,
+      reason: "LOW_CONFIDENCE",
+      action: "YES",
+      message: "Maybe yes.",
+    },
+  });
+  const userId = 91051;
+  const chatId = 91051;
+  seedManagerDecisionSession(harness.stateService, userId, chatId);
+
+  await harness.router.route(textUpdate(501, userId, chatId, "yes"));
+
+  const session = harness.stateService.getSession(userId);
+  assert(session);
+  assert.equal(session?.state, "waiting_manager_decision");
+  assert.equal(harness.actionRouterCalls, 1);
+  assert.equal(harness.gatekeeperCalls, 1);
+}
+
 async function testTypedCandidateReviewFlagOffKeepsLegacyPath(): Promise<void> {
   const harness = buildRouterHarness({
     enableTypedCandidateReviewRouter: false,
@@ -1361,6 +1862,66 @@ function seedCandidateSummaryReviewSession(
   session.answers = [];
 }
 
+function seedCandidateMandatorySession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+  options?: {
+    step?: "location" | "work_mode" | "salary";
+    country?: string;
+    city?: string;
+  },
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "candidate";
+  session.state = "candidate_mandatory_fields";
+  session.candidateMandatoryStep = options?.step ?? "location";
+  session.pendingFollowUp = undefined;
+  session.candidatePendingSalary = undefined;
+  session.candidateCountry = options?.country;
+  session.candidateCity = options?.city;
+}
+
+function seedManagerMandatorySession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+  options?: {
+    step?: "work_format" | "countries" | "budget";
+    workFormat?: "remote" | "onsite" | "hybrid";
+  },
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "manager";
+  session.state = "manager_mandatory_fields";
+  session.managerMandatoryStep = options?.step ?? "work_format";
+  session.jobWorkFormat = options?.workFormat;
+  session.pendingFollowUp = undefined;
+  session.managerPendingBudget = undefined;
+}
+
+function seedCandidateDecisionSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "candidate";
+  session.state = "waiting_candidate_decision";
+  session.pendingFollowUp = undefined;
+}
+
+function seedManagerDecisionSession(
+  stateService: StateService,
+  userId: number,
+  chatId: number,
+): void {
+  const session = stateService.getOrCreate(userId, chatId);
+  session.role = "manager";
+  session.state = "waiting_manager_decision";
+  session.pendingFollowUp = undefined;
+}
+
 function seedManagerSummaryReviewSession(
   stateService: StateService,
   userId: number,
@@ -1453,6 +2014,23 @@ function voiceUpdate(
   };
 }
 
+function locationUpdate(
+  updateId: number,
+  userId: number,
+  chatId: number,
+  latitude: number,
+  longitude: number,
+): NormalizedUpdate {
+  return {
+    kind: "location",
+    updateId,
+    chatId,
+    userId,
+    latitude,
+    longitude,
+  };
+}
+
 async function run(): Promise<void> {
   await testOnboardingSkipRoleAndRestart();
   await testOnboardingContactThenRole();
@@ -1478,6 +2056,23 @@ async function run(): Promise<void> {
   await testTypedJdFileWhenEnabled();
   await testTypedJdVoiceWhenEnabled();
   await testTypedJdRejectedFallsBackToLegacy();
+  await testTypedCandidateMandatoryFlagOffKeepsLegacyPath();
+  await testTypedCandidateMandatoryLocationSharingWhenEnabled();
+  await testTypedCandidateMandatoryTextAnswerWhenEnabled();
+  await testTypedCandidateMandatoryFreeTextWhenEnabled();
+  await testTypedCandidateMandatoryRejectedFallsBackToLegacy();
+  await testTypedManagerMandatoryFlagOffKeepsLegacyPath();
+  await testTypedManagerMandatoryTextAnswerWhenEnabled();
+  await testTypedManagerMandatoryFreeTextWhenEnabled();
+  await testTypedManagerMandatoryRejectedFallsBackToLegacy();
+  await testTypedCandidateDecisionFlagOffKeepsLegacyPath();
+  await testTypedCandidateDecisionYesWhenEnabled();
+  await testTypedCandidateDecisionNoWhenEnabled();
+  await testTypedCandidateDecisionRejectedFallsBackToLegacy();
+  await testTypedManagerDecisionFlagOffKeepsLegacyPath();
+  await testTypedManagerDecisionYesWhenEnabled();
+  await testTypedManagerDecisionNoWhenEnabled();
+  await testTypedManagerDecisionRejectedFallsBackToLegacy();
   await testTypedCandidateReviewFlagOffKeepsLegacyPath();
   await testTypedCandidateReviewApproveWhenEnabled();
   await testTypedCandidateReviewEditWhenEnabled();

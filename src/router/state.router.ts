@@ -201,6 +201,10 @@ export class StateRouter {
     private readonly enableTypedContactRouter = false,
     private readonly enableTypedCvRouter = false,
     private readonly enableTypedJdRouter = false,
+    private readonly enableTypedCandidateMandatoryRouter = false,
+    private readonly enableTypedManagerMandatoryRouter = false,
+    private readonly enableTypedCandidateDecisionRouter = false,
+    private readonly enableTypedManagerDecisionRouter = false,
     private readonly enableTypedCandidateReviewRouter = false,
     private readonly enableTypedManagerReviewRouter = false,
     private readonly actionRouterService?: ActionRouterService,
@@ -220,6 +224,10 @@ export class StateRouter {
         enableTypedContactRouter: this.enableTypedContactRouter,
         enableTypedCvRouter: this.enableTypedCvRouter,
         enableTypedJdRouter: this.enableTypedJdRouter,
+        enableTypedCandidateMandatoryRouter: this.enableTypedCandidateMandatoryRouter,
+        enableTypedManagerMandatoryRouter: this.enableTypedManagerMandatoryRouter,
+        enableTypedCandidateDecisionRouter: this.enableTypedCandidateDecisionRouter,
+        enableTypedManagerDecisionRouter: this.enableTypedManagerDecisionRouter,
         enableTypedCandidateReviewRouter: this.enableTypedCandidateReviewRouter,
         enableTypedManagerReviewRouter: this.enableTypedManagerReviewRouter,
       },
@@ -1024,13 +1032,39 @@ export class StateRouter {
     }
 
     if (session.state === "candidate_mandatory_fields") {
+      await this.maybeRunTypedCandidateMandatoryRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
       await this.handleCandidateMandatoryTextInput(session, update.chatId, rawText, normalizedEnglishText);
       return;
     }
 
     if (session.state === "manager_mandatory_fields") {
+      await this.maybeRunTypedManagerMandatoryRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
       await this.handleManagerMandatoryTextInput(session, update.chatId, normalizedEnglishText);
       return;
+    }
+
+    if (session.state === "waiting_candidate_decision") {
+      await this.maybeRunTypedCandidateDecisionRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
+    }
+
+    if (session.state === "waiting_manager_decision") {
+      await this.maybeRunTypedManagerDecisionRouter({
+        session,
+        userMessage: normalizedEnglishText,
+        source: "text",
+      });
     }
 
     if (session.state === "interviewing_candidate" || session.state === "interviewing_manager") {
@@ -1831,6 +1865,54 @@ export class StateRouter {
       currentQuestion: input.currentQuestion,
       currentQuestionIndex,
       hasFinalAnswers,
+    });
+  }
+
+  private async maybeRunTypedCandidateMandatoryRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text" | "location";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptCandidateMandatory({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedManagerMandatoryRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptManagerMandatory({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedCandidateDecisionRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptCandidateDecision({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
+    });
+  }
+
+  private async maybeRunTypedManagerDecisionRouter(input: {
+    session: UserSessionState;
+    userMessage: string;
+    source: "text";
+  }): Promise<void> {
+    await this.typedOnboardingCoordinator.attemptManagerDecision({
+      session: input.session,
+      userMessage: input.userMessage,
+      source: input.source,
     });
   }
 
@@ -2731,6 +2813,12 @@ export class StateRouter {
       );
       return;
     }
+
+    await this.maybeRunTypedCandidateMandatoryRouter({
+      session,
+      userMessage: `location ${update.latitude},${update.longitude}`,
+      source: "location",
+    });
 
     await this.sendBotMessage(
       session.userId,
