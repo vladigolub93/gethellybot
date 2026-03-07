@@ -78,6 +78,24 @@ Helly may sound conversational, but the prompt layer must remain strict about:
 - ambiguity handling
 - no unsupported inference beyond policy
 
+## 2.7 Shared Product Knowledge Base
+
+User-facing prompts should be grounded in a shared Helly product knowledge base rather than relying only on local prompt wording.
+
+The knowledge base should define:
+
+- canonical FAQ answers
+- what Helly does and does not do
+- why each major onboarding and workflow step exists
+- when information is and is not shared with other users
+- what happens before and after approval
+
+Primary grounding document:
+
+- `docs/HELLY_V1_AGENT_KNOWLEDGE_BASE.md`
+
+If a prompt needs to explain product behavior, privacy expectations, introduction timing, or the purpose of a step, it should stay consistent with that knowledge base.
+
 ## 3. Recommended Prompt Repository Layout
 
 ```text

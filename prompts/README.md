@@ -8,6 +8,7 @@ Rules:
 - every business-writing capability has a schema
 - examples and test cases are versioned with the prompt
 - code should eventually load prompts from here instead of embedding long strings
+- user-facing prompt families should stay grounded in `/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_AGENT_KNOWLEDGE_BASE.md`
 
 Current active runtime capabilities:
 
