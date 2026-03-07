@@ -105,6 +105,7 @@ class InterviewService:
         return conductor.payload.get("utterance") or self._question_prompt_text(current_question)
 
     def dispatch_invites_for_vacancy(self, *, vacancy_id, limit: int = 3) -> dict:
+        vacancy = self.vacancies.get_by_id(vacancy_id)
         matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
         invited_count = 0
         for match in matches:
@@ -126,7 +127,9 @@ class InterviewService:
                 entity_id=match.id,
                 template_key="candidate_interview_invitation",
                 payload_json={
-                    "text": self._copy("You have a new interview invitation. Reply 'Accept interview' or 'Skip opportunity'."),
+                    "text": self.messaging.compose_interview_invitation(
+                        role_title=getattr(vacancy, "role_title", None)
+                    ),
                 },
             )
             invited_count += 1

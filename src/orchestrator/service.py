@@ -5,6 +5,7 @@ from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_bot_controller_decision
+from src.messaging.service import MessagingService
 
 
 STATE_ALLOWED_ACTIONS = {
@@ -33,6 +34,7 @@ class BotControllerService:
         self.consents = UserConsentsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.vacancies = VacanciesRepository(session)
+        self.messaging = MessagingService(session)
 
     def build_recovery_message(self, *, user, latest_user_message: str) -> str:
         role, state, allowed_actions = self._resolve_context(user)
@@ -47,7 +49,16 @@ class BotControllerService:
         default_response = self._default_response(state, allowed_actions)
         if state in {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}:
             return default_response
-        return result.payload.get("response_text") or default_response
+        if result.payload.get("intent") == "small_talk":
+            return self.messaging.compose_small_talk(
+                latest_user_message=latest_user_message,
+                current_step_guidance=default_response,
+            )
+        return self.messaging.compose_recovery(
+            state=state,
+            allowed_actions=allowed_actions,
+            latest_user_message=latest_user_message,
+        )
 
     def _resolve_context(self, user) -> tuple[str | None, str | None, list[str]]:
         role = None
@@ -84,7 +95,7 @@ class BotControllerService:
         if state == "CONSENT_REQUIRED":
             return "Please confirm data processing consent by replying 'I agree'."
         if state == "ROLE_SELECTION":
-            return "Choose your role: Candidate or Hiring Manager."
+            return self.messaging.compose_role_selection()
         if allowed_actions:
             return f"Please continue with the current step. Expected actions: {', '.join(allowed_actions)}."
         return "Please continue with the current step."

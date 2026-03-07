@@ -30,11 +30,11 @@ It distinguishes between:
 | `interview_answer_parse` | Asset Ready | Runtime Wired | answer parsing supports follow-up decisions |
 | `candidate_rerank` | Asset Ready | Runtime Wired | LLM rerank active after deterministic pool |
 | `candidate_evaluate` | Asset Ready | Runtime Wired | OpenAI-backed evaluation active |
-| `messaging/recovery` | Asset Ready | Planned | currently mostly template-driven |
-| `messaging/small_talk` | Asset Ready | Planned | needed for workflow-safe small talk |
-| `messaging/role_selection` | Asset Ready | Planned | optional helper |
+| `messaging/recovery` | Asset Ready | Runtime Wired | active via `MessagingService` and `BotControllerService` |
+| `messaging/small_talk` | Asset Ready | Runtime Wired | active via `BotControllerService` |
+| `messaging/role_selection` | Asset Ready | Runtime Wired | active in onboarding entry flow |
 | `messaging/deletion_confirmation` | Asset Ready | Runtime Wired | active in candidate and vacancy deletion flows |
-| `messaging/interview_invitation_copy` | Asset Ready | Planned | invitation copy still routed through generic copywriter |
+| `messaging/interview_invitation_copy` | Asset Ready | Runtime Wired | active in invitation dispatch |
 | `messaging/response_copywriter` | Asset Ready | Runtime Wired | used as centralized messaging refinement layer |
 
 ## What Is Covered Now
@@ -58,8 +58,8 @@ The remaining gap is no longer prompt design coverage. The remaining gap is the 
 
 1. load prompt assets from disk instead of relying on inline prompt strings
 2. add transcript and document ingestion for non-text flows
-3. wire remaining specialized messaging prompts such as `interview_invitation_copy`, `small_talk`, `recovery`, and `role_selection`
-4. add cleanup jobs and retention-aware deletion follow-up work
+3. add cleanup jobs and retention-aware deletion follow-up work
+4. continue migrating remaining hard-coded low-priority text into the centralized messaging layer
 
 ## Conclusion
 

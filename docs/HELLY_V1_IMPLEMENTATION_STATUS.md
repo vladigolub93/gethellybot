@@ -261,14 +261,14 @@ Status vs SRS:
 - `Implemented`: OpenAI interview session conductor copy
 - `Implemented`: OpenAI candidate reranking
 - `Implemented`: OpenAI-backed interview evaluation
-- `Implemented`: OpenAI-backed response copywriting for key Telegram flows
+- `Implemented`: OpenAI-backed specialized messaging for small talk, recovery, role selection, interview invitation copy, and key Telegram flows
 - `Implemented`: OpenAI-backed deletion confirmation wording
 - `Implemented`: automatic fallback from `gpt-5.4` to `gpt-5.2`
 
 ### What is missing in runtime
 
 - `Not Implemented`: transcript-aware OpenAI processing for voice/video/document flows
-- `Not Implemented`: full specialized messaging-family wiring for every prompt family
+- `Partial`: some low-priority user-facing strings still use direct approved-intent copy rather than dedicated messaging-family prompts
 
 Status vs SRS:
 

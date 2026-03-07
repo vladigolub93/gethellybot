@@ -302,3 +302,40 @@ Entity type: {entity_type}
 Has active interview: {has_active_interview}
 Has active matches: {has_active_matches}
 """
+
+
+def small_talk_prompt(*, latest_user_message: str, current_step_guidance: str | None) -> str:
+    return f"""Task: reply to light conversational input without losing workflow control.
+
+Latest user message:
+{latest_user_message}
+
+Current step guidance:
+{current_step_guidance or ""}
+"""
+
+
+def recovery_prompt(*, state: str | None, allowed_actions: list[str], latest_user_message: str) -> str:
+    return f"""Task: generate a recovery message for invalid or off-flow input.
+
+Current state: {state}
+Allowed actions: {allowed_actions}
+Latest user message:
+{latest_user_message}
+"""
+
+
+def role_selection_prompt(*, latest_user_message: str | None = None) -> str:
+    return f"""Task: help the user choose between Candidate and Hiring Manager.
+
+Latest user message:
+{latest_user_message or ""}
+"""
+
+
+def interview_invitation_copy_prompt(*, role_title: str | None) -> str:
+    return f"""Task: write interview invitation copy for a matched candidate.
+
+Vacancy role title:
+{role_title or ""}
+"""

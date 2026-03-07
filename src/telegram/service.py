@@ -107,7 +107,7 @@ class TelegramUpdateService:
                     )
                 )
             else:
-                templates.append(self._notify(user.id, "request_role", {"text": self._copy("Choose your role: Candidate or Hiring Manager.")}))
+                templates.append(self._notify(user.id, "request_role", {"text": self.messaging.compose_role_selection()}))
             return templates
 
         if text_value == "/start":
@@ -135,7 +135,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": self._copy("Choose your role: Candidate or Hiring Manager.")},
+                    {"text": self.messaging.compose_role_selection()},
                 )
             )
             return templates
@@ -148,7 +148,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": self._copy("Consent recorded. Choose your role: Candidate or Hiring Manager.")},
+                    {"text": self.messaging.compose_role_selection(latest_user_message="consent confirmed")},
                 )
             )
             return templates

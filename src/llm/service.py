@@ -19,12 +19,16 @@ from src.llm.prompts import (
     candidate_questions_prompt,
     candidate_summary_edit_prompt,
     deletion_confirmation_prompt,
+    interview_invitation_copy_prompt,
     interview_answer_parse_prompt,
     interview_evaluation_prompt,
     interview_followup_decision_prompt,
     interview_question_plan_prompt,
     interview_session_conductor_prompt,
+    recovery_prompt,
     response_copywriter_prompt,
+    role_selection_prompt,
+    small_talk_prompt,
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
@@ -803,6 +807,73 @@ def build_deletion_confirmation_with_llm(
     )
 
 
+def build_small_talk_reply_with_llm(*, latest_user_message: str, current_step_guidance: str | None) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=load_system_prompt("messaging", "small_talk"),
+        user_prompt=small_talk_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="small_talk_reply_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=240) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def build_recovery_message_with_llm(*, state: str | None, allowed_actions: list[str], latest_user_message: str) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=load_system_prompt("messaging", "recovery"),
+        user_prompt=recovery_prompt(
+            state=state,
+            allowed_actions=allowed_actions,
+            latest_user_message=latest_user_message,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="recovery_message_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=400) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def build_role_selection_reply_with_llm(*, latest_user_message: str | None = None) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=load_system_prompt("messaging", "role_selection"),
+        user_prompt=role_selection_prompt(latest_user_message=latest_user_message),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="role_selection_reply_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=350) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def build_interview_invitation_copy_with_llm(*, role_title: str | None) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=load_system_prompt("messaging", "interview_invitation_copy"),
+        user_prompt=interview_invitation_copy_prompt(role_title=role_title),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="interview_invitation_copy_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=350) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def safe_extract_candidate_summary(session, source_text: str, source_type: str) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
@@ -1272,4 +1343,69 @@ def safe_build_deletion_confirmation(
         },
         model_name="baseline-deterministic",
         prompt_version="baseline_deletion_confirmation_v1",
+    )
+
+
+def safe_build_small_talk_reply(session, *, latest_user_message: str, current_step_guidance: str | None) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return build_small_talk_reply_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("small_talk_fallback_to_baseline", error=str(exc))
+    guidance = f" {current_step_guidance}" if current_step_guidance else ""
+    return LLMResult(
+        payload={"message": f"Happy to help.{guidance}".strip()},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_small_talk_v1",
+    )
+
+
+def safe_build_recovery_message(session, *, state: str | None, allowed_actions: list[str], latest_user_message: str) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return build_recovery_message_with_llm(
+                state=state,
+                allowed_actions=allowed_actions,
+                latest_user_message=latest_user_message,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("recovery_message_fallback_to_baseline", error=str(exc))
+    if allowed_actions:
+        message = f"Please continue with the current step. Expected actions: {', '.join(allowed_actions)}."
+    else:
+        message = "Please continue with the current step."
+    return LLMResult(
+        payload={"message": message},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_recovery_message_v1",
+    )
+
+
+def safe_build_role_selection_reply(session, *, latest_user_message: str | None = None) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return build_role_selection_reply_with_llm(latest_user_message=latest_user_message)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("role_selection_fallback_to_baseline", error=str(exc))
+    return LLMResult(
+        payload={"message": "Choose your role: Candidate or Hiring Manager."},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_role_selection_v1",
+    )
+
+
+def safe_build_interview_invitation_copy(session, *, role_title: str | None) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return build_interview_invitation_copy_with_llm(role_title=role_title)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("interview_invitation_copy_fallback_to_baseline", error=str(exc))
+    role_text = f" for {role_title}" if role_title else ""
+    return LLMResult(
+        payload={"message": f"We found a strong-fit opportunity{role_text}. The next step is a short AI interview. Reply 'Accept interview' or 'Skip opportunity'."},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_interview_invitation_copy_v1",
     )
