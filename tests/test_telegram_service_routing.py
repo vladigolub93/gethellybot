@@ -1230,8 +1230,11 @@ def test_summary_review_change_summary_alias_reaches_summary_handler() -> None:
 
 def test_candidate_ready_help_is_intercepted_before_fallback() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "Your profile is ready. Helly will contact you when a strong match is found."
+    )
+    service.bot_controller = FakeBotController(
+        "Old ready fallback should not be used."
     )
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
@@ -1253,6 +1256,8 @@ def test_candidate_ready_help_is_intercepted_before_fallback() -> None:
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:

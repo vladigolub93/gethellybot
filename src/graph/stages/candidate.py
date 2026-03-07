@@ -79,6 +79,22 @@ def _candidate_verification_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _candidate_ready_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat happens now\b",
+        r"\bwhat do i do next\b",
+        r"\bwhat should i do next\b",
+        r"\bwhen .*job\b",
+        r"\bwhen .*opportunit",
+        r"\bwhen .*match\b",
+        r"\bhow .*matching\b",
+        r"\bdo i need to do anything\b",
+        r"\bdo i need anything else\b",
+        r"\bwhen .*manager see\b",
+        r"\bwhen will i hear\b",
+    )
+
+
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -133,6 +149,11 @@ def _is_candidate_verification_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _candidate_verification_help_patterns())
 
 
+def _is_candidate_ready_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _candidate_ready_help_patterns())
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
@@ -143,6 +164,8 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
         is_help = _is_candidate_questions_help(text)
     elif state.active_stage == "VERIFICATION_PENDING":
         is_help = _is_candidate_verification_help(text)
+    elif state.active_stage == "READY":
+        is_help = _is_candidate_ready_help(text)
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "candidate_input"
