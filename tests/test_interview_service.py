@@ -36,6 +36,11 @@ class FakeMatchingRepository:
             return [self.match]
         return []
 
+    def count_shortlisted_for_vacancy(self, vacancy_id):
+        if self.match.vacancy_id == vacancy_id and self.match.status == "shortlisted":
+            return 1
+        return 0
+
     def mark_invited(self, match):
         match.status = "invited"
         match.invitation_sent_at = "now"
@@ -234,10 +239,26 @@ def test_dispatch_invites_for_vacancy_marks_match_invited() -> None:
 
     assert result["invited_count"] == 1
     assert result["wave_no"] == 1
+    assert result["remaining_shortlisted_count"] == 0
+    assert result["shortlist_exhausted"] is True
     assert match.status == "invited"
     assert service.matches.invite_waves[0].invited_count == 1
     assert service.matches.invite_waves[0].matching_run_id == matching_run.id
     assert service.notifications.rows[0].user_id == candidate.user_id
+
+
+def test_dispatch_invites_for_vacancy_returns_without_wave_when_shortlist_empty() -> None:
+    service, _candidate, match, vacancy, matching_run = _build_service()
+    match.status = "invited"
+
+    result = service.dispatch_invites_for_vacancy(vacancy_id=vacancy.id, matching_run_id=matching_run.id)
+
+    assert result["invited_count"] == 0
+    assert result["invite_wave_id"] is None
+    assert result["wave_no"] is None
+    assert result["remaining_shortlisted_count"] == 0
+    assert result["shortlist_exhausted"] is True
+    assert service.matches.invite_waves == []
 
 
 def test_accept_invitation_starts_interview() -> None:

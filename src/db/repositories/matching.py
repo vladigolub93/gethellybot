@@ -123,6 +123,13 @@ class MatchingRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def count_shortlisted_for_vacancy(self, vacancy_id) -> int:
+        stmt = select(Match).where(
+            Match.vacancy_id == vacancy_id,
+            Match.status == "shortlisted",
+        )
+        return len(list(self.session.execute(stmt).scalars().all()))
+
     def get_next_wave_no(self, matching_run_id) -> int:
         stmt = select(InviteWave).where(InviteWave.matching_run_id == matching_run_id)
         waves = list(self.session.execute(stmt).scalars().all())

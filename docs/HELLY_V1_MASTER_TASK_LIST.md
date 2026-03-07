@@ -369,6 +369,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 165. `P0` Implement invitation expiration timestamps.
 166. `P1` Implement wave expansion policy when completion threshold is not reached.
 166A. `P1` Schedule evaluation of active invite waves and enqueue expansion waves via background jobs.
+166B. `P1` Stop wave expansion when shortlist is exhausted and avoid creating empty invite waves.
 
 ### 10.3 Candidate Invite UX
 

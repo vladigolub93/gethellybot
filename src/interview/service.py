@@ -116,6 +116,17 @@ class InterviewService:
         if matching_run is None:
             raise ValueError("Matching run not found for invite dispatch.")
         matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
+        remaining_shortlisted_count = self.matches.count_shortlisted_for_vacancy(vacancy_id)
+        if not matches:
+            return {
+                "vacancy_id": str(vacancy_id),
+                "matching_run_id": str(matching_run.id),
+                "invite_wave_id": None,
+                "wave_no": None,
+                "invited_count": 0,
+                "remaining_shortlisted_count": remaining_shortlisted_count,
+                "shortlist_exhausted": True,
+            }
         wave = self.matches.create_invite_wave(
             vacancy_id=vacancy_id,
             matching_run_id=matching_run.id,
@@ -168,6 +179,8 @@ class InterviewService:
             "invite_wave_id": str(wave.id),
             "wave_no": wave.wave_no,
             "invited_count": invited_count,
+            "remaining_shortlisted_count": max(remaining_shortlisted_count - invited_count, 0),
+            "shortlist_exhausted": remaining_shortlisted_count <= invited_count,
         }
 
     def handle_candidate_message(

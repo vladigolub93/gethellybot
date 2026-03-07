@@ -172,6 +172,7 @@ Status vs SRS:
 - `Implemented`: `matching_runs` and `matches`
 - `Implemented`: `invite_waves` persistence foundation and first-wave creation
 - `Implemented`: invite-wave evaluation and expansion enqueue baseline
+- `Implemented`: invite-wave expansion now respects remaining shortlist capacity and avoids empty wave creation
 - `Implemented`: hard filters
   - location
   - work format
@@ -186,7 +187,7 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: multi-wave expansion baseline exists, but current policy is still simple threshold-based scheduling and not yet fully product-tuned
+- `Partial`: multi-wave expansion now prevents empty follow-up waves and stops when shortlist is exhausted, but the policy is still simple threshold-based scheduling and not yet time-aware or fully product-tuned
 
 Status vs SRS:
 
@@ -202,6 +203,7 @@ Status vs SRS:
 - `Implemented`: invitation dispatch
 - `Implemented`: first invite wave records are persisted and linked to matching runs
 - `Implemented`: active invite waves are evaluated by the scheduler and can enqueue expansion waves when interview completion threshold is not met
+- `Implemented`: invite dispatch returns without creating a wave when no shortlisted candidates remain
 - `Implemented`: candidate can accept or skip
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation

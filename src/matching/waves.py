@@ -31,6 +31,8 @@ class InviteWaveService:
         payload = dict(wave.payload_json or {})
         invited_match_ids = payload.get("invited_match_ids") or []
         completed_count = self.interviews.count_completed_for_match_ids(invited_match_ids)
+        remaining_shortlisted_count = self.matching.count_shortlisted_for_vacancy(wave.vacancy_id)
+        shortlist_exhausted = remaining_shortlisted_count == 0
 
         self.matching.complete_invite_wave(
             wave,
@@ -41,11 +43,13 @@ class InviteWaveService:
                 **payload,
                 "completed_interviews_count": completed_count,
                 "target_completed_interviews": self.policy.target_completed_interviews,
+                "remaining_shortlisted_count": remaining_shortlisted_count,
+                "shortlist_exhausted": shortlist_exhausted,
             },
         )
 
         expansion_enqueued = False
-        if completed_count < self.policy.target_completed_interviews:
+        if completed_count < self.policy.target_completed_interviews and not shortlist_exhausted:
             self.queue.enqueue(
                 JobMessage(
                     job_type="interview_dispatch_invites_v1",
@@ -68,5 +72,7 @@ class InviteWaveService:
             "wave_no": wave.wave_no,
             "completed_interviews_count": completed_count,
             "target_completed_interviews": self.policy.target_completed_interviews,
+            "remaining_shortlisted_count": remaining_shortlisted_count,
+            "shortlist_exhausted": shortlist_exhausted,
             "expansion_enqueued": expansion_enqueued,
         }
