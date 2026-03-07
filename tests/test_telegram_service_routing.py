@@ -47,12 +47,18 @@ class FakeCandidateService:
     def __init__(self):
         self.cv_calls = []
         self.verification_calls = []
+        self.summary_calls = []
+        self.deletion_calls = []
+        self.summary_result = None
+        self.deletion_result = None
 
     def handle_deletion_message(self, **kwargs):
-        return None
+        self.deletion_calls.append(kwargs)
+        return self.deletion_result
 
     def handle_summary_review_action(self, **kwargs):
-        return None
+        self.summary_calls.append(kwargs)
+        return self.summary_result
 
     def handle_questions_answer(self, **kwargs):
         return None
@@ -76,9 +82,12 @@ class FakeCandidateService:
 class FakeVacancyService:
     def __init__(self):
         self.intake_calls = []
+        self.deletion_calls = []
+        self.deletion_result = None
 
     def handle_deletion_message(self, **kwargs):
-        return None
+        self.deletion_calls.append(kwargs)
+        return self.deletion_result
 
     def handle_clarification_answer(self, **kwargs):
         return None
@@ -94,14 +103,15 @@ class FakeVacancyService:
 class FakeEvaluationService:
     def __init__(self):
         self.calls = []
-
-    def handle_manager_message(self, **kwargs):
-        self.calls.append(kwargs)
-        return SimpleNamespace(
+        self.result = SimpleNamespace(
             status="help",
             notification_template="manager_candidate_review_help",
             notification_text="Reply 'Approve candidate' or 'Reject candidate'.",
         )
+
+    def handle_manager_message(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
 
 
 class FakeInterviewService:
@@ -244,6 +254,65 @@ def test_candidate_questions_help_is_intercepted_before_questions_handler() -> N
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
 
 
+def test_summary_review_help_is_intercepted_before_summary_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(
+        "Tell me exactly what is wrong in the summary, and I will revise it once."
+    )
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u4a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw4a",
+        build_update(text="What should I change in this summary if something is wrong?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert not service.candidate_service.summary_calls
+
+
+def test_summary_review_actual_correction_reaches_summary_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = SimpleNamespace(
+        notification_template="candidate_summary_edit_processing",
+        status="processing",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.calls = []
+    service.interview_service.handle_candidate_message = lambda **kwargs: None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u4b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw4b",
+        build_update(text="The summary is wrong: I work mostly with Go, not Python."),
+    )
+
+    assert templates == ["candidate_summary_edit_processing"]
+    assert service.candidate_service.summary_calls
+
+
 def test_candidate_ready_help_is_intercepted_before_fallback() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(
@@ -299,6 +368,64 @@ def test_interview_invite_help_is_intercepted_before_interview_handler() -> None
     assert not service.interview_service.calls
 
 
+def test_candidate_delete_confirmation_help_is_intercepted_after_delete_prompt() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(
+        "If you confirm deletion, the profile will be removed from active recruiting flow and active interviews or matches may be cancelled."
+    )
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = None
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u6a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw6a",
+        build_update(text="What exactly will be cancelled if I confirm?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.candidate_service.deletion_calls
+
+
+def test_vacancy_delete_confirmation_help_is_intercepted_after_delete_prompt() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(
+        "If you confirm deletion, the vacancy will be removed from active flow and related interviews or matches may be cancelled."
+    )
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = None
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u6b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw6b",
+        build_update(text="Can I cancel this instead of deleting the vacancy?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.vacancy_service.deletion_calls
+
+
 def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(
@@ -325,3 +452,33 @@ def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
     assert not service.evaluation_service.calls
+
+
+def test_manager_approve_passthrough_reaches_manager_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="approved",
+        notification_template="manager_candidate_approved",
+        notification_text="Candidate approved.",
+    )
+
+    user = SimpleNamespace(
+        id="u8",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw8",
+        build_update(text="Approve candidate"),
+    )
+
+    assert templates == ["manager_candidate_approved"]
+    assert service.evaluation_service.calls
