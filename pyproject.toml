@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14.0",
   "fastapi>=0.115.0",
+  "psycopg[binary]>=3.2.3",
   "pydantic-settings>=2.6.0",
   "sqlalchemy>=2.0.36",
   "structlog>=24.4.0",
@@ -35,4 +36,3 @@ include = ["apps*", "src*"]
 pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-

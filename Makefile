@@ -12,3 +12,8 @@ run-scheduler:
 test:
 	pytest
 
+db-upgrade:
+	alembic upgrade head
+
+db-current:
+	alembic current
