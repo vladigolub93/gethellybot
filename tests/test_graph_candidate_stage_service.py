@@ -159,3 +159,27 @@ def test_graph_candidate_stage_allows_passthrough_for_real_questions_answer() ->
     )
 
     assert reply is None
+
+
+def test_graph_candidate_stage_handles_verification_pending_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp7", state="VERIFICATION_PENDING")
+    )
+
+    user = SimpleNamespace(
+        id="u10",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="I cannot record video now because I am on desktop.",
+    )
+
+    assert reply is not None
+    assert "video" in reply.lower() or "later" in reply.lower()

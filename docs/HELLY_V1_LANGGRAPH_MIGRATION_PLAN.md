@@ -124,9 +124,11 @@ Status:
   - graph-driven help handling for `CV_PENDING`
   - graph-driven help handling for `SUMMARY_REVIEW`
   - graph-driven help handling for `QUESTIONS_PENDING`
+  - graph-driven help handling for `VERIFICATION_PENDING`
   - non-help candidate experience input still falls through to the existing backend intake path
   - non-help summary approval/edit input still falls through to the existing backend summary-review path
   - non-help mandatory-question answers still fall through to the existing backend question parser path
+  - non-help verification submission still falls through to the existing backend video-verification path
 
 ### Step 5. Hiring Manager Onboarding Agents
 

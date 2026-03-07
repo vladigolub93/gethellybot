@@ -23,7 +23,7 @@ from src.orchestrator.policy import resolve_state_context
 
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
-    CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING"}
+    CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING", "VERIFICATION_PENDING"}
 
     def __init__(self, session):
         self.session = session

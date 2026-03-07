@@ -861,8 +861,11 @@ def test_manager_video_jd_passthrough_reaches_jd_handler() -> None:
 
 def test_candidate_verification_help_is_intercepted_before_submission_handler() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "You can do the verification later from a device with a camera. The step cannot be skipped."
+    )
+    service.bot_controller = FakeBotController(
+        "Old verification fallback should not be used."
     )
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
@@ -884,6 +887,8 @@ def test_candidate_verification_help_is_intercepted_before_submission_handler() 
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
     assert not service.candidate_service.verification_calls
 
 
