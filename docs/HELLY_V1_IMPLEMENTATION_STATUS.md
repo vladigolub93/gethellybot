@@ -46,6 +46,8 @@ Architectural status note:
 - this is no longer the final target orchestration architecture
 - the new target is `LangGraph` stage-agent execution over the same backend state machines
 - `LangGraph` foundation modules and canonical graph state contract are now added
+- the canonical supported runtime for LangGraph execution is now `Python 3.12`
+- Dockerized `Python 3.12` runtime has been validated locally with `langgraph` import and full test execution
 - entry-stage runtime execution has started migrating through a graph-driven path for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - candidate `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
 - manager `INTAKE_PENDING` help handling has also started migrating through a graph-driven path

@@ -100,6 +100,7 @@ Why:
 Consequences:
 
 - application should be container-friendly
+- canonical runtime should be `Python 3.12`
 - deployment should support at least:
   - one API/web process
   - one worker process

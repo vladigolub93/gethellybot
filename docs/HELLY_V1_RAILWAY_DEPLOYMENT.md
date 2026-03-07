@@ -32,6 +32,13 @@ Only `helly-api` needs public networking.
 
 Use the repository `Dockerfile` at project root.
 
+Important:
+
+- the Docker image is the canonical runtime for Helly
+- it runs on `Python 3.12`
+- `langgraph` is installed from project dependencies during image build
+- prompt assets in `/prompts` are copied into the image and are available at runtime
+
 This repository also includes service-specific Railway config-as-code files:
 
 - `/deploy/railway/api.railway.json`

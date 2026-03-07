@@ -7,7 +7,7 @@ name = "helly"
 version = "0.1.0"
 description = "Helly v1 backend skeleton"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14.0",
   "fastapi>=0.115.0",

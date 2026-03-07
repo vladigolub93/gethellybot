@@ -24,12 +24,18 @@ This repository now contains:
 
 ## Local Commands
 
+Local host execution now assumes `Python 3.12+`.
+
+The canonical local/runtime-compatible path is Docker, because production also runs in Docker on `python:3.12-slim` with `langgraph` installed from project dependencies.
+
 ```bash
 make run-api
 make run-worker
 make run-scheduler
 make test
 make db-upgrade
+make docker-build
+make docker-test
 ```
 
 ## Deploy Commands
