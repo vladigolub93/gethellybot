@@ -202,28 +202,37 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 89. `P1` Implement summary correction loop.
 90. `P1` Create `candidate_summary_merge` prompt asset.
 91. `P1` Enforce maximum correction loop count.
+92. `P1` Formalize candidate CV persistence contract:
+   - parse CV into canonical `cv_text`
+   - persist parsed `cv_text` as first-class candidate profile data
+   - run summary analysis only from persisted `cv_text`
+   - persist analysis result as first-class candidate summary data
+   - enforce one review question:
+     `Does this summary look correct, or would you like to change anything?`
+   - allow exactly one candidate correction round
+   - show final revised summary and require approval before continuing
 
 ### 6.5 Mandatory Candidate Questions
 
-92. `P0` Implement salary question.
-93. `P0` Implement location question.
-94. `P0` Implement work format question.
-95. `P0` Create `candidate_mandatory_field_parse` prompt asset.
-96. `P0` Normalize candidate answers into structured fields.
-97. `P1` Implement one follow-up per unresolved field.
+93. `P0` Implement salary question.
+94. `P0` Implement location question.
+95. `P0` Implement work format question.
+96. `P0` Create `candidate_mandatory_field_parse` prompt asset.
+97. `P0` Normalize candidate answers into structured fields.
+98. `P1` Implement one follow-up per unresolved field.
 
 ### 6.6 Verification
 
-98. `P0` Generate verification phrase.
-99. `P0` Request verification video.
-100. `P0` Store verification video in Supabase Storage.
-101. `P0` Link verification attempt to profile.
+99. `P0` Generate verification phrase.
+100. `P0` Request verification video.
+101. `P0` Store verification video in Supabase Storage.
+102. `P0` Link verification attempt to profile.
 
 ### 6.7 Candidate Ready State
 
-102. `P0` Implement `READY` eligibility validator.
-103. `P0` Transition candidate to `READY` only when all conditions pass.
-104. `P0` Emit event or outbox record for matching trigger.
+103. `P0` Implement `READY` eligibility validator.
+104. `P0` Transition candidate to `READY` only when all conditions pass.
+105. `P0` Emit event or outbox record for matching trigger.
 
 ## 10. Phase 7: Vacancy Onboarding
 

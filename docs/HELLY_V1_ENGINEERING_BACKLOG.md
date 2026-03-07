@@ -136,6 +136,7 @@ Tasks:
 | `E-05-T05` | implement CV/text/voice submission handling | `P0` | `E-04-T04`, `E-05-T03` |
 | `E-05-T06` | implement summary review and approve flow | `P0` | `E-07-T03`, `E-05-T02` |
 | `E-05-T07` | implement summary correction loop | `P1` | `E-05-T06`, `E-07-T04` |
+| `E-05-T07A` | formalize candidate CV analysis contract: persist canonical `cv_text`, derive summary only from persisted CV text, persist final analysis separately from source text, ask one review question, and allow exactly one correction round before approval | `P1` | `E-05-T05`, `E-05-T06`, `E-05-T07` |
 | `E-05-T08` | implement mandatory Q&A flow | `P0` | `E-07-T05`, `E-05-T03` |
 | `E-05-T09` | implement `candidate_verifications` schema | `P0` | `E-01-T04` |
 | `E-05-T10` | implement verification phrase generation and video upload flow | `P0` | `E-05-T09`, `E-04-T04` |
