@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from math import sqrt
+
 def _as_set(values) -> set[str]:
     return {str(value).lower() for value in (values or []) if value}
 
@@ -12,6 +14,20 @@ def compute_embedding_score(candidate_skills, vacancy_skills) -> float:
     intersection = len(candidate_set & vacancy_set)
     union = len(candidate_set | vacancy_set)
     return round(intersection / union, 4)
+
+
+def compute_vector_similarity(candidate_embedding, vacancy_embedding) -> float | None:
+    if not candidate_embedding or not vacancy_embedding:
+        return None
+    if len(candidate_embedding) != len(vacancy_embedding):
+        return None
+    candidate_norm = sqrt(sum(float(value) ** 2 for value in candidate_embedding))
+    vacancy_norm = sqrt(sum(float(value) ** 2 for value in vacancy_embedding))
+    if not candidate_norm or not vacancy_norm:
+        return None
+    dot_product = sum(float(a) * float(b) for a, b in zip(candidate_embedding, vacancy_embedding))
+    similarity = dot_product / (candidate_norm * vacancy_norm)
+    return round(max(0.0, min(1.0, similarity)), 4)
 
 
 def compute_deterministic_score(

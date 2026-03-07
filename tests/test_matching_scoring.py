@@ -1,4 +1,8 @@
-from src.matching.scoring import compute_deterministic_score, compute_embedding_score
+from src.matching.scoring import (
+    compute_deterministic_score,
+    compute_embedding_score,
+    compute_vector_similarity,
+)
 
 
 def test_compute_embedding_score() -> None:
@@ -21,3 +25,13 @@ def test_compute_deterministic_score() -> None:
 
     assert score > 0.8
     assert breakdown["skill_overlap_ratio"] == 1.0
+
+
+def test_compute_vector_similarity() -> None:
+    score = compute_vector_similarity(
+        [1.0, 0.0, 0.0],
+        [0.9, 0.1, 0.0],
+    )
+
+    assert score is not None
+    assert score > 0.9

@@ -31,6 +31,39 @@ class CandidateProfilesRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def list_top_similar_ready_profiles(self, *, embedding: list[float], limit: int = 50) -> list[dict]:
+        distance_expr = CandidateProfileVersion.semantic_embedding.cosine_distance(embedding)
+        stmt = (
+            select(
+                CandidateProfile,
+                CandidateProfileVersion,
+                distance_expr.label("distance"),
+            )
+            .join(
+                CandidateProfileVersion,
+                CandidateProfile.current_version_id == CandidateProfileVersion.id,
+            )
+            .where(
+                CandidateProfile.state == "READY",
+                CandidateProfile.deleted_at.is_(None),
+                CandidateProfileVersion.semantic_embedding.is_not(None),
+            )
+            .order_by(distance_expr.asc())
+            .limit(limit)
+        )
+        rows = self.session.execute(stmt).all()
+        results: list[dict] = []
+        for candidate, version, distance in rows:
+            similarity = max(0.0, min(1.0, 1.0 - float(distance)))
+            results.append(
+                {
+                    "candidate": candidate,
+                    "candidate_version": version,
+                    "embedding_score": round(similarity, 4),
+                }
+            )
+        return results
+
     def get_version_by_id(self, version_id) -> Optional[CandidateProfileVersion]:
         stmt = select(CandidateProfileVersion).where(CandidateProfileVersion.id == version_id)
         return self.session.execute(stmt).scalar_one_or_none()
@@ -190,6 +223,16 @@ class CandidateProfilesRepository:
             version.extracted_text = extracted_text
         if transcript_text is not None:
             version.transcript_text = transcript_text
+        self.session.flush()
+        return version
+
+    def update_version_embedding(
+        self,
+        version: CandidateProfileVersion,
+        *,
+        semantic_embedding: Optional[list[float]],
+    ) -> CandidateProfileVersion:
+        version.semantic_embedding = semantic_embedding
         self.session.flush()
         return version
 

@@ -36,7 +36,7 @@ As of this audit, the project has:
 - background worker and scheduler
 - real OpenAI-backed extraction, parsing, interview planning, follow-up logic, reranking, vacancy inconsistency detection, response copywriting, and evaluation with deterministic fallback
 
-What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, but vector retrieval and deletion cleanup jobs are still incomplete.
+What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, and `pgvector` retrieval is now wired into matching. The remaining major gaps are deletion cleanup jobs, richer operational guardrails, and deeper production hardening.
 
 ## 3. Infrastructure and Delivery Status
 
@@ -53,7 +53,7 @@ What it still does not have is the full target AI pipeline. The core extraction/
 - `Implemented`: Supabase Postgres is connected
 - `Implemented`: Alembic migrations through current baseline are applied
 - `Implemented`: Supabase Storage bucket `helly-private` is available
-- `Partial`: `pgvector` is enabled in schema strategy, but real embedding storage/retrieval is not yet used in the matching runtime
+- `Implemented`: `pgvector` is enabled and used for candidate/vacancy version embeddings and top-N candidate retrieval
 
 ## 4. SRS Audit by Capability
 
@@ -159,20 +159,16 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: a baseline `embedding_score` exists conceptually in code, but it is not based on true embeddings or vector search
-- `Partial`: retrieval is still deterministic-first, even though final shortlist ordering is now LLM-reranked
+- `Partial`: retrieval is now vector-backed, but ranking still blends vector similarity with deterministic scoring and LLM reranking rather than relying on a dedicated learned relevance model
 
 ### What is missing
 
-- `Not Implemented`: real embedding generation
-- `Not Implemented`: `pgvector` retrieval
-- `Not Implemented`: top-50 vector retrieval stage
 - `Not Implemented`: configurable multi-wave invitation policy beyond the current baseline dispatch
 
 Status vs SRS:
 
 - hard filters: implemented
-- embedding similarity: not implemented in production form
+- embedding similarity: implemented
 - deterministic scoring: implemented
 - LLM reranking: implemented
 
@@ -352,9 +348,9 @@ The largest remaining gap is no longer prompt execution or basic multimodal inge
 
 ### Not ready yet for full product claims
 
-- vector retrieval and embeddings
 - richer manager introduction workflow
 - production observability and retention policies
+- stronger transcript/document quality control and cleanup automation
 
 ## 8. What Is Truly Done vs Not Done
 
@@ -372,7 +368,6 @@ The largest remaining gap is no longer prompt execution or basic multimodal inge
 ### Still major work
 
 - improve Telegram UX with buttons and richer guidance
-- implement vector search and retrieval
 - add cleanup jobs after deletion
 - add stronger transcript/document quality control and OCR handling
 - build production-grade smoke/e2e validation around live user flows
@@ -381,8 +376,8 @@ The largest remaining gap is no longer prompt execution or basic multimodal inge
 
 Recommended order from here:
 
-1. Implement vector embeddings and retrieval.
-2. Add cleanup jobs and retention-aware deletion follow-up work.
-3. Improve Telegram UX and manager introduction flow.
-4. Add stronger transcript/document quality control and OCR handling.
-5. Add stronger readiness checks, metrics, and operational dashboards.
+1. Add cleanup jobs and retention-aware deletion follow-up work.
+2. Improve Telegram UX and manager introduction flow.
+3. Add stronger transcript/document quality control and OCR handling.
+4. Add stronger readiness checks, metrics, and operational dashboards.
+5. Expand live smoke/e2e coverage against Railway + Supabase.

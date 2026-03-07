@@ -1,6 +1,7 @@
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.embeddings.service import EmbeddingService
 from src.ingestion.service import ContentIngestionService
 from src.llm.service import (
     safe_detect_vacancy_inconsistencies,
@@ -21,6 +22,7 @@ class VacancyProcessingService:
         self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.vacancy_service = VacancyService(session)
+        self.embeddings = EmbeddingService()
         self.ingestion = ContentIngestionService(session)
 
     def _copy(self, approved_intent: str) -> str:
@@ -79,6 +81,7 @@ class VacancyProcessingService:
             fallback_issues=(llm_result.payload.get("inconsistency_json") or {}).get("issues") or [],
         )
         inconsistency_json = inconsistency_result.payload
+        embedding_result = self.embeddings.safe_build_vacancy_embedding(summary, vacancy)
         self.repo.update_version_analysis(
             version,
             summary_json=summary,
@@ -88,11 +91,19 @@ class VacancyProcessingService:
                 "ingestion_mode": ingestion_mode,
                 "ingestion_source": ingestion_source,
                 "inconsistency_processor": inconsistency_result.prompt_version,
+                "embedding_ready": embedding_result is not None,
+                "embedding_model_name": embedding_result.model_name if embedding_result else None,
+                "embedding_dimensions": embedding_result.dimensions if embedding_result else None,
             },
             inconsistency_json=inconsistency_json,
             prompt_version=f"{llm_result.prompt_version}+{inconsistency_result.prompt_version}",
             model_name=llm_result.model_name,
         )
+        if embedding_result is not None:
+            self.repo.update_version_embedding(
+                version,
+                semantic_embedding=embedding_result.vector,
+            )
         self.repo.update_clarifications(
             vacancy,
             role_title=summary.get("role_title"),

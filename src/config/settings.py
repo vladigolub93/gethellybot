@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     openai_model_transcription: str = Field(
         default="gpt-4o-mini-transcribe", alias="OPENAI_MODEL_TRANSCRIPTION"
     )
+    openai_model_embeddings: str = Field(
+        default="text-embedding-3-small", alias="OPENAI_MODEL_EMBEDDINGS"
+    )
+    openai_embedding_dimensions: int = Field(
+        default=256, alias="OPENAI_EMBEDDING_DIMENSIONS"
+    )
 
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_db_url: str = Field(default="", alias="SUPABASE_DB_URL")

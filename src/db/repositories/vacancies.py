@@ -218,3 +218,13 @@ class VacanciesRepository:
             version.transcript_text = transcript_text
         self.session.flush()
         return version
+
+    def update_version_embedding(
+        self,
+        version: VacancyVersion,
+        *,
+        semantic_embedding: Optional[list[float]],
+    ) -> VacancyVersion:
+        version.semantic_embedding = semantic_embedding
+        self.session.flush()
+        return version

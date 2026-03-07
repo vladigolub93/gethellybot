@@ -7,6 +7,7 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.candidate_profile.service import CandidateProfileService
+from src.embeddings.service import EmbeddingService
 from src.ingestion.service import ContentIngestionService
 from src.llm.service import safe_extract_candidate_summary, safe_merge_candidate_summary
 from src.state.service import StateService
@@ -20,6 +21,7 @@ class CandidateProcessingService:
         self.raw_messages = RawMessagesRepository(session)
         self.state_service = StateService(session)
         self.candidate_service = CandidateProfileService(session)
+        self.embeddings = EmbeddingService()
         self.ingestion = ContentIngestionService(session)
 
     def process_job(self, job) -> dict:
@@ -77,6 +79,7 @@ class CandidateProcessingService:
             version.source_type,
         )
         summary = llm_result.payload
+        embedding_result = self.embeddings.safe_build_candidate_embedding(summary)
         self.repo.update_version_analysis(
             version,
             summary_json=summary,
@@ -85,11 +88,19 @@ class CandidateProcessingService:
                 "ingestion_ready": True,
                 "ingestion_mode": ingestion_mode,
                 "ingestion_source": ingestion_source,
+                "embedding_ready": embedding_result is not None,
+                "embedding_model_name": embedding_result.model_name if embedding_result else None,
+                "embedding_dimensions": embedding_result.dimensions if embedding_result else None,
             },
             approval_status="pending_user_review",
             model_name=llm_result.model_name,
             prompt_version=llm_result.prompt_version,
         )
+        if embedding_result is not None:
+            self.repo.update_version_embedding(
+                version,
+                semantic_embedding=embedding_result.vector,
+            )
         if profile.state != CANDIDATE_STATE_SUMMARY_REVIEW:
             self.state_service.transition(
                 entity_type="candidate_profile",
@@ -129,17 +140,26 @@ class CandidateProcessingService:
             payload.get("edit_request_text") or "",
         )
         merged_summary = llm_result.payload
+        embedding_result = self.embeddings.safe_build_candidate_embedding(merged_summary)
         self.repo.update_version_analysis(
             version,
             summary_json=merged_summary,
             normalization_json={
                 "processor": llm_result.prompt_version,
                 "base_version_id": str(base_version.id),
+                "embedding_ready": embedding_result is not None,
+                "embedding_model_name": embedding_result.model_name if embedding_result else None,
+                "embedding_dimensions": embedding_result.dimensions if embedding_result else None,
             },
             approval_status="pending_user_review",
             model_name=llm_result.model_name,
             prompt_version=llm_result.prompt_version,
         )
+        if embedding_result is not None:
+            self.repo.update_version_embedding(
+                version,
+                semantic_embedding=embedding_result.vector,
+            )
         if profile.state == CANDIDATE_STATE_CV_PROCESSING:
             self.state_service.transition(
                 entity_type="candidate_profile",

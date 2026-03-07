@@ -1,14 +1,16 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from pgvector.sqlalchemy import Vector
 
 from src.db.base import Base
 from src.db.models.core import TimestampMixin, UpdateTimestampMixin
+from src.embeddings.constants import DEFAULT_EMBEDDING_DIMENSIONS
 
 
 class CandidateProfile(Base, UpdateTimestampMixin):
@@ -78,6 +80,10 @@ class CandidateProfileVersion(Base, TimestampMixin):
     )
     extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     transcript_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    semantic_embedding: Mapped[Optional[List[float]]] = mapped_column(
+        Vector(DEFAULT_EMBEDDING_DIMENSIONS),
+        nullable=True,
+    )
     summary_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     normalization_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     approval_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'draft'"))

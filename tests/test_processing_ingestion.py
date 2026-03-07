@@ -49,6 +49,10 @@ class FakeCandidateRepo:
             setattr(version, key, value)
         return version
 
+    def update_version_embedding(self, version, *, semantic_embedding):
+        version.semantic_embedding = semantic_embedding
+        return version
+
 
 class FakeVacancyRepo:
     def __init__(self, vacancy):
@@ -56,6 +60,10 @@ class FakeVacancyRepo:
 
     def get_by_id(self, _vacancy_id):
         return self.vacancy
+
+    def update_version_embedding(self, version, *, semantic_embedding):
+        version.semantic_embedding = semantic_embedding
+        return version
 
 
 class FakeRawMessagesRepo:

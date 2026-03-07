@@ -3,12 +3,17 @@ from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_rerank_candidates
 from src.matching.filters import evaluate_hard_filters
-from src.matching.scoring import compute_deterministic_score, compute_embedding_score
+from src.matching.scoring import (
+    compute_deterministic_score,
+    compute_embedding_score,
+    compute_vector_similarity,
+)
 
 
 class MatchingService:
     FINAL_SHORTLIST_LIMIT = 6
     DETERMINISTIC_POOL_LIMIT = 10
+    VECTOR_RETRIEVAL_LIMIT = 50
 
     def __init__(self, session):
         self.session = session
@@ -35,22 +40,44 @@ class MatchingService:
             candidate = self.candidates.get_by_id(trigger_candidate_profile_id)
             if candidate is not None and candidate.state == "READY" and candidate.deleted_at is None:
                 candidate_profiles.append(candidate)
+            preloaded_candidates = None
         else:
-            candidate_profiles = self.candidates.get_ready_profiles()
+            preloaded_candidates = None
+            if getattr(vacancy_version, "semantic_embedding", None):
+                preloaded_candidates = self.candidates.list_top_similar_ready_profiles(
+                    embedding=list(vacancy_version.semantic_embedding),
+                    limit=self.VECTOR_RETRIEVAL_LIMIT,
+                )
+                candidate_profiles = [item["candidate"] for item in preloaded_candidates]
+            else:
+                candidate_profiles = self.candidates.get_ready_profiles()
 
         run = self.matching.create_run(
             vacancy_id=vacancy.id,
             trigger_type=trigger_type,
             trigger_candidate_profile_id=trigger_candidate_profile_id,
-            payload_json={"mode": "deterministic_plus_llm_rerank"},
+            payload_json={
+                "mode": "vector_plus_deterministic_plus_llm_rerank"
+                if preloaded_candidates is not None
+                else "deterministic_plus_llm_rerank"
+            },
         )
 
         scored = []
         hard_filtered_count = 0
         vacancy_skills = vacancy.primary_tech_stack_json or []
+        preloaded_by_candidate_id = {
+            item["candidate"].id: item
+            for item in (preloaded_candidates or [])
+        }
 
         for candidate in candidate_profiles:
-            candidate_version = self.candidates.get_current_version(candidate)
+            preloaded = preloaded_by_candidate_id.get(candidate.id)
+            candidate_version = (
+                preloaded["candidate_version"]
+                if preloaded is not None
+                else self.candidates.get_current_version(candidate)
+            )
             if candidate_version is None:
                 continue
 
@@ -73,7 +100,15 @@ class MatchingService:
             candidate_summary = candidate_version.summary_json or {}
             candidate_skills = candidate_summary.get("skills") or []
             candidate_years_experience = candidate_summary.get("years_experience")
-            embedding_score = compute_embedding_score(candidate_skills, vacancy_skills)
+            if preloaded is not None:
+                embedding_score = preloaded["embedding_score"]
+            else:
+                embedding_score = compute_vector_similarity(
+                    getattr(candidate_version, "semantic_embedding", None),
+                    getattr(vacancy_version, "semantic_embedding", None),
+                )
+                if embedding_score is None:
+                    embedding_score = compute_embedding_score(candidate_skills, vacancy_skills)
             deterministic_score, score_breakdown = compute_deterministic_score(
                 candidate_skills=candidate_skills,
                 vacancy_skills=vacancy_skills,
@@ -195,9 +230,13 @@ class MatchingService:
             hard_filtered_count=hard_filtered_count,
             shortlisted_count=len(final_shortlist),
             payload_json={
-                "mode": "deterministic_plus_llm_rerank",
+                "mode": "vector_plus_deterministic_plus_llm_rerank"
+                if preloaded_candidates is not None
+                else "deterministic_plus_llm_rerank",
                 "candidate_pool_count": len(candidate_profiles),
                 "hard_filtered_count": hard_filtered_count,
+                "vector_retrieval_used": preloaded_candidates is not None,
+                "vector_retrieval_limit": self.VECTOR_RETRIEVAL_LIMIT if preloaded_candidates is not None else None,
                 "deterministic_pool_count": len(deterministic_pool),
                 "shortlisted_count": len(final_shortlist),
                 "llm_prompt_version": rerank_result.prompt_version,
