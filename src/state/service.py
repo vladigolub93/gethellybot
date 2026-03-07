@@ -41,9 +41,10 @@ class StateService:
         trigger_ref_id=None,
         actor_user_id=None,
         metadata_json=None,
+        state_field: str = "state",
     ) -> None:
-        from_state = getattr(entity, "state", None)
-        entity.state = to_state
+        from_state = getattr(entity, state_field, None)
+        setattr(entity, state_field, to_state)
         self.session.flush()
         self.record_transition(
             entity_type=entity_type,

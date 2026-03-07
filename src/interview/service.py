@@ -1,0 +1,296 @@
+from dataclasses import dataclass
+
+from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.interviews import InterviewsRepository
+from src.db.repositories.matching import MatchingRepository
+from src.db.repositories.notifications import NotificationsRepository
+from src.db.repositories.raw_messages import RawMessagesRepository
+from src.db.repositories.vacancies import VacanciesRepository
+from src.interview.question_plan import build_question_plan
+from src.interview.states import (
+    INTERVIEW_SESSION_ACCEPTED,
+    INTERVIEW_SESSION_COMPLETED,
+    INTERVIEW_SESSION_CREATED,
+    INTERVIEW_SESSION_IN_PROGRESS,
+)
+from src.jobs.db_queue import DatabaseQueueClient
+from src.jobs.queue import JobMessage
+from src.state.service import StateService
+
+
+@dataclass(frozen=True)
+class InterviewUserResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
+class InterviewService:
+    def __init__(self, session):
+        self.session = session
+        self.candidates = CandidateProfilesRepository(session)
+        self.matches = MatchingRepository(session)
+        self.vacancies = VacanciesRepository(session)
+        self.interviews = InterviewsRepository(session)
+        self.notifications = NotificationsRepository(session)
+        self.raw_messages = RawMessagesRepository(session)
+        self.state_service = StateService(session)
+        self.queue = DatabaseQueueClient(session)
+
+    def dispatch_invites_for_vacancy(self, *, vacancy_id, limit: int = 3) -> dict:
+        matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
+        invited_count = 0
+        for match in matches:
+            candidate = self.candidates.get_by_id(match.candidate_profile_id)
+            if candidate is None:
+                continue
+            self.matches.mark_invited(match)
+            self.state_service.record_transition(
+                entity_type="match",
+                entity_id=match.id,
+                from_state="shortlisted",
+                to_state="invited",
+                trigger_type="job",
+                metadata_json={"vacancy_id": str(vacancy_id)},
+            )
+            self.notifications.create(
+                user_id=candidate.user_id,
+                entity_type="match",
+                entity_id=match.id,
+                template_key="candidate_interview_invitation",
+                payload_json={
+                    "text": "You have a new interview invitation. Reply 'Accept interview' or 'Skip opportunity'.",
+                },
+            )
+            invited_count += 1
+        return {"vacancy_id": str(vacancy_id), "invited_count": invited_count}
+
+    def handle_candidate_message(
+        self,
+        *,
+        user,
+        raw_message_id,
+        content_type: str,
+        text=None,
+        file_id=None,
+    ):
+        candidate = self.candidates.get_active_by_user_id(user.id)
+        if candidate is None:
+            return None
+
+        active_session = self.interviews.get_active_session_for_candidate(candidate.id)
+        if active_session is not None:
+            return self._handle_interview_answer(
+                candidate=candidate,
+                session=active_session,
+                raw_message_id=raw_message_id,
+                content_type=content_type,
+                text=text,
+                file_id=file_id,
+            )
+
+        invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
+        if invited_match is None:
+            return None
+
+        lowered = (text or "").strip().lower()
+        if content_type == "text" and lowered in {"accept interview", "accept"}:
+            return self._accept_invitation(
+                candidate=candidate,
+                match=invited_match,
+                raw_message_id=raw_message_id,
+            )
+        if content_type == "text" and lowered in {"skip opportunity", "skip"}:
+            self.matches.mark_candidate_responded(invited_match, status="skipped")
+            self.state_service.record_transition(
+                entity_type="match",
+                entity_id=invited_match.id,
+                from_state="invited",
+                to_state="skipped",
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=user.id,
+            )
+            return InterviewUserResult(
+                status="skipped",
+                notification_template="candidate_interview_skipped",
+                notification_text="Opportunity skipped.",
+            )
+
+        return InterviewUserResult(
+            status="invite_pending",
+            notification_template="candidate_interview_invitation_help",
+            notification_text="Reply 'Accept interview' or 'Skip opportunity'.",
+        )
+
+    def _accept_invitation(self, *, candidate, match, raw_message_id):
+        self.matches.mark_candidate_responded(match, status="accepted")
+        self.state_service.record_transition(
+            entity_type="match",
+            entity_id=match.id,
+            from_state="invited",
+            to_state="accepted",
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+
+        session = self.interviews.get_session_by_match_id(match.id)
+        vacancy = self.vacancies.get_by_id(match.vacancy_id)
+        candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
+        if session is None:
+            plan = build_question_plan(
+                vacancy=vacancy,
+                candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+            )
+            session = self.interviews.create_session(
+                match_id=match.id,
+                candidate_profile_id=match.candidate_profile_id,
+                vacancy_id=match.vacancy_id,
+                state=INTERVIEW_SESSION_CREATED,
+                plan_json={"questions": plan},
+            )
+            self.state_service.record_transition(
+                entity_type="interview_session",
+                entity_id=session.id,
+                from_state=None,
+                to_state=INTERVIEW_SESSION_CREATED,
+                trigger_type="system",
+                metadata_json={"match_id": str(match.id)},
+            )
+            for order_no, question_text in enumerate(plan, start=1):
+                self.interviews.create_question(
+                    session_id=session.id,
+                    order_no=order_no,
+                    question_text=question_text,
+                )
+            self.interviews.set_total_questions(session, len(plan))
+
+        self.state_service.transition(
+            entity_type="interview_session",
+            entity=session,
+            to_state=INTERVIEW_SESSION_ACCEPTED,
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+        self.interviews.mark_accepted(session)
+
+        self.state_service.transition(
+            entity_type="interview_session",
+            entity=session,
+            to_state=INTERVIEW_SESSION_IN_PROGRESS,
+            trigger_type="system",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+        self.interviews.mark_started(session)
+        first_question = self.interviews.get_question_by_order(session.id, session.current_question_order)
+        if first_question is not None and first_question.asked_at is None:
+            self.interviews.mark_question_asked(first_question)
+
+        return InterviewUserResult(
+            status="accepted",
+            notification_template="candidate_interview_started",
+            notification_text=first_question.question_text if first_question is not None else "Interview started.",
+        )
+
+    def _handle_interview_answer(
+        self,
+        *,
+        candidate,
+        session,
+        raw_message_id,
+        content_type: str,
+        text=None,
+        file_id=None,
+    ):
+        if content_type == "text":
+            return self._handle_interview_answer_text(
+                candidate=candidate,
+                session=session,
+                raw_message_id=raw_message_id,
+                text=text,
+            )
+
+        if content_type in {"voice", "video"}:
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="interview_answer_process_v1",
+                    payload={
+                        "interview_session_id": str(session.id),
+                        "raw_message_id": str(raw_message_id),
+                        "file_id": str(file_id) if file_id is not None else None,
+                        "content_type": content_type,
+                    },
+                    idempotency_key=f"interview_answer_process_v1:{raw_message_id}",
+                    entity_type="interview_session",
+                    entity_id=session.id,
+                )
+            )
+            return InterviewUserResult(
+                status="queued",
+                notification_template="candidate_interview_answer_processing",
+                notification_text="Answer received. Processing it now.",
+            )
+
+        return InterviewUserResult(
+            status="unsupported",
+            notification_template="candidate_interview_answer_unsupported",
+            notification_text="Please answer with text, voice, or video.",
+        )
+
+    def _handle_interview_answer_text(self, *, candidate, session, raw_message_id, text):
+        question = self.interviews.get_question_by_order(session.id, session.current_question_order)
+        if question is None:
+            return InterviewUserResult(
+                status="missing_question",
+                notification_template="candidate_interview_state_error",
+                notification_text="Interview state is inconsistent. Please try again.",
+            )
+
+        self.interviews.create_answer(
+            session_id=session.id,
+            question_id=question.id,
+            raw_message_id=raw_message_id,
+            content_type="text",
+            answer_text=text,
+        )
+        self.interviews.mark_question_answered(question)
+
+        if session.current_question_order >= session.total_questions:
+            self.state_service.transition(
+                entity_type="interview_session",
+                entity=session,
+                to_state=INTERVIEW_SESSION_COMPLETED,
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=candidate.user_id,
+            )
+            self.interviews.mark_completed(session)
+            match = self.matches.get_by_id(session.match_id)
+            self.state_service.transition(
+                entity_type="match",
+                entity=match,
+                to_state="interview_completed",
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=candidate.user_id,
+                state_field="status",
+            )
+            return InterviewUserResult(
+                status="completed",
+                notification_template="candidate_interview_completed",
+                notification_text="Interview completed. Thank you.",
+            )
+
+        next_order = session.current_question_order + 1
+        self.interviews.advance_question_pointer(session, next_order)
+        next_question = self.interviews.get_question_by_order(session.id, next_order)
+        if next_question is not None and next_question.asked_at is None:
+            self.interviews.mark_question_asked(next_question)
+        return InterviewUserResult(
+            status="next_question",
+            notification_template="candidate_interview_next_question",
+            notification_text=next_question.question_text if next_question is not None else "Next question is ready.",
+        )

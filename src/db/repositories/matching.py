@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -88,3 +89,43 @@ class MatchingRepository:
     def get_matches_for_run(self, matching_run_id) -> list[Match]:
         stmt = select(Match).where(Match.matching_run_id == matching_run_id)
         return list(self.session.execute(stmt).scalars().all())
+
+    def list_shortlisted_for_vacancy(self, vacancy_id, *, limit: int = 3) -> list[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.vacancy_id == vacancy_id,
+                Match.status == "shortlisted",
+            )
+            .order_by(Match.llm_rank_position.asc().nulls_last(), Match.deterministic_score.desc().nulls_last())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def get_by_id(self, match_id) -> Optional[Match]:
+        stmt = select(Match).where(Match.id == match_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def get_latest_invited_for_candidate(self, candidate_profile_id) -> Optional[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status == "invited",
+            )
+            .order_by(Match.updated_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def mark_invited(self, match: Match) -> Match:
+        match.status = "invited"
+        match.invitation_sent_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return match
+
+    def mark_candidate_responded(self, match: Match, *, status: str) -> Match:
+        match.status = status
+        match.candidate_response_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return match

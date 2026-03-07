@@ -1,8 +1,9 @@
+from datetime import datetime
 from typing import Optional
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,3 +65,5 @@ class Match(Base, UpdateTimestampMixin):
     llm_rank_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     llm_rank_position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     rationale_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    invitation_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    candidate_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

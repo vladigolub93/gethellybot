@@ -43,8 +43,22 @@ class MatchingProcessingService:
 
     def _process_vacancy_run(self, job) -> dict:
         payload = job.payload_json or {}
-        return self.matching_service.execute_for_vacancy(
+        result = self.matching_service.execute_for_vacancy(
             vacancy_id=payload["vacancy_id"],
             trigger_type=payload.get("trigger_type", "vacancy_open"),
             trigger_candidate_profile_id=payload.get("trigger_candidate_profile_id"),
         )
+        if result["shortlisted_count"] > 0:
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="interview_dispatch_invites_v1",
+                    payload={
+                        "vacancy_id": result["vacancy_id"],
+                        "limit": 3,
+                    },
+                    idempotency_key=f"interview_dispatch_invites_v1:{result['vacancy_id']}:{result['matching_run_id']}",
+                    entity_type="vacancy",
+                    entity_id=payload["vacancy_id"],
+                )
+            )
+        return result
