@@ -73,7 +73,7 @@ The remaining gap is no longer prompt design coverage. The remaining gap is surr
 
 1. add vector retrieval and embedding refresh
 2. add cleanup jobs and retention-aware deletion follow-up work
-3. add action validation for AI-proposed actions and rejected-proposal logging
+3. broaden regression coverage for state-aware conversation
 4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion

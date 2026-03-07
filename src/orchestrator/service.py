@@ -10,6 +10,7 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_bot_controller_decision, safe_state_assistance_decision
 from src.messaging.service import MessagingService
 from src.orchestrator.policy import ResolvedStateContext, resolve_state_context
+from src.orchestrator.validation import validate_action_proposal
 
 
 class BotControllerService:
@@ -44,6 +45,11 @@ class BotControllerService:
                 latest_user_message=latest_user_message,
                 current_step_guidance=default_response,
             )
+        self._validate_action_from_result(
+            context=context,
+            source="bot_controller",
+            action=result.payload.get("proposed_action"),
+        )
         response_text = result.payload.get("response_text")
         if response_text:
             return response_text
@@ -79,6 +85,11 @@ class BotControllerService:
             context=context,
             latest_user_message=latest_user_message,
             recent_context=[],
+        )
+        self._validate_action_from_result(
+            context=context,
+            source="state_assistance",
+            action=result.payload.get("suggested_action"),
         )
         return result.payload.get("response_text") or context.help_text or context.guidance_text
 
@@ -144,6 +155,16 @@ class BotControllerService:
         if context.allowed_actions:
             return f"Please continue with the current step. Expected actions: {', '.join(context.allowed_actions)}."
         return "Please continue with the current step."
+
+    def _validate_action_from_result(self, *, context: ResolvedStateContext, source: str, action: str | None) -> None:
+        validate_action_proposal(
+            state=context.state,
+            role=context.role,
+            source=source,
+            action=action,
+            allowed_actions=context.allowed_actions,
+            blocked_actions=context.blocked_actions,
+        )
 
     def _looks_like_help_or_constraint_message(self, *, state: str, latest_user_message: str) -> bool:
         normalized = " ".join((latest_user_message or "").lower().split())

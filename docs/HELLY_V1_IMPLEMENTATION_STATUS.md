@@ -81,7 +81,8 @@ Status vs SRS:
 - `Implemented`: inbound and outbound raw messages are persisted
 - `Partial`: keyboards/helpers are still basic
 - `Not Implemented`: location input is not yet actively used in the runtime flow
-- `Partial`: state-aware conversational assistance is now implemented for the main candidate and vacancy intake states, but coverage is not yet complete across `READY`, `OPEN`, interview invite/review, and all edge states
+- `Implemented`: state-aware conversational assistance now covers intake, post-intake, interview, manager review, and delete-confirmation states
+- `Implemented`: AI-proposed actions are validated against state-allowed actions before any future execution path can use them
 
 Status vs SRS:
 

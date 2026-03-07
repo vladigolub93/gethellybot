@@ -121,6 +121,10 @@ Deliverables:
 - no-op fallback when proposal is invalid
 - structured logging for rejected proposals
 
+Status:
+
+- completed
+
 ### Step 7. Regression and UX Hardening
 
 Goal:
@@ -140,7 +144,7 @@ Required regression cases:
 
 The immediate next task is:
 
-- Step 6:
-  - add action validation for AI-proposed actions
-  - then broaden regression coverage and UX hardening
+- Step 7:
+  - broaden regression coverage and UX hardening
+  - lock down the required in-state cases in integration tests
 The foundation and first major state-policy slice are now live in runtime.
