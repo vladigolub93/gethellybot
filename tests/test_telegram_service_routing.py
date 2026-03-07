@@ -1017,6 +1017,36 @@ def test_summary_review_edit_alias_reaches_summary_handler() -> None:
     assert service.candidate_service.summary_calls
 
 
+def test_summary_review_edit_with_punctuation_reaches_summary_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = SimpleNamespace(
+        notification_template="candidate_summary_edit_empty",
+        status="awaiting_edit_details",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u4e1",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw4e1",
+        build_update(text="Edit summary."),
+    )
+
+    assert templates == ["candidate_summary_edit_empty"]
+    assert service.candidate_service.summary_calls
+
+
 def test_summary_review_change_summary_alias_reaches_summary_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1278,6 +1308,36 @@ def test_manager_uppercase_approve_reaches_manager_handler() -> None:
     assert service.evaluation_service.calls
 
 
+def test_manager_approve_with_punctuation_reaches_manager_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="approved",
+        notification_template="manager_candidate_approved",
+        notification_text="Candidate approved.",
+    )
+
+    user = SimpleNamespace(
+        id="u8c",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw8c",
+        build_update(text="Approve."),
+    )
+
+    assert templates == ["manager_candidate_approved"]
+    assert service.evaluation_service.calls
+
+
 def test_interview_accept_passthrough_reaches_interview_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1452,6 +1512,36 @@ def test_interview_skip_alias_passthrough_reaches_interview_handler() -> None:
         user,
         "raw10aa",
         build_update(text="Skip"),
+    )
+
+    assert templates == ["candidate_interview_skipped"]
+    assert service.interview_service.calls
+
+
+def test_interview_skip_with_punctuation_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="skipped",
+        notification_template="candidate_interview_skipped",
+        notification_text="Opportunity skipped.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10ab",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10ab",
+        build_update(text="Skip!"),
     )
 
     assert templates == ["candidate_interview_skipped"]
@@ -1997,6 +2087,36 @@ def test_vacancy_uppercase_confirm_delete_reaches_deletion_handler() -> None:
         user,
         "raw12f2",
         build_update(text="CONFIRM DELETE VACANCY"),
+    )
+
+    assert templates == ["vacancy_deleted"]
+    assert service.vacancy_service.deletion_calls
+
+
+def test_vacancy_confirm_delete_with_punctuation_reaches_deletion_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="vacancy_deleted",
+        notification_text="Vacancy deleted.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u12f3",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12f3",
+        build_update(text="Confirm delete vacancy."),
     )
 
     assert templates == ["vacancy_deleted"]

@@ -159,6 +159,7 @@ Status:
 - routing coverage now also protects normalization variants such as trimmed whitespace around commands and consent aliases like `agree` / `consent`
 - routing coverage now also protects uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - routing coverage now also protects punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation
+- routing coverage now also includes direct unit coverage for shared command normalization and broader punctuation handling across summary edit, manager approval, interview skip, and vacancy deletion
 
 ## 4. Current Next Task
 
