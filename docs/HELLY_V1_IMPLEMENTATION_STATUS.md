@@ -90,6 +90,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover candidate CV intake, manager JD intake, active interview answers, and cancel-delete passthrough; this also fixed a real manager-routing bug where empty clarification handling could block later JD intake routing
 - `Implemented`: routing regressions now also cover entry gating for `/start`, contact share, consent, and blocked role selection before prerequisites are satisfied
 - `Implemented`: routing regressions now also cover successful entry transitions for consent grant, contact-with-consent, and role-based onboarding start for both candidate and hiring manager
+- `Implemented`: routing regressions now also cover multimodal intake paths for candidate and manager onboarding, including candidate `voice/document` CV input, manager `voice/video` JD input, and non-text recovery fallback outside any active role flow
 
 Status vs SRS:
 

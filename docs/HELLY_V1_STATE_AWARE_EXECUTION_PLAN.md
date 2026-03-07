@@ -151,6 +151,7 @@ Status:
 - routing coverage now also protects candidate CV intake passthrough, manager JD intake passthrough, active interview answer passthrough, and cancel-delete passthrough for both candidate and vacancy flows
 - routing coverage now also protects contact/consent/role gating at flow entry, including `/start`, contact share, and blocked role selection before prerequisites are satisfied
 - routing coverage now also protects successful entry transitions for consent grant, contact-with-consent, and role-based onboarding start for both candidate and hiring manager
+- routing coverage now also protects mixed-input onboarding paths across candidate and manager flows, including candidate CV intake over voice/document, manager JD intake over voice/video, and non-text recovery fallback outside any active role flow
 
 ## 4. Current Next Task
 

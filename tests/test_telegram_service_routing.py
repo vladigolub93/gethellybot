@@ -448,6 +448,64 @@ def test_candidate_cv_passthrough_reaches_cv_handler() -> None:
     assert service.candidate_service.cv_calls
 
 
+def test_candidate_voice_cv_passthrough_reaches_cv_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = None
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = None
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u1b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw1b",
+        build_update(content_type="voice"),
+    )
+
+    assert templates == ["candidate_cv_received_processing"]
+    assert service.candidate_service.cv_calls
+
+
+def test_candidate_document_cv_passthrough_reaches_cv_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = None
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = None
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u1c",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw1c",
+        build_update(content_type="document"),
+    )
+
+    assert templates == ["candidate_cv_received_processing"]
+    assert service.candidate_service.cv_calls
+
+
 def test_manager_jd_help_is_intercepted_before_jd_intake() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(
@@ -493,6 +551,60 @@ def test_manager_jd_passthrough_reaches_jd_handler() -> None:
         user,
         "raw2a",
         build_update(text="Senior Python engineer, fintech product, remote in Europe, budget 6000 EUR."),
+    )
+
+    assert templates == ["vacancy_jd_received_processing"]
+    assert service.vacancy_service.intake_calls
+
+
+def test_manager_voice_jd_passthrough_reaches_jd_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = None
+
+    user = SimpleNamespace(
+        id="u2b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw2b",
+        build_update(content_type="voice"),
+    )
+
+    assert templates == ["vacancy_jd_received_processing"]
+    assert service.vacancy_service.intake_calls
+
+
+def test_manager_video_jd_passthrough_reaches_jd_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = None
+
+    user = SimpleNamespace(
+        id="u2c",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw2c",
+        build_update(content_type="video"),
     )
 
     assert templates == ["vacancy_jd_received_processing"]
@@ -1174,3 +1286,31 @@ def test_unsupported_input_uses_recovery_for_user_without_active_role_flow() -> 
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
     assert service.notifications_repo.calls[-1]["payload_json"]["text"].startswith("Recovery:")
+
+
+def test_unsupported_voice_input_uses_recovery_for_user_without_active_role_flow() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u14",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw14",
+        build_update(content_type="voice"),
+    )
+
+    assert templates == ["unsupported_input"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: voice"
