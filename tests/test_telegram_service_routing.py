@@ -273,6 +273,46 @@ def test_contact_share_without_consent_requests_consent() -> None:
     assert user.phone_number == "+380974527344"
 
 
+def test_contact_share_with_existing_consent_requests_role() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=True)
+
+    user = SimpleNamespace(
+        id="g4a",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw-g4a",
+        build_update(contact_phone_number="+380974527345"),
+    )
+
+    assert templates == ["request_role"]
+    assert service.identity_service.attach_calls
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
+
+
+def test_consent_message_grants_consent_and_requests_role() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+
+    user = SimpleNamespace(
+        id="g4b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g4b", build_update(text="I agree"))
+
+    assert templates == ["request_role"]
+    assert service.identity_service.grant_calls
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
+
+
 def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
@@ -291,6 +331,68 @@ def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() 
     assert templates == ["request_contact"]
     assert not service.candidate_service.start_calls
     assert not service.vacancy_service.start_calls
+
+
+def test_role_selection_without_consent_requests_consent_and_blocks_onboarding() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+    service.candidate_service = FakeCandidateService()
+    service.vacancy_service = FakeVacancyService()
+
+    user = SimpleNamespace(
+        id="g5a",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g5a", build_update(text="Candidate"))
+
+    assert templates == ["request_consent"]
+    assert not service.candidate_service.start_calls
+    assert not service.vacancy_service.start_calls
+
+
+def test_candidate_role_selection_starts_candidate_onboarding() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=True)
+    service.candidate_service = FakeCandidateService()
+    service.vacancy_service = FakeVacancyService()
+
+    user = SimpleNamespace(
+        id="g5b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g5b", build_update(text="Candidate"))
+
+    assert templates == ["candidate_onboarding_started"]
+    assert service.identity_service.set_role_calls[-1]["role"] == "candidate"
+    assert service.candidate_service.start_calls
+    assert not service.vacancy_service.start_calls
+
+
+def test_manager_role_selection_starts_manager_onboarding() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=True)
+    service.candidate_service = FakeCandidateService()
+    service.vacancy_service = FakeVacancyService()
+
+    user = SimpleNamespace(
+        id="g5c",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g5c", build_update(text="Hiring Manager"))
+
+    assert templates == ["manager_onboarding_started"]
+    assert service.identity_service.set_role_calls[-1]["role"] == "hiring_manager"
+    assert service.vacancy_service.start_calls
+    assert not service.candidate_service.start_calls
 
 
 def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
