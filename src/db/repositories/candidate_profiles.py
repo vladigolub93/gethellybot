@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, select
@@ -118,6 +119,11 @@ class CandidateProfilesRepository:
             profile.city = city
         if work_format is not None:
             profile.work_format = work_format
+        self.session.flush()
+        return profile
+
+    def mark_ready(self, profile: CandidateProfile) -> CandidateProfile:
+        profile.ready_at = datetime.now(timezone.utc)
         self.session.flush()
         return profile
 

@@ -10,6 +10,7 @@ from src.candidate_profile.question_prompts import (
     initial_questions_prompt,
     missing_questions_prompt,
 )
+from src.candidate_profile.verification import build_verification_phrase
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CONSENTED,
     CANDIDATE_STATE_CONTACT_COLLECTED,
@@ -17,11 +18,13 @@ from src.candidate_profile.states import (
     CANDIDATE_STATE_CV_PROCESSING,
     CANDIDATE_STATE_NEW,
     CANDIDATE_STATE_QUESTIONS_PENDING,
+    CANDIDATE_STATE_READY,
     CANDIDATE_STATE_ROLE_CONFIRMED,
     CANDIDATE_STATE_SUMMARY_REVIEW,
     CANDIDATE_STATE_VERIFICATION_PENDING,
 )
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
 from src.state.service import StateService
@@ -46,10 +49,18 @@ class CandidateQuestionsResult:
     notification_text: str
 
 
+@dataclass(frozen=True)
+class CandidateVerificationResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
 class CandidateProfileService:
     def __init__(self, session: Session):
         self.session = session
         self.repo = CandidateProfilesRepository(session)
+        self.verifications = CandidateVerificationsRepository(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
 
@@ -394,10 +405,14 @@ class CandidateProfileService:
                 actor_user_id=actor_user_id,
                 metadata_json={"action": "mandatory_questions_completed"},
             )
+            verification = self._issue_verification(profile)
             return CandidateQuestionsResult(
                 status="completed",
                 notification_template="candidate_questions_completed",
-                notification_text="Mandatory profile questions completed. Next step is video verification.",
+                notification_text=(
+                    "Mandatory profile questions completed. "
+                    f"Please record a short video and say: '{verification.phrase_text}'."
+                ),
             )
 
         questions_context = self._ensure_questions_context(profile)
@@ -441,3 +456,65 @@ class CandidateProfileService:
             if not follow_up_used.get(key, False):
                 return key
         return None
+
+    def handle_verification_submission(
+        self,
+        *,
+        user,
+        raw_message_id,
+        content_type: str,
+        file_id=None,
+    ) -> Optional[CandidateVerificationResult]:
+        profile = self.ensure_profile_for_user(user)
+        if profile.state != CANDIDATE_STATE_VERIFICATION_PENDING:
+            return None
+
+        verification = self.verifications.get_pending_by_profile_id(profile.id)
+        if verification is None:
+            verification = self._issue_verification(profile)
+
+        if content_type != "video" or file_id is None:
+            return CandidateVerificationResult(
+                status="instruction",
+                notification_template="candidate_verification_instructions",
+                notification_text=(
+                    "Please send a short video and clearly say: "
+                    f"'{verification.phrase_text}'."
+                ),
+            )
+
+        self.verifications.mark_submitted(verification, video_file_id=file_id)
+        self.state_service.transition(
+            entity_type="candidate_profile",
+            entity=profile,
+            to_state=CANDIDATE_STATE_READY,
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=user.id,
+            metadata_json={
+                "action": "verification_submitted",
+                "candidate_verification_id": str(verification.id),
+            },
+        )
+        self.repo.mark_ready(profile)
+        return CandidateVerificationResult(
+            status="completed",
+            notification_template="candidate_ready",
+            notification_text="Video verification received. Your profile is now ready for matching.",
+        )
+
+    def _issue_verification(self, profile):
+        existing = self.verifications.get_pending_by_profile_id(profile.id)
+        if existing is not None:
+            return existing
+
+        attempt_no = self.verifications.next_attempt_no(profile.id)
+        phrase_text = build_verification_phrase(
+            profile_id=profile.id,
+            attempt_no=attempt_no,
+        )
+        return self.verifications.create(
+            profile_id=profile.id,
+            attempt_no=attempt_no,
+            phrase_text=phrase_text,
+        )

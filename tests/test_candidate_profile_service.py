@@ -6,6 +6,7 @@ from src.candidate_profile.states import (
     CANDIDATE_STATE_CV_PENDING,
     CANDIDATE_STATE_CV_PROCESSING,
     CANDIDATE_STATE_QUESTIONS_PENDING,
+    CANDIDATE_STATE_READY,
     CANDIDATE_STATE_SUMMARY_REVIEW,
     CANDIDATE_STATE_VERIFICATION_PENDING,
 )
@@ -34,6 +35,7 @@ class FakeCandidateProfilesRepository:
             state=state,
             current_version_id=None,
             questions_context_json={},
+            ready_at=None,
         )
         return self.profile
 
@@ -60,6 +62,10 @@ class FakeCandidateProfilesRepository:
     def update_question_answers(self, profile, **kwargs):
         for key, value in kwargs.items():
             setattr(profile, key, value)
+        return profile
+
+    def mark_ready(self, profile):
+        profile.ready_at = "now"
         return profile
 
     def get_current_version(self, profile):
@@ -98,9 +104,43 @@ class FakeQueue:
         self.messages.append(message)
 
 
+class FakeCandidateVerificationsRepository:
+    def __init__(self):
+        self.rows = []
+
+    def get_pending_by_profile_id(self, profile_id):
+        for row in reversed(self.rows):
+            if row.profile_id == profile_id and row.status == "issued":
+                return row
+        return None
+
+    def next_attempt_no(self, profile_id):
+        return len([row for row in self.rows if row.profile_id == profile_id]) + 1
+
+    def create(self, *, profile_id, attempt_no, phrase_text, status="issued"):
+        row = SimpleNamespace(
+            id=uuid4(),
+            profile_id=profile_id,
+            attempt_no=attempt_no,
+            phrase_text=phrase_text,
+            status=status,
+            video_file_id=None,
+            submitted_at=None,
+        )
+        self.rows.append(row)
+        return row
+
+    def mark_submitted(self, verification, *, video_file_id):
+        verification.status = "submitted"
+        verification.video_file_id = video_file_id
+        verification.submitted_at = "now"
+        return verification
+
+
 def test_start_onboarding_moves_candidate_to_cv_pending() -> None:
     service = CandidateProfileService(FakeSession())
     service.repo = FakeCandidateProfilesRepository()
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = FakeStateService()
     service.queue = FakeQueue()
 
@@ -116,6 +156,7 @@ def test_handle_cv_intake_transitions_to_processing() -> None:
     fake_state = FakeStateService()
     fake_queue = FakeQueue()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = fake_queue
 
@@ -140,6 +181,7 @@ def test_approve_summary_moves_candidate_to_questions_pending() -> None:
     fake_repo = FakeCandidateProfilesRepository()
     fake_state = FakeStateService()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = FakeQueue()
 
@@ -171,6 +213,7 @@ def test_edit_summary_enqueues_processing_job() -> None:
     fake_state = FakeStateService()
     fake_queue = FakeQueue()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = fake_queue
 
@@ -203,6 +246,7 @@ def test_questions_answer_completion_moves_profile_to_verification_pending() -> 
     fake_repo = FakeCandidateProfilesRepository()
     fake_state = FakeStateService()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = FakeQueue()
 
@@ -221,6 +265,7 @@ def test_questions_answer_completion_moves_profile_to_verification_pending() -> 
     assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
     assert profile.salary_min == 5000
     assert profile.work_format == "remote"
+    assert len(service.verifications.rows) == 1
 
 
 def test_questions_answer_requests_follow_up_when_partial() -> None:
@@ -228,6 +273,7 @@ def test_questions_answer_requests_follow_up_when_partial() -> None:
     fake_repo = FakeCandidateProfilesRepository()
     fake_state = FakeStateService()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = FakeQueue()
 
@@ -253,6 +299,7 @@ def test_questions_voice_answer_enqueues_processing_job() -> None:
     fake_state = FakeStateService()
     fake_queue = FakeQueue()
     service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
     service.state_service = fake_state
     service.queue = fake_queue
 
@@ -269,3 +316,59 @@ def test_questions_voice_answer_enqueues_processing_job() -> None:
     assert result is not None
     assert result.status == "queued"
     assert len(fake_queue.messages) == 1
+
+
+def test_verification_submission_moves_candidate_to_ready() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_verifications = FakeCandidateVerificationsRepository()
+    service.repo = fake_repo
+    service.verifications = fake_verifications
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_VERIFICATION_PENDING)
+    fake_verifications.create(
+        profile_id=profile.id,
+        attempt_no=1,
+        phrase_text="Helly verification 1: clear bridge",
+    )
+
+    result = service.handle_verification_submission(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="video",
+        file_id=uuid4(),
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert profile.state == CANDIDATE_STATE_READY
+    assert profile.ready_at == "now"
+
+
+def test_verification_instruction_is_returned_for_non_video_input() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_verifications = FakeCandidateVerificationsRepository()
+    service.repo = fake_repo
+    service.verifications = fake_verifications
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_VERIFICATION_PENDING)
+
+    result = service.handle_verification_submission(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+    )
+
+    assert result is not None
+    assert result.status == "instruction"
+    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+    assert len(fake_verifications.rows) == 1

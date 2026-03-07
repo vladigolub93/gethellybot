@@ -210,6 +210,23 @@ class TelegramUpdateService:
                 )
                 return templates
 
+        if user.is_candidate and normalized_update.content_type in {"text", "video"}:
+            verification_result = self.candidate_service.handle_verification_submission(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                file_id=file_id,
+            )
+            if verification_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        verification_result.notification_template,
+                        {"text": verification_result.notification_text},
+                    )
+                )
+                return templates
+
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             questions_result = self.candidate_service.handle_questions_answer(
                 user=user,
