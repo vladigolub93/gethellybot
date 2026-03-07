@@ -164,6 +164,15 @@ class InterviewsRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def count_completed_for_match_ids(self, match_ids: list) -> int:
+        if not match_ids:
+            return 0
+        stmt = select(InterviewSession).where(
+            InterviewSession.match_id.in_(match_ids),
+            InterviewSession.state == "COMPLETED",
+        )
+        return len(list(self.session.execute(stmt).scalars().all()))
+
     def advance_question_pointer(self, session: InterviewSession, next_order: int) -> InterviewSession:
         session.current_question_order = next_order
         self.session.flush()

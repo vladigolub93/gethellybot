@@ -3,6 +3,7 @@ import time
 from src.config.logging import configure_logging, get_logger
 from src.config.settings import get_settings
 from src.db.repositories.files import FilesRepository
+from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.session import get_session_factory
 from src.jobs.db_queue import DatabaseQueueClient
@@ -15,6 +16,7 @@ def dispatch_once() -> dict:
     try:
         notifications = NotificationsRepository(session)
         files = FilesRepository(session)
+        matching = MatchingRepository(session)
         queue = DatabaseQueueClient(session)
 
         enqueued_notifications = 0
@@ -45,10 +47,24 @@ def dispatch_once() -> dict:
             files.mark_storage_queued(file_row)
             enqueued_files += 1
 
+        enqueued_wave_evaluations = 0
+        for wave in matching.list_active_invite_waves(limit=20):
+            queue.enqueue(
+                JobMessage(
+                    job_type="matching_evaluate_invite_wave_v1",
+                    idempotency_key=f"matching_evaluate_invite_wave_v1:{wave.id}",
+                    payload={"invite_wave_id": str(wave.id)},
+                    entity_type="invite_wave",
+                    entity_id=wave.id,
+                )
+            )
+            enqueued_wave_evaluations += 1
+
         session.commit()
         return {
             "notifications_enqueued": enqueued_notifications,
             "files_enqueued": enqueued_files,
+            "invite_wave_evaluations_enqueued": enqueued_wave_evaluations,
         }
     except Exception:
         session.rollback()

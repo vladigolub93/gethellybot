@@ -171,6 +171,7 @@ Status vs SRS:
 - `Implemented`: matching trigger from vacancy `OPEN`
 - `Implemented`: `matching_runs` and `matches`
 - `Implemented`: `invite_waves` persistence foundation and first-wave creation
+- `Implemented`: invite-wave evaluation and expansion enqueue baseline
 - `Implemented`: hard filters
   - location
   - work format
@@ -183,9 +184,9 @@ Status vs SRS:
 
 - `Partial`: retrieval is now vector-backed, but ranking still blends vector similarity with deterministic scoring and LLM reranking rather than relying on a dedicated learned relevance model
 
-### What is missing
+### What is only partial
 
-- `Not Implemented`: configurable multi-wave invitation expansion policy beyond the current first-wave dispatch baseline
+- `Partial`: multi-wave expansion baseline exists, but current policy is still simple threshold-based scheduling and not yet fully product-tuned
 
 Status vs SRS:
 
@@ -200,6 +201,7 @@ Status vs SRS:
 
 - `Implemented`: invitation dispatch
 - `Implemented`: first invite wave records are persisted and linked to matching runs
+- `Implemented`: active invite waves are evaluated by the scheduler and can enqueue expansion waves when interview completion threshold is not met
 - `Implemented`: candidate can accept or skip
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
@@ -216,7 +218,7 @@ Status vs SRS:
 ### What is missing
 
 - `Not Implemented`: transcript confidence scoring and retry/escalation strategy for low-quality media
-- `Not Implemented`: follow-on wave scheduler and completion-threshold expansion policy
+- `Not Implemented`: richer time-based reminder / expiration-aware wave policy
 
 Status vs SRS:
 

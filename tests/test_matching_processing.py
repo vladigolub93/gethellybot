@@ -31,6 +31,15 @@ class FakeMatchingService:
         }
 
 
+class FakeInviteWaveService:
+    def evaluate_wave(self, *, wave_id):
+        return {
+            "invite_wave_id": wave_id,
+            "completed_interviews_count": 1,
+            "expansion_enqueued": True,
+        }
+
+
 def test_matching_processing_enqueues_invite_dispatch_with_matching_run_id() -> None:
     service = MatchingProcessingService(FakeSession())
     service.queue = FakeQueue()
@@ -51,3 +60,21 @@ def test_matching_processing_enqueues_invite_dispatch_with_matching_run_id() -> 
     assert queued.payload["vacancy_id"] == "vacancy-1"
     assert queued.payload["matching_run_id"] == "run-1"
     assert queued.payload["limit"] == 3
+
+
+def test_matching_processing_routes_invite_wave_evaluation_job() -> None:
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.vacancies = FakeVacanciesRepository()
+    service.matching_service = FakeMatchingService()
+    service.wave_service = FakeInviteWaveService()
+
+    result = service.process_job(
+        SimpleNamespace(
+            job_type="matching_evaluate_invite_wave_v1",
+            payload_json={"invite_wave_id": "wave-1"},
+        )
+    )
+
+    assert result["invite_wave_id"] == "wave-1"
+    assert result["expansion_enqueued"] is True

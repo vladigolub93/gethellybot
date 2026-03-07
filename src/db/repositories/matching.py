@@ -173,6 +173,19 @@ class MatchingRepository:
         self.session.flush()
         return wave
 
+    def list_active_invite_waves(self, *, limit: int = 20) -> list[InviteWave]:
+        stmt = (
+            select(InviteWave)
+            .where(InviteWave.status.in_(("created", "running")))
+            .order_by(InviteWave.created_at.asc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def get_wave_by_id(self, wave_id) -> Optional[InviteWave]:
+        stmt = select(InviteWave).where(InviteWave.id == wave_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_by_id(self, match_id) -> Optional[Match]:
         stmt = select(Match).where(Match.id == match_id)
         return self.session.execute(stmt).scalar_one_or_none()

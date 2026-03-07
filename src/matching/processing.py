@@ -2,6 +2,7 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
 from src.matching.service import MatchingService
+from src.matching.waves import InviteWaveService
 
 
 class MatchingProcessingService:
@@ -10,10 +11,13 @@ class MatchingProcessingService:
         self.queue = DatabaseQueueClient(session)
         self.vacancies = VacanciesRepository(session)
         self.matching_service = MatchingService(session)
+        self.wave_service = InviteWaveService(session)
 
     def process_job(self, job) -> dict:
         if job.job_type == "matching_candidate_ready_v1":
             return self._process_candidate_ready(job)
+        if job.job_type == "matching_evaluate_invite_wave_v1":
+            return self._process_invite_wave_evaluation(job)
         if job.job_type == "matching_run_for_vacancy_v1":
             return self._process_vacancy_run(job)
         raise ValueError(f"Unsupported matching job type: {job.job_type}")
@@ -63,3 +67,7 @@ class MatchingProcessingService:
                 )
             )
         return result
+
+    def _process_invite_wave_evaluation(self, job) -> dict:
+        payload = job.payload_json or {}
+        return self.wave_service.evaluate_wave(wave_id=payload["invite_wave_id"])
