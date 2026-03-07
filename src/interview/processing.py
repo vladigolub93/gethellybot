@@ -1,5 +1,6 @@
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
+from src.ingestion.service import ContentIngestionService
 from src.interview.service import InterviewService
 
 
@@ -8,6 +9,7 @@ class InterviewProcessingService:
         self.session = session
         self.interviews = InterviewsRepository(session)
         self.raw_messages = RawMessagesRepository(session)
+        self.ingestion = ContentIngestionService(session)
         self.service = InterviewService(session)
 
     def process_job(self, job) -> dict:
@@ -35,24 +37,33 @@ class InterviewProcessingService:
         if raw_message is None:
             raise ValueError("Interview raw message not found.")
 
-        if not raw_message.text_content:
+        answer_text = raw_message.text_content
+        if not answer_text:
             from src.db.repositories.notifications import NotificationsRepository
 
-            NotificationsRepository(self.session).create(
-                user_id=raw_message.user_id,
-                entity_type="interview_session",
-                entity_id=session.id,
-                template_key="candidate_interview_answer_text_retry",
-                payload_json={"text": "Voice/video answer saved, but transcription is not connected yet. Please resend the answer in text."},
-            )
-            return {"status": "transcription_pending", "interview_session_id": str(session.id)}
+            try:
+                ingestion_result = self.ingestion.ingest_raw_message(raw_message)
+            except Exception:  # noqa: BLE001
+                NotificationsRepository(self.session).create(
+                    user_id=raw_message.user_id,
+                    entity_type="interview_session",
+                    entity_id=session.id,
+                    template_key="candidate_interview_answer_text_retry",
+                    payload_json={"text": "Voice/video answer saved, but transcription failed. Please resend the answer in text."},
+                )
+                raise
+            answer_text = ingestion_result.text
+            self.raw_messages.set_text_content(raw_message, answer_text)
 
         candidate = type("CandidateRef", (), {"user_id": raw_message.user_id})
         result = self.service._handle_interview_answer_text(
             candidate=candidate,
             session=session,
             raw_message_id=raw_message.id,
-            text=raw_message.text_content,
+            text=answer_text,
+            source_content_type=raw_message.content_type,
+            file_id=raw_message.file_id,
+            store_as_transcript=raw_message.content_type in {"voice", "video"},
         )
         from src.db.repositories.notifications import NotificationsRepository
 

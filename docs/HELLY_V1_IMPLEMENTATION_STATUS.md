@@ -36,7 +36,7 @@ As of this audit, the project has:
 - background worker and scheduler
 - real OpenAI-backed extraction, parsing, interview planning, follow-up logic, reranking, vacancy inconsistency detection, response copywriting, and evaluation with deterministic fallback
 
-What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, but transcript ingestion, vector retrieval, and deletion cleanup jobs are still incomplete.
+What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, but vector retrieval and deletion cleanup jobs are still incomplete.
 
 ## 3. Infrastructure and Delivery Status
 
@@ -105,19 +105,18 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: document and voice ingestion are structurally supported, but non-text extraction/transcription is still not connected
 - `Partial`: verification only checks that a video was submitted and linked
 - `Partial`: no real face/liveness/phrase verification is performed
 
 ### What is missing
 
-- `Not Implemented`: real CV parsing pipeline for PDF/DOCX content
-- `Not Implemented`: real voice transcription pipeline
+- `Not Implemented`: OCR-style handling for image-only CVs
+- `Not Implemented`: stronger quality controls for noisy or multilingual transcripts
 
 Status vs SRS:
 
 - candidate onboarding flow: implemented as baseline
-- AI quality of onboarding: partially implemented with OpenAI for text-based extraction and parsing
+- AI quality of onboarding: partially implemented with OpenAI-backed extraction and parsing across text, document, and voice inputs
 
 ## 4.4 Hiring Manager and Vacancy Onboarding
 
@@ -132,17 +131,16 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: extraction and inconsistency analysis are now OpenAI-backed for text input, but non-text ingestion still falls back to resend-as-text behavior
-- `Partial`: non-text JD formats are accepted but not truly processed through a production ingestion pipeline
+- `Partial`: extraction and inconsistency analysis are OpenAI-backed, but transcript/document quality controls are still baseline-level
 
 ### What is missing
 
-- `Not Implemented`: document/voice/video JD ingestion into usable extracted text
+- `Not Implemented`: OCR-style handling for scanned/image-heavy job descriptions
 
 Status vs SRS:
 
 - hiring manager flow: implemented as baseline
-- AI vacancy understanding: partially implemented
+- AI vacancy understanding: partially implemented with live multimodal ingestion
 
 ## 4.5 Matching Engine
 
@@ -193,12 +191,11 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: interview questions, answer parsing, follow-up logic, and turn-by-turn conductor copy are OpenAI-backed for text-ready flows
-- `Partial`: voice/video answers are accepted structurally but still fall back to asking for text when no transcript is available
+- `Partial`: interview questions, answer parsing, follow-up logic, and turn-by-turn conductor copy are OpenAI-backed, including transcript use for voice/video turns
 
 ### What is missing
 
-- `Not Implemented`: real voice/video transcript processing
+- `Not Implemented`: transcript confidence scoring and retry/escalation strategy for low-quality media
 
 Status vs SRS:
 
@@ -218,7 +215,7 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: evaluation is OpenAI-backed for text-ready interview sessions, but still lacks full transcript/document evidence ingestion
+- `Partial`: evaluation is OpenAI-backed and now consumes transcript-ready interview evidence, but still lacks richer package rendering and explicit confidence diagnostics
 - `Partial`: manager package is delivered as notification content, not as a polished final package artifact set
 
 ### What is missing
@@ -267,8 +264,8 @@ Status vs SRS:
 
 ### What is missing in runtime
 
-- `Not Implemented`: transcript-aware OpenAI processing for voice/video/document flows
 - `Partial`: some low-priority user-facing strings still use direct approved-intent copy rather than dedicated messaging-family prompts
+- `Not Implemented`: dedicated confidence/guardrail layer around transcription quality and OCR edge cases
 
 Status vs SRS:
 
@@ -340,7 +337,7 @@ Current reality:
 - runtime now uses active prompt execution for extraction, parsing, interview planning, interview conducting, reranking, inconsistency detection, deletion confirmation, and evaluation
 - deterministic Python logic still exists as a runtime fallback layer
 
-The largest remaining gap is no longer prompt execution itself. It is transcript/document ingestion, vector retrieval, and completion of the remaining specialized messaging families.
+The largest remaining gap is no longer prompt execution or basic multimodal ingestion. It is vector retrieval, cleanup jobs, and stronger quality controls around transcription and document extraction edge cases.
 
 ## 7. Production Readiness Assessment
 
@@ -355,7 +352,7 @@ The largest remaining gap is no longer prompt execution itself. It is transcript
 
 ### Not ready yet for full product claims
 
-- transcript-aware multimodal ingestion
+- vector retrieval and embeddings
 - richer manager introduction workflow
 - production observability and retention policies
 
@@ -375,17 +372,17 @@ The largest remaining gap is no longer prompt execution itself. It is transcript
 ### Still major work
 
 - improve Telegram UX with buttons and richer guidance
-- implement actual transcript/document extraction integrations
 - implement vector search and retrieval
 - add cleanup jobs after deletion
+- add stronger transcript/document quality control and OCR handling
 - build production-grade smoke/e2e validation around live user flows
 
 ## 9. Recommended Next Build Priorities
 
 Recommended order from here:
 
-1. Implement transcript/document ingestion for non-text CV/JD/interview inputs.
-2. Implement vector embeddings and retrieval.
-3. Add cleanup jobs and retention-aware deletion follow-up work.
-4. Improve Telegram UX and manager introduction flow.
+1. Implement vector embeddings and retrieval.
+2. Add cleanup jobs and retention-aware deletion follow-up work.
+3. Improve Telegram UX and manager introduction flow.
+4. Add stronger transcript/document quality control and OCR handling.
 5. Add stronger readiness checks, metrics, and operational dashboards.

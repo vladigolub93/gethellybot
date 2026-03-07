@@ -179,6 +179,20 @@ class CandidateProfilesRepository:
         self.session.flush()
         return version
 
+    def update_version_source_text(
+        self,
+        version: CandidateProfileVersion,
+        *,
+        extracted_text=None,
+        transcript_text=None,
+    ) -> CandidateProfileVersion:
+        if extracted_text is not None:
+            version.extracted_text = extracted_text
+        if transcript_text is not None:
+            version.transcript_text = transcript_text
+        self.session.flush()
+        return version
+
     def count_versions_by_source_type(self, profile_id, source_type: str) -> int:
         stmt = select(func.count(CandidateProfileVersion.id)).where(
             CandidateProfileVersion.profile_id == profile_id,

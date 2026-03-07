@@ -50,3 +50,8 @@ class RawMessagesRepository:
         raw_message.file_id = file_id
         self.session.flush()
         return raw_message
+
+    def set_text_content(self, raw_message: RawMessage, text_content: Optional[str]) -> RawMessage:
+        raw_message.text_content = text_content
+        self.session.flush()
+        return raw_message

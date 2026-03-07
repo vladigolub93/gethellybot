@@ -1,6 +1,7 @@
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.ingestion.service import ContentIngestionService
 from src.llm.service import (
     safe_detect_vacancy_inconsistencies,
     safe_extract_vacancy_summary,
@@ -20,6 +21,7 @@ class VacancyProcessingService:
         self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.vacancy_service = VacancyService(session)
+        self.ingestion = ContentIngestionService(session)
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
@@ -39,21 +41,30 @@ class VacancyProcessingService:
             raise ValueError("Vacancy or version was not found for processing.")
 
         source_text = version.extracted_text or version.transcript_text or ""
+        ingestion_mode = "passthrough"
+        ingestion_source = version.source_type
         if not source_text:
-            self.repo.update_version_analysis(
-                version,
-                summary_json={"status": "ingestion_pending", "source_type": version.source_type},
-                normalization_json={"processor": "baseline_vacancy_jd_extract_v1", "ingestion_ready": False},
-                model_name="baseline-ingestion",
-            )
-            self.notifications.create(
-                user_id=vacancy.manager_user_id,
-                entity_type="vacancy",
-                entity_id=vacancy.id,
-                template_key="vacancy_jd_text_retry",
-                payload_json={"text": self._copy("Job description saved, but extraction is not connected for this format yet. Please resend it in text.")},
-            )
-            return {"status": "ingestion_pending", "vacancy_id": str(vacancy.id), "vacancy_version_id": str(version.id)}
+            try:
+                ingestion_result = self.ingestion.ingest_vacancy_version(version)
+            except Exception:  # noqa: BLE001
+                self.repo.update_version_analysis(
+                    version,
+                    summary_json={"status": "ingestion_pending", "source_type": version.source_type},
+                    normalization_json={"processor": "baseline_vacancy_jd_extract_v1", "ingestion_ready": False},
+                    model_name="baseline-ingestion",
+                )
+                raise
+            source_text = ingestion_result.text
+            ingestion_mode = ingestion_result.mode
+            ingestion_source = ingestion_result.source
+            if version.source_type in {"voice_description", "video_description"}:
+                self.repo.update_version_source_text(version, transcript_text=source_text)
+            else:
+                self.repo.update_version_source_text(version, extracted_text=source_text)
+            if version.source_raw_message_id is not None:
+                raw_message = self.raw_messages.get_by_id(version.source_raw_message_id)
+                if raw_message is not None and not raw_message.text_content:
+                    self.raw_messages.set_text_content(raw_message, source_text)
 
         llm_result = safe_extract_vacancy_summary(
             self.session,
@@ -74,6 +85,8 @@ class VacancyProcessingService:
             normalization_json={
                 "processor": llm_result.prompt_version,
                 "ingestion_ready": True,
+                "ingestion_mode": ingestion_mode,
+                "ingestion_source": ingestion_source,
                 "inconsistency_processor": inconsistency_result.prompt_version,
             },
             inconsistency_json=inconsistency_json,
@@ -119,20 +132,26 @@ class VacancyProcessingService:
             raise ValueError("Vacancy or raw message was not found for clarification processing.")
         if vacancy.state != VACANCY_STATE_CLARIFICATION_QA:
             return {"status": "ignored", "vacancy_id": str(vacancy.id), "raw_message_id": str(raw_message.id)}
-        if not raw_message.text_content:
-            self.notifications.create(
-                user_id=vacancy.manager_user_id,
-                entity_type="vacancy",
-                entity_id=vacancy.id,
-                template_key="vacancy_clarification_text_retry",
-                payload_json={"text": self._copy("Voice/video clarification saved, but transcription is not connected yet. Please resend the clarification in text.")},
-            )
-            return {"status": "transcription_pending", "vacancy_id": str(vacancy.id), "raw_message_id": str(raw_message.id)}
+        clarification_text = raw_message.text_content
+        if not clarification_text:
+            try:
+                ingestion_result = self.ingestion.ingest_raw_message(raw_message)
+            except Exception:  # noqa: BLE001
+                self.notifications.create(
+                    user_id=vacancy.manager_user_id,
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                    template_key="vacancy_clarification_text_retry",
+                    payload_json={"text": self._copy("Voice/video clarification saved, but transcription failed. Please resend the clarification in text.")},
+                )
+                raise
+            clarification_text = ingestion_result.text
+            self.raw_messages.set_text_content(raw_message, clarification_text)
 
         result = self.vacancy_service.process_clarification_text(
             vacancy=vacancy,
             raw_message_id=raw_message.id,
-            text=raw_message.text_content,
+            text=clarification_text,
             trigger_type="job",
         )
         self.notifications.create(

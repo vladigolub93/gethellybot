@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     openai_model_reasoning: str = Field(
         default="gpt-5.4", alias="OPENAI_MODEL_REASONING"
     )
+    openai_model_transcription: str = Field(
+        default="gpt-4o-mini-transcribe", alias="OPENAI_MODEL_TRANSCRIPTION"
+    )
 
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_db_url: str = Field(default="", alias="SUPABASE_DB_URL")

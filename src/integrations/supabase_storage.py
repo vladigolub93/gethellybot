@@ -71,3 +71,13 @@ class SupabaseStorageClient:
             if not response.content:
                 return {}
             return response.json()
+
+    def download_bytes(self, *, storage_key: str) -> bytes:
+        object_path = quote(f"{self.bucket_name}/{storage_key}", safe="/")
+        with httpx.Client(timeout=self.timeout_seconds) as client:
+            response = client.get(
+                f"{self.base_url}/storage/v1/object/{object_path}",
+                headers=self._headers,
+            )
+            response.raise_for_status()
+            return response.content

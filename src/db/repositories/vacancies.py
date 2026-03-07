@@ -204,3 +204,17 @@ class VacanciesRepository:
         vacancy.state = "DELETED"
         self.session.flush()
         return vacancy
+
+    def update_version_source_text(
+        self,
+        version: VacancyVersion,
+        *,
+        extracted_text=None,
+        transcript_text=None,
+    ) -> VacancyVersion:
+        if extracted_text is not None:
+            version.extracted_text = extracted_text
+        if transcript_text is not None:
+            version.transcript_text = transcript_text
+        self.session.flush()
+        return version

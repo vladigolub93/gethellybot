@@ -7,6 +7,7 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.candidate_profile.service import CandidateProfileService
+from src.ingestion.service import ContentIngestionService
 from src.llm.service import safe_extract_candidate_summary, safe_merge_candidate_summary
 from src.state.service import StateService
 
@@ -19,6 +20,7 @@ class CandidateProcessingService:
         self.raw_messages = RawMessagesRepository(session)
         self.state_service = StateService(session)
         self.candidate_service = CandidateProfileService(session)
+        self.ingestion = ContentIngestionService(session)
 
     def process_job(self, job) -> dict:
         if job.job_type == "candidate_cv_extract_v1":
@@ -37,25 +39,37 @@ class CandidateProcessingService:
             raise ValueError("Candidate profile or version was not found for processing.")
 
         source_text = version.extracted_text or version.transcript_text or ""
+        ingestion_mode = "passthrough"
+        ingestion_source = version.source_type
         if not source_text:
-            self.repo.update_version_analysis(
-                version,
-                summary_json={
-                    "status": "ingestion_pending",
-                    "source_type": version.source_type,
-                },
-                normalization_json={
-                    "processor": "baseline_cv_extract_v1",
-                    "ingestion_ready": False,
-                },
-                approval_status="ingestion_pending",
-                model_name="baseline-ingestion",
-            )
-            return {
-                "status": "ingestion_pending",
-                "candidate_profile_id": str(profile.id),
-                "candidate_profile_version_id": str(version.id),
-            }
+            try:
+                ingestion_result = self.ingestion.ingest_candidate_version(version)
+            except Exception:  # noqa: BLE001
+                self.repo.update_version_analysis(
+                    version,
+                    summary_json={
+                        "status": "ingestion_pending",
+                        "source_type": version.source_type,
+                    },
+                    normalization_json={
+                        "processor": "baseline_cv_extract_v1",
+                        "ingestion_ready": False,
+                    },
+                    approval_status="ingestion_pending",
+                    model_name="baseline-ingestion",
+                )
+                raise
+            source_text = ingestion_result.text
+            ingestion_mode = ingestion_result.mode
+            ingestion_source = ingestion_result.source
+            if version.source_type == "voice_description":
+                self.repo.update_version_source_text(version, transcript_text=source_text)
+            else:
+                self.repo.update_version_source_text(version, extracted_text=source_text)
+            if version.source_raw_message_id is not None:
+                raw_message = self.raw_messages.get_by_id(version.source_raw_message_id)
+                if raw_message is not None and not raw_message.text_content:
+                    self.raw_messages.set_text_content(raw_message, source_text)
 
         llm_result = safe_extract_candidate_summary(
             self.session,
@@ -69,6 +83,8 @@ class CandidateProcessingService:
             normalization_json={
                 "processor": llm_result.prompt_version,
                 "ingestion_ready": True,
+                "ingestion_mode": ingestion_mode,
+                "ingestion_source": ingestion_source,
             },
             approval_status="pending_user_review",
             model_name=llm_result.model_name,
@@ -163,26 +179,28 @@ class CandidateProcessingService:
                 "raw_message_id": str(raw_message.id),
             }
 
-        if not raw_message.text_content:
-            self.notifications.create(
-                user_id=profile.user_id,
-                entity_type="candidate_profile",
-                entity_id=profile.id,
-                template_key="candidate_questions_text_retry",
-                payload_json={
-                    "text": "Voice/video answer saved, but transcription is not connected yet. Please send salary, location, and work format in text.",
-                },
-            )
-            return {
-                "status": "transcription_pending",
-                "candidate_profile_id": str(profile.id),
-                "raw_message_id": str(raw_message.id),
-            }
+        question_text = raw_message.text_content
+        if not question_text:
+            try:
+                ingestion_result = self.ingestion.ingest_raw_message(raw_message)
+            except Exception:  # noqa: BLE001
+                self.notifications.create(
+                    user_id=profile.user_id,
+                    entity_type="candidate_profile",
+                    entity_id=profile.id,
+                    template_key="candidate_questions_text_retry",
+                    payload_json={
+                        "text": "Voice/video answer saved, but transcription failed. Please send salary, location, and work format in text.",
+                    },
+                )
+                raise
+            question_text = ingestion_result.text
+            self.raw_messages.set_text_content(raw_message, question_text)
 
         result = self.candidate_service.process_question_answer_text(
             profile=profile,
             raw_message_id=raw_message.id,
-            text=raw_message.text_content,
+            text=question_text,
             trigger_type="job",
         )
         self.notifications.create(

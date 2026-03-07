@@ -329,7 +329,17 @@ class InterviewService:
             notification_text=self._copy("Please answer with text, voice, or video."),
         )
 
-    def _handle_interview_answer_text(self, *, candidate, session, raw_message_id, text):
+    def _handle_interview_answer_text(
+        self,
+        *,
+        candidate,
+        session,
+        raw_message_id,
+        text,
+        source_content_type: str = "text",
+        file_id=None,
+        store_as_transcript: bool = False,
+    ):
         question = self.interviews.get_question_by_order(session.id, session.current_question_order)
         if question is None:
             return InterviewUserResult(
@@ -342,8 +352,10 @@ class InterviewService:
             session_id=session.id,
             question_id=question.id,
             raw_message_id=raw_message_id,
-            content_type="text",
-            answer_text=text,
+            file_id=file_id,
+            content_type=source_content_type,
+            answer_text=None if store_as_transcript else text,
+            transcript_text=text if store_as_transcript else None,
             is_follow_up_answer=question.question_kind == "follow_up",
         )
         self.interviews.mark_question_answered(question)

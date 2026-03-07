@@ -54,15 +54,15 @@ At the prompt-asset level, Helly now covers the necessary LLM surface for:
 
 ## Remaining Engineering Work
 
-The remaining gap is no longer prompt design coverage. The remaining gap is the last runtime wiring and surrounding infra:
+The remaining gap is no longer prompt design coverage. The remaining gap is surrounding infra and quality control:
 
-1. load prompt assets from disk instead of relying on inline prompt strings
-2. add transcript and document ingestion for non-text flows
-3. add cleanup jobs and retention-aware deletion follow-up work
-4. continue migrating remaining hard-coded low-priority text into the centralized messaging layer
+1. add vector retrieval and embedding refresh
+2. add cleanup jobs and retention-aware deletion follow-up work
+3. continue migrating remaining hard-coded low-priority text into the centralized messaging layer
+4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion
 
-From the specification and asset perspective, Helly now has complete prompt-family coverage for v1.
+From the specification and runtime perspective, Helly now has complete prompt-family coverage for v1.
 
-The work that remains is implementation wiring, not prompt discovery.
+The work that remains is platform hardening and retrieval quality, not prompt discovery.
