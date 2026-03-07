@@ -1,3 +1,5 @@
+from typing import Optional
+
 from src.candidate_profile.summary_builder import KNOWN_SKILLS
 
 
@@ -5,7 +7,7 @@ def _normalize_text(text: str) -> str:
     return " ".join((text or "").split())
 
 
-def detect_seniority(text: str) -> str | None:
+def detect_seniority(text: str) -> Optional[str]:
     lowered = text.lower()
     if "senior" in lowered or "lead" in lowered or "staff" in lowered:
         return "senior"
@@ -16,7 +18,7 @@ def detect_seniority(text: str) -> str | None:
     return None
 
 
-def detect_role_title(text: str) -> str | None:
+def detect_role_title(text: str) -> Optional[str]:
     normalized = _normalize_text(text)
     for separator in (".", "\n", ","):
         head = normalized.split(separator, 1)[0].strip()

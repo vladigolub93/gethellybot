@@ -22,6 +22,13 @@ class CandidateProfilesRepository:
         stmt = select(CandidateProfile).where(CandidateProfile.id == profile_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_ready_profiles(self) -> list[CandidateProfile]:
+        stmt = select(CandidateProfile).where(
+            CandidateProfile.state == "READY",
+            CandidateProfile.deleted_at.is_(None),
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def get_version_by_id(self, version_id) -> Optional[CandidateProfileVersion]:
         stmt = select(CandidateProfileVersion).where(CandidateProfileVersion.id == version_id)
         return self.session.execute(stmt).scalar_one_or_none()

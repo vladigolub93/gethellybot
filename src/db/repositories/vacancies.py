@@ -36,6 +36,13 @@ class VacanciesRepository:
         stmt = select(Vacancy).where(Vacancy.id == vacancy_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_open_vacancies(self) -> list[Vacancy]:
+        stmt = select(Vacancy).where(
+            Vacancy.state == "OPEN",
+            Vacancy.deleted_at.is_(None),
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def get_version_by_id(self, version_id) -> Optional[VacancyVersion]:
         stmt = select(VacancyVersion).where(VacancyVersion.id == version_id)
         return self.session.execute(stmt).scalar_one_or_none()

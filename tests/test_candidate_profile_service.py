@@ -347,6 +347,7 @@ def test_verification_submission_moves_candidate_to_ready() -> None:
     assert result.status == "completed"
     assert profile.state == CANDIDATE_STATE_READY
     assert profile.ready_at == "now"
+    assert len(service.queue.messages) == 1
 
 
 def test_verification_instruction_is_returned_for_non_video_input() -> None:

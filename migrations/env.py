@@ -9,6 +9,7 @@ from src.config.settings import get_settings
 from src.db.base import Base
 from src.db.models import core  # noqa: F401
 from src.db.models import candidates  # noqa: F401
+from src.db.models import matching  # noqa: F401
 from src.db.models import vacancies  # noqa: F401
 
 config = context.config

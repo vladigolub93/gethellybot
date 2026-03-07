@@ -157,6 +157,7 @@ def test_clarification_completion_opens_vacancy() -> None:
     assert result.status == "completed"
     assert vacancy.state == VACANCY_STATE_OPEN
     assert vacancy.opened_at == "now"
+    assert len(service.queue.messages) == 1
 
 
 def test_clarification_requests_follow_up_when_partial() -> None:

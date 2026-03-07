@@ -497,6 +497,17 @@ class CandidateProfileService:
             },
         )
         self.repo.mark_ready(profile)
+        self.queue.enqueue(
+            JobMessage(
+                job_type="matching_candidate_ready_v1",
+                payload={
+                    "candidate_profile_id": str(profile.id),
+                },
+                idempotency_key=f"matching_candidate_ready_v1:{profile.id}",
+                entity_type="candidate_profile",
+                entity_id=profile.id,
+            )
+        )
         return CandidateVerificationResult(
             status="completed",
             notification_template="candidate_ready",

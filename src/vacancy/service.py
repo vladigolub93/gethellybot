@@ -238,6 +238,18 @@ class VacancyService:
                 metadata_json={"action": "clarifications_completed"},
             )
             self.repo.mark_open(vacancy)
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="matching_run_for_vacancy_v1",
+                    payload={
+                        "vacancy_id": str(vacancy.id),
+                        "trigger_type": "vacancy_open",
+                    },
+                    idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:vacancy_open",
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                )
+            )
             return VacancyClarificationResult(
                 status="completed",
                 notification_template="vacancy_open",
