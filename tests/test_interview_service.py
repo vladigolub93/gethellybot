@@ -26,8 +26,10 @@ class FakeCandidateRepository:
 
 
 class FakeMatchingRepository:
-    def __init__(self, match):
+    def __init__(self, match, matching_run):
         self.match = match
+        self.matching_run = matching_run
+        self.invite_waves = []
 
     def list_shortlisted_for_vacancy(self, vacancy_id, *, limit=3):
         if self.match.vacancy_id == vacancy_id and self.match.status == "shortlisted":
@@ -51,6 +53,31 @@ class FakeMatchingRepository:
 
     def get_by_id(self, match_id):
         return self.match if self.match.id == match_id else None
+
+    def get_run_by_id(self, matching_run_id):
+        return self.matching_run if self.matching_run.id == matching_run_id else None
+
+    def get_latest_run_for_vacancy(self, vacancy_id, *, status=None):
+        if self.matching_run.vacancy_id != vacancy_id:
+            return None
+        if status is not None and self.matching_run.status != status:
+            return None
+        return self.matching_run
+
+    def get_next_wave_no(self, matching_run_id):
+        if not self.invite_waves:
+            return 1
+        return max(wave.wave_no for wave in self.invite_waves if wave.matching_run_id == matching_run_id) + 1
+
+    def create_invite_wave(self, **kwargs):
+        wave = SimpleNamespace(id=uuid4(), **kwargs)
+        self.invite_waves.append(wave)
+        return wave
+
+    def complete_invite_wave(self, wave, **kwargs):
+        for key, value in kwargs.items():
+            setattr(wave, key, value)
+        return wave
 
 
 class FakeVacancyRepository:
@@ -178,8 +205,10 @@ def _build_service():
     candidate = SimpleNamespace(id=uuid4(), user_id=uuid4())
     candidate_version = SimpleNamespace(id=uuid4(), summary_json={"years_experience": 6, "skills": ["python", "postgresql"]})
     vacancy = SimpleNamespace(id=uuid4(), role_title="Senior Python Engineer", primary_tech_stack_json=["python", "postgresql"])
+    matching_run = SimpleNamespace(id=uuid4(), vacancy_id=vacancy.id, status="completed")
     match = SimpleNamespace(
         id=uuid4(),
+        matching_run_id=matching_run.id,
         vacancy_id=vacancy.id,
         candidate_profile_id=candidate.id,
         candidate_profile_version_id=candidate_version.id,
@@ -189,27 +218,30 @@ def _build_service():
     )
     service = InterviewService(FakeSession())
     service.candidates = FakeCandidateRepository(candidate, candidate_version)
-    service.matches = FakeMatchingRepository(match)
+    service.matches = FakeMatchingRepository(match, matching_run)
     service.vacancies = FakeVacancyRepository(vacancy)
     service.interviews = FakeInterviewsRepository()
     service.notifications = FakeNotificationsRepository()
     service.state_service = FakeStateService()
     service.queue = FakeQueue()
-    return service, candidate, match, vacancy
+    return service, candidate, match, vacancy, matching_run
 
 
 def test_dispatch_invites_for_vacancy_marks_match_invited() -> None:
-    service, candidate, match, vacancy = _build_service()
+    service, candidate, match, vacancy, matching_run = _build_service()
 
-    result = service.dispatch_invites_for_vacancy(vacancy_id=vacancy.id)
+    result = service.dispatch_invites_for_vacancy(vacancy_id=vacancy.id, matching_run_id=matching_run.id)
 
     assert result["invited_count"] == 1
+    assert result["wave_no"] == 1
     assert match.status == "invited"
+    assert service.matches.invite_waves[0].invited_count == 1
+    assert service.matches.invite_waves[0].matching_run_id == matching_run.id
     assert service.notifications.rows[0].user_id == candidate.user_id
 
 
 def test_accept_invitation_starts_interview() -> None:
-    service, candidate, match, _vacancy = _build_service()
+    service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
 
@@ -229,7 +261,7 @@ def test_accept_invitation_starts_interview() -> None:
 
 
 def test_interview_answers_complete_session() -> None:
-    service, candidate, match, _vacancy = _build_service()
+    service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
     service.handle_candidate_message(
@@ -255,7 +287,7 @@ def test_interview_answers_complete_session() -> None:
 
 
 def test_strong_answer_inserts_followup_question(monkeypatch: pytest.MonkeyPatch) -> None:
-    service, candidate, match, _vacancy = _build_service()
+    service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
     service.handle_candidate_message(

@@ -106,10 +106,26 @@ class InterviewService:
         )
         return conductor.payload.get("utterance") or self._question_prompt_text(current_question)
 
-    def dispatch_invites_for_vacancy(self, *, vacancy_id, limit: int = 3) -> dict:
+    def dispatch_invites_for_vacancy(self, *, vacancy_id, matching_run_id=None, limit: int = 3) -> dict:
         vacancy = self.vacancies.get_by_id(vacancy_id)
+        matching_run = None
+        if matching_run_id is not None:
+            matching_run = self.matches.get_run_by_id(matching_run_id)
+        if matching_run is None:
+            matching_run = self.matches.get_latest_run_for_vacancy(vacancy_id, status="completed")
+        if matching_run is None:
+            raise ValueError("Matching run not found for invite dispatch.")
         matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
+        wave = self.matches.create_invite_wave(
+            vacancy_id=vacancy_id,
+            matching_run_id=matching_run.id,
+            wave_no=self.matches.get_next_wave_no(matching_run.id),
+            status="running",
+            target_invites_count=limit,
+            payload_json={"limit": limit},
+        )
         invited_count = 0
+        invited_match_ids = []
         for match in matches:
             candidate = self.candidates.get_by_id(match.candidate_profile_id)
             if candidate is None:
@@ -136,7 +152,23 @@ class InterviewService:
                 },
             )
             invited_count += 1
-        return {"vacancy_id": str(vacancy_id), "invited_count": invited_count}
+            invited_match_ids.append(str(match.id))
+        self.matches.complete_invite_wave(
+            wave,
+            invited_count=invited_count,
+            payload_json={
+                "limit": limit,
+                "matching_run_id": str(matching_run.id),
+                "invited_match_ids": invited_match_ids,
+            },
+        )
+        return {
+            "vacancy_id": str(vacancy_id),
+            "matching_run_id": str(matching_run.id),
+            "invite_wave_id": str(wave.id),
+            "wave_no": wave.wave_no,
+            "invited_count": invited_count,
+        }
 
     def handle_candidate_message(
         self,

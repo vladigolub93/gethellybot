@@ -364,6 +364,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 ### 10.2 Invite Waves
 
 163. `P0` Implement first wave creation.
+163A. `P0` Link invite waves to `matching_runs` and persist invited match IDs per wave.
 164. `P0` Implement invite count limits.
 165. `P0` Implement invitation expiration timestamps.
 166. `P1` Implement wave expansion policy when completion threshold is not reached.

@@ -54,6 +54,7 @@ class MatchingProcessingService:
                     job_type="interview_dispatch_invites_v1",
                     payload={
                         "vacancy_id": result["vacancy_id"],
+                        "matching_run_id": result["matching_run_id"],
                         "limit": 3,
                     },
                     idempotency_key=f"interview_dispatch_invites_v1:{result['vacancy_id']}:{result['matching_run_id']}",

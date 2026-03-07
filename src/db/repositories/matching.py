@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models.matching import Match, MatchingRun
+from src.db.models.matching import InviteWave, Match, MatchingRun
 
 
 class MatchingRepository:
@@ -100,6 +100,17 @@ class MatchingRepository:
         stmt = select(Match).where(Match.matching_run_id == matching_run_id)
         return list(self.session.execute(stmt).scalars().all())
 
+    def get_run_by_id(self, matching_run_id) -> Optional[MatchingRun]:
+        stmt = select(MatchingRun).where(MatchingRun.id == matching_run_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def get_latest_run_for_vacancy(self, vacancy_id, *, status: Optional[str] = None) -> Optional[MatchingRun]:
+        stmt = select(MatchingRun).where(MatchingRun.vacancy_id == vacancy_id)
+        if status is not None:
+            stmt = stmt.where(MatchingRun.status == status)
+        stmt = stmt.order_by(MatchingRun.created_at.desc()).limit(1)
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def list_shortlisted_for_vacancy(self, vacancy_id, *, limit: int = 3) -> list[Match]:
         stmt = (
             select(Match)
@@ -111,6 +122,56 @@ class MatchingRepository:
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def get_next_wave_no(self, matching_run_id) -> int:
+        stmt = select(InviteWave).where(InviteWave.matching_run_id == matching_run_id)
+        waves = list(self.session.execute(stmt).scalars().all())
+        if not waves:
+            return 1
+        return max(wave.wave_no for wave in waves) + 1
+
+    def create_invite_wave(
+        self,
+        *,
+        vacancy_id,
+        matching_run_id,
+        wave_no: int,
+        status: str = "created",
+        invited_count: int = 0,
+        completed_interviews_count: int = 0,
+        target_invites_count: int = 0,
+        payload_json: Optional[dict] = None,
+    ) -> InviteWave:
+        row = InviteWave(
+            vacancy_id=vacancy_id,
+            matching_run_id=matching_run_id,
+            wave_no=wave_no,
+            status=status,
+            invited_count=invited_count,
+            completed_interviews_count=completed_interviews_count,
+            target_invites_count=target_invites_count,
+            payload_json=payload_json,
+        )
+        self.session.add(row)
+        self.session.flush()
+        return row
+
+    def complete_invite_wave(
+        self,
+        wave: InviteWave,
+        *,
+        invited_count: int,
+        completed_interviews_count: int = 0,
+        status: str = "completed",
+        payload_json: Optional[dict] = None,
+    ) -> InviteWave:
+        wave.invited_count = invited_count
+        wave.completed_interviews_count = completed_interviews_count
+        wave.status = status
+        if payload_json is not None:
+            wave.payload_json = payload_json
+        self.session.flush()
+        return wave
 
     def get_by_id(self, match_id) -> Optional[Match]:
         stmt = select(Match).where(Match.id == match_id)

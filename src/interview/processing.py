@@ -17,6 +17,7 @@ class InterviewProcessingService:
             payload = job.payload_json or {}
             return self.service.dispatch_invites_for_vacancy(
                 vacancy_id=payload["vacancy_id"],
+                matching_run_id=payload.get("matching_run_id"),
                 limit=payload.get("limit", 3),
             )
         if job.job_type == "interview_answer_process_v1":

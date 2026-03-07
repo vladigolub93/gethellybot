@@ -18,6 +18,7 @@ def test_core_table_names_present() -> None:
         "vacancies",
         "vacancy_versions",
         "matching_runs",
+        "invite_waves",
         "matches",
         "interview_sessions",
         "interview_questions",

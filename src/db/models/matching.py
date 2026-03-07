@@ -68,3 +68,26 @@ class Match(Base, UpdateTimestampMixin):
     invitation_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     candidate_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     manager_decision_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class InviteWave(Base, TimestampMixin):
+    __tablename__ = "invite_waves"
+    __table_args__ = (
+        Index("ix_invite_waves_vacancy_id_created_at", "vacancy_id", "created_at"),
+        Index("ix_invite_waves_matching_run_id_wave_no", "matching_run_id", "wave_no", unique=True),
+        Index("ix_invite_waves_status_created_at", "status", "created_at"),
+    )
+
+    id: Mapped[PyUUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    vacancy_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("vacancies.id"), nullable=False
+    )
+    matching_run_id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("matching_runs.id"), nullable=False
+    )
+    wave_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    invited_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_interviews_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target_invites_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    payload_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)

@@ -328,6 +328,8 @@ Run invitation waves and AI interviews inside Telegram.
 - implement invitation creation with expiration timestamp
 - build wave policy configuration
 - implement wave scheduler job
+- persist `invite_waves` records linked to matching runs
+- create first invitation wave during invite dispatch
 - implement accept interview path
 - implement skip opportunity path
 - create `interview_question_plan` prompt asset

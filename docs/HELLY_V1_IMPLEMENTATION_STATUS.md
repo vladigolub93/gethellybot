@@ -170,6 +170,7 @@ Status vs SRS:
 - `Implemented`: matching trigger from candidate `READY`
 - `Implemented`: matching trigger from vacancy `OPEN`
 - `Implemented`: `matching_runs` and `matches`
+- `Implemented`: `invite_waves` persistence foundation and first-wave creation
 - `Implemented`: hard filters
   - location
   - work format
@@ -184,7 +185,7 @@ Status vs SRS:
 
 ### What is missing
 
-- `Not Implemented`: configurable multi-wave invitation policy beyond the current baseline dispatch
+- `Not Implemented`: configurable multi-wave invitation expansion policy beyond the current first-wave dispatch baseline
 
 Status vs SRS:
 
@@ -198,6 +199,7 @@ Status vs SRS:
 ### What is implemented
 
 - `Implemented`: invitation dispatch
+- `Implemented`: first invite wave records are persisted and linked to matching runs
 - `Implemented`: candidate can accept or skip
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
@@ -214,6 +216,7 @@ Status vs SRS:
 ### What is missing
 
 - `Not Implemented`: transcript confidence scoring and retry/escalation strategy for low-quality media
+- `Not Implemented`: follow-on wave scheduler and completion-threshold expansion policy
 
 Status vs SRS:
 
