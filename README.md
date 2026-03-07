@@ -1,44 +1,33 @@
-# telegrambot
+# Helly
 
-MVP scaffold for a Telegram-based AI-powered recruitment matching system.
+Helly is a Telegram-first AI recruitment platform.
 
-## DB readiness check
+This repository has been reset to a clean baseline. The previous codebase was intentionally removed from the active implementation path because it is no longer considered a valid foundation.
 
-After migrations are applied and service is running, verify DB schema readiness:
+## Current Repository Role
 
-1. Set `ADMIN_SECRET` in environment.
-2. Call endpoint:
-   - `GET /admin/db-status`
-   - Header: `x-admin-secret: <ADMIN_SECRET>`
+The repository currently serves as the canonical product and architecture workspace for Helly v1.
 
-Response shape:
+It contains:
 
-```json
-{
-  "ok": true,
-  "missing_tables": [],
-  "missing_columns": [],
-  "applied_migrations_count": 0
-}
-```
+- product specification
+- architecture blueprint
+- infrastructure decisions
+- data model and state machines
+- AI prompt catalog
+- implementation roadmap and engineering backlog
 
-If `ok` is `false`, apply missing migrations and recheck.
+## Start Here
 
-## LLM gate simulation
+- [docs/README.md](/Users/vladigolub/Desktop/gethellybot/docs/README.md)
 
-Run a local dispatcher simulation without Telegram network calls:
+## Confirmed v1 Stack
 
-```bash
-npm run simulate:flow
-```
+- Supabase
+- Railway
+- Telegram Bot API
+- OpenAI
 
-This script checks:
-- every mocked update goes through router classification,
-- no generic fallback phrase is used,
-- meta steps do not force interview advancement.
+## Next Phase
 
-## Vector search mode
-
-The project supports dual vector mode:
-- Primary, Qdrant candidate retrieval when `QDRANT_URL` and `QDRANT_API_KEY` are set.
-- Fallback, Supabase vector search and then local in-memory scoring when Qdrant is unavailable.
+The next implementation phase is to build a new backend baseline directly from the documents in `docs/`, instead of continuing the removed legacy code.
