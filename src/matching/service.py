@@ -1,11 +1,15 @@
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.llm.service import safe_rerank_candidates
 from src.matching.filters import evaluate_hard_filters
 from src.matching.scoring import compute_deterministic_score, compute_embedding_score
 
 
 class MatchingService:
+    FINAL_SHORTLIST_LIMIT = 6
+    DETERMINISTIC_POOL_LIMIT = 10
+
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
@@ -38,7 +42,7 @@ class MatchingService:
             vacancy_id=vacancy.id,
             trigger_type=trigger_type,
             trigger_candidate_profile_id=trigger_candidate_profile_id,
-            payload_json={"mode": "baseline_deterministic_matching"},
+            payload_json={"mode": "deterministic_plus_llm_rerank"},
         )
 
         scored = []
@@ -92,10 +96,39 @@ class MatchingService:
             reverse=True,
         )
 
-        shortlisted = scored[:10]
-        non_shortlisted = scored[10:]
+        deterministic_pool = scored[: self.DETERMINISTIC_POOL_LIMIT]
+        non_shortlisted = scored[self.DETERMINISTIC_POOL_LIMIT :]
+        rerank_input = [
+            {
+                "candidate_ref": str(item["candidate"].id),
+                "candidate_profile_id": item["candidate"].id,
+                "candidate_profile_version_id": item["candidate_version"].id,
+                "candidate_summary": item["candidate_version"].summary_json or {},
+                "embedding_score": item["embedding_score"],
+                "deterministic_score": item["deterministic_score"],
+                "score_breakdown": item["score_breakdown"],
+            }
+            for item in deterministic_pool
+        ]
+        rerank_result = safe_rerank_candidates(
+            self.session,
+            vacancy=vacancy,
+            shortlisted_candidates=rerank_input,
+        )
+        reranked_candidates = rerank_result.payload.get("ranked_candidates") or []
+        rerank_map = {item["candidate_ref"]: item for item in reranked_candidates}
+        reranked_pool = sorted(
+            deterministic_pool,
+            key=lambda item: rerank_map.get(str(item["candidate"].id), {}).get(
+                "rank",
+                self.DETERMINISTIC_POOL_LIMIT + 1,
+            ),
+        )
+        final_shortlist = reranked_pool[: self.FINAL_SHORTLIST_LIMIT]
+        llm_filtered = reranked_pool[self.FINAL_SHORTLIST_LIMIT :]
 
-        for rank, item in enumerate(shortlisted, start=1):
+        for rank, item in enumerate(final_shortlist, start=1):
+            rerank_item = rerank_map.get(str(item["candidate"].id), {})
             self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
@@ -107,10 +140,34 @@ class MatchingService:
                 filter_reason_codes_json=[],
                 embedding_score=item["embedding_score"],
                 deterministic_score=item["deterministic_score"],
+                llm_rank_score=rerank_item.get("fit_score"),
                 llm_rank_position=rank,
                 rationale_json={
-                    "stage": "deterministic_shortlist",
+                    "stage": "llm_rerank_shortlist",
                     "score_breakdown": item["score_breakdown"],
+                    "llm_rationale": rerank_item.get("rationale"),
+                },
+            )
+
+        for item in llm_filtered:
+            rerank_item = rerank_map.get(str(item["candidate"].id), {})
+            self.matching.create_match(
+                matching_run_id=run.id,
+                vacancy_id=vacancy.id,
+                vacancy_version_id=vacancy_version.id,
+                candidate_profile_id=item["candidate"].id,
+                candidate_profile_version_id=item["candidate_version"].id,
+                status="filtered_out",
+                hard_filter_passed=True,
+                filter_reason_codes_json=["below_llm_rerank_cutoff"],
+                embedding_score=item["embedding_score"],
+                deterministic_score=item["deterministic_score"],
+                llm_rank_score=rerank_item.get("fit_score"),
+                llm_rank_position=rerank_item.get("rank"),
+                rationale_json={
+                    "stage": "llm_rerank",
+                    "score_breakdown": item["score_breakdown"],
+                    "llm_rationale": rerank_item.get("rationale"),
                 },
             )
 
@@ -136,12 +193,14 @@ class MatchingService:
             run,
             candidate_pool_count=len(candidate_profiles),
             hard_filtered_count=hard_filtered_count,
-            shortlisted_count=len(shortlisted),
+            shortlisted_count=len(final_shortlist),
             payload_json={
-                "mode": "baseline_deterministic_matching",
+                "mode": "deterministic_plus_llm_rerank",
                 "candidate_pool_count": len(candidate_profiles),
                 "hard_filtered_count": hard_filtered_count,
-                "shortlisted_count": len(shortlisted),
+                "deterministic_pool_count": len(deterministic_pool),
+                "shortlisted_count": len(final_shortlist),
+                "llm_prompt_version": rerank_result.prompt_version,
             },
         )
         return {
@@ -149,5 +208,5 @@ class MatchingService:
             "vacancy_id": str(vacancy.id),
             "candidate_pool_count": len(candidate_profiles),
             "hard_filtered_count": hard_filtered_count,
-            "shortlisted_count": len(shortlisted),
+            "shortlisted_count": len(final_shortlist),
         }

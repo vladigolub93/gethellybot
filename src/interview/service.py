@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import Optional
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
@@ -17,6 +20,7 @@ from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
 from src.llm.service import (
     safe_build_interview_question_plan,
+    safe_conduct_interview_turn,
     safe_decide_interview_followup,
     safe_parse_interview_answer,
 )
@@ -55,6 +59,45 @@ class InterviewService:
             "project_description": getattr(vacancy, "project_description", None),
             "work_format": getattr(vacancy, "work_format", None),
         }
+
+    @staticmethod
+    def _question_payload(question, *, question_id: Optional[int] = None) -> dict:
+        if question is None:
+            return {}
+        return {
+            "id": question_id,
+            "type": question.question_kind if question.question_kind != "follow_up" else None,
+            "question": question.question_text,
+        }
+
+    def _render_interview_utterance(
+        self,
+        *,
+        mode: str,
+        candidate_summary: dict,
+        vacancy,
+        session,
+        current_question,
+        candidate_answer: str | None = None,
+        answer_quality: str | None = None,
+        follow_up_used: bool = False,
+        follow_up_reason: str | None = None,
+        candidate_first_name: str | None = None,
+    ) -> str:
+        conductor = safe_conduct_interview_turn(
+            self.session,
+            mode=mode,
+            candidate_first_name=candidate_first_name,
+            candidate_summary=candidate_summary,
+            vacancy_context=self._vacancy_context(vacancy),
+            interview_plan=(session.plan_json or {}).get("questions") or [],
+            current_question=self._question_payload(current_question, question_id=session.current_question_order),
+            candidate_answer=candidate_answer,
+            answer_quality=answer_quality,
+            follow_up_used=follow_up_used,
+            follow_up_reason=follow_up_reason,
+        )
+        return conductor.payload.get("utterance") or self._question_prompt_text(current_question)
 
     def dispatch_invites_for_vacancy(self, *, vacancy_id, limit: int = 3) -> dict:
         matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
@@ -219,11 +262,18 @@ class InterviewService:
         first_question = self.interviews.get_question_by_order(session.id, session.current_question_order)
         if first_question is not None and first_question.asked_at is None:
             self.interviews.mark_question_asked(first_question)
+        opening_text = self._render_interview_utterance(
+            mode="opening",
+            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+            vacancy=vacancy,
+            session=session,
+            current_question=first_question,
+        )
 
         return InterviewUserResult(
             status="accepted",
             notification_template="candidate_interview_started",
-            notification_text=first_question.question_text if first_question is not None else "Interview started.",
+            notification_text=opening_text if first_question is not None else "Interview started.",
         )
 
     def _handle_interview_answer(
@@ -332,10 +382,21 @@ class InterviewService:
             self.interviews.set_total_questions(session, session.total_questions + 1)
             self.interviews.advance_question_pointer(session, next_order)
             self.interviews.mark_question_asked(followup)
+            followup_text = self._render_interview_utterance(
+                mode="ask_follow_up",
+                candidate_summary=candidate_summary,
+                vacancy=vacancy,
+                session=session,
+                current_question=followup,
+                candidate_answer=text or "",
+                answer_quality=followup_decision.payload.get("answer_quality"),
+                follow_up_used=True,
+                follow_up_reason=followup_decision.payload.get("followup_reason"),
+            )
             return InterviewUserResult(
                 status="follow_up_question",
                 notification_template="candidate_interview_follow_up_question",
-                notification_text=self._question_prompt_text(followup),
+                notification_text=followup_text,
             )
 
         if session.current_question_order >= session.total_questions:
@@ -369,10 +430,21 @@ class InterviewService:
                     entity_id=session.id,
                 )
             )
+            closing_text = self._render_interview_utterance(
+                mode="closing",
+                candidate_summary=candidate_summary,
+                vacancy=vacancy,
+                session=session,
+                current_question=question,
+                candidate_answer=text or "",
+                answer_quality=followup_decision.payload.get("answer_quality"),
+                follow_up_used=question.question_kind == "follow_up",
+                follow_up_reason=followup_decision.payload.get("followup_reason"),
+            )
             return InterviewUserResult(
                 status="completed",
                 notification_template="candidate_interview_completed",
-                notification_text="Interview completed. Thank you.",
+                notification_text=closing_text,
             )
 
         next_order = session.current_question_order + 1
@@ -380,8 +452,19 @@ class InterviewService:
         next_question = self.interviews.get_question_by_order(session.id, next_order)
         if next_question is not None and next_question.asked_at is None:
             self.interviews.mark_question_asked(next_question)
+        next_question_text = self._render_interview_utterance(
+            mode="move_to_next_question",
+            candidate_summary=candidate_summary,
+            vacancy=vacancy,
+            session=session,
+            current_question=next_question,
+            candidate_answer=text or "",
+            answer_quality=followup_decision.payload.get("answer_quality"),
+            follow_up_used=question.question_kind == "follow_up",
+            follow_up_reason=followup_decision.payload.get("followup_reason"),
+        )
         return InterviewUserResult(
             status="next_question",
             notification_template="candidate_interview_next_question",
-            notification_text=self._question_prompt_text(next_question) if next_question is not None else "Next question is ready.",
+            notification_text=next_question_text if next_question is not None else "Next question is ready.",
         )

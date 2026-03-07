@@ -215,3 +215,57 @@ Parsed answer evidence:
 
 Follow-up already used for this topic: {follow_up_already_used}
 """
+
+
+def interview_session_conductor_prompt(
+    *,
+    mode: str,
+    candidate_first_name: str | None,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    interview_plan: list[dict] | None,
+    current_question: dict | None,
+    candidate_answer: str | None,
+    answer_quality: str | None,
+    follow_up_used: bool,
+    follow_up_reason: str | None,
+) -> str:
+    return f"""Task: conduct a single Telegram interview turn for Helly.
+
+Mode: {mode}
+Candidate first name: {candidate_first_name}
+Candidate summary:
+{candidate_summary or {}}
+
+Vacancy context:
+{vacancy_context or {}}
+
+Interview plan:
+{interview_plan or []}
+
+Current question:
+{current_question or {}}
+
+Candidate answer:
+{candidate_answer or ""}
+
+Answer quality:
+{answer_quality}
+
+Follow-up already used:
+{follow_up_used}
+
+Follow-up reason:
+{follow_up_reason}
+"""
+
+
+def candidate_rerank_prompt(*, vacancy_context: dict, shortlisted_candidates: list[dict]) -> str:
+    return f"""Task: rerank already-shortlisted candidates for this vacancy.
+
+Vacancy context:
+{vacancy_context}
+
+Shortlisted candidates:
+{shortlisted_candidates}
+"""

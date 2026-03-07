@@ -92,3 +92,26 @@ class BotControllerDecisionSchema(BaseModel):
     should_use_recovery: bool
     response_text: Optional[str] = None
     reason_code: Optional[str] = None
+
+
+class InterviewSessionConductorTurnSchema(BaseModel):
+    mode: str
+    utterance: str
+    current_question_id: Optional[int] = None
+    current_question_type: Optional[str] = None
+    answer_quality: Optional[str] = None
+    follow_up_used: bool = False
+    follow_up_reason: Optional[str] = None
+    move_to_next_question: bool = False
+    interview_complete: bool = False
+
+
+class CandidateRerankItemSchema(BaseModel):
+    candidate_ref: str
+    rank: int
+    fit_score: float
+    rationale: str
+
+
+class CandidateRerankSchema(BaseModel):
+    ranked_candidates: List[CandidateRerankItemSchema] = Field(default_factory=list)

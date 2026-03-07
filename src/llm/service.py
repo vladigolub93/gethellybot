@@ -14,6 +14,7 @@ from src.interview.question_plan import build_question_plan
 from src.llm.assets import load_system_prompt
 from src.llm.prompts import (
     bot_controller_prompt,
+    candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_prompt,
     candidate_summary_edit_prompt,
@@ -21,17 +22,20 @@ from src.llm.prompts import (
     interview_evaluation_prompt,
     interview_followup_decision_prompt,
     interview_question_plan_prompt,
+    interview_session_conductor_prompt,
     vacancy_clarifications_prompt,
     vacancy_jd_prompt,
 )
 from src.llm.schemas import (
     BotControllerDecisionSchema,
+    CandidateRerankSchema,
     CandidateQuestionParseSchema,
     CandidateSummarySchema,
     InterviewAnswerParseSchema,
     InterviewEvaluationSchema,
     InterviewFollowupDecisionSchema,
     InterviewQuestionPlanSchema,
+    InterviewSessionConductorTurnSchema,
     VacancyClarificationSchema,
     VacancySummarySchema,
 )
@@ -231,6 +235,27 @@ def _fallback_interview_question_plan(vacancy, candidate_summary: dict) -> dict:
         ],
         "fallback_used": True,
     }
+
+
+def _normalize_question_type(value: Optional[str]) -> Optional[str]:
+    normalized = (value or "").strip().lower()
+    if normalized in {"behavioral", "situational", "role_specific", "motivation"}:
+        return normalized
+    return None
+
+
+def _normalize_answer_quality(value: Optional[str]) -> Optional[str]:
+    normalized = (value or "").strip().lower()
+    if normalized in {"strong", "mixed", "weak"}:
+        return normalized
+    return None
+
+
+def _normalize_followup_reason(value: Optional[str]) -> Optional[str]:
+    normalized = (value or "").strip().lower()
+    if normalized in {"deepen", "clarify", "verify", "none"}:
+        return normalized
+    return None
 
 
 def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LLMResult:
@@ -585,6 +610,97 @@ def bot_controller_decision_with_llm(
     )
 
 
+def conduct_interview_turn_with_llm(
+    *,
+    mode: str,
+    candidate_first_name: str | None,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    interview_plan: list[dict] | None,
+    current_question: dict | None,
+    candidate_answer: str | None,
+    answer_quality: str | None,
+    follow_up_used: bool,
+    follow_up_reason: str | None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=InterviewSessionConductorTurnSchema,
+        system_prompt=load_system_prompt("interview", "session_conductor"),
+        user_prompt=interview_session_conductor_prompt(
+            mode=mode,
+            candidate_first_name=candidate_first_name,
+            candidate_summary=candidate_summary,
+            vacancy_context=vacancy_context,
+            interview_plan=interview_plan,
+            current_question=current_question,
+            candidate_answer=candidate_answer,
+            answer_quality=answer_quality,
+            follow_up_used=follow_up_used,
+            follow_up_reason=follow_up_reason,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="interview_session_conductor_llm_v1",
+    )
+    payload = {
+        "mode": (result.payload.get("mode") or mode).strip().lower(),
+        "utterance": _clean_text(result.payload.get("utterance"), limit=500) or "",
+        "current_question_id": result.payload.get("current_question_id"),
+        "current_question_type": _normalize_question_type(result.payload.get("current_question_type")),
+        "answer_quality": _normalize_answer_quality(result.payload.get("answer_quality")),
+        "follow_up_used": bool(result.payload.get("follow_up_used")),
+        "follow_up_reason": _normalize_followup_reason(result.payload.get("follow_up_reason")),
+        "move_to_next_question": bool(result.payload.get("move_to_next_question")),
+        "interview_complete": bool(result.payload.get("interview_complete")),
+    }
+    return LLMResult(
+        payload=payload,
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def rerank_candidates_with_llm(*, vacancy, shortlisted_candidates: list[dict]) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateRerankSchema,
+        system_prompt=load_system_prompt("matching", "candidate_rerank"),
+        user_prompt=candidate_rerank_prompt(
+            vacancy_context=_vacancy_context(vacancy),
+            shortlisted_candidates=shortlisted_candidates,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="matching_candidate_rerank_llm_v1",
+    )
+    ranked_candidates = []
+    for item in result.payload.get("ranked_candidates") or []:
+        if not isinstance(item, dict):
+            continue
+        candidate_ref = _clean_text(item.get("candidate_ref"), limit=120)
+        rationale = _clean_text(item.get("rationale"), limit=280)
+        rank = item.get("rank")
+        fit_score = item.get("fit_score")
+        if not candidate_ref or rationale is None:
+            continue
+        try:
+            rank_value = int(rank)
+            fit_score_value = max(0.0, min(1.0, float(fit_score)))
+        except (TypeError, ValueError):
+            continue
+        ranked_candidates.append(
+            {
+                "candidate_ref": candidate_ref,
+                "rank": rank_value,
+                "fit_score": round(fit_score_value, 4),
+                "rationale": rationale,
+            }
+        )
+    ranked_candidates.sort(key=lambda item: item["rank"])
+    return LLMResult(
+        payload={"ranked_candidates": ranked_candidates},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def safe_extract_candidate_summary(session, source_text: str, source_type: str) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
@@ -873,4 +989,106 @@ def safe_bot_controller_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_bot_controller_v1",
+    )
+
+
+def safe_conduct_interview_turn(
+    session,
+    *,
+    mode: str,
+    candidate_first_name: str | None,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    interview_plan: list[dict] | None,
+    current_question: dict | None,
+    candidate_answer: str | None,
+    answer_quality: str | None,
+    follow_up_used: bool,
+    follow_up_reason: str | None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return conduct_interview_turn_with_llm(
+                mode=mode,
+                candidate_first_name=candidate_first_name,
+                candidate_summary=candidate_summary,
+                vacancy_context=vacancy_context,
+                interview_plan=interview_plan,
+                current_question=current_question,
+                candidate_answer=candidate_answer,
+                answer_quality=answer_quality,
+                follow_up_used=follow_up_used,
+                follow_up_reason=follow_up_reason,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("interview_conductor_fallback_to_baseline", error=str(exc))
+
+    question_text = (current_question or {}).get("question") or ""
+    if mode == "opening":
+        first_name = f" {candidate_first_name}" if candidate_first_name else ""
+        utterance = (
+            f"Thanks for joining{first_name}. I reviewed your profile and prepared a few questions about your experience for this role. "
+            f"Let's start. {question_text}"
+        ).strip()
+    elif mode in {"ask_main_question", "move_to_next_question"}:
+        utterance = question_text
+    elif mode == "ask_follow_up":
+        utterance = question_text
+    elif mode == "closing":
+        utterance = "Thanks for sharing. That gives a good overview of your experience for the role."
+    else:
+        utterance = question_text or "Please continue."
+
+    return LLMResult(
+        payload={
+            "mode": mode,
+            "utterance": utterance[:500],
+            "current_question_id": (current_question or {}).get("id"),
+            "current_question_type": _normalize_question_type((current_question or {}).get("type")),
+            "answer_quality": _normalize_answer_quality(answer_quality),
+            "follow_up_used": follow_up_used,
+            "follow_up_reason": _normalize_followup_reason(follow_up_reason),
+            "move_to_next_question": mode == "move_to_next_question",
+            "interview_complete": mode == "closing",
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_interview_session_conductor_v1",
+    )
+
+
+def safe_rerank_candidates(session, *, vacancy, shortlisted_candidates: list[dict]) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            result = rerank_candidates_with_llm(
+                vacancy=vacancy,
+                shortlisted_candidates=shortlisted_candidates,
+            )
+            if result.payload.get("ranked_candidates"):
+                return result
+            raise RuntimeError("LLM returned empty rerank result.")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_rerank_fallback_to_baseline", error=str(exc))
+
+    ranked = []
+    ordered = sorted(
+        shortlisted_candidates,
+        key=lambda item: (
+            float(item.get("deterministic_score") or 0.0),
+            float(item.get("embedding_score") or 0.0),
+        ),
+        reverse=True,
+    )
+    for rank, item in enumerate(ordered, start=1):
+        ranked.append(
+            {
+                "candidate_ref": item["candidate_ref"],
+                "rank": rank,
+                "fit_score": round(float(item.get("deterministic_score") or 0.0), 4),
+                "rationale": "Strong deterministic fit based on stack overlap, experience, and seniority alignment.",
+            }
+        )
+    return LLMResult(
+        payload={"ranked_candidates": ranked},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_rerank_v1",
     )

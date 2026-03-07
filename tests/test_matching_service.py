@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from src.matching.service import MatchingService
 
 
@@ -110,3 +112,86 @@ def test_execute_for_vacancy_creates_shortlisted_and_filtered_matches() -> None:
     assert len(service.matching.matches) == 2
     assert any(match.status == "shortlisted" for match in service.matching.matches)
     assert any(match.status == "filtered_out" for match in service.matching.matches)
+
+
+def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    vacancy = SimpleNamespace(
+        id=uuid4(),
+        primary_tech_stack_json=["python", "postgresql"],
+        countries_allowed_json=["PL"],
+        work_format="remote",
+        budget_max=6000,
+        seniority_normalized="senior",
+    )
+    vacancy_version = SimpleNamespace(id=uuid4())
+
+    candidate_a = SimpleNamespace(
+        id=uuid4(),
+        state="READY",
+        deleted_at=None,
+        country_code="PL",
+        work_format="remote",
+        salary_min=5000,
+        seniority_normalized="senior",
+    )
+    candidate_b = SimpleNamespace(
+        id=uuid4(),
+        state="READY",
+        deleted_at=None,
+        country_code="PL",
+        work_format="remote",
+        salary_min=5000,
+        seniority_normalized="senior",
+    )
+    candidate_versions = {
+        candidate_a.id: SimpleNamespace(
+            id=uuid4(),
+            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
+        ),
+        candidate_b.id: SimpleNamespace(
+            id=uuid4(),
+            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
+        ),
+    }
+
+    service = MatchingService(FakeSession())
+    service.candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
+    service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
+    service.matching = FakeMatchingRepository()
+
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: SimpleNamespace(
+            prompt_version="matching_candidate_rerank_llm_v1",
+            payload={
+                "ranked_candidates": [
+                    {
+                        "candidate_ref": str(candidate_b.id),
+                        "rank": 1,
+                        "fit_score": 0.91,
+                        "rationale": "Better direct role fit.",
+                    },
+                    {
+                        "candidate_ref": str(candidate_a.id),
+                        "rank": 2,
+                        "fit_score": 0.82,
+                        "rationale": "Strong but slightly less aligned.",
+                    },
+                ]
+            },
+        ),
+    )
+
+    result = service.execute_for_vacancy(
+        vacancy_id=vacancy.id,
+        trigger_type="vacancy_open",
+    )
+
+    shortlisted = [match for match in service.matching.matches if match.status == "shortlisted"]
+    assert result["shortlisted_count"] == 2
+    assert len(shortlisted) == 2
+    candidate_b_match = next(match for match in shortlisted if match.candidate_profile_id == candidate_b.id)
+    candidate_a_match = next(match for match in shortlisted if match.candidate_profile_id == candidate_a.id)
+    assert candidate_b_match.llm_rank_position == 1
+    assert candidate_a_match.llm_rank_position == 2
+    assert candidate_b_match.llm_rank_score == 0.91
