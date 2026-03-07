@@ -5,6 +5,11 @@ LangGraph-Based Agent-per-Stage Orchestration
 Version: 1.0  
 Date: 2026-03-07
 
+Canonical note:
+
+- this document remains useful as the original LangGraph migration rationale
+- the current canonical target architecture is now defined in `HELLY_V1_AGENT_OWNED_STAGE_ARCHITECTURE.md`
+
 ## 1. Purpose
 
 This document defines the new target orchestration model for Helly v1.
@@ -131,6 +136,11 @@ A stage agent may:
 - detect valid completion input
 - structure user input for backend validation
 - propose exactly one bounded action
+
+Current direction update:
+
+- the target is now stronger than a help-oriented stage assistant
+- every major user-facing stage should become a full stage-owning agent that can carry the user through the whole stage, not only answer help or clarification messages
 
 A stage agent may not:
 

@@ -5,6 +5,12 @@ Execution Plan for Migrating Helly to LangGraph Stage Agents
 Version: 1.0  
 Date: 2026-03-07
 
+Canonical note:
+
+- this document reflects the original migration sequencing toward LangGraph
+- the current canonical rebuild sequence is now defined in `HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md`
+- future execution should follow the rebuild plan when the two documents differ
+
 ## 1. Purpose
 
 This document turns the LangGraph stage-agent architecture decision into an execution sequence.
@@ -30,6 +36,11 @@ to:
 - LangGraph stage router
 - one bounded stage agent per major workflow stage
 - backend validation bridge
+
+Updated target:
+
+- every major user-facing stage should become a full stage-owning agent
+- not merely a graph-driven help layer over existing handlers
 
 ## 3. Constraints
 
@@ -114,7 +125,7 @@ Migrate:
 
 Exit:
 
-- candidate journey is graph-driven from CV request through ready state
+- candidate journey is stage-agent owned from CV request through ready state
 
 Status:
 
@@ -141,7 +152,7 @@ Migrate:
 
 Exit:
 
-- manager vacancy onboarding is graph-driven
+- manager vacancy onboarding is stage-agent owned
 
 Status:
 
@@ -162,7 +173,7 @@ Migrate:
 
 Exit:
 
-- invitation, interview, review, and deletion confirmation all run through bounded stage agents
+- invitation, interview, review, and deletion confirmation are stage-agent owned
 
 ### Step 7. Routing Simplification
 
@@ -186,5 +197,6 @@ The migration is complete when:
 
 - all major user-facing stages execute through LangGraph
 - old state-aware routing/controller logic is no longer the main orchestration layer
+- each major user-facing stage is owned by its stage agent rather than by scattered handler logic
 - backend state transitions remain validated and auditable
 - Telegram transport is reduced to ingress/egress plumbing

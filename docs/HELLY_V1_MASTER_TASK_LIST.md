@@ -20,6 +20,11 @@ It translates the architecture and backlog documents into one linear implementat
 
 This is the primary execution document to use while building the project.
 
+Canonical next-phase note:
+
+- the current implementation phase should follow `HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md`
+- this master list remains valid as the full-program checklist, but stage-agent rebuild work now has priority over further hardening of the old shared-controller approach
+
 ## 2. How to Use This List
 
 Rules:
@@ -196,6 +201,10 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 73P. `P1` Migrate manager review and deletion confirmation into LangGraph stage agents.
 73Q. `P1` Keep backend state machines authoritative and validate every agent-proposed action.
 73R. `P1` Replace old ad-hoc Telegram routing branches with thin transport glue once graph paths are stable.
+73S. `P0` Convert stage agents from help-oriented overlays into full stage owners that collect all data needed for next-state transition.
+73T. `P0` Ensure every user-facing stage has its own prompt family, KB grounding rules, completion criteria, and structured output schema.
+73U. `P0` Move stage completion logic out of scattered Telegram/domain handlers and into stage-agent execution contracts.
+73V. `P1` Retire the shared controller as the primary runtime path once all major stage agents are graph-owned.
 
 ## 9. Phase 6: Candidate Onboarding
 

@@ -22,8 +22,13 @@ This is not a sprint commitment document. It is the canonical implementation roa
 Architecture note:
 
 - the currently implemented state-aware controller/routing layer remains a working baseline
-- the new target orchestration architecture is now `LangGraph` stage-agent execution
-- future implementation work should therefore migrate orchestration from the current ad-hoc Telegram routing layer into bounded LangGraph stage agents while preserving the same backend state truth
+- the canonical target orchestration architecture is now `agent-owned LangGraph stage execution`
+- future implementation work should therefore rebuild orchestration around one stage agent per major user-facing state while preserving the same backend state truth
+
+Canonical planning note:
+
+- the canonical rebuild sequence for this architecture is now defined in `HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md`
+- this document remains the broader roadmap, but the stage-agent rebuild plan should drive the next implementation phase
 
 ## 2. Planning Assumptions
 
@@ -35,6 +40,7 @@ This roadmap assumes:
 - no web dashboard in v1
 - one core engineering effort rather than many independent teams
 - `LangGraph` is the target orchestration runtime for user-facing workflow execution
+- major user-facing workflow ownership will move from shared controller logic into dedicated stage agents
 
 ## 3. Recommended Milestones
 
@@ -42,7 +48,7 @@ Recommended milestone structure:
 
 1. Foundation
 2. State-Aware Conversation Layer Baseline
-3. LangGraph Stage-Agent Migration
+3. Agent-Owned Stage Rebuild
 4. Candidate Intake
 5. Vacancy Intake
 6. Matching
@@ -50,18 +56,18 @@ Recommended milestone structure:
 8. Evaluation and Manager Review
 9. Hardening and Launch Readiness
 
-## 3A. Milestone 3: LangGraph Stage-Agent Migration
+## 3A. Milestone 3: Agent-Owned Stage Rebuild
 
 Goal:
 
-Migrate user-facing orchestration from rigid Telegram routing plus shared assistance into bounded LangGraph stage agents.
+Rebuild user-facing orchestration so each major workflow stage is owned by its own LangGraph stage agent.
 
 ## 3A.1 Epics
 
 - graph runtime foundation
 - stage-agent contract
 - backend validation bridge
-- staged migration by workflow family
+- stage-by-stage rebuild by workflow family
 
 ## 3A.2 Deliverables
 
@@ -70,6 +76,8 @@ Migrate user-facing orchestration from rigid Telegram routing plus shared assist
 - reusable stage-agent nodes
 - graph router from active DB state to stage subgraph
 - backend validation bridge for agent-proposed actions
+- stage-specific prompt families for every major user-facing state
+- shared KB grounding for every stage agent
 
 ## 3A.3 Suggested Tasks
 
@@ -99,11 +107,12 @@ Migrate user-facing orchestration from rigid Telegram routing plus shared assist
   - clarification
 - migrate interview invite and active interview
 - migrate manager review and deletion confirmation
-- deprecate old Telegram routing branches once graph paths are stable
+- replace legacy Telegram/controller ownership once graph paths are stable
 
 ## 3A.4 Exit Criteria
 
 - every major user-facing stage is executed through a bounded LangGraph stage agent
+- every major user-facing stage is conversation-owned by its stage agent
 - backend state machines still remain authoritative
 - agent-proposed actions cannot bypass backend validation
 - old ad-hoc routing/controller paths are removed or reduced to thin transport glue

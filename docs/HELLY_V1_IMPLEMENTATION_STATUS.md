@@ -44,7 +44,7 @@ Architectural status note:
 
 - the current runtime uses a working state-aware controller/routing baseline
 - this is no longer the final target orchestration architecture
-- the new target is `LangGraph` stage-agent execution over the same backend state machines
+- the new canonical target is `agent-owned LangGraph stage execution` over the same backend state machines
 - `LangGraph` foundation modules and canonical graph state contract are now added
 - the canonical supported runtime for LangGraph execution is now `Python 3.12`
 - Dockerized `Python 3.12` runtime has been validated locally with `langgraph` import and full test execution
@@ -52,6 +52,7 @@ Architectural status note:
 - candidate `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
 - manager `INTAKE_PENDING` help handling has also started migrating through a graph-driven path
 - Telegram still falls back to the old controller/routing layer for all remaining stages
+- important architectural gap: currently migrated graph stages are still primarily help-oriented overlays around existing handlers, not yet full stage-owning agents that collect all required data for stage completion
 
 ## 3. Infrastructure and Delivery Status
 

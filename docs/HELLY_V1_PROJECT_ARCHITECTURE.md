@@ -57,6 +57,11 @@ The correct architectural model is:
 - with AI-assisted extraction, ranking, and evaluation
 - with backend-validated transitions and side effects
 
+Canonical direction update:
+
+- the active target is no longer a shared state-aware assistance layer around handlers
+- the active target is one stage-owning AI agent per major user-facing state
+
 ## 4. Fixed v1 Infrastructure
 
 Helly v1 will use:
