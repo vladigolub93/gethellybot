@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 from sqlalchemy import select
@@ -9,6 +11,10 @@ from src.db.models.core import File
 class FilesRepository:
     def __init__(self, session: Session):
         self.session = session
+
+    def get_by_id(self, file_id) -> Optional[File]:
+        stmt = select(File).where(File.id == file_id)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def get_by_telegram_unique_file_id(self, telegram_unique_file_id: str) -> Optional[File]:
         stmt = select(File).where(File.telegram_unique_file_id == telegram_unique_file_id)
@@ -51,5 +57,47 @@ class FilesRepository:
             status="received",
         )
         self.session.add(file_row)
+        self.session.flush()
+        return file_row
+
+    def list_pending_storage(self, *, limit: int = 20) -> list[File]:
+        stmt = (
+            select(File)
+            .where(
+                File.source == "telegram",
+                File.status == "received",
+                File.telegram_file_id.is_not(None),
+            )
+            .order_by(File.created_at.asc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars())
+
+    def mark_storage_queued(self, file_row: File) -> File:
+        file_row.status = "storage_queued"
+        self.session.flush()
+        return file_row
+
+    def mark_stored(
+        self,
+        file_row: File,
+        *,
+        storage_key: str,
+        provider_metadata: Optional[dict] = None,
+    ) -> File:
+        file_row.status = "stored"
+        file_row.storage_key = storage_key
+        if provider_metadata:
+            current_metadata = dict(file_row.provider_metadata or {})
+            current_metadata.update(provider_metadata)
+            file_row.provider_metadata = current_metadata
+        self.session.flush()
+        return file_row
+
+    def mark_storage_failed(self, file_row: File, *, error_message: str) -> File:
+        file_row.status = "storage_failed"
+        current_metadata = dict(file_row.provider_metadata or {})
+        current_metadata["storage_error"] = error_message[:1000]
+        file_row.provider_metadata = current_metadata
         self.session.flush()
         return file_row
