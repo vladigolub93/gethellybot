@@ -43,7 +43,20 @@ def _parse_amount(raw_value: str) -> Optional[float]:
 
 def parse_budget(text: str) -> dict:
     normalized = _normalize_text(text)
-    matches = re.findall(r"(?<!\d)(\d{1,3}(?:[,\d]{0,3})?(?:\.\d+)?k?)(?!\d)", normalized, flags=re.IGNORECASE)
+    budget_scope = normalized
+    scope_match = re.search(
+        r"(?:budget|salary|compensation)\s*:?\s*([^.;\n]+)",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if scope_match is not None:
+        budget_scope = scope_match.group(1)
+
+    matches = re.findall(
+        r"(?<![A-Za-z])(?:[$€£]\s*)?(\d{1,3}(?:[,\d]{0,3})?(?:\.\d+)?k?)(?![A-Za-z])",
+        budget_scope,
+        flags=re.IGNORECASE,
+    )
     values = []
     for match in matches:
         amount = _parse_amount(match)

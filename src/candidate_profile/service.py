@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
 
@@ -434,11 +436,15 @@ class CandidateProfileService:
 
     def _missing_question_keys(self, profile) -> list[str]:
         missing = []
-        if profile.salary_min is None and profile.salary_max is None:
+        salary_min = getattr(profile, "salary_min", None)
+        salary_max = getattr(profile, "salary_max", None)
+        location_text = getattr(profile, "location_text", None)
+        work_format = getattr(profile, "work_format", None)
+        if salary_min is None and salary_max is None:
             missing.append("salary")
-        if not profile.location_text:
+        if not location_text:
             missing.append("location")
-        if not profile.work_format:
+        if not work_format:
             missing.append("work_format")
         return missing
 

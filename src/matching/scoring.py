@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 def _as_set(values) -> set[str]:
     return {str(value).lower() for value in (values or []) if value}
 

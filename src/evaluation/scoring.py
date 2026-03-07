@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 def build_interview_summary(answer_texts: list[str]) -> str:
     return " ".join(answer_texts).strip()
 

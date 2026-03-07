@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 from src.candidate_profile.summary_builder import KNOWN_SKILLS

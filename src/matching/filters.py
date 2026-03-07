@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 SENIORITY_ORDER = {
     "junior": 1,
     "middle": 2,

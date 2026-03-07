@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 def build_question_plan(*, vacancy, candidate_summary: dict) -> list[str]:
     role_title = vacancy.role_title or "this role"
     tech_stack = vacancy.primary_tech_stack_json or []
