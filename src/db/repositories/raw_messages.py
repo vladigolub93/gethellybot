@@ -25,6 +25,7 @@ class RawMessagesRepository:
         content_type: str,
         payload_json: dict,
         text_content: Optional[str],
+        file_id: Optional[UUID] = None,
     ) -> RawMessage:
         raw_message = RawMessage(
             user_id=user_id,
@@ -35,8 +36,13 @@ class RawMessagesRepository:
             content_type=content_type,
             payload_json=payload_json,
             text_content=text_content,
+            file_id=file_id,
         )
         self.session.add(raw_message)
         self.session.flush()
         return raw_message
 
+    def attach_file(self, raw_message: RawMessage, file_id: UUID) -> RawMessage:
+        raw_message.file_id = file_id
+        self.session.flush()
+        return raw_message

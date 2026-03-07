@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.candidate_profile.service import CandidateProfileService
 from src.db.repositories.consents import UserConsentsRepository
+from src.db.repositories.files import FilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
@@ -26,6 +27,7 @@ class TelegramUpdateService:
         self.users_repo = UsersRepository(session)
         self.raw_messages_repo = RawMessagesRepository(session)
         self.consents_repo = UserConsentsRepository(session)
+        self.files_repo = FilesRepository(session)
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
         self.candidate_service = CandidateProfileService(session)
@@ -51,8 +53,14 @@ class TelegramUpdateService:
             payload_json=normalized_update.payload,
             text_content=normalized_update.text,
         )
+        persisted_file = self._persist_file_if_present(user.id, raw_message, normalized_update)
 
-        notification_templates = self._apply_identity_flow(user, raw_message.id, normalized_update)
+        notification_templates = self._apply_identity_flow(
+            user,
+            raw_message.id,
+            normalized_update,
+            file_id=persisted_file.id if persisted_file is not None else None,
+        )
         self.session.commit()
 
         return ProcessedTelegramUpdate(
@@ -62,7 +70,14 @@ class TelegramUpdateService:
             user_id=str(user.id),
         )
 
-    def _apply_identity_flow(self, user, raw_message_id, normalized_update: NormalizedTelegramUpdate) -> List[str]:
+    def _apply_identity_flow(
+        self,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        *,
+        file_id=None,
+    ) -> List[str]:
         templates: List[str] = []
         text_value = (normalized_update.text or "").strip().lower()
 
@@ -171,12 +186,37 @@ class TelegramUpdateService:
             )
             return templates
 
+        if user.is_candidate and normalized_update.content_type == "text":
+            summary_review_result = self.candidate_service.handle_summary_review_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text,
+            )
+            if summary_review_result is not None:
+                message_map = {
+                    "candidate_summary_approved": "Summary approved. Next step: salary, location, and work format.",
+                    "candidate_summary_edit_processing": "Summary edits received. Updating your profile summary.",
+                    "candidate_summary_edit_limit_reached": "Summary edit limit reached. Please approve the latest summary or restart profile creation.",
+                    "candidate_summary_edit_empty": "Please send summary edits after 'Edit summary:'.",
+                    "candidate_summary_not_available": "No current summary is available to review.",
+                    "candidate_summary_review_help": "Reply 'Approve summary' or 'Edit summary: ...' while reviewing your summary.",
+                }
+                templates.append(
+                    self._notify(
+                        user.id,
+                        summary_review_result.notification_template,
+                        {"text": message_map[summary_review_result.notification_template]},
+                    )
+                )
+                return templates
+
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             intake_result = self.candidate_service.handle_cv_intake(
                 user=user,
                 raw_message_id=raw_message_id,
                 content_type=normalized_update.content_type,
                 text=normalized_update.text,
+                file_id=file_id,
             )
             message_map = {
                 "candidate_cv_received_processing": "CV or experience input received. Processing started.",
@@ -200,6 +240,23 @@ class TelegramUpdateService:
             )
         )
         return templates
+
+    def _persist_file_if_present(self, user_id, raw_message, normalized_update: NormalizedTelegramUpdate):
+        if normalized_update.file is None:
+            return None
+
+        file_row = self.files_repo.create_or_get_from_telegram(
+            owner_user_id=user_id,
+            kind=normalized_update.file.kind,
+            telegram_file_id=normalized_update.file.telegram_file_id,
+            telegram_unique_file_id=normalized_update.file.telegram_unique_file_id,
+            mime_type=normalized_update.file.mime_type,
+            extension=normalized_update.file.extension,
+            size_bytes=normalized_update.file.size_bytes,
+            provider_metadata=normalized_update.file.payload,
+        )
+        self.raw_messages_repo.attach_file(raw_message, file_row.id)
+        return file_row
 
     def _notify(self, user_id, template_key: str, payload: dict) -> str:
         self.notifications_repo.create(

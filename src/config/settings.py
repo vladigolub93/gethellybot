@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         default="helly-private", alias="SUPABASE_STORAGE_BUCKET_PRIVATE"
     )
 
-    queue_backend: str = Field(default="stub", alias="QUEUE_BACKEND")
+    queue_backend: str = Field(default="database", alias="QUEUE_BACKEND")
     redis_url: str = Field(default="", alias="REDIS_URL")
 
     model_config = SettingsConfigDict(
@@ -58,4 +58,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

@@ -5,6 +5,8 @@ from src.candidate_profile.service import CandidateProfileService
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CV_PENDING,
     CANDIDATE_STATE_CV_PROCESSING,
+    CANDIDATE_STATE_QUESTIONS_PENDING,
+    CANDIDATE_STATE_SUMMARY_REVIEW,
 )
 
 
@@ -49,6 +51,20 @@ class FakeCandidateProfilesRepository:
         profile.current_version_id = version_id
         return profile
 
+    def get_current_version(self, profile):
+        for version in self.versions:
+            if version.id == profile.current_version_id:
+                return version
+        return None
+
+    def mark_version_approved(self, version):
+        version.approval_status = "approved"
+        version.approved_by_user = True
+        return version
+
+    def count_versions_by_source_type(self, _profile_id, source_type):
+        return len([version for version in self.versions if version.source_type == source_type])
+
 
 class FakeStateService:
     def __init__(self):
@@ -63,10 +79,19 @@ class FakeStateService:
         self.transitions.append(kwargs)
 
 
+class FakeQueue:
+    def __init__(self):
+        self.messages = []
+
+    def enqueue(self, message):
+        self.messages.append(message)
+
+
 def test_start_onboarding_moves_candidate_to_cv_pending() -> None:
     service = CandidateProfileService(FakeSession())
     service.repo = FakeCandidateProfilesRepository()
     service.state_service = FakeStateService()
+    service.queue = FakeQueue()
 
     user = SimpleNamespace(id=uuid4())
     profile = service.start_onboarding(user, trigger_ref_id=uuid4())
@@ -78,8 +103,10 @@ def test_handle_cv_intake_transitions_to_processing() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()
     fake_state = FakeStateService()
+    fake_queue = FakeQueue()
     service.repo = fake_repo
     service.state_service = fake_state
+    service.queue = fake_queue
 
     user = SimpleNamespace(id=uuid4())
     profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_CV_PENDING)
@@ -94,3 +121,67 @@ def test_handle_cv_intake_transitions_to_processing() -> None:
     assert result.status == "accepted"
     assert profile.state == CANDIDATE_STATE_CV_PROCESSING
     assert len(fake_repo.versions) == 1
+    assert len(fake_queue.messages) == 1
+
+
+def test_approve_summary_moves_candidate_to_questions_pending() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=1,
+        source_type="pasted_text",
+        summary_json={"headline": "Python engineer"},
+    )
+    fake_repo.set_current_version(profile, version.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="Approve summary",
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
+    assert version.approval_status == "approved"
+
+
+def test_edit_summary_enqueues_processing_job() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=1,
+        source_type="pasted_text",
+        summary_json={"headline": "Python engineer"},
+    )
+    fake_repo.set_current_version(profile, version.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="Edit summary: emphasize backend leadership",
+    )
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert profile.state == CANDIDATE_STATE_CV_PROCESSING
+    assert len(fake_repo.versions) == 2
+    assert fake_repo.versions[-1].source_type == "summary_user_edit"
+    assert len(fake_queue.messages) == 1

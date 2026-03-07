@@ -1,6 +1,7 @@
-from typing import Any, Dict
+from os.path import splitext
+from typing import Any, Dict, Optional
 
-from src.telegram.types import NormalizedTelegramUpdate
+from src.telegram.types import NormalizedTelegramFile, NormalizedTelegramUpdate
 
 
 class TelegramUpdateNormalizationError(ValueError):
@@ -11,6 +12,35 @@ def _build_display_name(user_payload: Dict[str, Any]) -> str:
     first_name = user_payload.get("first_name", "") or ""
     last_name = user_payload.get("last_name", "") or ""
     return f"{first_name} {last_name}".strip()
+
+
+def _normalize_extension(file_name: Optional[str], mime_type: Optional[str]) -> Optional[str]:
+    if file_name:
+        extension = splitext(file_name)[1].lstrip(".").lower()
+        if extension:
+            return extension
+
+    if mime_type == "audio/ogg":
+        return "ogg"
+    if mime_type == "video/mp4":
+        return "mp4"
+
+    return None
+
+
+def _build_file_payload(kind: str, payload: Dict[str, Any]) -> NormalizedTelegramFile:
+    file_name = payload.get("file_name")
+    mime_type = payload.get("mime_type")
+    return NormalizedTelegramFile(
+        kind=kind,
+        telegram_file_id=payload["file_id"],
+        telegram_unique_file_id=payload.get("file_unique_id"),
+        file_name=file_name,
+        mime_type=mime_type,
+        size_bytes=payload.get("file_size"),
+        extension=_normalize_extension(file_name, mime_type),
+        payload=payload,
+    )
 
 
 def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdate:
@@ -29,17 +59,24 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
     content_type = "text"
     text = message.get("text")
     contact_payload = message.get("contact")
+    document_payload = message.get("document")
+    voice_payload = message.get("voice")
+    video_payload = message.get("video") or message.get("video_note")
     contact_phone_number = None
+    file = None
 
     if isinstance(contact_payload, dict):
         content_type = "contact"
         contact_phone_number = contact_payload.get("phone_number")
-    elif message.get("document"):
+    elif isinstance(document_payload, dict):
         content_type = "document"
-    elif message.get("voice"):
+        file = _build_file_payload("document", document_payload)
+    elif isinstance(voice_payload, dict):
         content_type = "voice"
-    elif message.get("video") or message.get("video_note"):
+        file = _build_file_payload("voice", voice_payload)
+    elif isinstance(video_payload, dict):
         content_type = "video"
+        file = _build_file_payload("video", video_payload)
     elif text is None:
         content_type = "unknown"
 
@@ -58,6 +95,6 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
         display_name=_build_display_name(sender) or None,
         username=sender.get("username"),
         language_code=sender.get("language_code"),
+        file=file,
         payload=update,
     )
-

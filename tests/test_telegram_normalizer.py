@@ -48,3 +48,60 @@ def test_normalize_contact_message() -> None:
 
     assert normalized.content_type == "contact"
     assert normalized.contact_phone_number == "+1234567890"
+
+
+def test_normalize_document_message() -> None:
+    update = {
+        "update_id": 125,
+        "message": {
+            "message_id": 79,
+            "chat": {"id": 557, "type": "private"},
+            "from": {
+                "id": 1001,
+                "first_name": "Alex",
+            },
+            "document": {
+                "file_id": "doc-1",
+                "file_unique_id": "uniq-doc-1",
+                "file_name": "resume.pdf",
+                "mime_type": "application/pdf",
+                "file_size": 1024,
+            },
+        },
+    }
+
+    normalized = normalize_telegram_update(update)
+
+    assert normalized.content_type == "document"
+    assert normalized.file is not None
+    assert normalized.file.kind == "document"
+    assert normalized.file.telegram_file_id == "doc-1"
+    assert normalized.file.extension == "pdf"
+
+
+def test_normalize_voice_message() -> None:
+    update = {
+        "update_id": 126,
+        "message": {
+            "message_id": 80,
+            "chat": {"id": 558, "type": "private"},
+            "from": {
+                "id": 1002,
+                "first_name": "Mila",
+            },
+            "voice": {
+                "file_id": "voice-1",
+                "file_unique_id": "uniq-voice-1",
+                "mime_type": "audio/ogg",
+                "file_size": 4096,
+            },
+        },
+    }
+
+    normalized = normalize_telegram_update(update)
+
+    assert normalized.content_type == "voice"
+    assert normalized.file is not None
+    assert normalized.file.kind == "voice"
+    assert normalized.file.telegram_file_id == "voice-1"
+    assert normalized.file.extension == "ogg"
