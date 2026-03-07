@@ -7,7 +7,7 @@ from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
-from src.evaluation.scoring import evaluate_candidate
+from src.llm.service import safe_evaluate_candidate
 from src.state.service import StateService
 
 
@@ -41,11 +41,13 @@ class EvaluationService:
         vacancy = self.vacancies.get_by_id(session.vacancy_id)
         answers = self.interviews.list_answers_for_session(session.id)
         answer_texts = [(answer.answer_text or answer.transcript_text or "") for answer in answers]
-        evaluation = evaluate_candidate(
+        llm_result = safe_evaluate_candidate(
+            self.session,
             candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
             vacancy=vacancy,
             answer_texts=answer_texts,
         )
+        evaluation = llm_result.payload
         status = "auto_rejected" if evaluation["recommendation"] == "reject" else "manager_review"
         row = self.evaluations.create(
             match_id=match.id,

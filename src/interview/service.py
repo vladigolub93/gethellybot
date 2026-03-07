@@ -15,6 +15,7 @@ from src.interview.states import (
 )
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
+from src.llm.service import safe_build_interview_question_plan
 from src.state.service import StateService
 
 
@@ -139,7 +140,12 @@ class InterviewService:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
         if session is None:
-            plan = build_question_plan(
+            llm_result = safe_build_interview_question_plan(
+                self.session,
+                vacancy=vacancy,
+                candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+            )
+            plan = llm_result.payload["questions"] or build_question_plan(
                 vacancy=vacancy,
                 candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
             )

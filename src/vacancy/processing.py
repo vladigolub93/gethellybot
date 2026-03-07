@@ -1,10 +1,10 @@
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.llm.service import safe_extract_vacancy_summary
 from src.state.service import StateService
 from src.vacancy.service import VacancyService
 from src.vacancy.states import VACANCY_STATE_CLARIFICATION_QA, VACANCY_STATE_JD_PROCESSING
-from src.vacancy.summary_builder import build_vacancy_summary
 
 
 class VacancyProcessingService:
@@ -47,14 +47,20 @@ class VacancyProcessingService:
             )
             return {"status": "ingestion_pending", "vacancy_id": str(vacancy.id), "vacancy_version_id": str(version.id)}
 
-        summary, inconsistency_json = build_vacancy_summary(source_text, version.source_type)
+        llm_result = safe_extract_vacancy_summary(
+            self.session,
+            source_text,
+            version.source_type,
+        )
+        summary = llm_result.payload["summary"]
+        inconsistency_json = llm_result.payload["inconsistency_json"]
         self.repo.update_version_analysis(
             version,
             summary_json=summary,
-            normalization_json={"processor": "baseline_vacancy_jd_extract_v1", "ingestion_ready": True},
+            normalization_json={"processor": llm_result.prompt_version, "ingestion_ready": True},
             inconsistency_json=inconsistency_json,
-            prompt_version="baseline_vacancy_jd_extract_v1",
-            model_name="baseline-deterministic",
+            prompt_version=llm_result.prompt_version,
+            model_name=llm_result.model_name,
         )
         self.repo.update_clarifications(
             vacancy,

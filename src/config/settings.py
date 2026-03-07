@@ -28,10 +28,10 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model_extraction: str = Field(
-        default="gpt-4.1-mini", alias="OPENAI_MODEL_EXTRACTION"
+        default="gpt-5.4", alias="OPENAI_MODEL_EXTRACTION"
     )
     openai_model_reasoning: str = Field(
-        default="gpt-4.1", alias="OPENAI_MODEL_REASONING"
+        default="gpt-5.4", alias="OPENAI_MODEL_REASONING"
     )
 
     supabase_url: str = Field(default="", alias="SUPABASE_URL")

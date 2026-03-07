@@ -5,7 +5,6 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from src.candidate_profile.question_parser import parse_candidate_questions
 from src.candidate_profile.question_prompts import (
     QUESTION_KEYS,
     follow_up_prompt,
@@ -29,6 +28,7 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
+from src.llm.service import safe_parse_candidate_questions
 from src.state.service import StateService
 
 
@@ -392,7 +392,8 @@ class CandidateProfileService:
                 notification_text=initial_questions_prompt(),
             )
 
-        parsed = parse_candidate_questions(normalized_text)
+        llm_result = safe_parse_candidate_questions(self.session, normalized_text)
+        parsed = llm_result.payload
         if parsed:
             self.repo.update_question_answers(profile, **parsed)
 

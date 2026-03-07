@@ -3,11 +3,11 @@ from src.candidate_profile.states import (
     CANDIDATE_STATE_QUESTIONS_PENDING,
     CANDIDATE_STATE_SUMMARY_REVIEW,
 )
-from src.candidate_profile.summary_builder import build_candidate_summary
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.candidate_profile.service import CandidateProfileService
+from src.llm.service import safe_extract_candidate_summary, safe_merge_candidate_summary
 from src.state.service import StateService
 
 
@@ -57,17 +57,22 @@ class CandidateProcessingService:
                 "candidate_profile_version_id": str(version.id),
             }
 
-        summary = build_candidate_summary(source_text, version.source_type)
+        llm_result = safe_extract_candidate_summary(
+            self.session,
+            source_text,
+            version.source_type,
+        )
+        summary = llm_result.payload
         self.repo.update_version_analysis(
             version,
             summary_json=summary,
             normalization_json={
-                "processor": "baseline_cv_extract_v1",
+                "processor": llm_result.prompt_version,
                 "ingestion_ready": True,
             },
             approval_status="pending_user_review",
-            model_name="baseline-deterministic",
-            prompt_version="baseline_cv_extract_v1",
+            model_name=llm_result.model_name,
+            prompt_version=llm_result.prompt_version,
         )
         if profile.state != CANDIDATE_STATE_SUMMARY_REVIEW:
             self.state_service.transition(
@@ -102,19 +107,22 @@ class CandidateProcessingService:
         if profile is None or version is None or base_version is None:
             raise ValueError("Candidate profile or summary version was not found for edit processing.")
 
-        merged_summary = dict(base_version.summary_json or {})
-        merged_summary["candidate_edit_notes"] = payload.get("edit_request_text")
-        merged_summary["status"] = "draft"
+        llm_result = safe_merge_candidate_summary(
+            self.session,
+            dict(base_version.summary_json or {}),
+            payload.get("edit_request_text") or "",
+        )
+        merged_summary = llm_result.payload
         self.repo.update_version_analysis(
             version,
             summary_json=merged_summary,
             normalization_json={
-                "processor": "baseline_summary_edit_apply_v1",
+                "processor": llm_result.prompt_version,
                 "base_version_id": str(base_version.id),
             },
             approval_status="pending_user_review",
-            model_name="baseline-deterministic",
-            prompt_version="baseline_summary_edit_apply_v1",
+            model_name=llm_result.model_name,
+            prompt_version=llm_result.prompt_version,
         )
         if profile.state == CANDIDATE_STATE_CV_PROCESSING:
             self.state_service.transition(

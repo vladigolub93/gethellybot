@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
+from src.llm.service import safe_parse_vacancy_clarifications
 from src.state.service import StateService
-from src.vacancy.question_parser import parse_vacancy_clarifications
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
     follow_up_prompt,
@@ -224,7 +224,8 @@ class VacancyService:
                 notification_text=initial_clarification_prompt(),
             )
 
-        parsed = parse_vacancy_clarifications(normalized_text)
+        llm_result = safe_parse_vacancy_clarifications(self.session, normalized_text)
+        parsed = llm_result.payload
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
 

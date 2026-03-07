@@ -34,8 +34,9 @@ As of this audit, the project has:
 - baseline interview flow
 - baseline evaluation and manager review flow
 - background worker and scheduler
+- real OpenAI-backed extraction, parsing, interview planning, and evaluation with deterministic fallback
 
-What it does not yet have is a full production AI pipeline. Most AI-heavy parts currently use deterministic placeholder logic instead of true OpenAI-driven extraction, reranking, and evaluation.
+What it still does not have is the full target AI pipeline. The core extraction/parsing/evaluation path is now OpenAI-backed, but transcript ingestion, vector retrieval, reranking, and deletion/cleanup flows are still incomplete.
 
 ## 3. Infrastructure and Delivery Status
 
@@ -104,7 +105,7 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: document and voice ingestion are structurally supported, but extraction/transcription are not truly AI-backed yet
+- `Partial`: document and voice ingestion are structurally supported, but non-text extraction/transcription is still not connected
 - `Partial`: verification only checks that a video was submitted and linked
 - `Partial`: no real face/liveness/phrase verification is performed
 
@@ -112,12 +113,11 @@ Status vs SRS:
 
 - `Not Implemented`: real CV parsing pipeline for PDF/DOCX content
 - `Not Implemented`: real voice transcription pipeline
-- `Not Implemented`: real AI summary merge/update behavior
 
 Status vs SRS:
 
 - candidate onboarding flow: implemented as baseline
-- AI quality of onboarding: partial
+- AI quality of onboarding: partially implemented with OpenAI for text-based extraction and parsing
 
 ## 4.4 Hiring Manager and Vacancy Onboarding
 
@@ -132,18 +132,17 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: extraction and inconsistency analysis currently use baseline deterministic logic
+- `Partial`: extraction and inconsistency analysis are now OpenAI-backed for text input, but non-text ingestion still falls back to resend-as-text behavior
 - `Partial`: non-text JD formats are accepted but not truly processed through a production ingestion pipeline
 
 ### What is missing
 
-- `Not Implemented`: true AI JD extraction
-- `Not Implemented`: true AI inconsistency reasoning beyond heuristics
+- `Not Implemented`: document/voice/video JD ingestion into usable extracted text
 
 Status vs SRS:
 
 - hiring manager flow: implemented as baseline
-- AI vacancy understanding: partial
+- AI vacancy understanding: partially implemented
 
 ## 4.5 Matching Engine
 
@@ -193,12 +192,11 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: interview questions are deterministic templates, not AI-generated from vacancy context in a rich way
+- `Partial`: interview questions are now OpenAI-generated for text-ready flows
 - `Partial`: voice/video answers are accepted structurally but still fall back to asking for text when no transcript is available
 
 ### What is missing
 
-- `Not Implemented`: AI-generated 5-7 question plan using LLM
 - `Not Implemented`: AI follow-up decision logic
 - `Not Implemented`: one follow-up-per-question runtime beyond basic question progression
 - `Not Implemented`: real voice/video transcript processing
@@ -221,12 +219,11 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: evaluation logic is deterministic and simplified
+- `Partial`: evaluation is OpenAI-backed for text-ready interview sessions, but still lacks full transcript/document evidence ingestion
 - `Partial`: manager package is delivered as notification content, not as a polished final package artifact set
 
 ### What is missing
 
-- `Not Implemented`: true AI evaluation using CV + vacancy + interview transcript
 - `Not Implemented`: final structured candidate package with full file bundle and richer render strategy
 - `Not Implemented`: true Telegram introduction/handoff between candidate and manager
 
@@ -253,21 +250,25 @@ Status vs SRS:
 
 - `Implemented`: configuration fields for OpenAI
 - `Implemented`: architecture, prompt catalog, and SRS for the intended AI layer
+- `Implemented`: active OpenAI client abstraction in runtime code
+- `Implemented`: OpenAI structured extraction for candidate CV summaries
+- `Implemented`: OpenAI structured parsing for candidate mandatory answers
+- `Implemented`: OpenAI structured extraction for vacancy summaries
+- `Implemented`: OpenAI structured parsing for vacancy clarifications
+- `Implemented`: OpenAI-generated interview question plans
+- `Implemented`: OpenAI-backed interview evaluation
+- `Implemented`: automatic fallback from `gpt-5.4` to `gpt-5.2`
 
 ### What is missing in runtime
 
-- `Not Implemented`: real OpenAI client abstraction in active production logic
-- `Not Implemented`: true OpenAI extraction for CVs
-- `Not Implemented`: true OpenAI extraction for JDs
-- `Not Implemented`: true OpenAI parsing for mandatory answers
 - `Not Implemented`: true OpenAI follow-up generation
 - `Not Implemented`: true OpenAI reranking
-- `Not Implemented`: true OpenAI interview evaluation
+- `Not Implemented`: transcript-aware OpenAI processing for voice/video/document flows
 
 Status vs SRS:
 
 - AI orchestration design: documented
-- AI runtime integration: not implemented in the intended form
+- AI runtime integration: partially implemented in active production code
 
 ## 4.10 Observability, Logging, and Auditability
 
@@ -331,10 +332,10 @@ Documentation for prompt capabilities exists, but most of those prompt assets ar
 Current reality:
 
 - prompt catalog exists in docs
-- runtime mostly uses deterministic Python logic
-- true prompt execution layer is still pending
+- runtime now uses active prompt execution for extraction, parsing, interview planning, and evaluation
+- deterministic Python logic still exists as a runtime fallback layer
 
-This is one of the largest remaining gaps between architecture and implementation.
+The largest remaining gap is no longer prompt execution itself. It is transcript/document ingestion, reranking, and vector retrieval.
 
 ## 7. Production Readiness Assessment
 
@@ -349,10 +350,8 @@ This is one of the largest remaining gaps between architecture and implementatio
 
 ### Not ready yet for full product claims
 
-- AI-powered extraction
 - AI-powered reranking
-- AI-powered interviewing
-- AI-powered evaluation
+- transcript-aware multimodal ingestion
 - deletion flows
 - richer manager introduction workflow
 - production observability and retention policies
@@ -371,7 +370,6 @@ This is one of the largest remaining gaps between architecture and implementatio
 
 ### Still major work
 
-- replace placeholders with real OpenAI-based capabilities
 - implement deletion and cleanup flows
 - improve Telegram UX with buttons and richer guidance
 - implement actual transcript/document extraction integrations
@@ -382,10 +380,8 @@ This is one of the largest remaining gaps between architecture and implementatio
 
 Recommended order from here:
 
-1. Implement real OpenAI extraction/parsing/evaluation clients and replace deterministic placeholders.
-2. Implement transcript/document ingestion for non-text CV/JD/interview inputs.
-3. Implement vector embeddings and reranking.
-4. Implement deletion flows and cleanup jobs.
-5. Improve Telegram UX and manager introduction flow.
-6. Add stronger readiness checks, metrics, and operational dashboards.
-
+1. Implement transcript/document ingestion for non-text CV/JD/interview inputs.
+2. Implement vector embeddings and reranking.
+3. Implement deletion flows and cleanup jobs.
+4. Improve Telegram UX and manager introduction flow.
+5. Add stronger readiness checks, metrics, and operational dashboards.
