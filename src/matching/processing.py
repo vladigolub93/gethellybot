@@ -16,6 +16,8 @@ class MatchingProcessingService:
     def process_job(self, job) -> dict:
         if job.job_type == "matching_candidate_ready_v1":
             return self._process_candidate_ready(job)
+        if job.job_type == "matching_send_invite_wave_reminder_v1":
+            return self._process_invite_wave_reminder(job)
         if job.job_type == "matching_evaluate_invite_wave_v1":
             return self._process_invite_wave_evaluation(job)
         if job.job_type == "matching_run_for_vacancy_v1":
@@ -71,3 +73,7 @@ class MatchingProcessingService:
     def _process_invite_wave_evaluation(self, job) -> dict:
         payload = job.payload_json or {}
         return self.wave_service.evaluate_wave(wave_id=payload["invite_wave_id"])
+
+    def _process_invite_wave_reminder(self, job) -> dict:
+        payload = job.payload_json or {}
+        return self.wave_service.send_wave_reminders(wave_id=payload["invite_wave_id"])

@@ -48,7 +48,21 @@ def dispatch_once() -> dict:
             enqueued_files += 1
 
         enqueued_wave_evaluations = 0
-        for wave in matching.list_active_invite_waves(limit=20):
+        enqueued_wave_reminders = 0
+        for wave in matching.list_due_invite_wave_reminders(limit=20):
+            queue.enqueue(
+                JobMessage(
+                    job_type="matching_send_invite_wave_reminder_v1",
+                    idempotency_key=f"matching_send_invite_wave_reminder_v1:{wave.id}",
+                    payload={"invite_wave_id": str(wave.id)},
+                    entity_type="invite_wave",
+                    entity_id=wave.id,
+                )
+            )
+            enqueued_wave_reminders += 1
+
+        enqueued_wave_evaluations = 0
+        for wave in matching.list_due_invite_wave_evaluations(limit=20):
             queue.enqueue(
                 JobMessage(
                     job_type="matching_evaluate_invite_wave_v1",
@@ -64,6 +78,7 @@ def dispatch_once() -> dict:
         return {
             "notifications_enqueued": enqueued_notifications,
             "files_enqueued": enqueued_files,
+            "invite_wave_reminders_enqueued": enqueued_wave_reminders,
             "invite_wave_evaluations_enqueued": enqueued_wave_evaluations,
         }
     except Exception:

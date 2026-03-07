@@ -32,6 +32,12 @@ class FakeMatchingService:
 
 
 class FakeInviteWaveService:
+    def send_wave_reminders(self, *, wave_id):
+        return {
+            "invite_wave_id": wave_id,
+            "reminder_sent_count": 2,
+        }
+
     def evaluate_wave(self, *, wave_id):
         return {
             "invite_wave_id": wave_id,
@@ -78,3 +84,21 @@ def test_matching_processing_routes_invite_wave_evaluation_job() -> None:
 
     assert result["invite_wave_id"] == "wave-1"
     assert result["expansion_enqueued"] is True
+
+
+def test_matching_processing_routes_invite_wave_reminder_job() -> None:
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.vacancies = FakeVacanciesRepository()
+    service.matching_service = FakeMatchingService()
+    service.wave_service = FakeInviteWaveService()
+
+    result = service.process_job(
+        SimpleNamespace(
+            job_type="matching_send_invite_wave_reminder_v1",
+            payload_json={"invite_wave_id": "wave-1"},
+        )
+    )
+
+    assert result["invite_wave_id"] == "wave-1"
+    assert result["reminder_sent_count"] == 2

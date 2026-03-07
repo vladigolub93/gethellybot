@@ -332,6 +332,9 @@ Run invitation waves and AI interviews inside Telegram.
 - create first invitation wave during invite dispatch
 - evaluate active invite waves and enqueue expansion waves when completion threshold is missed
 - prevent empty expansion waves when shortlist is exhausted
+- schedule reminder jobs for due invite waves
+- send reminder notifications only to still-invited candidates
+- expire stale unanswered invitations during wave evaluation
 - implement accept interview path
 - implement skip opportunity path
 - create `interview_question_plan` prompt asset
@@ -350,6 +353,7 @@ Run invitation waves and AI interviews inside Telegram.
 - candidate can complete interview inside Telegram
 - session resumes correctly after interruption
 - follow-up limits are enforced
+- baseline reminder and expiration handling works for invite waves
 
 ## 9. Milestone 6: Evaluation and Manager Review
 

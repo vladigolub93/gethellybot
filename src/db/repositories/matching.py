@@ -189,6 +189,54 @@ class MatchingRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    @staticmethod
+    def _parse_payload_dt(value) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    def list_due_invite_wave_reminders(
+        self,
+        *,
+        now: Optional[datetime] = None,
+        limit: int = 20,
+    ) -> list[InviteWave]:
+        now = now or datetime.now(timezone.utc)
+        rows = []
+        for wave in self.list_active_invite_waves(limit=limit * 4):
+            payload = wave.payload_json or {}
+            reminder_due_at = self._parse_payload_dt(payload.get("reminder_due_at"))
+            reminder_sent_at = self._parse_payload_dt(payload.get("reminder_sent_at"))
+            if reminder_due_at and reminder_due_at <= now and reminder_sent_at is None:
+                rows.append(wave)
+            if len(rows) >= limit:
+                break
+        return rows
+
+    def list_due_invite_wave_evaluations(
+        self,
+        *,
+        now: Optional[datetime] = None,
+        limit: int = 20,
+    ) -> list[InviteWave]:
+        now = now or datetime.now(timezone.utc)
+        rows = []
+        for wave in self.list_active_invite_waves(limit=limit * 4):
+            payload = wave.payload_json or {}
+            expires_at = self._parse_payload_dt(payload.get("expires_at"))
+            evaluated_at = self._parse_payload_dt(payload.get("evaluated_at"))
+            if expires_at and expires_at <= now and evaluated_at is None:
+                rows.append(wave)
+            if len(rows) >= limit:
+                break
+        return rows
+
     def get_wave_by_id(self, wave_id) -> Optional[InviteWave]:
         stmt = select(InviteWave).where(InviteWave.id == wave_id)
         return self.session.execute(stmt).scalar_one_or_none()
@@ -196,6 +244,12 @@ class MatchingRepository:
     def get_by_id(self, match_id) -> Optional[Match]:
         stmt = select(Match).where(Match.id == match_id)
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_by_ids(self, match_ids: list) -> list[Match]:
+        if not match_ids:
+            return []
+        stmt = select(Match).where(Match.id.in_(match_ids))
+        return list(self.session.execute(stmt).scalars().all())
 
     def get_latest_invited_for_candidate(self, candidate_profile_id) -> Optional[Match]:
         stmt = (
@@ -243,6 +297,12 @@ class MatchingRepository:
         self.session.flush()
         return match
 
+    def mark_invitation_expired(self, match: Match) -> Match:
+        match.status = "expired"
+        match.candidate_response_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return match
+
     def mark_manager_decision(self, match: Match, *, status: str) -> Match:
         match.status = status
         match.manager_decision_at = datetime.now(timezone.utc)
@@ -253,6 +313,12 @@ class MatchingRepository:
         match.status = status
         self.session.flush()
         return match
+
+    def mark_wave_reminder_sent(self, wave: InviteWave, *, payload_json: Optional[dict] = None) -> InviteWave:
+        if payload_json is not None:
+            wave.payload_json = payload_json
+        self.session.flush()
+        return wave
 
     def get_latest_manager_review_for_manager(self, vacancy_ids: list, *, manager_review_only: bool = True) -> Optional[Match]:
         if not vacancy_ids:

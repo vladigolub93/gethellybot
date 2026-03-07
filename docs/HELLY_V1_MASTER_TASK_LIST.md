@@ -370,6 +370,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 166. `P1` Implement wave expansion policy when completion threshold is not reached.
 166A. `P1` Schedule evaluation of active invite waves and enqueue expansion waves via background jobs.
 166B. `P1` Stop wave expansion when shortlist is exhausted and avoid creating empty invite waves.
+166C. `P1` Add configurable reminder/expiration tuning and escalation-aware wave policy beyond the baseline scheduler.
 
 ### 10.3 Candidate Invite UX
 
@@ -377,6 +378,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 168. `P0` Implement `accept interview`.
 169. `P0` Implement `skip opportunity`.
 170. `P1` Implement invitation reminder messages.
+170A. `P1` Add richer reminder variants and escalation rules for unresponsive invited candidates.
 
 ## 14. Phase 11: Interview Engine
 

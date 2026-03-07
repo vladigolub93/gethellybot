@@ -207,6 +207,8 @@ Status vs SRS:
 - `Implemented`: first invite wave records are persisted and linked to matching runs
 - `Implemented`: active invite waves are evaluated by the scheduler and can enqueue expansion waves when interview completion threshold is not met
 - `Implemented`: invite dispatch returns without creating a wave when no shortlisted candidates remain
+- `Implemented`: reminder jobs are scheduled for due invite waves and send reminder notifications to still-invited candidates
+- `Implemented`: invite wave evaluation now expires stale unanswered invitations before deciding whether to expand
 - `Implemented`: candidate can accept or skip
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
@@ -223,13 +225,14 @@ Status vs SRS:
 ### What is missing
 
 - `Not Implemented`: transcript confidence scoring and retry/escalation strategy for low-quality media
-- `Not Implemented`: richer time-based reminder / expiration-aware wave policy
+- `Not Implemented`: richer time-based reminder / expiration-aware wave policy with configurable tuning, delivery variants, and escalation rules
 
 Status vs SRS:
 
 - invitation flow: implemented
 - AI interview quality: partial
 - follow-up policy: implemented for text-ready runtime
+- wave reminder / expiration baseline: implemented
 
 ## 4.7 Interview Evaluation and Manager Review
 

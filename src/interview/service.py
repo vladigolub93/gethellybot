@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
@@ -25,6 +26,7 @@ from src.llm.service import (
     safe_parse_interview_answer,
 )
 from src.messaging.service import MessagingService
+from src.matching.waves import InviteWaveService
 from src.state.service import StateService
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import interview_invitation_keyboard
@@ -47,6 +49,7 @@ class InterviewService:
         self.notifications = NotificationsRepository(session)
         self.raw_messages = RawMessagesRepository(session)
         self.messaging = MessagingService(session)
+        self.wave_service = InviteWaveService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
 
@@ -109,6 +112,7 @@ class InterviewService:
     def dispatch_invites_for_vacancy(self, *, vacancy_id, matching_run_id=None, limit: int = 3) -> dict:
         vacancy = self.vacancies.get_by_id(vacancy_id)
         matching_run = None
+        now = datetime.now(timezone.utc)
         if matching_run_id is not None:
             matching_run = self.matches.get_run_by_id(matching_run_id)
         if matching_run is None:
@@ -133,7 +137,11 @@ class InterviewService:
             wave_no=self.matches.get_next_wave_no(matching_run.id),
             status="running",
             target_invites_count=limit,
-            payload_json={"limit": limit},
+            payload_json=self.wave_service.build_wave_timing_payload(
+                matching_run_id=matching_run.id,
+                limit=limit,
+                now=now,
+            ),
         )
         invited_count = 0
         invited_match_ids = []
@@ -167,9 +175,13 @@ class InterviewService:
         self.matches.complete_invite_wave(
             wave,
             invited_count=invited_count,
+            status="running",
             payload_json={
-                "limit": limit,
-                "matching_run_id": str(matching_run.id),
+                **self.wave_service.build_wave_timing_payload(
+                    matching_run_id=matching_run.id,
+                    limit=limit,
+                    now=now,
+                ),
                 "invited_match_ids": invited_match_ids,
             },
         )

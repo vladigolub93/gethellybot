@@ -26,7 +26,12 @@ class FakeFilesRepository:
 
 
 class FakeMatchingRepository:
-    def list_active_invite_waves(self, limit=20):
+    def list_due_invite_wave_reminders(self, limit=20):
+        return [
+            SimpleNamespace(id=uuid4(), vacancy_id=uuid4()),
+        ]
+
+    def list_due_invite_wave_evaluations(self, limit=20):
         return [
             SimpleNamespace(id=uuid4(), vacancy_id=uuid4()),
             SimpleNamespace(id=uuid4(), vacancy_id=uuid4()),
@@ -52,6 +57,8 @@ def test_scheduler_enqueues_invite_wave_evaluations(monkeypatch) -> None:
 
     result = scheduler_main.dispatch_once()
 
+    assert result["invite_wave_reminders_enqueued"] == 1
     assert result["invite_wave_evaluations_enqueued"] == 2
-    assert len(fake_queue.messages) == 2
-    assert all(message.job_type == "matching_evaluate_invite_wave_v1" for message in fake_queue.messages)
+    assert len(fake_queue.messages) == 3
+    assert fake_queue.messages[0].job_type == "matching_send_invite_wave_reminder_v1"
+    assert all(message.job_type == "matching_evaluate_invite_wave_v1" for message in fake_queue.messages[1:])

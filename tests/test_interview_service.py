@@ -244,6 +244,9 @@ def test_dispatch_invites_for_vacancy_marks_match_invited() -> None:
     assert match.status == "invited"
     assert service.matches.invite_waves[0].invited_count == 1
     assert service.matches.invite_waves[0].matching_run_id == matching_run.id
+    assert service.matches.invite_waves[0].status == "running"
+    assert "reminder_due_at" in service.matches.invite_waves[0].payload_json
+    assert "expires_at" in service.matches.invite_waves[0].payload_json
     assert service.notifications.rows[0].user_id == candidate.user_id
 
 
