@@ -103,7 +103,7 @@ Status vs SRS:
 - `Implemented`: verification phrase generation
 - `Implemented`: verification video submission step
 - `Implemented`: transition to `READY`
-- `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, and `VERIFICATION_PENDING`
+- `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY`
 
 ### What is only partial
 
@@ -130,7 +130,7 @@ Status vs SRS:
 - `Implemented`: vacancy clarification step
 - `Implemented`: required fields for budget, countries, work format, team size, project description, primary stack
 - `Implemented`: vacancy transitions to `OPEN`
-- `Implemented`: state-aware in-step AI help for `INTAKE_PENDING` and `CLARIFICATION_QA`
+- `Implemented`: state-aware in-step AI help for `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
 
 ### What is only partial
 

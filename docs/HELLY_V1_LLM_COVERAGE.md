@@ -40,8 +40,10 @@ It distinguishes between:
 | `orchestrator/state_assistance/candidate_summary_review` | Asset Ready | Runtime Wired | summary review clarifications without misclassifying edits |
 | `orchestrator/state_assistance/candidate_questions_pending` | Asset Ready | Runtime Wired | salary/location/work-format help inside state |
 | `orchestrator/state_assistance/candidate_verification_pending` | Asset Ready | Runtime Wired | verification blockers and why-needed guidance |
+| `orchestrator/state_assistance/candidate_ready` | Asset Ready | Runtime Wired | post-intake candidate guidance while waiting for matches |
 | `orchestrator/state_assistance/vacancy_intake_pending` | Asset Ready | Runtime Wired | manager help when no formal JD exists |
 | `orchestrator/state_assistance/vacancy_clarification_qa` | Asset Ready | Runtime Wired | clarification-stage vacancy guidance |
+| `orchestrator/state_assistance/vacancy_open` | Asset Ready | Runtime Wired | post-intake vacancy guidance while matching is active |
 
 ## What Is Covered Now
 
@@ -65,7 +67,7 @@ The remaining gap is no longer prompt design coverage. The remaining gap is surr
 
 1. add vector retrieval and embedding refresh
 2. add cleanup jobs and retention-aware deletion follow-up work
-3. add remaining state-policy prompts for `READY`, `OPEN`, invite/review, and deletion-adjacent states
+3. add remaining state-policy prompts for invite/review and deletion-adjacent states
 4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion

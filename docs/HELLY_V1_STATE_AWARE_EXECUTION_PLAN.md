@@ -72,8 +72,7 @@ Priority states:
 Status:
 
 - in progress
-- implemented so far: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`
-- remaining priority state: `READY`
+- implemented so far: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, `READY`
 
 ### Step 4. Vacancy State Policies
 
@@ -90,8 +89,7 @@ Priority states:
 Status:
 
 - in progress
-- implemented so far: `JD_PENDING` runtime is mapped to `INTAKE_PENDING`, and `CLARIFICATION_QA`
-- remaining priority state: `OPEN`
+- implemented so far: `JD_PENDING` runtime is mapped to `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
 
 ### Step 5. Interview and Review State Policies
 

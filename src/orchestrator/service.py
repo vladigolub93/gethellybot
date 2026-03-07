@@ -58,6 +58,8 @@ class BotControllerService:
             "QUESTIONS_PENDING",
             "VERIFICATION_PENDING",
             "CLARIFICATION_QA",
+            "READY",
+            "OPEN",
         }:
             return None
         if not self._looks_like_help_or_constraint_message(
@@ -181,6 +183,30 @@ class BotControllerService:
                 r"\bwhat should i change\b",
                 r"\bwhat do i change\b",
                 r"\bexplain\b",
+            ],
+            "READY": [
+                r"\bwhat happens now\b",
+                r"\bwhat now\b",
+                r"\bwhat next\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhen\b",
+                r"\bmatch\b",
+                r"\bjobs?\b",
+                r"\bopportunit(y|ies)\b",
+                r"\bdelete\b",
+            ],
+            "OPEN": [
+                r"\bwhat happens now\b",
+                r"\bwhat now\b",
+                r"\bwhat next\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhen\b",
+                r"\bcandidates?\b",
+                r"\bmatches?\b",
+                r"\bdelete\b",
+                r"\bupdate\b",
             ],
         }
         patterns = patterns_by_state.get(state, [])

@@ -1,0 +1,6 @@
+- name: what_now
+  input: "What happens now?"
+  expected_intent: "clarification_request"
+- name: when_matches
+  input: "When will I start getting job opportunities?"
+  expected_intent: "clarification_request"

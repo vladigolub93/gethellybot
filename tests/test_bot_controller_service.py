@@ -202,3 +202,38 @@ def test_maybe_build_in_state_assistance_for_vacancy_clarification_question() ->
 
     assert message is not None
     assert "budget" in message.lower() or "approximate" in message.lower() or "range" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_candidate_ready_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="READY")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What happens now? Do I need to do anything else?",
+    )
+
+    assert message is not None
+    assert "match" in message.lower() or "profile is ready" in message.lower() or "strong match" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_vacancy_open_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository(vacancy=None)
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What happens now and when will I see candidates?",
+    )
+
+    assert message is not None
+    assert "vacancy is open" in message.lower() or "qualified" in message.lower() or "candidates" in message.lower()
