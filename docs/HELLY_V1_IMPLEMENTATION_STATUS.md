@@ -99,6 +99,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
+- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `160` passing tests covering help interception, business-action passthrough, normalization, aliases, and multimodal routing for the major user flows
 
 Status vs SRS:
 

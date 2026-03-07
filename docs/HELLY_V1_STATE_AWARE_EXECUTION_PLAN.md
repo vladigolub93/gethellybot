@@ -71,8 +71,8 @@ Priority states:
 
 Status:
 
-- in progress
-- implemented so far: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, `READY`
+- completed
+- implemented: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, `READY`
 
 ### Step 4. Vacancy State Policies
 
@@ -88,8 +88,8 @@ Priority states:
 
 Status:
 
-- in progress
-- implemented so far: `JD_PENDING` runtime is mapped to `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
+- completed
+- implemented: `JD_PENDING` runtime is mapped to `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
 
 ### Step 5. Interview and Review State Policies
 
@@ -106,8 +106,8 @@ Priority states:
 
 Status:
 
-- in progress
-- implemented so far: `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, `DELETE_CONFIRMATION`
+- completed
+- implemented: `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, `DELETE_CONFIRMATION`
 
 ### Step 6. Action Validation Layer
 
@@ -142,7 +142,7 @@ Required regression cases:
 
 Status:
 
-- in progress
+- completed
 - controller-level regression coverage is in place for all major state families
 - telegram routing regression coverage is now in place for key help-first interception cases across candidate intake, candidate questions, candidate ready, verification, manager intake, interview invite, and manager review
 - routing coverage now also protects summary review help vs real correction input, delete-confirmation help flows, and manager-approve passthrough behavior
@@ -160,12 +160,20 @@ Status:
 - routing coverage now also protects uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - routing coverage now also protects punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation
 - routing coverage now also includes direct unit coverage for shared command normalization and broader punctuation handling across summary edit, manager approval, interview skip, and vacancy deletion
+- current verification point:
+  - `160 passed`
+  - state-aware help interception is covered
+  - valid business-action passthrough is covered
+  - normalization and alias handling is covered
+  - multimodal routing coverage is in place for major candidate and manager paths
 
 ## 4. Current Next Task
 
 The immediate next task is:
 
-- Step 7:
-  - broaden regression coverage and UX hardening
-  - lock down the required in-state cases in integration tests
-The foundation and first major state-policy slice are now live in runtime.
+- state-aware conversation layer is complete for Helly v1 baseline
+- resume the broader master plan outside this slice:
+  - richer manager package and introduction/handoff flow
+  - invitation wave policy hardening
+  - transcript confidence and media quality controls
+  - operational hardening, observability, and production validation
