@@ -144,7 +144,7 @@ Status:
 
 - in progress
 - controller-level regression coverage is in place for all major state families
-- telegram routing regression coverage is now in place for key help-first interception cases
+- telegram routing regression coverage is now in place for key help-first interception cases across candidate intake, candidate questions, candidate ready, verification, manager intake, interview invite, and manager review
 
 ## 4. Current Next Task
 
