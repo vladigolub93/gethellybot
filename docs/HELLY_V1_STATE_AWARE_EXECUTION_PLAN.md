@@ -157,6 +157,7 @@ Status:
 - routing coverage now also protects near-canonical phrasing variants across summary review, manager decisions, and deletion cancellation, including `approve profile`, `edit summary`, `approve`, `reject`, and `don't delete`
 - routing coverage now also protects generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
 - routing coverage now also protects normalization variants such as trimmed whitespace around commands and consent aliases like `agree` / `consent`
+- routing coverage now also protects uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 
 ## 4. Current Next Task
 

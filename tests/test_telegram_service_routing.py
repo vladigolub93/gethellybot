@@ -879,6 +879,36 @@ def test_summary_review_approve_with_whitespace_reaches_summary_handler() -> Non
     assert service.candidate_service.summary_calls
 
 
+def test_summary_review_uppercase_approve_reaches_summary_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = SimpleNamespace(
+        notification_template="candidate_summary_approved",
+        status="approved",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u4c2",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw4c2",
+        build_update(text="APPROVE SUMMARY"),
+    )
+
+    assert templates == ["candidate_summary_approved"]
+    assert service.candidate_service.summary_calls
+
+
 def test_summary_review_approve_profile_alias_reaches_summary_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1170,6 +1200,36 @@ def test_manager_approve_alias_passthrough_reaches_manager_handler() -> None:
     assert service.evaluation_service.calls
 
 
+def test_manager_uppercase_approve_reaches_manager_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="approved",
+        notification_template="manager_candidate_approved",
+        notification_text="Candidate approved.",
+    )
+
+    user = SimpleNamespace(
+        id="u8b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw8b",
+        build_update(text="APPROVE"),
+    )
+
+    assert templates == ["manager_candidate_approved"]
+    assert service.evaluation_service.calls
+
+
 def test_interview_accept_passthrough_reaches_interview_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1224,6 +1284,36 @@ def test_interview_accept_alias_passthrough_reaches_interview_handler() -> None:
         user,
         "raw9a",
         build_update(text="Accept"),
+    )
+
+    assert templates == ["candidate_interview_started"]
+    assert service.interview_service.calls
+
+
+def test_interview_uppercase_accept_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="accepted",
+        notification_template="candidate_interview_started",
+        notification_text="Interview started.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u9b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw9b",
+        build_update(text="ACCEPT"),
     )
 
     assert templates == ["candidate_interview_started"]
@@ -1565,6 +1655,36 @@ def test_candidate_confirm_delete_with_whitespace_reaches_deletion_handler() -> 
     assert service.candidate_service.deletion_calls
 
 
+def test_candidate_uppercase_confirm_delete_reaches_deletion_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="candidate_deleted",
+        notification_text="Profile deleted.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u11c2",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw11c2",
+        build_update(text="CONFIRM DELETE PROFILE"),
+    )
+
+    assert templates == ["candidate_deleted"]
+    assert service.candidate_service.deletion_calls
+
+
 def test_candidate_delete_cancel_passthrough_reaches_deletion_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1739,6 +1859,36 @@ def test_vacancy_confirm_delete_with_whitespace_reaches_deletion_handler() -> No
         user,
         "raw12f1",
         build_update(text="  Confirm delete vacancy  "),
+    )
+
+    assert templates == ["vacancy_deleted"]
+    assert service.vacancy_service.deletion_calls
+
+
+def test_vacancy_uppercase_confirm_delete_reaches_deletion_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="vacancy_deleted",
+        notification_text="Vacancy deleted.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u12f2",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12f2",
+        build_update(text="CONFIRM DELETE VACANCY"),
     )
 
     assert templates == ["vacancy_deleted"]
