@@ -48,7 +48,7 @@ Architectural status note:
 - `LangGraph` foundation modules and canonical graph state contract are now added
 - the canonical supported runtime for LangGraph execution is now `Python 3.12`
 - Dockerized `Python 3.12` runtime has been validated locally with `langgraph` import and full test execution
-- entry-stage runtime execution has started migrating through a graph-driven path for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
+- entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - candidate `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
 - manager `INTAKE_PENDING` help handling has also started migrating through a graph-driven path
 - Telegram still falls back to the old controller/routing layer for all remaining stages
@@ -79,7 +79,7 @@ Architectural status note:
 - `Implemented`: consent capture exists
 - `Implemented`: role selection exists
 - `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection
-- `Implemented`: early identity help is now routed through a bounded graph-driven entry-stage agent path before the legacy controller fallback
+- `Implemented`: entry onboarding is now executed through graph-owned stage agents for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
   - the `User` table can technically support multiple role flags
@@ -118,7 +118,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
 - `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `178` passing tests covering help interception, business-action passthrough, normalization, aliases, multimodal routing, and early identity/onboarding assistance
-- `Partial`: the current state-aware routing/controller layer is a baseline only; migration to LangGraph stage-agent orchestration is still pending
+- `Partial`: the current state-aware routing/controller layer is still the main runtime for non-entry stages; only entry onboarding is now fully graph-owned
 
 Status vs SRS:
 

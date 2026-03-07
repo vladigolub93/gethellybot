@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import List
 
@@ -56,6 +58,15 @@ class TelegramUpdateService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    def _entry_stage_reply_markup(self, stage: str | None):
+        if stage == "CONTACT_REQUIRED":
+            return contact_request_keyboard()
+        if stage == "CONSENT_REQUIRED":
+            return consent_keyboard()
+        if stage == "ROLE_SELECTION":
+            return role_selection_keyboard()
+        return None
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
@@ -137,6 +148,77 @@ class TelegramUpdateService:
             or (not user.is_candidate and not user.is_hiring_manager)
         )
 
+        if should_offer_identity_assistance and normalized_update.content_type == "text":
+            entry_result = self.stage_agents.maybe_run_entry_stage(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            )
+            if entry_result is not None:
+                if entry_result.action_accepted and entry_result.proposed_action == "reply_i_agree":
+                    self.identity_service.grant_data_processing_consent(
+                        user, source_raw_message_id=raw_message_id
+                    )
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "request_role",
+                            {
+                                "text": self.messaging.compose_role_selection(latest_user_message="consent confirmed"),
+                                "reply_markup": role_selection_keyboard(),
+                            },
+                        )
+                    )
+                    return templates
+
+                if entry_result.action_accepted and entry_result.proposed_action in {"candidate", "hiring_manager"}:
+                    role = "candidate" if entry_result.proposed_action == "candidate" else "hiring_manager"
+                    self.identity_service.set_role(user, role)
+                    if role == "candidate":
+                        self.candidate_service.start_onboarding(
+                            user, trigger_ref_id=raw_message_id
+                        )
+                    else:
+                        self.vacancy_service.start_onboarding(
+                            user, trigger_ref_id=raw_message_id
+                        )
+                    template_key = (
+                        "candidate_onboarding_started"
+                        if role == "candidate"
+                        else "manager_onboarding_started"
+                    )
+                    message_text = (
+                        "Candidate flow started. Please upload your CV or describe your experience."
+                        if role == "candidate"
+                        else "Hiring manager flow started. Please send the job description."
+                    )
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            template_key,
+                            {"text": self._copy(message_text)},
+                        )
+                    )
+                    return templates
+
+                if entry_result.reply_text:
+                    stage_template = {
+                        "CONTACT_REQUIRED": "request_contact",
+                        "CONSENT_REQUIRED": "request_consent",
+                        "ROLE_SELECTION": "request_role",
+                    }.get(entry_result.stage, "state_aware_help")
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            stage_template,
+                            {
+                                "text": entry_result.reply_text,
+                                "reply_markup": self._entry_stage_reply_markup(entry_result.stage),
+                            },
+                        )
+                    )
+                    return templates
+
         if (
             should_offer_identity_assistance
             and normalized_update.content_type == "text"
@@ -149,11 +231,7 @@ class TelegramUpdateService:
             "hiring manager",
             }
         ):
-            assistance_text = self.stage_agents.maybe_build_entry_reply(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            ) or self.bot_controller.maybe_build_in_state_assistance(
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
                 user=user,
                 latest_user_message=normalized_update.text or "",
             )

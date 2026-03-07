@@ -73,3 +73,51 @@ def test_graph_entry_service_handles_role_selection() -> None:
 
     assert reply is not None
     assert "candidate" in reply.lower() or "hiring manager" in reply.lower()
+
+
+def test_graph_entry_service_accepts_consent_transition() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=False)
+
+    user = SimpleNamespace(
+        id="u4",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_entry_stage(
+        user=user,
+        latest_user_message="I agree",
+    )
+
+    assert result is not None
+    assert result.stage == "CONSENT_REQUIRED"
+    assert result.action_accepted is True
+    assert result.proposed_action == "reply_i_agree"
+    assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_entry_service_accepts_role_selection_transition() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+
+    user = SimpleNamespace(
+        id="u5",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_entry_stage(
+        user=user,
+        latest_user_message="Candidate",
+    )
+
+    assert result is not None
+    assert result.stage == "ROLE_SELECTION"
+    assert result.action_accepted is True
+    assert result.proposed_action == "candidate"
+    assert result.stage_status == "ready_for_transition"

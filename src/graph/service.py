@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from typing import Any
+
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -28,6 +31,17 @@ from src.graph.stages.manager import (
 from src.orchestrator.policy import resolve_state_context
 
 
+@dataclass(frozen=True)
+class StageAgentExecutionResult:
+    stage: str
+    reply_text: str | None
+    stage_status: str | None
+    proposed_action: str | None
+    action_accepted: bool
+    structured_payload: dict[str, Any] = field(default_factory=dict)
+    validation_result: dict[str, Any] = field(default_factory=dict)
+
+
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
     CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING", "VERIFICATION_PENDING", "READY"}
@@ -52,24 +66,40 @@ class LangGraphStageAgentService:
         latest_user_message: str,
         latest_message_type: str = "text",
     ) -> str | None:
+        result = self.maybe_run_entry_stage(
+            user=user,
+            latest_user_message=latest_user_message,
+            latest_message_type=latest_message_type,
+        )
+        return result.reply_text if result is not None else None
+
+    def maybe_run_entry_stage(
+        self,
+        *,
+        user,
+        latest_user_message: str,
+        latest_message_type: str = "text",
+    ) -> StageAgentExecutionResult | None:
         if latest_message_type != "text" or not latest_user_message.strip():
             return None
         stage = self._resolve_entry_stage(user)
         if stage not in self.ENTRY_STAGES:
             return None
-        compiled = self._get_compiled_graph(stage)
-        context_stage = self.router.build_initial_state(
+        result = self._run_stage_graph(
+            user=user,
             stage=stage,
-            user_id=str(getattr(user, "id", "")) or None,
-            telegram_chat_id=str(getattr(user, "telegram_chat_id", "")) or None,
-            role=self._resolve_role(user),
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
-            allowed_actions=[],
-            missing_requirements=[],
         )
-        result = compiled.invoke(context_stage.as_dict())
-        return result.get("reply_text")
+        return StageAgentExecutionResult(
+            stage=stage,
+            reply_text=result.get("reply_text"),
+            stage_status=result.get("stage_status"),
+            proposed_action=result.get("proposed_action"),
+            action_accepted=bool(result.get("validation_result", {}).get("accepted")),
+            structured_payload=result.get("structured_payload") or {},
+            validation_result=result.get("validation_result") or {},
+        )
 
     def maybe_build_stage_reply(
         self,
@@ -83,19 +113,12 @@ class LangGraphStageAgentService:
         stage = self._resolve_supported_stage(user)
         if stage is None:
             return None
-        compiled = self._get_compiled_graph(stage)
-        context = resolve_state_context(role=self._resolve_role(user), state=stage)
-        state_input = self.router.build_initial_state(
+        result = self._run_stage_graph(
+            user=user,
             stage=stage,
-            user_id=str(getattr(user, "id", "")) or None,
-            telegram_chat_id=str(getattr(user, "telegram_chat_id", "")) or None,
-            role=self._resolve_role(user),
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
-            allowed_actions=context.allowed_actions,
-            missing_requirements=context.missing_requirements,
         )
-        result = compiled.invoke(state_input.as_dict())
         return result.get("reply_text")
 
     def _resolve_role(self, user) -> str | None:
@@ -207,3 +230,25 @@ class LangGraphStageAgentService:
         )
         self._compiled_graphs[stage] = compiled
         return compiled
+
+    def _run_stage_graph(
+        self,
+        *,
+        user,
+        stage: str,
+        latest_user_message: str,
+        latest_message_type: str,
+    ) -> dict[str, Any]:
+        compiled = self._get_compiled_graph(stage)
+        context = resolve_state_context(role=self._resolve_role(user), state=stage)
+        state_input = self.router.build_initial_state(
+            stage=stage,
+            user_id=str(getattr(user, "id", "")) or None,
+            telegram_chat_id=str(getattr(user, "telegram_chat_id", "")) or None,
+            role=self._resolve_role(user),
+            latest_user_message=latest_user_message,
+            latest_message_type=latest_message_type,
+            allowed_actions=context.allowed_actions,
+            missing_requirements=context.missing_requirements,
+        )
+        return compiled.invoke(state_input.as_dict())

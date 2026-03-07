@@ -315,8 +315,8 @@ Strict order:
 
 The next concrete implementation tasks should be:
 
-1. finish documentation rewrite and mark it canonical
-2. expand `LangGraph` graph runtime from partial slices to full stage ownership
+1. expand `LangGraph` graph runtime from partial slices to full stage ownership
+2. convert candidate-side migrated stages from help-oriented graph slices into full stage owners
 3. finish manager-side stage coverage:
    - `CLARIFICATION_QA`
    - `OPEN`
@@ -326,6 +326,12 @@ The next concrete implementation tasks should be:
    - `MANAGER_REVIEW`
    - `DELETE_CONFIRMATION`
 5. refactor Telegram routing so graph becomes the default path for all supported stages
+
+Current execution note:
+
+- Phase 1 is complete
+- entry flow in Phase 4 is now implemented as graph-owned execution for text-based onboarding interactions
+- the next rebuild target is candidate flow, starting with `CV_PENDING` as a full stage owner rather than a graph-driven help overlay
 
 ## 9. Definition of Done
 
