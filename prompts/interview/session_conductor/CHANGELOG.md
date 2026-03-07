@@ -9,3 +9,7 @@
 - encoded follow-up decision policy: deepen, clarify, verify, or move on
 - enforced maximum one follow-up per topic
 - defined a structured turn output contract for future runtime orchestration
+
+## v2
+
+- aligned interview conductor with Helly product constraints around pre-approval visibility and non-marketplace behavior

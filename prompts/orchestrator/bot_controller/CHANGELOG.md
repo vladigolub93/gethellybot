@@ -9,3 +9,8 @@
 - upgraded the decision contract to include `response_mode`, `keep_current_state`, and `proposed_action`
 - aligned the controller with the new state-aware conversation model
 - expanded context to include state goal, blocked actions, missing requirements, and current step guidance
+
+## v3
+
+- aligned user-facing response rules with the shared Helly agent knowledge base
+- tightened privacy, sharing, and non-job-board constraints for controller responses
