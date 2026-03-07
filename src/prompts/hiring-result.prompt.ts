@@ -1,0 +1,25 @@
+export function buildHiringResultPrompt(payloadJson: string): string {
+  return [
+    "You are summarizing a completed hiring manager intake interview.",
+    "Return STRICT JSON only, no markdown, no extra text.",
+    "Keep output compact and practical.",
+    "",
+    "Required JSON shape:",
+    "{",
+    '  "title": "Role Intake Summary",',
+    '  "roleOverview": "string",',
+    '  "mustHaves": ["string"],',
+    '  "risks": ["string"],',
+    '  "nextStep": "string"',
+    "}",
+    "",
+    "Rules:",
+    "- roleOverview: max 220 chars",
+    "- mustHaves: 1..4 items, each max 120 chars",
+    "- risks: 1..4 items, each max 120 chars",
+    "- nextStep: max 120 chars",
+    "- be faithful to provided data; avoid speculation",
+    "",
+    `Input payload JSON:\n${payloadJson}`,
+  ].join("\n");
+}

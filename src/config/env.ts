@@ -1,0 +1,289 @@
+import dotenv from "dotenv";
+
+dotenv.config();
+
+export interface EnvConfig {
+  nodeEnv: string;
+  debugMode: boolean;
+  telegramLogsEnabled: boolean;
+  telegramLogsChatId?: string;
+  telegramLogsLevel: "debug" | "info" | "warn" | "error";
+  telegramLogsRatePerMin: number;
+  telegramLogsBatchMs: number;
+  adminSecret?: string;
+  adminWebappPin: string;
+  adminUserIds: number[];
+  /** Stage 11: admin Telegram group/DM for error reporting */
+  adminTelegramChatId?: string;
+  /** Stage 11: min level to send to admin (info|warn|error) */
+  adminLogLevel: "info" | "warn" | "error";
+  adminWebappSessionTtlSec: number;
+  adminWebappRequireTelegram: boolean;
+  port: number;
+  telegramBotToken: string;
+  telegramWebhookPath: string;
+  telegramWebhookUrl?: string;
+  telegramSecretToken?: string;
+  openaiApiKey: string;
+  openaiChatModel: string;
+  openaiEmbeddingModel: string;
+  openaiTranscriptionModel: string;
+  voiceMaxDurationSec: number;
+  telegramReactionsEnabled: boolean;
+  telegramReactionsProbability: number;
+  telegramButtonsEnabled: boolean;
+  prescreenV2Enabled: boolean;
+  jobPrescreenV2Enabled: boolean;
+  dialogueV2Enabled: boolean;
+  prescreenV3Enabled: boolean;
+  conversationStateV2Enabled: boolean;
+  enableTypedRoleSelectionRouter: boolean;
+  enableTypedContactRouter: boolean;
+  enableTypedCvRouter: boolean;
+  enableTypedJdRouter: boolean;
+  enableTypedCandidateMandatoryRouter: boolean;
+  enableTypedManagerMandatoryRouter: boolean;
+  enableTypedCandidateDecisionRouter: boolean;
+  enableTypedManagerDecisionRouter: boolean;
+  enableTypedInterviewInviteRouter: boolean;
+  enableTypedInterviewAnswerRouter: boolean;
+  enableTypedCandidateReviewRouter: boolean;
+  enableTypedManagerReviewRouter: boolean;
+  enableCanonicalCandidateAcceptGate: boolean;
+  enableCanonicalCandidateRejectGate: boolean;
+  enableCanonicalManagerAcceptGate: boolean;
+  enableCanonicalManagerRejectGate: boolean;
+  interviewReminderEnabled: boolean;
+  interviewReminderCheckIntervalMinutes: number;
+  supabaseUrl?: string;
+  supabasePublishableKey?: string;
+  supabaseServiceRoleKey?: string;
+  supabaseApiKey?: string;
+  qdrantUrl?: string;
+  qdrantApiKey?: string;
+  qdrantCandidateCollection: string;
+  qdrantBackfillOnStart: boolean;
+}
+
+function getRequiredString(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return trimmed;
+}
+
+function getOptionalTrimmed(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function loadEnv(): EnvConfig {
+  const telegramWebhookPath = process.env.TELEGRAM_WEBHOOK_PATH ?? "/telegram/webhook";
+  const portRaw = process.env.PORT ?? "3000";
+  const port = Number(portRaw);
+  const voiceLimitRaw = process.env.VOICE_MAX_DURATION_SEC ?? "180";
+  const voiceMaxDurationSec = Number(voiceLimitRaw);
+  const reactionsEnabledRaw = process.env.TELEGRAM_REACTIONS_ENABLED ?? "true";
+  const reactionsProbabilityRaw = process.env.TELEGRAM_REACTIONS_PROBABILITY ?? "0.12";
+  const buttonsEnabledRaw = process.env.TELEGRAM_BUTTONS_ENABLED ?? "true";
+  const prescreenV2EnabledRaw = process.env.PRESCREEN_V2_ENABLED ?? "true";
+  const jobPrescreenV2EnabledRaw = process.env.JOB_PRESCREEN_V2_ENABLED ?? "true";
+  const dialogueV2EnabledRaw = process.env.DIALOGUE_V2_ENABLED ?? "true";
+  const prescreenV3EnabledRaw = process.env.PRESCREEN_V3_ENABLED ?? "false";
+  const conversationStateV2EnabledRaw = process.env.CONVERSATION_STATE_V2_ENABLED ?? "true";
+  const enableTypedRoleSelectionRouterRaw = process.env.ENABLE_TYPED_ROLE_SELECTION_ROUTER ?? "false";
+  const enableTypedContactRouterRaw = process.env.ENABLE_TYPED_CONTACT_ROUTER ?? "false";
+  const enableTypedCvRouterRaw = process.env.ENABLE_TYPED_CV_ROUTER ?? "false";
+  const enableTypedJdRouterRaw = process.env.ENABLE_TYPED_JD_ROUTER ?? "false";
+  const enableTypedCandidateMandatoryRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_MANDATORY_ROUTER ?? "false";
+  const enableTypedManagerMandatoryRouterRaw = process.env.ENABLE_TYPED_MANAGER_MANDATORY_ROUTER ?? "false";
+  const enableTypedCandidateDecisionRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_DECISION_ROUTER ?? "false";
+  const enableTypedManagerDecisionRouterRaw = process.env.ENABLE_TYPED_MANAGER_DECISION_ROUTER ?? "false";
+  const enableTypedInterviewInviteRouterRaw = process.env.ENABLE_TYPED_INTERVIEW_INVITE_ROUTER ?? "false";
+  const enableTypedInterviewAnswerRouterRaw = process.env.ENABLE_TYPED_INTERVIEW_ANSWER_ROUTER ?? "false";
+  const enableTypedCandidateReviewRouterRaw = process.env.ENABLE_TYPED_CANDIDATE_REVIEW_ROUTER ?? "false";
+  const enableTypedManagerReviewRouterRaw = process.env.ENABLE_TYPED_MANAGER_REVIEW_ROUTER ?? "false";
+  const enableCanonicalCandidateAcceptGateRaw = process.env.ENABLE_CANONICAL_CANDIDATE_ACCEPT_GATE ?? "false";
+  const enableCanonicalCandidateRejectGateRaw = process.env.ENABLE_CANONICAL_CANDIDATE_REJECT_GATE ?? "false";
+  const enableCanonicalManagerAcceptGateRaw = process.env.ENABLE_CANONICAL_MANAGER_ACCEPT_GATE ?? "false";
+  const enableCanonicalManagerRejectGateRaw = process.env.ENABLE_CANONICAL_MANAGER_REJECT_GATE ?? "false";
+  const interviewReminderEnabledRaw = process.env.INTERVIEW_REMINDER_ENABLED ?? "true";
+  const interviewReminderCheckIntervalRaw = process.env.INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES ?? "60";
+  const qdrantBackfillOnStartRaw = process.env.QDRANT_BACKFILL_ON_START ?? "true";
+  const adminWebappSessionTtlRaw = process.env.ADMIN_WEBAPP_SESSION_TTL_SEC ?? "3600";
+  const adminWebappRequireTelegramRaw = process.env.ADMIN_WEBAPP_REQUIRE_TELEGRAM ?? "true";
+  const debugModeRaw = process.env.DEBUG_MODE ?? "false";
+  const telegramLogsEnabledRaw =
+    process.env.TELEGRAM_LOGS_ENABLED ?? ((process.env.NODE_ENV ?? "development") === "production" ? "true" : "false");
+  const telegramLogsLevelRaw = (process.env.TELEGRAM_LOG_LEVEL ?? "warn").trim().toLowerCase();
+  const telegramLogsRatePerMinRaw = process.env.TELEGRAM_LOG_RATE_PER_MIN ?? "20";
+  const telegramLogsBatchMsRaw = process.env.TELEGRAM_LOG_BATCH_MS ?? "2500";
+  const telegramReactionsEnabled = parseBoolean(reactionsEnabledRaw);
+  const telegramReactionsProbability = Number(reactionsProbabilityRaw);
+  const telegramButtonsEnabled = parseBoolean(buttonsEnabledRaw);
+  const prescreenV2Enabled = parseBoolean(prescreenV2EnabledRaw);
+  const jobPrescreenV2Enabled = parseBoolean(jobPrescreenV2EnabledRaw);
+  const dialogueV2Enabled = parseBoolean(dialogueV2EnabledRaw);
+  const prescreenV3Enabled = parseBoolean(prescreenV3EnabledRaw);
+  const conversationStateV2Enabled = parseBoolean(conversationStateV2EnabledRaw);
+  const enableTypedRoleSelectionRouter = parseBoolean(enableTypedRoleSelectionRouterRaw);
+  const enableTypedContactRouter = parseBoolean(enableTypedContactRouterRaw);
+  const enableTypedCvRouter = parseBoolean(enableTypedCvRouterRaw);
+  const enableTypedJdRouter = parseBoolean(enableTypedJdRouterRaw);
+  const enableTypedCandidateMandatoryRouter = parseBoolean(enableTypedCandidateMandatoryRouterRaw);
+  const enableTypedManagerMandatoryRouter = parseBoolean(enableTypedManagerMandatoryRouterRaw);
+  const enableTypedCandidateDecisionRouter = parseBoolean(enableTypedCandidateDecisionRouterRaw);
+  const enableTypedManagerDecisionRouter = parseBoolean(enableTypedManagerDecisionRouterRaw);
+  const enableTypedInterviewInviteRouter = parseBoolean(enableTypedInterviewInviteRouterRaw);
+  const enableTypedInterviewAnswerRouter = parseBoolean(enableTypedInterviewAnswerRouterRaw);
+  const enableTypedCandidateReviewRouter = parseBoolean(enableTypedCandidateReviewRouterRaw);
+  const enableTypedManagerReviewRouter = parseBoolean(enableTypedManagerReviewRouterRaw);
+  const enableCanonicalCandidateAcceptGate = parseBoolean(enableCanonicalCandidateAcceptGateRaw);
+  const enableCanonicalCandidateRejectGate = parseBoolean(enableCanonicalCandidateRejectGateRaw);
+  const enableCanonicalManagerAcceptGate = parseBoolean(enableCanonicalManagerAcceptGateRaw);
+  const enableCanonicalManagerRejectGate = parseBoolean(enableCanonicalManagerRejectGateRaw);
+  const interviewReminderEnabled = parseBoolean(interviewReminderEnabledRaw);
+  const interviewReminderCheckIntervalMinutes = Number(interviewReminderCheckIntervalRaw);
+  const qdrantBackfillOnStart = parseBoolean(qdrantBackfillOnStartRaw);
+  const adminWebappSessionTtlSec = Number(adminWebappSessionTtlRaw);
+  const adminWebappRequireTelegram = parseBoolean(adminWebappRequireTelegramRaw);
+  const debugMode = parseBoolean(debugModeRaw);
+  const telegramLogsEnabled = parseBoolean(telegramLogsEnabledRaw);
+  const telegramLogsRatePerMin = Number(telegramLogsRatePerMinRaw);
+  const telegramLogsBatchMs = Number(telegramLogsBatchMsRaw);
+  const telegramLogsLevel = parseLogLevel(telegramLogsLevelRaw);
+
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: ${portRaw}`);
+  }
+  if (!Number.isInteger(voiceMaxDurationSec) || voiceMaxDurationSec <= 0) {
+    throw new Error(`Invalid VOICE_MAX_DURATION_SEC value: ${voiceLimitRaw}`);
+  }
+  if (!Number.isFinite(telegramReactionsProbability) || telegramReactionsProbability < 0 || telegramReactionsProbability > 1) {
+    throw new Error(
+      `Invalid TELEGRAM_REACTIONS_PROBABILITY value: ${reactionsProbabilityRaw}. Expected number between 0 and 1.`,
+    );
+  }
+  if (!Number.isFinite(interviewReminderCheckIntervalMinutes) || interviewReminderCheckIntervalMinutes < 10) {
+    throw new Error(
+      `Invalid INTERVIEW_REMINDER_CHECK_INTERVAL_MINUTES value: ${interviewReminderCheckIntervalRaw}`,
+    );
+  }
+  if (!Number.isFinite(telegramLogsRatePerMin) || telegramLogsRatePerMin < 1) {
+    throw new Error(`Invalid TELEGRAM_LOG_RATE_PER_MIN value: ${telegramLogsRatePerMinRaw}`);
+  }
+  if (!Number.isFinite(telegramLogsBatchMs) || telegramLogsBatchMs < 250) {
+    throw new Error(`Invalid TELEGRAM_LOG_BATCH_MS value: ${telegramLogsBatchMsRaw}`);
+  }
+  if (!Number.isInteger(adminWebappSessionTtlSec) || adminWebappSessionTtlSec < 300) {
+    throw new Error(`Invalid ADMIN_WEBAPP_SESSION_TTL_SEC value: ${adminWebappSessionTtlRaw}`);
+  }
+
+  return {
+    nodeEnv: process.env.NODE_ENV ?? "development",
+    debugMode,
+    telegramLogsEnabled,
+    telegramLogsChatId: process.env.TELEGRAM_LOG_CHAT_ID ?? "-1003451429547",
+    telegramLogsLevel,
+    telegramLogsRatePerMin: telegramLogsRatePerMin,
+    telegramLogsBatchMs: telegramLogsBatchMs,
+    adminSecret: getOptionalTrimmed("ADMIN_SECRET"),
+    adminWebappPin: process.env.ADMIN_WEBAPP_PIN?.trim() || "21041993",
+    adminUserIds: parseAdminUserIds(process.env.ADMIN_USER_IDS),
+    adminTelegramChatId: getOptionalTrimmed("ADMIN_TELEGRAM_CHAT_ID"),
+    adminLogLevel: parseAdminLogLevel(process.env.ADMIN_LOG_LEVEL ?? "warn"),
+    adminWebappSessionTtlSec,
+    adminWebappRequireTelegram,
+    port,
+    telegramBotToken: getRequiredString("TELEGRAM_BOT_TOKEN"),
+    telegramWebhookPath,
+    telegramWebhookUrl: getOptionalTrimmed("TELEGRAM_WEBHOOK_URL"),
+    telegramSecretToken: getOptionalTrimmed("TELEGRAM_SECRET_TOKEN"),
+    openaiApiKey: getRequiredString("OPENAI_API_KEY"),
+    openaiChatModel: process.env.OPENAI_CHAT_MODEL ?? "gpt-5.2",
+    openaiEmbeddingModel: process.env.OPENAI_EMBEDDINGS_MODEL ?? process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-large",
+    openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
+    voiceMaxDurationSec,
+    telegramReactionsEnabled,
+    telegramReactionsProbability,
+    telegramButtonsEnabled,
+    prescreenV2Enabled,
+    jobPrescreenV2Enabled,
+    dialogueV2Enabled,
+    prescreenV3Enabled,
+    conversationStateV2Enabled,
+    enableTypedRoleSelectionRouter,
+    enableTypedContactRouter,
+    enableTypedCvRouter,
+    enableTypedJdRouter,
+    enableTypedCandidateMandatoryRouter,
+    enableTypedManagerMandatoryRouter,
+    enableTypedCandidateDecisionRouter,
+    enableTypedManagerDecisionRouter,
+    enableTypedInterviewInviteRouter,
+    enableTypedInterviewAnswerRouter,
+    enableTypedCandidateReviewRouter,
+    enableTypedManagerReviewRouter,
+    enableCanonicalCandidateAcceptGate,
+    enableCanonicalCandidateRejectGate,
+    enableCanonicalManagerAcceptGate,
+    enableCanonicalManagerRejectGate,
+    interviewReminderEnabled,
+    interviewReminderCheckIntervalMinutes,
+    supabaseUrl: getOptionalTrimmed("SUPABASE_URL"),
+    supabasePublishableKey: getOptionalTrimmed("SUPABASE_PUBLISHABLE_KEY"),
+    supabaseServiceRoleKey: getOptionalTrimmed("SUPABASE_SERVICE_ROLE_KEY"),
+    supabaseApiKey: getOptionalTrimmed("SUPABASE_SERVICE_ROLE_KEY") ?? getOptionalTrimmed("SUPABASE_PUBLISHABLE_KEY"),
+    qdrantUrl: getOptionalTrimmed("QDRANT_URL"),
+    qdrantApiKey: getOptionalTrimmed("QDRANT_API_KEY"),
+    qdrantCandidateCollection: getOptionalTrimmed("QDRANT_CANDIDATE_COLLECTION") ?? "helly_candidates_v1",
+    qdrantBackfillOnStart,
+  };
+}
+
+function parseAdminUserIds(rawValue: string | undefined): number[] {
+  const ownerTelegramUserId = 768517770;
+  if (!rawValue || rawValue.trim().length === 0) {
+    return [ownerTelegramUserId];
+  }
+  const ids = rawValue
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => Number.isInteger(n) && n > 0);
+  return ids.length > 0 ? ids : [ownerTelegramUserId];
+}
+
+function parseAdminLogLevel(value: string): "info" | "warn" | "error" {
+  const v = value.trim().toLowerCase();
+  if (v === "info" || v === "warn" || v === "error") return v;
+  return "warn";
+}
+
+function parseBoolean(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0" || normalized === "no") {
+    return false;
+  }
+  throw new Error(`Invalid boolean value: ${value}`);
+}
+
+function parseLogLevel(value: string): "debug" | "info" | "warn" | "error" {
+  if (value === "debug" || value === "info" || value === "warn" || value === "error") {
+    return value;
+  }
+  throw new Error(`Invalid TELEGRAM_LOG_LEVEL value: ${value}`);
+}

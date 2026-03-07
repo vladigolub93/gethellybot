@@ -1,0 +1,38 @@
+{
+  "name": "telegrambot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "ts-node src/server.ts",
+    "start": "node dist/server.js",
+    "test": "npm run test:integration",
+    "test:integration": "ts-node src/tests/integration/smoke.test.ts && ts-node src/tests/integration/onboarding.e2e.test.ts && npm run test:characterization",
+    "test:characterization": "ts-node src/tests/characterization/critical-happy-paths.characterization.test.ts",
+    "test:gatekeeper": "ts-node src/tests/unit/gatekeeper.service.test.ts",
+    "simulate:flow": "ts-node scripts/simulate-flow.ts",
+    "sanity:answer-evaluator": "ts-node scripts/answer-evaluator-sanity.ts",
+    "seed:test-jobs": "ts-node scripts/seed-test-jobs.ts",
+    "smoke:llm-system-prompt": "ts-node src/tests/unit/llm-system-prompt.smoke.ts",
+    "test:normalization": "ts-node src/tests/unit/normalization.service.smoke.ts",
+    "test:prescreen-v3-schemas": "ts-node src/tests/unit/prescreen-v3-schemas.test.ts",
+    "check:connections": "ts-node scripts/check-connections.ts",
+    "verify:prod": "ts-node scripts/verify-prod.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "form-data": "^4.0.4",
+    "mammoth": "^1.11.0",
+    "node-fetch": "^2.7.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^24.3.0",
+    "@types/node-fetch": "^2.6.12",
+    "@types/pdf-parse": "^1.1.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}

@@ -1,5 +1,11 @@
-# macOS
+node_modules/
+dist/
+.env
 .DS_Store
+*.log
+data/interviews/
+data/matches/
+data/state/
 
 # Python
 __pycache__/
@@ -11,7 +17,6 @@ __pycache__/
 venv/
 
 # Environment and secrets
-.env
 .env.*
 !.env.example
 
@@ -20,9 +25,5 @@ venv/
 .vscode/
 
 # Build artifacts
-dist/
 build/
 *.egg-info/
-
-# Logs
-*.log
