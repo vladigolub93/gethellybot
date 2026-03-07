@@ -136,6 +136,12 @@ class CandidateProfilesRepository:
         self.session.flush()
         return profile
 
+    def soft_delete(self, profile: CandidateProfile) -> CandidateProfile:
+        profile.deleted_at = datetime.now(timezone.utc)
+        profile.state = "DELETED"
+        self.session.flush()
+        return profile
+
     def get_current_version(self, profile: CandidateProfile) -> Optional[CandidateProfileVersion]:
         if profile.current_version_id is None:
             return None

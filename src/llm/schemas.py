@@ -129,3 +129,8 @@ class VacancyInconsistencySchema(BaseModel):
 
 class ResponseCopywriterSchema(BaseModel):
     message: str
+
+
+class DeletionConfirmationSchema(BaseModel):
+    message: str
+    is_explicit_confirmation_required: bool

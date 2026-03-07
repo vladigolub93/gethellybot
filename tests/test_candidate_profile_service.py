@@ -36,6 +36,7 @@ class FakeCandidateProfilesRepository:
             current_version_id=None,
             questions_context_json={},
             ready_at=None,
+            deleted_at=None,
         )
         return self.profile
 
@@ -68,6 +69,11 @@ class FakeCandidateProfilesRepository:
         profile.ready_at = "now"
         return profile
 
+    def soft_delete(self, profile):
+        profile.deleted_at = "now"
+        profile.state = "DELETED"
+        return profile
+
     def get_current_version(self, profile):
         for version in self.versions:
             if version.id == profile.current_version_id:
@@ -92,7 +98,8 @@ class FakeStateService:
 
     def transition(self, **kwargs):
         entity = kwargs["entity"]
-        entity.state = kwargs["to_state"]
+        field = kwargs.get("state_field", "state")
+        setattr(entity, field, kwargs["to_state"])
         self.transitions.append(kwargs)
 
 
@@ -102,6 +109,22 @@ class FakeQueue:
 
     def enqueue(self, message):
         self.messages.append(message)
+
+
+class FakeMatchingRepository:
+    def __init__(self):
+        self.active_matches = []
+
+    def list_active_for_candidate(self, candidate_profile_id):
+        return [match for match in self.active_matches if match.candidate_profile_id == candidate_profile_id]
+
+
+class FakeInterviewsRepository:
+    def __init__(self):
+        self.sessions_by_match_id = {}
+
+    def get_active_by_match_id(self, match_id):
+        return self.sessions_by_match_id.get(match_id)
 
 
 class FakeCandidateVerificationsRepository:
@@ -348,6 +371,45 @@ def test_verification_submission_moves_candidate_to_ready() -> None:
     assert profile.state == CANDIDATE_STATE_READY
     assert profile.ready_at == "now"
     assert len(service.queue.messages) == 1
+
+
+def test_candidate_deletion_requires_confirmation_then_soft_deletes() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+    match = SimpleNamespace(id=uuid4(), candidate_profile_id=profile.id, status="invited")
+    interview = SimpleNamespace(id=uuid4(), match_id=match.id, state="IN_PROGRESS")
+    service.matching.active_matches.append(match)
+    service.interviews.sessions_by_match_id[match.id] = interview
+
+    first = service.handle_deletion_message(
+        user=user,
+        raw_message_id=uuid4(),
+        text="delete profile",
+    )
+    second = service.handle_deletion_message(
+        user=user,
+        raw_message_id=uuid4(),
+        text="confirm delete profile",
+    )
+
+    assert first is not None
+    assert first.status == "confirmation_required"
+    assert second is not None
+    assert second.status == "deleted"
+    assert profile.deleted_at == "now"
+    assert profile.state == "DELETED"
+    assert match.status == "cancelled"
+    assert interview.state == "CANCELLED"
 
 
 def test_verification_instruction_is_returned_for_non_video_input() -> None:

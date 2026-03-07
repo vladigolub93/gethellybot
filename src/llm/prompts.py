@@ -288,3 +288,17 @@ def response_copywriter_prompt(*, approved_intent: str) -> str:
 Approved response intent:
 {approved_intent}
 """
+
+
+def deletion_confirmation_prompt(
+    *,
+    entity_type: str,
+    has_active_interview: bool,
+    has_active_matches: bool,
+) -> str:
+    return f"""Task: draft a safe deletion confirmation message.
+
+Entity type: {entity_type}
+Has active interview: {has_active_interview}
+Has active matches: {has_active_matches}
+"""

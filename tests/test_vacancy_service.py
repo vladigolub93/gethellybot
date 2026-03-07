@@ -45,8 +45,14 @@ class FakeVacanciesRepository:
             project_description=None,
             role_title=None,
             seniority_normalized=None,
+            deleted_at=None,
         )
         return self.vacancy
+
+    def get_latest_active_by_manager_user_id(self, manager_user_id):
+        if self.vacancy and self.vacancy.manager_user_id == manager_user_id and self.vacancy.deleted_at is None:
+            return self.vacancy
+        return None
 
     def next_version_no(self, _vacancy_id):
         return len(self.versions) + 1
@@ -73,6 +79,11 @@ class FakeVacanciesRepository:
         vacancy.opened_at = "now"
         return vacancy
 
+    def soft_delete(self, vacancy):
+        vacancy.deleted_at = "now"
+        vacancy.state = "DELETED"
+        return vacancy
+
 
 class FakeStateService:
     def __init__(self):
@@ -83,7 +94,8 @@ class FakeStateService:
 
     def transition(self, **kwargs):
         entity = kwargs["entity"]
-        entity.state = kwargs["to_state"]
+        field = kwargs.get("state_field", "state")
+        setattr(entity, field, kwargs["to_state"])
         self.transitions.append(kwargs)
 
 
@@ -93,6 +105,22 @@ class FakeQueue:
 
     def enqueue(self, message):
         self.messages.append(message)
+
+
+class FakeMatchingRepository:
+    def __init__(self):
+        self.active_matches = []
+
+    def list_active_for_vacancy(self, vacancy_id):
+        return [match for match in self.active_matches if match.vacancy_id == vacancy_id]
+
+
+class FakeInterviewsRepository:
+    def __init__(self):
+        self.sessions_by_match_id = {}
+
+    def get_active_by_match_id(self, match_id):
+        return self.sessions_by_match_id.get(match_id)
 
 
 def test_start_onboarding_moves_manager_to_intake_pending() -> None:
@@ -181,3 +209,41 @@ def test_clarification_requests_follow_up_when_partial() -> None:
     assert result is not None
     assert result.status == "follow_up"
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+
+
+def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    match = SimpleNamespace(id=uuid4(), vacancy_id=vacancy.id, status="manager_review")
+    interview = SimpleNamespace(id=uuid4(), match_id=match.id, state="IN_PROGRESS")
+    service.matching.active_matches.append(match)
+    service.interviews.sessions_by_match_id[match.id] = interview
+
+    first = service.handle_deletion_message(
+        user=user,
+        raw_message_id=uuid4(),
+        text="delete vacancy",
+    )
+    second = service.handle_deletion_message(
+        user=user,
+        raw_message_id=uuid4(),
+        text="confirm delete vacancy",
+    )
+
+    assert first is not None
+    assert first.status == "confirmation_required"
+    assert second is not None
+    assert second.status == "deleted"
+    assert vacancy.deleted_at == "now"
+    assert vacancy.state == "DELETED"
+    assert match.status == "cancelled"
+    assert interview.state == "CANCELLED"

@@ -205,6 +205,38 @@ class TelegramUpdateService:
             )
             return templates
 
+        if user.is_candidate and normalized_update.content_type == "text":
+            deletion_result = self.candidate_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text,
+            )
+            if deletion_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        deletion_result.notification_template,
+                        {"text": deletion_result.notification_text},
+                    )
+                )
+                return templates
+
+        if user.is_hiring_manager and normalized_update.content_type == "text":
+            deletion_result = self.vacancy_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text,
+            )
+            if deletion_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        deletion_result.notification_template,
+                        {"text": deletion_result.notification_text},
+                    )
+                )
+                return templates
+
         if user.is_hiring_manager and normalized_update.content_type == "text":
             manager_result = self.evaluation_service.handle_manager_message(
                 user=user,

@@ -5,10 +5,16 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from src.db.repositories.interviews import InterviewsRepository
+from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
-from src.llm.service import safe_copywrite_response, safe_parse_vacancy_clarifications
+from src.llm.service import (
+    safe_build_deletion_confirmation,
+    safe_copywrite_response,
+    safe_parse_vacancy_clarifications,
+)
 from src.state.service import StateService
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
@@ -38,10 +44,19 @@ class VacancyClarificationResult:
     notification_text: str
 
 
+@dataclass(frozen=True)
+class VacancyDeletionResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
 class VacancyService:
     def __init__(self, session: Session):
         self.session = session
         self.repo = VacanciesRepository(session)
+        self.interviews = InterviewsRepository(session)
+        self.matching = MatchingRepository(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
 
@@ -312,3 +327,132 @@ class VacancyService:
             if not follow_up_used.get(key, False):
                 return key
         return None
+
+    def handle_deletion_message(
+        self,
+        *,
+        user,
+        raw_message_id,
+        text: Optional[str],
+    ) -> Optional[VacancyDeletionResult]:
+        vacancy = self.repo.get_latest_active_by_manager_user_id(user.id)
+        if vacancy is None:
+            return None
+
+        normalized_text = (text or "").strip().lower()
+        deletion_context = self._ensure_deletion_context(vacancy)
+        pending = bool(deletion_context.get("pending"))
+
+        if normalized_text in {"cancel delete", "keep vacancy", "don't delete", "dont delete"} and pending:
+            deletion_context["pending"] = False
+            self._update_deletion_context(vacancy, deletion_context)
+            return VacancyDeletionResult(
+                status="cancelled",
+                notification_template="vacancy_deletion_cancelled",
+                notification_text=self._copy("Vacancy deletion cancelled. The vacancy remains active."),
+            )
+
+        if normalized_text not in {
+            "delete vacancy",
+            "delete this vacancy",
+            "remove vacancy",
+            "confirm delete",
+            "confirm delete vacancy",
+        }:
+            return None
+
+        active_matches = self.matching.list_active_for_vacancy(vacancy.id)
+        has_active_interview = any(
+            self.interviews.get_active_by_match_id(match.id) is not None for match in active_matches
+        )
+
+        if normalized_text in {"confirm delete", "confirm delete vacancy"} and pending:
+            return self._execute_deletion(
+                vacancy=vacancy,
+                raw_message_id=raw_message_id,
+                actor_user_id=user.id,
+                active_matches=active_matches,
+            )
+
+        deletion_context["pending"] = True
+        self._update_deletion_context(vacancy, deletion_context)
+        confirmation = safe_build_deletion_confirmation(
+            self.session,
+            entity_type="vacancy",
+            has_active_interview=has_active_interview,
+            has_active_matches=bool(active_matches),
+        )
+        return VacancyDeletionResult(
+            status="confirmation_required",
+            notification_template="vacancy_deletion_confirmation_required",
+            notification_text=confirmation.payload["message"],
+        )
+
+    def _ensure_deletion_context(self, vacancy) -> dict:
+        current = dict(vacancy.questions_context_json or {})
+        deletion = dict(current.get("deletion") or {})
+        deletion.setdefault("pending", False)
+        current["deletion"] = deletion
+        return current
+
+    def _update_deletion_context(self, vacancy, context: dict) -> None:
+        self.repo.update_questions_context(vacancy, context)
+
+    def _execute_deletion(self, *, vacancy, raw_message_id, actor_user_id, active_matches) -> VacancyDeletionResult:
+        deletion_context = self._ensure_deletion_context(vacancy)
+        deletion_context["pending"] = False
+        self._update_deletion_context(vacancy, deletion_context)
+
+        cancelled_matches = 0
+        cancelled_interviews = 0
+        for match in active_matches:
+            session = self.interviews.get_active_by_match_id(match.id)
+            if session is not None:
+                self.state_service.transition(
+                    entity_type="interview_session",
+                    entity=session,
+                    to_state="CANCELLED",
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=actor_user_id,
+                    metadata_json={"reason": "vacancy_deleted"},
+                )
+                cancelled_interviews += 1
+            self.state_service.transition(
+                entity_type="match",
+                entity=match,
+                to_state="cancelled",
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=actor_user_id,
+                metadata_json={"reason": "vacancy_deleted"},
+                state_field="status",
+            )
+            cancelled_matches += 1
+
+        self.state_service.transition(
+            entity_type="vacancy",
+            entity=vacancy,
+            to_state="DELETED",
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=actor_user_id,
+            metadata_json={
+                "cancelled_matches": cancelled_matches,
+                "cancelled_interviews": cancelled_interviews,
+            },
+        )
+        self.repo.soft_delete(vacancy)
+        details = []
+        if cancelled_matches:
+            details.append(f"{cancelled_matches} active match(es)")
+        if cancelled_interviews:
+            details.append(f"{cancelled_interviews} interview(s)")
+        details_text = ""
+        if details:
+            details_text = " Cancelled: " + ", ".join(details) + "."
+        return VacancyDeletionResult(
+            status="deleted",
+            notification_template="vacancy_deleted",
+            notification_text=self._copy(f"Vacancy deleted and removed from active flow.{details_text}"),
+        )

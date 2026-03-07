@@ -145,6 +145,13 @@ class InterviewsRepository:
         stmt = select(InterviewAnswer).where(InterviewAnswer.session_id == session_id)
         return list(self.session.execute(stmt).scalars().all())
 
+    def get_active_by_match_id(self, match_id) -> Optional[InterviewSession]:
+        stmt = select(InterviewSession).where(
+            InterviewSession.match_id == match_id,
+            InterviewSession.state.in_(ACTIVE_INTERVIEW_STATES),
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def advance_question_pointer(self, session: InterviewSession, next_order: int) -> InterviewSession:
         session.current_question_order = next_order
         self.session.flush()
@@ -167,5 +174,10 @@ class InterviewsRepository:
 
     def mark_completed(self, session: InterviewSession) -> InterviewSession:
         session.completed_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return session
+
+    def set_state(self, session: InterviewSession, state: str) -> InterviewSession:
+        session.state = state
         self.session.flush()
         return session

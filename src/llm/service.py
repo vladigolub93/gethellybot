@@ -18,6 +18,7 @@ from src.llm.prompts import (
     candidate_cv_prompt,
     candidate_questions_prompt,
     candidate_summary_edit_prompt,
+    deletion_confirmation_prompt,
     interview_answer_parse_prompt,
     interview_evaluation_prompt,
     interview_followup_decision_prompt,
@@ -33,6 +34,7 @@ from src.llm.schemas import (
     CandidateRerankSchema,
     CandidateQuestionParseSchema,
     CandidateSummarySchema,
+    DeletionConfirmationSchema,
     InterviewAnswerParseSchema,
     InterviewEvaluationSchema,
     InterviewFollowupDecisionSchema,
@@ -772,6 +774,35 @@ def copywrite_response_with_llm(*, approved_intent: str) -> LLMResult:
     )
 
 
+def build_deletion_confirmation_with_llm(
+    *,
+    entity_type: str,
+    has_active_interview: bool,
+    has_active_matches: bool,
+) -> LLMResult:
+    result = _client.parse(
+        schema=DeletionConfirmationSchema,
+        system_prompt=load_system_prompt("messaging", "deletion_confirmation"),
+        user_prompt=deletion_confirmation_prompt(
+            entity_type=entity_type,
+            has_active_interview=has_active_interview,
+            has_active_matches=has_active_matches,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="deletion_confirmation_llm_v1",
+    )
+    return LLMResult(
+        payload={
+            "message": _clean_text(result.payload.get("message"), limit=350) or "",
+            "is_explicit_confirmation_required": bool(
+                result.payload.get("is_explicit_confirmation_required", True)
+            ),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def safe_extract_candidate_summary(session, source_text: str, source_type: str) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
@@ -1205,4 +1236,40 @@ def safe_copywrite_response(session, *, approved_intent: str) -> LLMResult:
         payload={"message": approved_intent[:400]},
         model_name="baseline-deterministic",
         prompt_version="baseline_response_copywriter_v1",
+    )
+
+
+def safe_build_deletion_confirmation(
+    session,
+    *,
+    entity_type: str,
+    has_active_interview: bool,
+    has_active_matches: bool,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return build_deletion_confirmation_with_llm(
+                entity_type=entity_type,
+                has_active_interview=has_active_interview,
+                has_active_matches=has_active_matches,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("deletion_confirmation_fallback_to_baseline", error=str(exc))
+
+    side_effects = []
+    if has_active_matches:
+        side_effects.append("remove you from active matching")
+    if has_active_interview:
+        side_effects.append("cancel the active interview")
+    side_effects_text = ""
+    if side_effects:
+        side_effects_text = " It will also " + " and ".join(side_effects) + "."
+    noun = "profile" if entity_type == "candidate_profile" else "vacancy"
+    return LLMResult(
+        payload={
+            "message": f"Please confirm deletion of this {noun}. Reply 'CONFIRM DELETE' to continue or 'Cancel delete' to keep it.{side_effects_text}",
+            "is_explicit_confirmation_required": True,
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_deletion_confirmation_v1",
     )

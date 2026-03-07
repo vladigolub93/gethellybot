@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.candidate_profile.question_prompts import (
     QUESTION_KEYS,
     follow_up_prompt,
@@ -24,11 +25,16 @@ from src.candidate_profile.states import (
     CANDIDATE_STATE_SUMMARY_REVIEW,
     CANDIDATE_STATE_VERIFICATION_PENDING,
 )
-from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
+from src.db.repositories.interviews import InterviewsRepository
+from src.db.repositories.matching import MatchingRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
-from src.llm.service import safe_parse_candidate_questions
+from src.llm.service import (
+    safe_build_deletion_confirmation,
+    safe_copywrite_response,
+    safe_parse_candidate_questions,
+)
 from src.state.service import StateService
 
 
@@ -58,13 +64,28 @@ class CandidateVerificationResult:
     notification_text: str
 
 
+@dataclass(frozen=True)
+class CandidateDeletionResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
 class CandidateProfileService:
     def __init__(self, session: Session):
         self.session = session
         self.repo = CandidateProfilesRepository(session)
         self.verifications = CandidateVerificationsRepository(session)
+        self.interviews = InterviewsRepository(session)
+        self.matching = MatchingRepository(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return safe_copywrite_response(
+            self.session,
+            approved_intent=approved_intent,
+        ).payload["message"]
 
     def ensure_profile_for_user(self, user) -> object:
         profile = self.repo.get_active_by_user_id(user.id)
@@ -463,6 +484,135 @@ class CandidateProfileService:
             if not follow_up_used.get(key, False):
                 return key
         return None
+
+    def handle_deletion_message(
+        self,
+        *,
+        user,
+        raw_message_id,
+        text: Optional[str],
+    ) -> Optional[CandidateDeletionResult]:
+        profile = self.repo.get_active_by_user_id(user.id)
+        if profile is None:
+            return None
+
+        normalized_text = (text or "").strip().lower()
+        deletion_context = self._ensure_deletion_context(profile)
+        pending = bool(deletion_context.get("pending"))
+
+        if normalized_text in {"cancel delete", "keep profile", "don't delete", "dont delete"} and pending:
+            deletion_context["pending"] = False
+            self._update_deletion_context(profile, deletion_context)
+            return CandidateDeletionResult(
+                status="cancelled",
+                notification_template="candidate_deletion_cancelled",
+                notification_text=self._copy("Profile deletion cancelled. Your profile remains active."),
+            )
+
+        if normalized_text not in {
+            "delete profile",
+            "delete my profile",
+            "remove profile",
+            "confirm delete",
+            "confirm delete profile",
+        }:
+            return None
+
+        active_matches = self.matching.list_active_for_candidate(profile.id)
+        has_active_interview = any(
+            self.interviews.get_active_by_match_id(match.id) is not None for match in active_matches
+        )
+
+        if normalized_text in {"confirm delete", "confirm delete profile"} and pending:
+            return self._execute_deletion(
+                profile=profile,
+                raw_message_id=raw_message_id,
+                actor_user_id=user.id,
+                active_matches=active_matches,
+            )
+
+        deletion_context["pending"] = True
+        self._update_deletion_context(profile, deletion_context)
+        confirmation = safe_build_deletion_confirmation(
+            self.session,
+            entity_type="candidate_profile",
+            has_active_interview=has_active_interview,
+            has_active_matches=bool(active_matches),
+        )
+        return CandidateDeletionResult(
+            status="confirmation_required",
+            notification_template="candidate_deletion_confirmation_required",
+            notification_text=confirmation.payload["message"],
+        )
+
+    def _ensure_deletion_context(self, profile) -> dict:
+        current = dict(profile.questions_context_json or {})
+        deletion = dict(current.get("deletion") or {})
+        deletion.setdefault("pending", False)
+        current["deletion"] = deletion
+        return current
+
+    def _update_deletion_context(self, profile, context: dict) -> None:
+        self.repo.update_questions_context(profile, context)
+
+    def _execute_deletion(self, *, profile, raw_message_id, actor_user_id, active_matches) -> CandidateDeletionResult:
+        deletion_context = self._ensure_deletion_context(profile)
+        deletion_context["pending"] = False
+        self._update_deletion_context(profile, deletion_context)
+
+        cancelled_matches = 0
+        cancelled_interviews = 0
+        for match in active_matches:
+            session = self.interviews.get_active_by_match_id(match.id)
+            if session is not None:
+                self.state_service.transition(
+                    entity_type="interview_session",
+                    entity=session,
+                    to_state="CANCELLED",
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=actor_user_id,
+                    metadata_json={"reason": "candidate_deleted"},
+                )
+                cancelled_interviews += 1
+            self.state_service.transition(
+                entity_type="match",
+                entity=match,
+                to_state="cancelled",
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=actor_user_id,
+                metadata_json={"reason": "candidate_deleted"},
+                state_field="status",
+            )
+            cancelled_matches += 1
+
+        self.state_service.transition(
+            entity_type="candidate_profile",
+            entity=profile,
+            to_state="DELETED",
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=actor_user_id,
+            metadata_json={
+                "cancelled_matches": cancelled_matches,
+                "cancelled_interviews": cancelled_interviews,
+            },
+        )
+        self.repo.soft_delete(profile)
+        details = []
+        if cancelled_matches:
+            details.append(f"{cancelled_matches} active match(es)")
+        if cancelled_interviews:
+            details.append(f"{cancelled_interviews} interview(s)")
+        details_text = ""
+        if details:
+            details_text = " Cancelled: " + ", ".join(details) + "."
+        return CandidateDeletionResult(
+            status="deleted",
+            notification_template="candidate_deleted",
+            notification_text=self._copy(f"Your profile has been deleted and removed from active recruiting flow.{details_text}"),
+        )
 
     def handle_verification_submission(
         self,

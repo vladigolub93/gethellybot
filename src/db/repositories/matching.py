@@ -10,6 +10,14 @@ from src.db.models.matching import Match, MatchingRun
 
 
 class MatchingRepository:
+    ACTIVE_MATCH_STATUSES = (
+        "shortlisted",
+        "invited",
+        "accepted",
+        "interview_completed",
+        "manager_review",
+    )
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -120,6 +128,20 @@ class MatchingRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def list_active_for_candidate(self, candidate_profile_id) -> list[Match]:
+        stmt = select(Match).where(
+            Match.candidate_profile_id == candidate_profile_id,
+            Match.status.in_(self.ACTIVE_MATCH_STATUSES),
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_active_for_vacancy(self, vacancy_id) -> list[Match]:
+        stmt = select(Match).where(
+            Match.vacancy_id == vacancy_id,
+            Match.status.in_(self.ACTIVE_MATCH_STATUSES),
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def mark_invited(self, match: Match) -> Match:
         match.status = "invited"
         match.invitation_sent_at = datetime.now(timezone.utc)
@@ -135,6 +157,11 @@ class MatchingRepository:
     def mark_manager_decision(self, match: Match, *, status: str) -> Match:
         match.status = status
         match.manager_decision_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return match
+
+    def set_status(self, match: Match, *, status: str) -> Match:
+        match.status = status
         self.session.flush()
         return match
 

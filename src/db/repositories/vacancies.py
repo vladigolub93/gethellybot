@@ -52,6 +52,18 @@ class VacanciesRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def get_latest_active_by_manager_user_id(self, manager_user_id) -> Optional[Vacancy]:
+        stmt = (
+            select(Vacancy)
+            .where(
+                Vacancy.manager_user_id == manager_user_id,
+                Vacancy.deleted_at.is_(None),
+            )
+            .order_by(Vacancy.updated_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_version_by_id(self, version_id) -> Optional[VacancyVersion]:
         stmt = select(VacancyVersion).where(VacancyVersion.id == version_id)
         return self.session.execute(stmt).scalar_one_or_none()
@@ -184,5 +196,11 @@ class VacanciesRepository:
 
     def mark_open(self, vacancy: Vacancy) -> Vacancy:
         vacancy.opened_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return vacancy
+
+    def soft_delete(self, vacancy: Vacancy) -> Vacancy:
+        vacancy.deleted_at = datetime.now(timezone.utc)
+        vacancy.state = "DELETED"
         self.session.flush()
         return vacancy
