@@ -55,3 +55,15 @@ class CandidateVerificationsRepository:
             CandidateVerification.profile_id == profile_id
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def get_latest_submitted_by_profile_id(self, profile_id) -> Optional[CandidateVerification]:
+        stmt = (
+            select(CandidateVerification)
+            .where(
+                CandidateVerification.profile_id == profile_id,
+                CandidateVerification.status == "submitted",
+            )
+            .order_by(CandidateVerification.submitted_at.desc(), CandidateVerification.attempt_no.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()

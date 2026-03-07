@@ -370,8 +370,10 @@ Evaluate interview results and deliver qualified candidate packages to managers.
 - evaluation worker
 - configurable threshold logic
 - manager package delivery
+- baseline structured candidate package assembly
 - manager approve/reject controls
 - introduction strategy implementation
+- first Telegram contact handoff mode after approval
 
 ## 9.3 Suggested Tasks
 
@@ -387,14 +389,15 @@ Evaluate interview results and deliver qualified candidate packages to managers.
 - implement introduction strategy interface
 - implement first introduction mode
 - log introduction outcomes
+- evolve package rendering from baseline structured notification content to a richer artifact bundle
 
 ## 9.4 Exit Criteria
 
 - completed interviews generate evaluation results
 - weak candidates can be auto-rejected
-- managers receive complete candidate packages
+- managers receive baseline structured candidate packages
 - managers can approve/reject
-- approved candidates and managers can be introduced
+- approved candidates and managers can be introduced through the first Telegram handoff mode
 
 ## 10. Milestone 7: Hardening and Launch Readiness
 

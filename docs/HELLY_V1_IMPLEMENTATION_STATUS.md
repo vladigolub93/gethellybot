@@ -238,24 +238,27 @@ Status vs SRS:
 - `Implemented`: evaluation result persistence
 - `Implemented`: auto reject path
 - `Implemented`: manager review path
+- `Implemented`: candidate package builder baseline
 - `Implemented`: manager approve/reject actions
 - `Implemented`: introduction event logging
+- `Implemented`: first Telegram handoff mode sends mutual contact details after approval
 
 ### What is only partial
 
-- `Partial`: evaluation is OpenAI-backed and now consumes transcript-ready interview evidence, but still lacks richer package rendering and explicit confidence diagnostics
-- `Partial`: manager package is delivered as notification content, not as a polished final package artifact set
+- `Partial`: evaluation is OpenAI-backed and now consumes transcript-ready interview evidence, but still lacks explicit confidence diagnostics
+- `Partial`: manager package is delivered as structured notification content with candidate summary, verification status, interview summary, strengths, risks, recommendation, and score, but not yet as a full bundled artifact set with media attachments
+- `Partial`: introduction flow now performs a basic Telegram contact handoff after approval, but does not yet support richer introduction strategies or delivery variants
 
 ### What is missing
 
 - `Not Implemented`: final structured candidate package with full file bundle and richer render strategy
-- `Not Implemented`: true Telegram introduction/handoff between candidate and manager
+- `Not Implemented`: richer introduction workflow options beyond the first handoff mode
 
 Status vs SRS:
 
 - baseline evaluation flow: implemented
 - AI evaluation quality: partial
-- introduction behavior: partial
+- introduction behavior: partial with first Telegram handoff implemented
 
 ## 4.8 Deletion Flows
 

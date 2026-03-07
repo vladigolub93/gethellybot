@@ -18,6 +18,72 @@ def _render_mapping(mapping: dict) -> list[str]:
     return lines
 
 
+def _render_counterparty(counterparty: dict) -> list[str]:
+    lines = []
+    name = counterparty.get("name")
+    username = counterparty.get("username")
+    phone_number = counterparty.get("phone_number")
+    if name:
+        lines.append(f"Name: {name}")
+    if username:
+        lines.append(f"Telegram username: @{username.lstrip('@')}")
+    if phone_number:
+        lines.append(f"Phone: {phone_number}")
+    return lines
+
+
+def _render_candidate_package(candidate_package: dict) -> list[str]:
+    lines = ["Candidate package:"]
+    name = candidate_package.get("candidate_name")
+    role_title = candidate_package.get("vacancy_role_title")
+    if name:
+        lines.append(f"Candidate: {name}")
+    if role_title:
+        lines.append(f"Vacancy: {role_title}")
+    summary_text = candidate_package.get("candidate_summary_text")
+    if summary_text:
+        lines.append("")
+        lines.append("Profile summary:")
+        lines.append(str(summary_text))
+    skills = candidate_package.get("skills") or []
+    if skills:
+        lines.append("")
+        lines.append(f"Skills: {', '.join(str(item) for item in skills)}")
+    work_preferences = candidate_package.get("work_preferences") or []
+    if work_preferences:
+        lines.append("")
+        lines.append("Work preferences:")
+        lines.extend(str(item) for item in work_preferences)
+    verification_status = candidate_package.get("verification_status")
+    if verification_status:
+        lines.append("")
+        lines.append(f"Verification: {verification_status}")
+    interview_summary = candidate_package.get("interview_summary")
+    if interview_summary:
+        lines.append("")
+        lines.append("Interview summary:")
+        lines.append(str(interview_summary))
+    strengths = candidate_package.get("strengths") or []
+    if strengths:
+        lines.append("")
+        lines.append("Strengths:")
+        lines.extend(f"- {item}" for item in strengths)
+    risks = candidate_package.get("risks") or []
+    if risks:
+        lines.append("")
+        lines.append("Risks:")
+        lines.extend(f"- {item}" for item in risks)
+    recommendation = candidate_package.get("recommendation")
+    final_score = candidate_package.get("final_score")
+    if recommendation or final_score is not None:
+        lines.append("")
+        if recommendation:
+            lines.append(f"Recommendation: {recommendation}")
+        if final_score is not None:
+            lines.append(f"Final score: {final_score}")
+    return lines
+
+
 def render_notification_text(*, template_key: str, payload: dict) -> str:
     lines = []
     text = (payload or {}).get("text")
@@ -43,11 +109,22 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
         lines.append("Evaluation:")
         lines.extend(_render_mapping(evaluation))
 
+    candidate_package = (payload or {}).get("candidate_package")
+    if isinstance(candidate_package, dict) and candidate_package:
+        lines.append("")
+        lines.extend(_render_candidate_package(candidate_package))
+
     candidate_summary = (payload or {}).get("candidate_summary")
     if isinstance(candidate_summary, dict) and candidate_summary:
         lines.append("")
         lines.append("Candidate:")
         lines.extend(_render_mapping(candidate_summary))
+
+    counterparty = (payload or {}).get("counterparty")
+    if isinstance(counterparty, dict) and counterparty:
+        lines.append("")
+        lines.append("Contact details:")
+        lines.extend(_render_counterparty(counterparty))
 
     inconsistencies = (payload or {}).get("inconsistencies")
     if isinstance(inconsistencies, dict) and inconsistencies:

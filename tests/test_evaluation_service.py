@@ -87,11 +87,26 @@ class FakeNotificationsRepository:
 
 
 class FakeUsersRepository:
-    def __init__(self, manager):
+    def __init__(self, manager, candidate_user):
         self.manager = manager
+        self.candidate_user = candidate_user
 
     def get_by_id(self, user_id):
-        return self.manager if self.manager.id == user_id else None
+        if self.manager.id == user_id:
+            return self.manager
+        if self.candidate_user.id == user_id:
+            return self.candidate_user
+        return None
+
+
+class FakeCandidateVerificationsRepository:
+    def __init__(self, verification):
+        self.verification = verification
+
+    def get_latest_submitted_by_profile_id(self, profile_id):
+        if self.verification and self.verification.profile_id == profile_id:
+            return self.verification
+        return None
 
 
 class FakeStateService:
@@ -109,10 +124,12 @@ class FakeStateService:
 
 
 def _build_service():
-    candidate = SimpleNamespace(id=uuid4(), user_id=uuid4(), state="READY")
-    manager = SimpleNamespace(id=uuid4(), is_hiring_manager=True)
+    candidate_user = SimpleNamespace(id=uuid4(), display_name="Candidate User", username="candidateuser", phone_number="+111111")
+    candidate = SimpleNamespace(id=uuid4(), user_id=candidate_user.id, state="READY", location_text="Warsaw", work_format="remote", salary_min=4000, salary_currency="USD", salary_period="month")
+    manager = SimpleNamespace(id=uuid4(), is_hiring_manager=True, display_name="Manager User", username="manageruser", phone_number="+222222")
     candidate_version = SimpleNamespace(id=uuid4(), summary_json={"skills": ["python", "postgresql"], "years_experience": 6})
     vacancy = SimpleNamespace(id=uuid4(), manager_user_id=manager.id, role_title="Senior Python Engineer", primary_tech_stack_json=["python", "postgresql"])
+    verification = SimpleNamespace(id=uuid4(), profile_id=candidate.id, status="submitted")
     match = SimpleNamespace(
         id=uuid4(),
         vacancy_id=vacancy.id,
@@ -126,18 +143,19 @@ def _build_service():
 
     service = EvaluationService(FakeSession())
     service.candidates = FakeCandidateRepository(candidate, candidate_version)
+    service.verifications = FakeCandidateVerificationsRepository(verification)
     service.vacancies = FakeVacancyRepository(vacancy)
     service.interviews = FakeInterviewsRepository(session_row, answers)
     service.matches = FakeMatchingRepository(match)
     service.notifications = FakeNotificationsRepository()
     service.evaluations = FakeEvaluationsRepository()
-    service.users = FakeUsersRepository(manager)
+    service.users = FakeUsersRepository(manager, candidate_user)
     service.state_service = FakeStateService()
-    return service, candidate, manager, match, session_row
+    return service, candidate, candidate_user, manager, match, session_row
 
 
 def test_evaluate_interview_routes_candidate_to_manager_review() -> None:
-    service, candidate, manager, match, session_row = _build_service()
+    service, candidate, _candidate_user, manager, match, session_row = _build_service()
 
     result = service.evaluate_interview(interview_session_id=session_row.id)
 
@@ -146,10 +164,14 @@ def test_evaluate_interview_routes_candidate_to_manager_review() -> None:
     assert candidate.state == "UNDER_MANAGER_REVIEW"
     assert len(service.notifications.rows) == 1
     assert service.notifications.rows[0].user_id == manager.id
+    candidate_package = service.notifications.rows[0].payload_json["candidate_package"]
+    assert candidate_package["candidate_name"] == "Candidate User"
+    assert candidate_package["verification_status"] == "verification_submitted"
+    assert candidate_package["recommendation"] == "advance"
 
 
 def test_manager_approve_creates_introduction_event() -> None:
-    service, candidate, manager, match, _session_row = _build_service()
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
     match.status = "manager_review"
     user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
 
@@ -164,10 +186,15 @@ def test_manager_approve_creates_introduction_event() -> None:
     assert match.status == "approved"
     assert candidate.state == "APPROVED"
     assert len(service.evaluations.introductions) == 1
+    assert len(service.notifications.rows) == 2
+    candidate_notification = service.notifications.rows[0]
+    manager_notification = service.notifications.rows[1]
+    assert candidate_notification.payload_json["counterparty"]["username"] == "manageruser"
+    assert manager_notification.payload_json["counterparty"]["username"] == "candidateuser"
 
 
 def test_manager_reject_updates_match_and_candidate() -> None:
-    service, candidate, manager, match, _session_row = _build_service()
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
     match.status = "manager_review"
     user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
 

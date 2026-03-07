@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
@@ -12,6 +13,7 @@ from src.messaging.service import MessagingService
 from src.state.service import StateService
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import manager_review_keyboard
+from src.evaluation.package_builder import build_candidate_package
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class EvaluationService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
+        self.verifications = CandidateVerificationsRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matches = MatchingRepository(session)
@@ -46,6 +49,8 @@ class EvaluationService:
         candidate = self.candidates.get_by_id(session.candidate_profile_id)
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
         vacancy = self.vacancies.get_by_id(session.vacancy_id)
+        candidate_user = self.users.get_by_id(candidate.user_id)
+        verification = self.verifications.get_latest_submitted_by_profile_id(candidate.id)
         answers = self.interviews.list_answers_for_session(session.id)
         answer_texts = [(answer.answer_text or answer.transcript_text or "") for answer in answers]
         llm_result = safe_evaluate_candidate(
@@ -122,8 +127,14 @@ class EvaluationService:
                 template_key="manager_candidate_review_ready",
                 payload_json={
                     "text": self._copy("A qualified candidate is ready for review. Use the buttons below to approve or reject."),
-                    "candidate_summary": (candidate_version.summary_json or {}) if candidate_version else {},
-                    "evaluation": evaluation,
+                    "candidate_package": build_candidate_package(
+                        candidate_user=candidate_user,
+                        candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+                        candidate_profile=candidate,
+                        vacancy=vacancy,
+                        evaluation=evaluation,
+                        verification=verification,
+                    ),
                     "reply_markup": manager_review_keyboard(),
                 },
             )
@@ -161,6 +172,8 @@ class EvaluationService:
     def _approve_candidate(self, *, user, match, raw_message_id):
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
+        candidate_user = self.users.get_by_id(candidate.user_id)
+        manager_user = self.users.get_by_id(user.id)
         self.matches.mark_manager_decision(match, status="approved")
         self.state_service.record_transition(
             entity_type="match",
@@ -190,19 +203,28 @@ class EvaluationService:
             entity_type="match",
             entity_id=match.id,
             template_key="candidate_approved_introduction",
-            payload_json={"text": self._copy(f"You have been approved for {vacancy.role_title or 'the vacancy'}. Helly will introduce you to the manager.")},
+            payload_json={
+                "text": self._copy(
+                    f"You have been approved for {vacancy.role_title or 'the vacancy'}. "
+                    "Here is your hiring manager contact for the next step."
+                ),
+                "counterparty": self._build_counterparty_payload(manager_user),
+            },
         )
         self.notifications.create(
             user_id=user.id,
             entity_type="match",
             entity_id=match.id,
             template_key="manager_candidate_approved",
-            payload_json={"text": self._copy("Candidate approved. Introduction event logged.")},
+            payload_json={
+                "text": self._copy("Candidate approved. Here is the candidate contact for the next step."),
+                "counterparty": self._build_counterparty_payload(candidate_user),
+            },
         )
         return ManagerDecisionResult(
             status="approved",
             notification_template="manager_candidate_approved",
-            notification_text=self._copy("Candidate approved. Introduction event logged."),
+            notification_text=self._copy("Candidate approved. Candidate handoff sent."),
         )
 
     def _reject_candidate(self, *, user, match, raw_message_id):
@@ -237,3 +259,14 @@ class EvaluationService:
             notification_template="manager_candidate_rejected",
             notification_text=self._copy("Candidate rejected."),
         )
+
+    @staticmethod
+    def _build_counterparty_payload(user) -> dict:
+        if user is None:
+            return {}
+        payload = {
+            "name": getattr(user, "display_name", None),
+            "username": getattr(user, "username", None),
+            "phone_number": getattr(user, "phone_number", None),
+        }
+        return {key: value for key, value in payload.items() if value}

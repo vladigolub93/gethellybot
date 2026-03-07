@@ -441,6 +441,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 201. `P0` Implement candidate package builder.
 202. `P0` Include summary, CV/artifact, verification video, interview summary, evaluation.
 203. `P0` Send manager candidate package notification.
+203A. `P1` Improve manager package rendering from baseline structured notification content to richer artifact-style delivery.
 
 ### 12.4 Manager Actions
 
@@ -453,6 +454,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 207. `P1` Implement introduction strategy abstraction.
 208. `P1` Implement first introduction mode.
 209. `P1` Log introduction event and result.
+209A. `P1` Add richer introduction modes beyond the initial Telegram handoff.
 
 ## 16. Phase 13: Deletion and Lifecycle Controls
 
