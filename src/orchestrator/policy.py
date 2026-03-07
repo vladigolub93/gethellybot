@@ -200,6 +200,17 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         ),
         missing_requirements=["manager_decision"],
     ),
+    "DELETE_CONFIRMATION": StatePolicyDefinition(
+        state="DELETE_CONFIRMATION",
+        goal="Get an explicit confirm or cancel decision before destructive deletion.",
+        allowed_actions=["confirm_delete", "cancel_delete"],
+        assistance_prompt_slug="delete_confirmation",
+        guidance_text="Please confirm deletion or cancel it.",
+        help_text=(
+            "Deletion requires explicit confirmation. You can confirm deletion or cancel it if you want to keep the current profile or vacancy."
+        ),
+        missing_requirements=["explicit_delete_confirmation"],
+    ),
 }
 
 

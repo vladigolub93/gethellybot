@@ -235,6 +235,7 @@ Status vs SRS:
 - `Implemented`: vacancy deletion flow
 - `Implemented`: cancellation policy for active invites/interviews on deletion
 - `Implemented`: cleanup jobs cancel stale notifications and mark related files as deleted/restricted
+- `Implemented`: state-aware delete-confirmation assistance explains consequences before confirm/cancel
 
 Status vs SRS:
 

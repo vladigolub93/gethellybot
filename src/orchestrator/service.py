@@ -65,6 +65,7 @@ class BotControllerService:
             "INTERVIEW_INVITED",
             "INTERVIEW_IN_PROGRESS",
             "MANAGER_REVIEW",
+            "DELETE_CONFIRMATION",
         }:
             return None
         if not self._looks_like_help_or_constraint_message(
@@ -98,6 +99,8 @@ class BotControllerService:
         if role == "candidate":
             candidate = self.candidates.get_active_by_user_id(user.id)
             if candidate is not None:
+                if self._has_pending_deletion(candidate):
+                    return resolve_state_context(role=role, state="DELETE_CONFIRMATION")
                 interview = self.interviews.get_active_session_for_candidate(candidate.id)
                 if interview is not None:
                     state_map = {
@@ -115,6 +118,9 @@ class BotControllerService:
             return resolve_state_context(role=role, state="CV_PENDING")
 
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
+        latest_active_vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
+        if latest_active_vacancy is not None and self._has_pending_deletion(latest_active_vacancy):
+            return resolve_state_context(role=role, state="DELETE_CONFIRMATION")
         review_match = self.matching.get_latest_manager_review_for_manager(
             [vacancy.id for vacancy in manager_vacancies]
         )
@@ -261,6 +267,27 @@ class BotControllerService:
                 r"\bstrengths?\b",
                 r"\brisks?\b",
             ],
+            "DELETE_CONFIRMATION": [
+                r"\bwhat\b",
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcancel\b",
+                r"\bconfirm\b",
+                r"\bdelete\b",
+                r"\bremoved?\b",
+                r"\bcancelled?\b",
+                r"\binterviews?\b",
+                r"\bmatches?\b",
+                r"\bprofile\b",
+                r"\bvacancy\b",
+            ],
         }
         patterns = patterns_by_state.get(state, [])
         return any(re.search(pattern, normalized) for pattern in patterns)
+
+    @staticmethod
+    def _has_pending_deletion(entity) -> bool:
+        context = getattr(entity, "questions_context_json", None) or {}
+        deletion = context.get("deletion") or {}
+        return bool(deletion.get("pending"))

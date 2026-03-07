@@ -38,6 +38,11 @@ class FakeVacanciesRepository:
     def get_by_manager_user_id(self, user_id):
         return list(self.vacancies)
 
+    def get_latest_active_by_manager_user_id(self, user_id):
+        if self.vacancy is not None:
+            return self.vacancy
+        return self.vacancies[0] if self.vacancies else None
+
 
 class FakeMatchingRepository:
     def __init__(self, invited_match=None, manager_review_match=None):
@@ -232,7 +237,7 @@ def test_maybe_build_in_state_assistance_for_vacancy_clarification_question() ->
 
 def test_maybe_build_in_state_assistance_for_candidate_ready_question() -> None:
     user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
-    candidate = SimpleNamespace(id="c1", state="READY")
+    candidate = SimpleNamespace(id="c1", state="READY", questions_context_json={})
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
@@ -269,7 +274,7 @@ def test_maybe_build_in_state_assistance_for_vacancy_open_question() -> None:
 
 def test_maybe_build_in_state_assistance_for_interview_invited_question() -> None:
     user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
-    candidate = SimpleNamespace(id="c1", state="READY")
+    candidate = SimpleNamespace(id="c1", state="READY", questions_context_json={})
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
@@ -288,7 +293,7 @@ def test_maybe_build_in_state_assistance_for_interview_invited_question() -> Non
 
 def test_maybe_build_in_state_assistance_for_interview_in_progress_question() -> None:
     user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
-    candidate = SimpleNamespace(id="c1", state="READY")
+    candidate = SimpleNamespace(id="c1", state="READY", questions_context_json={})
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
@@ -307,7 +312,7 @@ def test_maybe_build_in_state_assistance_for_interview_in_progress_question() ->
 
 def test_maybe_build_in_state_assistance_for_manager_review_question() -> None:
     user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
-    vacancy = SimpleNamespace(id="v1", state="OPEN")
+    vacancy = SimpleNamespace(id="v1", state="OPEN", questions_context_json={})
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository()
@@ -322,3 +327,49 @@ def test_maybe_build_in_state_assistance_for_manager_review_question() -> None:
 
     assert message is not None
     assert "approve" in message.lower() or "reject" in message.lower() or "evaluation" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_candidate_delete_confirmation() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(
+        id="c1",
+        state="READY",
+        questions_context_json={"deletion": {"pending": True}},
+    )
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What exactly will be cancelled if I confirm?",
+    )
+
+    assert message is not None
+    assert "confirm" in message.lower() or "cancel" in message.lower() or "active recruiting flow" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_vacancy_delete_confirmation() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
+    vacancy = SimpleNamespace(
+        id="v1",
+        state="OPEN",
+        questions_context_json={"deletion": {"pending": True}},
+    )
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository(vacancy=vacancy, vacancies=[vacancy])
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="If I do not want to remove the vacancy, can I cancel this?",
+    )
+
+    assert message is not None
+    assert "cancel" in message.lower() or "vacancy" in message.lower() or "confirm" in message.lower()

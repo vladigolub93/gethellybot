@@ -47,6 +47,7 @@ It distinguishes between:
 | `orchestrator/state_assistance/interview_invited` | Asset Ready | Runtime Wired | interview invitation clarifications before accept or skip |
 | `orchestrator/state_assistance/interview_in_progress` | Asset Ready | Runtime Wired | current-question guidance during active interview |
 | `orchestrator/state_assistance/manager_review` | Asset Ready | Runtime Wired | manager review clarification before approve or reject |
+| `orchestrator/state_assistance/delete_confirmation` | Asset Ready | Runtime Wired | explicit deletion consequences and confirm-or-cancel guidance |
 
 ## What Is Covered Now
 
@@ -64,6 +65,7 @@ At the prompt-asset level, Helly now covers the necessary LLM surface for:
 - top-level bot control
 - state-specific in-flow assistance for the main candidate and vacancy intake states
 - state-specific in-flow assistance for invite, active interview, and manager review states
+- state-specific in-flow assistance for delete confirmation
 
 ## Remaining Engineering Work
 
@@ -71,7 +73,7 @@ The remaining gap is no longer prompt design coverage. The remaining gap is surr
 
 1. add vector retrieval and embedding refresh
 2. add cleanup jobs and retention-aware deletion follow-up work
-3. add remaining state-policy prompts for deletion-adjacent states
+3. add action validation for AI-proposed actions and rejected-proposal logging
 4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion

@@ -1,0 +1,6 @@
+- name: deletion_consequences
+  input: "What exactly will be cancelled if I confirm?"
+  expected_intent: "clarification_request"
+- name: keep_instead
+  input: "Can I keep it and not delete anything?"
+  expected_intent: "clarification_request"
