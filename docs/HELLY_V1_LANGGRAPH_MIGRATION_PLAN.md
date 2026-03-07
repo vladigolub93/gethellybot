@@ -62,6 +62,7 @@ Status:
   - stage registry
   - foundation stage graph bootstrap
   - router skeleton
+  - runtime compiler with sequential fallback when `langgraph` is not importable in the local environment
 
 ### Step 2. Backend Validation Bridge
 
@@ -90,6 +91,16 @@ Migrate:
 Exit:
 
 - `/start` and early onboarding no longer depend on old branchy Telegram handlers for decisioning
+
+Status:
+
+- in progress
+- implemented:
+  - entry-stage graph service
+  - graph-driven reply path for `CONTACT_REQUIRED`
+  - graph-driven reply path for `CONSENT_REQUIRED`
+  - graph-driven reply path for `ROLE_SELECTION`
+  - Telegram identity assistance now tries the entry stage graph before falling back to the old controller
 
 ### Step 4. Candidate Onboarding Agents
 

@@ -35,6 +35,22 @@ class FakeBotController:
         return f"Recovery: {latest_user_message}"
 
 
+class FakeStageAgentService:
+    def __init__(self, response: Optional[str]):
+        self.response = response
+        self.calls = []
+
+    def maybe_build_entry_reply(self, *, user, latest_user_message: str, latest_message_type: str = "text"):
+        self.calls.append(
+            {
+                "user_id": user.id,
+                "text": latest_user_message,
+                "message_type": latest_message_type,
+            }
+        )
+        return self.response
+
+
 class FailIfCalledService:
     def __getattr__(self, item):
         def _fail(*args, **kwargs):
@@ -194,6 +210,7 @@ def build_service() -> TelegramUpdateService:
     service = TelegramUpdateService(session=object())
     service.notifications_repo = FakeNotificationsRepository()
     service.messaging = FakeMessagingService()
+    service.stage_agents = FakeStageAgentService(None)
     return service
 
 
@@ -218,7 +235,8 @@ def test_start_without_contact_requests_contact() -> None:
 def test_contact_required_help_intercepts_before_identity_gating() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
-    service.bot_controller = FakeBotController("Please use the contact button so Helly can continue onboarding.")
+    service.stage_agents = FakeStageAgentService("Please use the contact button so Helly can continue onboarding.")
+    service.bot_controller = FakeBotController(None)
 
     user = SimpleNamespace(
         id="g1h",
@@ -230,8 +248,29 @@ def test_contact_required_help_intercepts_before_identity_gating() -> None:
     templates = service._apply_identity_flow(user, "raw-g1h", build_update(text="Why do you need my contact?"))
 
     assert templates == ["state_aware_help"]
-    assert service.bot_controller.calls
+    assert service.stage_agents.calls
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+
+
+def test_contact_required_help_falls_back_to_old_controller_if_graph_returns_none() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(None)
+    service.bot_controller = FakeBotController("Fallback contact guidance.")
+
+    user = SimpleNamespace(
+        id="g1hf",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g1hf", build_update(text="Why?"))
+
+    assert templates == ["state_aware_help"]
+    assert service.stage_agents.calls
+    assert service.bot_controller.calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Fallback contact guidance."
 
 
 def test_start_with_contact_but_without_consent_requests_consent() -> None:

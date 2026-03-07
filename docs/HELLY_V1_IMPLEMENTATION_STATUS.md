@@ -45,7 +45,9 @@ Architectural status note:
 - the current runtime uses a working state-aware controller/routing baseline
 - this is no longer the final target orchestration architecture
 - the new target is `LangGraph` stage-agent execution over the same backend state machines
-- `LangGraph` foundation modules and canonical graph state contract are now added, but runtime stage execution has not yet been migrated
+- `LangGraph` foundation modules and canonical graph state contract are now added
+- entry-stage runtime execution has started migrating through a graph-driven path for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
+- Telegram still falls back to the old controller/routing layer for all other stages
 
 ## 3. Infrastructure and Delivery Status
 
@@ -72,6 +74,7 @@ Architectural status note:
 - `Implemented`: consent capture exists
 - `Implemented`: role selection exists
 - `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection
+- `Implemented`: early identity help is now routed through a bounded graph-driven entry-stage agent path before the legacy controller fallback
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
   - the `User` table can technically support multiple role flags

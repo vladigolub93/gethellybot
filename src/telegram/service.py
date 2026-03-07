@@ -10,6 +10,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
 from src.evaluation.service import EvaluationService
+from src.graph.service import LangGraphStageAgentService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
@@ -46,6 +47,7 @@ class TelegramUpdateService:
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
         self.messaging = MessagingService(session)
+        self.stage_agents = LangGraphStageAgentService(session)
         self.candidate_service = CandidateProfileService(session)
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
@@ -147,7 +149,11 @@ class TelegramUpdateService:
             "hiring manager",
             }
         ):
-            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+            assistance_text = self.stage_agents.maybe_build_entry_reply(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            ) or self.bot_controller.maybe_build_in_state_assistance(
                 user=user,
                 latest_user_message=normalized_update.text or "",
             )
