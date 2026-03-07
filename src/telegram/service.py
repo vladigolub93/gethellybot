@@ -485,6 +485,53 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
+            stage_result = self.stage_agents.maybe_run_stage(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            )
+            if (
+                stage_result is not None
+                and stage_result.stage == "SUMMARY_REVIEW"
+                and stage_result.action_accepted
+                and stage_result.proposed_action in {"approve_summary", "request_summary_change"}
+            ):
+                summary_input_text = (
+                    "Approve summary"
+                    if stage_result.proposed_action == "approve_summary"
+                    else (stage_result.structured_payload or {}).get("edit_text") or normalized_update.text
+                )
+                summary_review_result = self.candidate_service.handle_summary_review_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    text=summary_input_text,
+                )
+                if summary_review_result is not None:
+                    message_map = {
+                        "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
+                        "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
+                        "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
+                        "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
+                        "candidate_summary_not_available": "No current summary is available to review.",
+                        "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+                    }
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            summary_review_result.notification_template,
+                            {
+                                "text": self._copy(message_map[summary_review_result.notification_template]),
+                                "reply_markup": summary_review_keyboard(edit_allowed=True)
+                                if summary_review_result.notification_template in {
+                                    "candidate_summary_review_help",
+                                    "candidate_summary_edit_empty",
+                                }
+                                else None,
+                            },
+                        )
+                    )
+                    return templates
+
             assistance_text = self.stage_agents.maybe_build_stage_reply(
                 user=user,
                 latest_user_message=normalized_update.text or "",

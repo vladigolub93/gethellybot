@@ -96,7 +96,7 @@ def test_graph_candidate_stage_handles_summary_review_help() -> None:
     assert "summary" in reply.lower() or "approve" in reply.lower()
 
 
-def test_graph_candidate_stage_allows_passthrough_for_real_summary_correction() -> None:
+def test_graph_candidate_stage_accepts_summary_review_correction() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
@@ -111,12 +111,42 @@ def test_graph_candidate_stage_allows_passthrough_for_real_summary_correction() 
         telegram_chat_id=200,
     )
 
-    reply = service.maybe_build_stage_reply(
+    result = service.maybe_run_stage(
         user=user,
         latest_user_message="The summary is wrong: I work mostly with Go, not Python.",
     )
 
-    assert reply is None
+    assert result is not None
+    assert result.stage == "SUMMARY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "request_summary_change"
+    assert "Go" in result.structured_payload["edit_text"]
+
+
+def test_graph_candidate_stage_accepts_summary_approve() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp4a", state="SUMMARY_REVIEW")
+    )
+
+    user = SimpleNamespace(
+        id="u7a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Approve summary",
+    )
+
+    assert result is not None
+    assert result.stage == "SUMMARY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "approve_summary"
 
 
 def test_graph_candidate_stage_handles_questions_pending_help() -> None:

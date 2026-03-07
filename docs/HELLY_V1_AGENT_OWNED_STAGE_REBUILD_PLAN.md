@@ -332,7 +332,8 @@ Current execution note:
 - Phase 1 is complete
 - entry flow in Phase 4 is now implemented as graph-owned execution for text-based onboarding interactions
 - `CV_PENDING` is now implemented as a graph-owned text stage
-- the next rebuild target is the rest of candidate flow, starting with `SUMMARY_REVIEW` as a full stage owner rather than a graph-driven help overlay
+- `SUMMARY_REVIEW` is now implemented as a graph-owned approval/correction stage
+- the next rebuild target is the rest of candidate flow, starting with `QUESTIONS_PENDING` as a full stage owner rather than a graph-driven help overlay
 
 ## 9. Definition of Done
 

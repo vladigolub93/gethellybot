@@ -137,12 +137,14 @@ Status:
   - graph-driven help handling for `CV_PENDING`
   - graph-driven structured action proposal for candidate text CV input
   - graph-driven `send_cv_text` validation and backend handoff
-  - graph-driven help handling for `SUMMARY_REVIEW`
+  - graph-owned execution for `SUMMARY_REVIEW`
+  - graph-driven structured action proposal for summary approval
+  - graph-driven structured action proposal for summary correction
+  - graph-driven backend handoff for summary approval and one-round correction
   - graph-driven help handling for `QUESTIONS_PENDING`
   - graph-driven help handling for `VERIFICATION_PENDING`
   - graph-driven help handling for `READY`
   - voice/document candidate experience input still falls through to the existing backend intake path
-  - non-help summary approval/edit input still falls through to the existing backend summary-review path
   - non-help mandatory-question answers still fall through to the existing backend question parser path
   - non-help verification submission still falls through to the existing backend video-verification path
 

@@ -1124,6 +1124,18 @@ def test_summary_review_help_is_intercepted_before_summary_handler() -> None:
 
 def test_summary_review_actual_correction_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="SUMMARY_REVIEW",
+            reply_text="Thanks. I will update the summary based on your correction.",
+            stage_status="ready_for_transition",
+            proposed_action="request_summary_change",
+            action_accepted=True,
+            structured_payload={"edit_text": "The summary is wrong: I work mostly with Go, not Python."},
+            validation_result={"accepted": True, "normalized_action": "request_summary_change"},
+        ),
+    )
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1155,6 +1167,17 @@ def test_summary_review_actual_correction_reaches_summary_handler() -> None:
 
 def test_summary_review_approve_passthrough_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="SUMMARY_REVIEW",
+            reply_text="Thanks. I will approve the summary and move to the next step.",
+            stage_status="ready_for_transition",
+            proposed_action="approve_summary",
+            action_accepted=True,
+            validation_result={"accepted": True, "normalized_action": "approve_summary"},
+        ),
+    )
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(

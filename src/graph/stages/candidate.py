@@ -139,6 +139,23 @@ def _is_candidate_summary_help(text: str) -> bool:
     return False
 
 
+def _detect_summary_review_action(text: str) -> tuple[str | None, dict]:
+    normalized_text = (text or "").strip()
+    command = normalize_command_text(text or "")
+    if command in {"approve summary", "approve", "approve profile"}:
+        return "approve_summary", {}
+    if command in {"change summary", "edit summary", "change", "edit"}:
+        return None, {"needs_edit_details": True}
+
+    edit_text = normalized_text
+    if command.startswith("edit summary:") or command.startswith("edit:"):
+        edit_text = normalized_text.split(":", 1)[1].strip()
+
+    if edit_text:
+        return "request_summary_change", {"edit_text": edit_text}
+    return None, {}
+
+
 def _is_candidate_questions_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _candidate_questions_help_patterns())
@@ -168,7 +185,21 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             state.structured_payload = {"cv_text": text.strip()}
         return state
     elif state.active_stage == "SUMMARY_REVIEW":
-        is_help = _is_candidate_summary_help(text)
+        if _is_candidate_summary_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_summary_review_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+        else:
+            state.intent = "needs_clarification"
+            state.parsed_input["intent"] = "needs_clarification"
+            state.structured_payload = payload
+        return state
     elif state.active_stage == "QUESTIONS_PENDING":
         is_help = _is_candidate_questions_help(text)
     elif state.active_stage == "VERIFICATION_PENDING":
@@ -204,6 +235,21 @@ def build_candidate_stage_reply_node(session):
             state.reply_text = "Thanks. I will use this experience summary to prepare your profile."
             state.confidence = 0.9
             return state
+
+        if state.active_stage == "SUMMARY_REVIEW":
+            if state.parsed_input.get("intent") == "needs_clarification":
+                state.reply_text = "Tell me exactly what is incorrect in the summary, and I will update it once."
+                state.follow_up_needed = True
+                state.follow_up_question = state.reply_text
+                return state
+            if state.parsed_input.get("intent") == "stage_completion_input":
+                state.stage_status = "ready_for_transition"
+                if state.proposed_action == "approve_summary":
+                    state.reply_text = "Thanks. I will approve the summary and move to the next step."
+                else:
+                    state.reply_text = "Thanks. I will update the summary based on your correction."
+                state.confidence = 0.9
+                return state
 
         state.reply_text = None
         state.proposed_action = None
