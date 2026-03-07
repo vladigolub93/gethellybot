@@ -86,6 +86,8 @@ Status vs SRS:
 - `Implemented`: regression coverage now includes both state-policy unit tests and Telegram routing interception tests for key help-first scenarios across candidate, interview, and manager paths
 - `Implemented`: routing regressions now also cover summary-review help vs correction, delete-confirmation help, and manager-action passthrough
 - `Implemented`: routing regressions now also cover interview accept/skip passthrough, delete-confirm passthrough, and the generic unsupported-input recovery path for users outside an active role flow
+- `Implemented`: routing regressions now also cover valid business-action passthrough for summary approval, candidate questions, verification submission, manager clarification answers, and manager rejection
+- `Implemented`: routing regressions now also cover candidate CV intake, manager JD intake, active interview answers, and cancel-delete passthrough; this also fixed a real manager-routing bug where empty clarification handling could block later JD intake routing
 
 Status vs SRS:
 

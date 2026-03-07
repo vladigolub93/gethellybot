@@ -147,6 +147,8 @@ Status:
 - telegram routing regression coverage is now in place for key help-first interception cases across candidate intake, candidate questions, candidate ready, verification, manager intake, interview invite, and manager review
 - routing coverage now also protects summary review help vs real correction input, delete-confirmation help flows, and manager-approve passthrough behavior
 - routing coverage now also protects interview accept/skip passthrough, candidate/vacancy delete-confirm passthrough, and generic recovery fallback for users outside any active role flow
+- routing coverage now also protects valid business-action passthrough for summary approval, questions answering, verification video submission, manager clarification answers, and manager rejection
+- routing coverage now also protects candidate CV intake passthrough, manager JD intake passthrough, active interview answer passthrough, and cancel-delete passthrough for both candidate and vacancy flows
 
 ## 4. Current Next Task
 

@@ -481,12 +481,12 @@ class TelegramUpdateService:
             if clarification_result is not None:
                 templates.append(
                     self._notify(
-                    user.id,
-                    clarification_result.notification_template,
-                    {"text": self._copy(clarification_result.notification_text)},
+                        user.id,
+                        clarification_result.notification_template,
+                        {"text": self._copy(clarification_result.notification_text)},
+                    )
                 )
-            )
-            return templates
+                return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
             assistance_text = self.bot_controller.maybe_build_in_state_assistance(
