@@ -172,7 +172,11 @@ Status:
   - graph-driven help handling for `INTAKE_PENDING`
   - graph-driven structured action proposal for manager text JD input
   - graph-driven `send_job_description_text` validation and backend handoff
+  - graph-owned execution for `CLARIFICATION_QA`
+  - graph-driven structured parsing for text clarification answers
+  - graph-driven `send_vacancy_clarifications` validation and backend handoff
   - non-text vacancy JD input still falls through to the existing backend intake path
+  - voice/video clarification answers still fall through to the existing backend clarification parser path
 
 ### Step 6. Interview and Review Agents
 

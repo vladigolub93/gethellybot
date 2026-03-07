@@ -337,7 +337,8 @@ Current execution note:
 - `VERIFICATION_PENDING` is now implemented as a graph-owned verification stage with graph-validated video handoff
 - `READY` is now implemented as a graph-owned candidate status/delete-initiation stage
 - `INTAKE_PENDING` is now implemented as a graph-owned manager text-intake stage
-- the next rebuild target is the rest of manager flow, starting with `CLARIFICATION_QA`
+- `CLARIFICATION_QA` is now implemented as a graph-owned manager clarification stage
+- the next rebuild target is the rest of manager and interaction flow, starting with `OPEN`
 
 ## 9. Definition of Done
 

@@ -211,6 +211,38 @@ def test_clarification_requests_follow_up_when_partial() -> None:
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
 
 
+def test_parsed_clarification_payload_opens_vacancy() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "budget_min": 7000,
+            "budget_max": 9000,
+            "budget_currency": "USD",
+            "budget_period": "month",
+            "countries_allowed_json": ["PL", "DE"],
+            "work_format": "remote",
+            "team_size": 6,
+            "project_description": "B2B payments platform.",
+            "primary_tech_stack_json": ["python", "fastapi", "postgresql"],
+        },
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert vacancy.state == VACANCY_STATE_OPEN
+
+
 def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()

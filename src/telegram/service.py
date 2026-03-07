@@ -737,10 +737,35 @@ class TelegramUpdateService:
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                stage_result = self.stage_agents.maybe_run_stage(
                     user=user,
                     latest_user_message=normalized_update.text or "",
                     latest_message_type=normalized_update.content_type,
+                )
+                if (
+                    stage_result is not None
+                    and stage_result.stage == "CLARIFICATION_QA"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action == "send_vacancy_clarifications"
+                ):
+                    clarification_result = self.vacancy_service.handle_clarification_parsed_payload(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        parsed_payload=stage_result.structured_payload or {},
+                    )
+                    if clarification_result is not None:
+                        templates.append(
+                            self._notify(
+                                user.id,
+                                clarification_result.notification_template,
+                                {"text": self._copy(clarification_result.notification_text)},
+                            )
+                        )
+                        return templates
+                assistance_text = (
+                    stage_result.reply_text
+                    if stage_result is not None and not stage_result.action_accepted
+                    else None
                 ) or self.bot_controller.maybe_build_in_state_assistance(
                     user=user,
                     latest_user_message=normalized_update.text or "",

@@ -227,6 +227,24 @@ class VacancyService:
             actor_user_id=actor_user_id,
         )
 
+    def handle_clarification_parsed_payload(
+        self,
+        *,
+        user,
+        raw_message_id,
+        parsed_payload: dict,
+    ) -> Optional[VacancyClarificationResult]:
+        vacancy = self.ensure_active_intake_vacancy_for_manager(user)
+        if vacancy.state != VACANCY_STATE_CLARIFICATION_QA:
+            return None
+        return self._apply_clarification_payload(
+            vacancy=vacancy,
+            raw_message_id=raw_message_id,
+            parsed=dict(parsed_payload or {}),
+            trigger_type="user_action",
+            actor_user_id=user.id,
+        )
+
     def _apply_clarification_text(
         self,
         *,
@@ -245,7 +263,24 @@ class VacancyService:
             )
 
         llm_result = safe_parse_vacancy_clarifications(self.session, normalized_text)
-        parsed = llm_result.payload
+        parsed = dict(llm_result.payload or {})
+        return self._apply_clarification_payload(
+            vacancy=vacancy,
+            raw_message_id=raw_message_id,
+            parsed=parsed,
+            trigger_type=trigger_type,
+            actor_user_id=actor_user_id,
+        )
+
+    def _apply_clarification_payload(
+        self,
+        *,
+        vacancy,
+        raw_message_id,
+        parsed: dict,
+        trigger_type: str,
+        actor_user_id=None,
+    ) -> VacancyClarificationResult:
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
 

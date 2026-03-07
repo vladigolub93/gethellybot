@@ -181,6 +181,10 @@ class FakeVacancyService:
         self.clarification_calls.append(kwargs)
         return self.clarification_result
 
+    def handle_clarification_parsed_payload(self, **kwargs):
+        self.clarification_calls.append(kwargs)
+        return self.clarification_result
+
     def handle_jd_intake(self, **kwargs):
         self.intake_calls.append(kwargs)
         return SimpleNamespace(
@@ -2743,6 +2747,56 @@ def test_manager_clarification_answer_passthrough_reaches_clarification_handler(
 
     assert templates == ["vacancy_open"]
     assert service.vacancy_service.clarification_calls
+
+
+def test_graph_manager_clarification_stage_can_own_text_completion() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="CLARIFICATION_QA",
+            reply_text="Thanks. I will update the vacancy details from this answer.",
+            stage_status="ready_for_transition",
+            proposed_action="send_vacancy_clarifications",
+            action_accepted=True,
+            structured_payload={
+                "budget_min": 5000,
+                "budget_max": 7000,
+                "budget_currency": "USD",
+                "work_format": "remote",
+                "countries_allowed_json": ["PL", "DE"],
+            },
+            validation_result={"accepted": True, "normalized_action": "send_vacancy_clarifications"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = SimpleNamespace(
+        status="open",
+        notification_template="vacancy_open",
+        notification_text="Vacancy is now open.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12ax",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12ax",
+        build_update(text="Budget is 5000 to 7000 USD, remote across Poland and Germany."),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.clarification_calls
+    assert service.vacancy_service.clarification_calls[-1]["parsed_payload"]["budget_min"] == 5000
 
 
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:

@@ -69,3 +69,58 @@ def test_graph_manager_stage_allows_passthrough_for_real_jd_text() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "send_job_description_text"
     assert "Senior Python engineer" in result.structured_payload["job_description_text"]
+
+
+def test_graph_manager_stage_handles_clarification_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v3", state="CLARIFICATION_QA")
+    )
+
+    user = SimpleNamespace(
+        id="m3",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="What exactly do you still need from me?",
+    )
+
+    assert reply is not None
+    assert "budget" in reply.lower() or "vacancy" in reply.lower()
+
+
+def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v4", state="CLARIFICATION_QA")
+    )
+
+    user = SimpleNamespace(
+        id="m4",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message=(
+            "Budget: 7000-9000 USD per month. Countries: Poland and Germany. Remote. "
+            "Team size: 6. Project: B2B payments platform. Primary stack: Python, FastAPI, PostgreSQL."
+        ),
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["budget_min"] == 7000
+    assert result.structured_payload["work_format"] == "remote"
