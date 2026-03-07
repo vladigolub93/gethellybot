@@ -123,8 +123,10 @@ Status:
   - first candidate-stage graph slice for `CV_PENDING`
   - graph-driven help handling for `CV_PENDING`
   - graph-driven help handling for `SUMMARY_REVIEW`
+  - graph-driven help handling for `QUESTIONS_PENDING`
   - non-help candidate experience input still falls through to the existing backend intake path
   - non-help summary approval/edit input still falls through to the existing backend summary-review path
+  - non-help mandatory-question answers still fall through to the existing backend question parser path
 
 ### Step 5. Hiring Manager Onboarding Agents
 

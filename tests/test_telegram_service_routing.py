@@ -889,8 +889,11 @@ def test_candidate_verification_help_is_intercepted_before_submission_handler() 
 
 def test_candidate_questions_help_is_intercepted_before_questions_handler() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "I need salary, location, and work format so Helly can apply matching filters correctly."
+    )
+    service.bot_controller = FakeBotController(
+        "Old questions fallback should not be used."
     )
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
@@ -912,6 +915,8 @@ def test_candidate_questions_help_is_intercepted_before_questions_handler() -> N
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
 
 
 def test_summary_review_help_is_intercepted_before_summary_handler() -> None:

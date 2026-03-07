@@ -43,6 +43,24 @@ def _candidate_summary_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _candidate_questions_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhy\b",
+        r"\bhow\b",
+        r"\bhelp\b",
+        r"\bwhat happens after\b",
+        r"\bwhat next\b",
+        r"\bexample\b",
+        r"\bgross or net\b",
+        r"\bnet or gross\b",
+        r"\bwhich currency\b",
+        r"\bwhat currency\b",
+        r"\bwhat period\b",
+        r"\bper month or year\b",
+        r"\bhow should i answer\b",
+    )
+
+
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -87,12 +105,19 @@ def _is_candidate_summary_help(text: str) -> bool:
     return False
 
 
+def _is_candidate_questions_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _candidate_questions_help_patterns())
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
         is_help = _is_candidate_cv_help(text)
     elif state.active_stage == "SUMMARY_REVIEW":
         is_help = _is_candidate_summary_help(text)
+    elif state.active_stage == "QUESTIONS_PENDING":
+        is_help = _is_candidate_questions_help(text)
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "candidate_input"
