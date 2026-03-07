@@ -5,6 +5,15 @@ from src.config.logging import configure_logging, get_logger
 from src.config.settings import get_settings
 from src.db.repositories.job_execution_logs import JobExecutionLogsRepository
 from src.db.session import get_session_factory
+from src.vacancy.processing import VacancyProcessingService
+
+
+def _process_job(session, job):
+    if job.job_type.startswith("candidate_"):
+        return CandidateProcessingService(session).process_job(job)
+    if job.job_type.startswith("vacancy_"):
+        return VacancyProcessingService(session).process_job(job)
+    raise ValueError(f"Unsupported job type: {job.job_type}")
 
 
 def process_once() -> bool:
@@ -18,8 +27,7 @@ def process_once() -> bool:
             return False
 
         repo.mark_started(job)
-        processor = CandidateProcessingService(session)
-        result = processor.process_job(job)
+        result = _process_job(session, job)
         repo.mark_completed(job, result_json=result)
         session.commit()
         return True

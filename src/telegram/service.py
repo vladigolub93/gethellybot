@@ -11,6 +11,7 @@ from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
 from src.identity.service import IdentityService
 from src.telegram.types import NormalizedTelegramUpdate
+from src.vacancy.service import VacancyService
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class TelegramUpdateService:
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
         self.candidate_service = CandidateProfileService(session)
+        self.vacancy_service = VacancyService(session)
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
@@ -167,6 +169,10 @@ class TelegramUpdateService:
                 self.candidate_service.start_onboarding(
                     user, trigger_ref_id=raw_message_id
                 )
+            else:
+                self.vacancy_service.start_onboarding(
+                    user, trigger_ref_id=raw_message_id
+                )
             template_key = (
                 "candidate_onboarding_started"
                 if role == "candidate"
@@ -244,6 +250,46 @@ class TelegramUpdateService:
                     )
                 )
                 return templates
+
+        if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
+            clarification_result = self.vacancy_service.handle_clarification_answer(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                text=normalized_update.text,
+                file_id=file_id,
+            )
+            if clarification_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        clarification_result.notification_template,
+                        {"text": clarification_result.notification_text},
+                    )
+                )
+                return templates
+
+        if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
+            intake_result = self.vacancy_service.handle_jd_intake(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                text=normalized_update.text,
+                file_id=file_id,
+            )
+            message_map = {
+                "vacancy_jd_received_processing": "Job description received. Processing started.",
+                "manager_input_not_expected": "Manager input is not expected at the current step.",
+                "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
+            }
+            templates.append(
+                self._notify(
+                    user.id,
+                    intake_result.notification_template,
+                    {"text": message_map[intake_result.notification_template]},
+                )
+            )
+            return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             intake_result = self.candidate_service.handle_cv_intake(

@@ -1,3 +1,3 @@
 """Database models."""
 
-from src.db.models import candidates, core  # noqa: F401
+from src.db.models import candidates, core, vacancies  # noqa: F401

@@ -54,7 +54,9 @@ class UsersRepository:
     def set_role(self, user: User, role: str) -> User:
         if role == "candidate":
             user.is_candidate = True
+            user.is_hiring_manager = False
         elif role == "hiring_manager":
+            user.is_candidate = False
             user.is_hiring_manager = True
         else:
             raise ValueError(f"Unsupported role: {role}")

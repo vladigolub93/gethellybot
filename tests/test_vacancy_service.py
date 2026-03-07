@@ -1,0 +1,182 @@
+from types import SimpleNamespace
+from uuid import uuid4
+
+from src.vacancy.service import VacancyService
+from src.vacancy.states import (
+    VACANCY_STATE_CLARIFICATION_QA,
+    VACANCY_STATE_INTAKE_PENDING,
+    VACANCY_STATE_JD_PROCESSING,
+    VACANCY_STATE_OPEN,
+)
+
+
+class FakeSession:
+    def add(self, _obj):
+        return None
+
+    def flush(self):
+        return None
+
+
+class FakeVacanciesRepository:
+    def __init__(self):
+        self.vacancy = None
+        self.versions = []
+
+    def get_latest_incomplete_by_manager_user_id(self, _manager_user_id):
+        return self.vacancy
+
+    def create(self, *, manager_user_id, state):
+        self.vacancy = SimpleNamespace(
+            id=uuid4(),
+            manager_user_id=manager_user_id,
+            state=state,
+            current_version_id=None,
+            countries_allowed_json=[],
+            primary_tech_stack_json=[],
+            questions_context_json={},
+            opened_at=None,
+            budget_min=None,
+            budget_max=None,
+            budget_currency=None,
+            budget_period=None,
+            work_format=None,
+            team_size=None,
+            project_description=None,
+            role_title=None,
+            seniority_normalized=None,
+        )
+        return self.vacancy
+
+    def next_version_no(self, _vacancy_id):
+        return len(self.versions) + 1
+
+    def create_version(self, **kwargs):
+        version = SimpleNamespace(id=uuid4(), **kwargs)
+        self.versions.append(version)
+        return version
+
+    def set_current_version(self, vacancy, version_id):
+        vacancy.current_version_id = version_id
+        return vacancy
+
+    def update_clarifications(self, vacancy, **kwargs):
+        for key, value in kwargs.items():
+            setattr(vacancy, key, value)
+        return vacancy
+
+    def update_questions_context(self, vacancy, questions_context_json):
+        vacancy.questions_context_json = questions_context_json
+        return vacancy
+
+    def mark_open(self, vacancy):
+        vacancy.opened_at = "now"
+        return vacancy
+
+
+class FakeStateService:
+    def __init__(self):
+        self.transitions = []
+
+    def record_transition(self, **kwargs):
+        self.transitions.append(kwargs)
+
+    def transition(self, **kwargs):
+        entity = kwargs["entity"]
+        entity.state = kwargs["to_state"]
+        self.transitions.append(kwargs)
+
+
+class FakeQueue:
+    def __init__(self):
+        self.messages = []
+
+    def enqueue(self, message):
+        self.messages.append(message)
+
+
+def test_start_onboarding_moves_manager_to_intake_pending() -> None:
+    service = VacancyService(FakeSession())
+    service.repo = FakeVacanciesRepository()
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = service.start_onboarding(user, trigger_ref_id=uuid4())
+
+    assert vacancy.state == VACANCY_STATE_INTAKE_PENDING
+
+
+def test_handle_jd_intake_transitions_to_processing() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_INTAKE_PENDING)
+
+    result = service.handle_jd_intake(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="Senior Python Engineer for fintech platform",
+    )
+
+    assert result.status == "accepted"
+    assert fake_repo.vacancy.state == VACANCY_STATE_JD_PROCESSING
+    assert len(fake_repo.versions) == 1
+    assert len(fake_queue.messages) == 1
+
+
+def test_clarification_completion_opens_vacancy() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text=(
+            "Budget: $7000-$9000 per month. Countries: Poland and Germany. Remote. "
+            "Team size: 6. Project: B2B payments platform. Primary stack: Python, FastAPI, PostgreSQL."
+        ),
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert vacancy.state == VACANCY_STATE_OPEN
+    assert vacancy.opened_at == "now"
+
+
+def test_clarification_requests_follow_up_when_partial() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="Remote, team size: 6",
+    )
+
+    assert result is not None
+    assert result.status == "follow_up"
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
