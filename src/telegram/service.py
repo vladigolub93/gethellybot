@@ -3,6 +3,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from src.candidate_profile.service import CandidateProfileService
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
@@ -27,6 +28,7 @@ class TelegramUpdateService:
         self.consents_repo = UserConsentsRepository(session)
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
+        self.candidate_service = CandidateProfileService(session)
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
@@ -146,6 +148,10 @@ class TelegramUpdateService:
 
             role = "candidate" if text_value == "candidate" else "hiring_manager"
             self.identity_service.set_role(user, role)
+            if role == "candidate":
+                self.candidate_service.start_onboarding(
+                    user, trigger_ref_id=raw_message_id
+                )
             template_key = (
                 "candidate_onboarding_started"
                 if role == "candidate"
@@ -161,6 +167,27 @@ class TelegramUpdateService:
                     user.id,
                     template_key,
                     {"text": message_text},
+                )
+            )
+            return templates
+
+        if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
+            intake_result = self.candidate_service.handle_cv_intake(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                text=normalized_update.text,
+            )
+            message_map = {
+                "candidate_cv_received_processing": "CV or experience input received. Processing started.",
+                "candidate_input_not_expected": "Candidate input is not expected at the current step.",
+                "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
+            }
+            templates.append(
+                self._notify(
+                    user.id,
+                    intake_result.notification_template,
+                    {"text": message_map[intake_result.notification_template]},
                 )
             )
             return templates
@@ -183,4 +210,3 @@ class TelegramUpdateService:
             payload_json=payload,
         )
         return template_key
-

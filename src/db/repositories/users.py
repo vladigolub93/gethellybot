@@ -60,4 +60,3 @@ class UsersRepository:
             raise ValueError(f"Unsupported role: {role}")
         self.session.flush()
         return user
-
