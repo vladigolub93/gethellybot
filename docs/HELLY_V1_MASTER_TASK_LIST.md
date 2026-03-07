@@ -171,6 +171,21 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 72. `P0` Implement interview session state machine skeleton.
 73. `P1` Implement notification state machine handling.
 
+### 5.3 State-Aware Conversation Layer
+
+73A. `P0` Define the runtime contract for state-aware AI assistance:
+   - current state
+   - allowed actions
+   - missing required data
+   - latest user message
+   - recent state-local context
+73B. `P0` Implement bounded AI decision schema for in-state assistance.
+73C. `P0` Implement backend validation of AI-proposed actions before any state transition.
+73D. `P0` Implement state policy families for candidate onboarding states.
+73E. `P0` Implement state policy families for vacancy onboarding states.
+73F. `P1` Implement state policy families for interview, manager review, and deletion states.
+73G. `P1` Add integration tests for off-happy-path messages inside major states.
+
 ## 9. Phase 6: Candidate Onboarding
 
 ### 6.1 Candidate Persistence
@@ -214,6 +229,7 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 
 ### 6.5 Mandatory Candidate Questions
 
+92A. `P1` Replace rigid summary-review commands with natural-language correction handling inside `SUMMARY_REVIEW`.
 93. `P0` Implement salary question.
 94. `P0` Implement location question.
 95. `P0` Implement work format question.
@@ -238,47 +254,47 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 
 ### 7.1 Vacancy Persistence
 
-105. `P0` Create `vacancies`.
-106. `P0` Create `vacancy_versions`.
+106. `P0` Create `vacancies`.
+107. `P0` Create `vacancy_versions`.
 
 ### 7.2 Vacancy Intake Entry
 
-107. `P0` Implement vacancy creation entrypoint.
-108. `P0` Request JD or equivalent job description input.
-109. `P0` Accept text JD.
-110. `P0` Accept document JD.
-111. `P0` Accept voice/video JD input.
+108. `P0` Implement vacancy creation entrypoint.
+109. `P0` Request JD or equivalent job description input.
+110. `P0` Accept text JD.
+111. `P0` Accept document JD.
+112. `P0` Accept voice/video JD input.
 
 ### 7.3 Vacancy Parsing
 
-112. `P0` Create `vacancy_jd_extract` prompt asset.
-113. `P0` Implement JD extraction capability.
-114. `P1` Create `vacancy_inconsistency_detect` prompt asset.
-115. `P1` Implement inconsistency detection.
+113. `P0` Create `vacancy_jd_extract` prompt asset.
+114. `P0` Implement JD extraction capability.
+115. `P1` Create `vacancy_inconsistency_detect` prompt asset.
+116. `P1` Implement inconsistency detection.
 
 ### 7.4 Vacancy Clarification
 
-116. `P0` Ask for budget range.
-117. `P0` Ask for countries allowed.
-118. `P0` Ask for work format.
-119. `P0` Ask for team size.
-120. `P0` Ask for project description.
-121. `P0` Ask for primary tech stack.
-122. `P0` Create `vacancy_clarification_parse` prompt asset.
-123. `P0` Parse clarification answers into normalized fields.
-124. `P1` Implement one follow-up per unresolved field.
+117. `P0` Ask for budget range.
+118. `P0` Ask for countries allowed.
+119. `P0` Ask for work format.
+120. `P0` Ask for team size.
+121. `P0` Ask for project description.
+122. `P0` Ask for primary tech stack.
+123. `P0` Create `vacancy_clarification_parse` prompt asset.
+124. `P0` Parse clarification answers into normalized fields.
+125. `P1` Implement one follow-up per unresolved field.
 
 ### 7.5 Vacancy Open State
 
-125. `P0` Implement vacancy `OPEN` validator.
-126. `P0` Transition vacancy to `OPEN` only after all requirements pass.
-127. `P0` Emit outbox events for embedding refresh and matching.
+126. `P0` Implement vacancy `OPEN` validator.
+127. `P0` Transition vacancy to `OPEN` only after all requirements pass.
+128. `P0` Emit outbox events for embedding refresh and matching.
 
 ## 11. Phase 8: AI Infrastructure and Prompt System
 
 ### 8.1 Prompt Runtime
 
-128. `P0` Implement prompt asset loader.
+128A. `P0` Implement prompt asset loader.
 129. `P0` Implement prompt version resolution.
 130. `P0` Implement JSON schema validation layer for AI outputs.
 131. `P0` Implement AI trace metadata capture.

@@ -53,6 +53,7 @@ The correct architectural model is:
 - with multimodal ingestion
 - with explicit state machines
 - with AI-assisted extraction, ranking, and evaluation
+- with state-aware AI assistance inside every workflow step
 
 ## 4. Fixed v1 Infrastructure
 
@@ -85,7 +86,24 @@ Primary stateful aggregates:
 - interview session
 - notification
 
-## 5.2 Database as Source of Truth
+## 5.2 State-Aware AI Inside Each Step
+
+Helly should not behave like a rigid finite-state form filler.
+
+For every active state, the AI layer should understand:
+
+- whether the user is providing valid input
+- whether the user is asking for help or clarification
+- whether the user has a constraint that requires an alternative allowed path
+
+The correct pattern is:
+
+- backend provides current state and allowed actions
+- AI proposes an in-state response or a bounded action
+- backend validates the proposal
+- backend either preserves the current state or executes a valid transition
+
+## 5.3 Database as Source of Truth
 
 Operational truth lives in PostgreSQL.
 
@@ -98,7 +116,7 @@ Database stores:
 - job logs
 - notification intents
 
-## 5.3 Raw Artifact Preservation
+## 5.4 Raw Artifact Preservation
 
 Every inbound Telegram update and every user-submitted artifact must be stored in raw form before downstream transformation.
 
@@ -111,7 +129,7 @@ This includes:
 - transcripts
 - AI structured outputs
 
-## 5.4 AI at Controlled Boundaries
+## 5.5 AI at Controlled Boundaries
 
 AI is used for:
 
@@ -122,6 +140,7 @@ AI is used for:
 - reranking
 - evaluation
 - conversational recovery text
+- state-aware assistance inside active workflow states
 
 AI is not used for:
 
@@ -130,7 +149,7 @@ AI is not used for:
 - deletion semantics
 - invitation concurrency rules
 
-## 5.5 Async Processing for Heavy Work
+## 5.6 Async Processing for Heavy Work
 
 The Telegram interaction layer must stay responsive.
 
@@ -144,7 +163,7 @@ Heavy tasks must run asynchronously:
 - interview evaluation
 - reminders and wave handling
 
-## 5.6 Interface-Driven External Integrations
+## 5.7 Interface-Driven External Integrations
 
 All external systems must be wrapped behind internal interfaces.
 
@@ -274,6 +293,8 @@ Responsibilities:
 - route by role and state
 - accept or reject user actions based on allowed transitions
 - generate next-step prompts
+- invoke state-aware AI policy for in-state assistance
+- validate AI-proposed actions before transition
 
 ## 8.4 `candidate_profile`
 

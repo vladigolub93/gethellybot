@@ -81,6 +81,7 @@ Status vs SRS:
 - `Implemented`: inbound and outbound raw messages are persisted
 - `Partial`: keyboards/helpers are still basic
 - `Not Implemented`: location input is not yet actively used in the runtime flow
+- `Partial`: state-aware conversational assistance exists in some places, but the bot still relies on rigid handlers in several states instead of a complete policy layer across all major flows
 
 Status vs SRS:
 

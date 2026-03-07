@@ -53,7 +53,23 @@ Every AI response stored in business records should reference:
 
 User-facing fallback messages should not be mixed into structured extraction prompts.
 
-## 2.5 Human-Like Tone, System-Like Discipline
+## 2.5 State Policy Prompts Are Separate from Business Extraction
+
+Helly should not rely on one generic assistant prompt for every active state.
+
+The prompt architecture should include:
+
+- one global controller
+- state-specific policy prompts for major workflow states
+- specialized prompts for extraction, parsing, interviewing, reranking, and evaluation
+
+State policy prompts should decide:
+
+- what the user is trying to do inside the current state
+- whether the bot should answer, clarify, redirect, or request required input again
+- which bounded action, if any, should be proposed to the backend
+
+## 2.6 Human-Like Tone, System-Like Discipline
 
 Helly may sound conversational, but the prompt layer must remain strict about:
 
@@ -97,6 +113,20 @@ prompts/
     rerank/
   evaluation/
     candidate_evaluate/
+  orchestrator/
+    bot_controller/
+    state_policies/
+      contact_required/
+      consent_required/
+      role_selection/
+      candidate_cv_pending/
+      candidate_summary_review/
+      candidate_questions_pending/
+      candidate_verification_pending/
+      vacancy_jd_pending/
+      vacancy_clarification/
+      interview_invited/
+      interview_active/
   messaging/
     recovery/
     small_talk/
@@ -188,6 +218,33 @@ Recommended model policy:
 Evaluation owner:
 
 - AI extraction benchmark dataset
+
+## 5.1A `state_policy_*`
+
+Purpose:
+
+- make Helly helpful inside a fixed workflow state without giving the LLM authority over state transitions
+
+Primary inputs:
+
+- current state
+- allowed actions
+- missing required data
+- latest user message
+- recent state-local context
+
+Output contract:
+
+- interpreted intent
+- response strategy
+- proposed bounded action if any
+- suggested user-facing reply
+
+Validation rules:
+
+- policy output must never directly mutate business state
+- proposed action must be validated against the current state's allowed actions
+- unsupported messages should usually keep the same state and produce recovery/help guidance
 
 ## 5.2 `candidate_summary_merge`
 

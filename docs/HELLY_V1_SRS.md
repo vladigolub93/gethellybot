@@ -173,7 +173,25 @@ The backend must determine:
 - retry limits
 - completion status
 
-### 5.4 Auditability
+### 5.4 State-Aware Conversational Assistance
+
+The system must be conversationally intelligent inside every active workflow state without surrendering workflow control to the LLM.
+
+For every major state, the conversational layer must be able to:
+
+- interpret help requests
+- answer clarification questions
+- handle objections or constraints
+- suggest alternative valid ways to complete the current requirement
+- recover from off-topic or unsupported input
+
+The conversational layer must not:
+
+- mutate business state directly
+- skip mandatory requirements
+- invent unsupported completion paths
+
+### 5.5 Auditability
 
 Every important business event must be traceable through stored raw messages, parsed artifacts, state transitions, and job execution logs.
 
@@ -205,14 +223,16 @@ Helly v1 is considered functionally successful if:
 3. User selects `Candidate`.
 4. User uploads CV or submits equivalent experience input.
 5. System extracts and generates structured summary.
-6. User approves or edits summary.
-7. User answers mandatory profile questions.
-8. User submits verification video with phrase.
-9. Candidate profile becomes `READY`.
-10. Matching engine may later invite the candidate to an interview for a specific vacancy.
-11. Candidate accepts or skips.
-12. Candidate completes AI interview.
-13. Candidate may be auto-rejected, shortlisted to manager, or later approved/rejected by manager.
+6. System asks: `Does this summary look correct, or would you like to change anything?`
+7. User approves the summary or requests one correction round.
+8. If correction is requested, the system shows the revised final summary for approval.
+9. User answers mandatory profile questions.
+10. User submits verification video with phrase.
+11. Candidate profile becomes `READY`.
+12. Matching engine may later invite the candidate to an interview for a specific vacancy.
+13. Candidate accepts or skips.
+14. Candidate completes AI interview.
+15. Candidate may be auto-rejected, shortlisted to manager, or later approved/rejected by manager.
 
 ## 8.2 Hiring Manager Flow Overview
 
@@ -221,7 +241,7 @@ Helly v1 is considered functionally successful if:
 3. User selects `Hiring Manager`.
 4. User submits job description.
 5. System extracts vacancy structure and inconsistencies.
-6. System asks clarification questions.
+6. System asks clarification questions and handles help or constraint questions inside the same clarification state.
 7. Manager answers required vacancy questions.
 8. Vacancy becomes `OPEN`.
 9. Matching pipeline runs asynchronously.
@@ -263,6 +283,17 @@ Acceptance:
 
 - selection is explicit
 - role-specific state machine starts only after selection
+
+### FR-004 In-State Conversational Assistance
+
+The system must support intelligent conversational assistance inside every major workflow state.
+
+Acceptance:
+
+- if the user asks for help, the system responds helpfully without resetting or breaking the active flow
+- if the user cannot complete the default input method, the system suggests other valid methods supported by the same state
+- if the user message does not satisfy transition guards, the current state is preserved
+- the LLM may propose a response strategy, but only the backend may approve a state transition
 
 ## 9.2 Candidate Intake
 

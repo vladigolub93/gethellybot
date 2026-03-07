@@ -31,6 +31,7 @@ Task IDs in this document are proposed IDs, not system-generated IDs.
 | `E-01` | Project Foundation | `P0` |
 | `E-02` | Identity and Consent | `P0` |
 | `E-03` | Telegram Ingestion and Messaging | `P0` |
+| `E-03A` | State-Aware Conversation Control | `P0` |
 | `E-04` | File and Artifact Management | `P0` |
 | `E-05` | Candidate Onboarding | `P0` |
 | `E-06` | Vacancy Onboarding | `P0` |
@@ -118,6 +119,32 @@ Tasks:
 | `E-04-T03` | implement Telegram file download flow | `P0` | `E-03-T05`, `E-04-T02` |
 | `E-04-T04` | register uploaded artifacts with metadata and hashes | `P0` | `E-04-T01`, `E-04-T03` |
 | `E-04-T05` | support text-only pseudo-artifacts for pasted input | `P1` | `E-04-T01` |
+
+## 4.4A `E-03A` State-Aware Conversation Control
+
+Goal:
+
+- make Helly intelligent inside every active state while preserving deterministic backend authority
+
+Tasks:
+
+| Task ID | Task | Priority | Depends On |
+| --- | --- | --- | --- |
+| `E-03A-T01` | define state-policy decision contract with current state, allowed actions, missing data, and latest user message | `P0` | `E-01-T01` |
+| `E-03A-T02` | implement allowed-action registry for major candidate, vacancy, interview, and review states | `P0` | `E-03A-T01`, `E-05-T03`, `E-06-T03`, `E-09-T02` |
+| `E-03A-T03` | implement global bot controller that returns bounded in-state decisions instead of free-form transitions | `P0` | `E-03A-T01`, `E-07-T01` |
+| `E-03A-T04` | implement candidate state policies for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` | `P0` | `E-03A-T02`, `E-03A-T03` |
+| `E-03A-T05` | implement vacancy state policies for `JD_PENDING`, `CLARIFICATION_QA`, and `OPEN` | `P0` | `E-03A-T02`, `E-03A-T03` |
+| `E-03A-T06` | implement interview and review state policies for invite, active interview, manager review, and deletion confirmation states | `P1` | `E-03A-T02`, `E-03A-T03` |
+| `E-03A-T07` | validate every AI-proposed action against state guards before mutation | `P0` | `E-03A-T03`, `E-13-T01` |
+| `E-03A-T08` | add off-happy-path conversational integration tests and regression cases | `P0` | `E-03A-T04`, `E-03A-T05`, `E-03A-T06` |
+
+Definition of done:
+
+- users can ask for help inside major states without breaking the flow
+- the AI can suggest alternative valid paths inside the current state
+- invalid AI proposals cannot mutate state
+- repeated rigid fallback prompts are replaced with state-aware assistance
 
 ## 4.5 `E-05` Candidate Onboarding
 

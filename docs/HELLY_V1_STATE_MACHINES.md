@@ -46,6 +46,24 @@ Unexpected input during a step should usually result in:
 
 Expiration, reminder, and wave-advance behavior should be modeled as explicit transitions or explicit transition-triggering events.
 
+## 2.6 Every State Has an In-State Policy Layer
+
+Each state must define not only transition guards, but also allowed conversational assistance behavior.
+
+For every state, the runtime should distinguish between:
+
+- valid transition-triggering input
+- help request
+- clarification request
+- objection or user constraint
+- off-topic or unsupported input
+
+The correct response to non-transition input is usually:
+
+- helpful reply
+- same state preserved
+- no-op business mutation
+
 ## 3. Candidate Profile State Machine
 
 ## 3.1 Candidate States
@@ -163,8 +181,15 @@ Meaning:
 
 Rules:
 
-- maximum correction loops: 3
+- maximum correction loops: 1
 - no transition forward until an approved version exists
+
+Expected in-state assistance:
+
+- explain that the summary is generated from parsed CV text
+- ask what exactly is incorrect
+- support one correction round
+- show the revised final version before approval
 
 ### `MANDATORY_QA`
 

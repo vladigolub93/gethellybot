@@ -78,7 +78,22 @@ LLMs are not orchestration engines in Helly. They are controlled reasoning servi
 
 All LLM outputs must be validated before business writes.
 
-## 4.3 Raw Artifact Preservation
+## 4.3 State-Aware Conversation Over Deterministic Flow
+
+Helly should use AI inside each active state, not instead of the state machine.
+
+Target control pattern:
+
+1. backend resolves current state
+2. backend resolves allowed actions for that state
+3. AI interprets the user message inside that state
+4. AI returns a bounded response strategy and optional proposed action
+5. backend validates the proposal
+6. backend either keeps the same state or performs a valid transition
+
+This pattern allows helpful behavior such as suggesting pasted or voice experience if the candidate has no CV, while still preventing prompt-driven state mutation.
+
+## 4.4 Raw Artifact Preservation
 
 All inbound content must be stored in raw form before destructive transformation or summarization.
 
@@ -90,7 +105,7 @@ This includes:
 - parsed structured outputs
 - prompt/response traces where policy allows
 
-## 4.4 Async by Default for Heavy Work
+## 4.5 Async by Default for Heavy Work
 
 The following must run asynchronously:
 
@@ -104,7 +119,7 @@ The following must run asynchronously:
 
 Telegram reply latency must not depend on long-running jobs.
 
-## 4.5 Provider Abstraction
+## 4.6 Provider Abstraction
 
 Every external AI-capable dependency must be hidden behind internal interfaces.
 
@@ -189,6 +204,7 @@ Responsibilities:
 - request next required step
 - recover from unsupported input
 - coordinate with parsing and worker jobs
+- invoke state-aware policy prompts and validate proposed actions
 
 ## 6.4 `candidate_profile`
 

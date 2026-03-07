@@ -34,12 +34,13 @@ This roadmap assumes:
 Recommended milestone structure:
 
 1. Foundation
-2. Candidate Intake
-3. Vacancy Intake
-4. Matching
-5. Interviewing
-6. Evaluation and Manager Review
-7. Hardening and Launch Readiness
+2. State-Aware Conversation Layer
+3. Candidate Intake
+4. Vacancy Intake
+5. Matching
+6. Interviewing
+7. Evaluation and Manager Review
+8. Hardening and Launch Readiness
 
 ## 4. Milestone 1: Foundation
 
@@ -94,6 +95,54 @@ Establish the technical skeleton needed for every later feature.
 - jobs can be enqueued and processed
 - logs and traces contain correlation IDs
 
+## 4.5 Cross-Cutting Requirement: State-Aware Conversation
+
+Every milestone after Foundation must follow the same control model:
+
+- deterministic states remain authoritative
+- the AI assists intelligently inside each state
+- off-happy-path messages must not collapse into rigid repeated prompts
+- every major state defines allowed actions and in-state assistance behavior
+
+## 4.6 Milestone 1A: State-Aware Conversation Layer
+
+Goal:
+
+Make Helly helpful inside every active state without giving state authority to the LLM.
+
+## 4.6.1 Epics
+
+- state policy contract
+- global bot controller
+- state-specific policy prompts
+- safe proposed-action validation
+- off-happy-path conversational tests
+
+## 4.6.2 Deliverables
+
+- unified decision contract for in-state AI assistance
+- allowed-action registry per major state
+- policy prompt family for candidate, vacancy, interview, and review states
+- safe no-op handling for help, objections, and clarification questions
+- regression tests for common off-happy-path interactions
+
+## 4.6.3 Suggested Tasks
+
+- define policy input/output schema for state-aware conversation
+- implement controller that receives current state, allowed actions, and latest user message
+- implement policy families for candidate onboarding states
+- implement policy families for vacancy onboarding states
+- implement policy families for interview and review states
+- validate AI-proposed actions against backend guards
+- add integration tests for messages like `I do not have a CV`, `why do you need this`, and `what should I do next`
+
+## 4.6.4 Exit Criteria
+
+- major states can handle help requests without breaking flow
+- the bot can suggest alternative valid inputs inside the current state
+- invalid AI proposals cannot mutate state
+- user experience no longer depends on rigid fixed replies alone
+
 ## 5. Milestone 2: Candidate Intake
 
 Goal:
@@ -132,7 +181,9 @@ Enable candidates to complete profile onboarding to `READY`.
 - create structured candidate summary schema
 - implement summary review message rendering
 - implement summary approve path
-- implement summary correction path with max 3 loops
+- implement summary correction path with exactly 1 correction round
+- ask `Does this summary look correct, or would you like to change anything?`
+- allow the user to describe what is wrong in natural language rather than only fixed command syntax
 - create `candidate_summary_merge` prompt asset
 - implement mandatory Q&A handler for salary/location/work format
 - normalize work format to enum
@@ -184,9 +235,11 @@ Enable hiring managers to create and open structured vacancies.
 - create `vacancy_jd_extract` prompt asset
 - create `vacancy_inconsistency_detect` prompt asset
 - implement structured vacancy normalized schema
+- implement in-state help and alternative-input guidance for `JD_PENDING`
 - render vacancy clarification prompts
 - implement mandatory fields: budget, countries, work format, team size, project description, primary tech stack
 - implement one follow-up rule for unresolved vacancy fields
+- implement in-state help and policy answers for `CLARIFICATION_QA`
 - implement `OPEN` validation
 - enqueue embedding refresh and matching trigger when vacancy opens
 
