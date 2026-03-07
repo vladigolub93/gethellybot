@@ -5,6 +5,7 @@ import re
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
+from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_bot_controller_decision, safe_state_assistance_decision
 from src.messaging.service import MessagingService
@@ -17,6 +18,7 @@ class BotControllerService:
         self.candidates = CandidateProfilesRepository(session)
         self.consents = UserConsentsRepository(session)
         self.interviews = InterviewsRepository(session)
+        self.matching = MatchingRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.messaging = MessagingService(session)
 
@@ -60,6 +62,9 @@ class BotControllerService:
             "CLARIFICATION_QA",
             "READY",
             "OPEN",
+            "INTERVIEW_INVITED",
+            "INTERVIEW_IN_PROGRESS",
+            "MANAGER_REVIEW",
         }:
             return None
         if not self._looks_like_help_or_constraint_message(
@@ -95,10 +100,26 @@ class BotControllerService:
             if candidate is not None:
                 interview = self.interviews.get_active_session_for_candidate(candidate.id)
                 if interview is not None:
-                    state = f"INTERVIEW_{interview.state}"
-                    return resolve_state_context(role=role, state=state)
+                    state_map = {
+                        "INVITED": "INTERVIEW_INVITED",
+                        "ACCEPTED": "INTERVIEW_IN_PROGRESS",
+                        "IN_PROGRESS": "INTERVIEW_IN_PROGRESS",
+                    }
+                    mapped_state = state_map.get(interview.state)
+                    if mapped_state is not None:
+                        return resolve_state_context(role=role, state=mapped_state)
+                invited_match = self.matching.get_latest_invited_for_candidate(candidate.id)
+                if invited_match is not None:
+                    return resolve_state_context(role=role, state="INTERVIEW_INVITED")
                 return resolve_state_context(role=role, state=candidate.state)
             return resolve_state_context(role=role, state="CV_PENDING")
+
+        manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
+        review_match = self.matching.get_latest_manager_review_for_manager(
+            [vacancy.id for vacancy in manager_vacancies]
+        )
+        if review_match is not None:
+            return resolve_state_context(role=role, state="MANAGER_REVIEW")
 
         vacancy = self.vacancies.get_latest_incomplete_by_manager_user_id(user.id)
         if vacancy is not None:
@@ -207,6 +228,38 @@ class BotControllerService:
                 r"\bmatches?\b",
                 r"\bdelete\b",
                 r"\bupdate\b",
+            ],
+            "INTERVIEW_INVITED": [
+                r"\bwhat is this\b",
+                r"\bwhat happens\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhy\b",
+                r"\bhow long\b",
+                r"\bduration\b",
+                r"\bvoice\b",
+                r"\bvideo\b",
+            ],
+            "INTERVIEW_IN_PROGRESS": [
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\brepeat\b",
+                r"\bwhat do you mean\b",
+                r"\bclarify\b",
+                r"\bvoice\b",
+                r"\bvideo\b",
+                r"\boff topic\b",
+            ],
+            "MANAGER_REVIEW": [
+                r"\bwhat does this mean\b",
+                r"\bwhat do these scores mean\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhy\b",
+                r"\bapprove\b",
+                r"\breject\b",
+                r"\bstrengths?\b",
+                r"\brisks?\b",
             ],
         }
         patterns = patterns_by_state.get(state, [])

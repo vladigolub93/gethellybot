@@ -1,0 +1,6 @@
+- name: clarification
+  input: "Can you repeat what you mean here?"
+  expected_intent: "clarification_request"
+- name: answer_format
+  input: "Can I answer this by voice?"
+  expected_intent: "clarification_request"

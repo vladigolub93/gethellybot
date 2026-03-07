@@ -44,6 +44,9 @@ It distinguishes between:
 | `orchestrator/state_assistance/vacancy_intake_pending` | Asset Ready | Runtime Wired | manager help when no formal JD exists |
 | `orchestrator/state_assistance/vacancy_clarification_qa` | Asset Ready | Runtime Wired | clarification-stage vacancy guidance |
 | `orchestrator/state_assistance/vacancy_open` | Asset Ready | Runtime Wired | post-intake vacancy guidance while matching is active |
+| `orchestrator/state_assistance/interview_invited` | Asset Ready | Runtime Wired | interview invitation clarifications before accept or skip |
+| `orchestrator/state_assistance/interview_in_progress` | Asset Ready | Runtime Wired | current-question guidance during active interview |
+| `orchestrator/state_assistance/manager_review` | Asset Ready | Runtime Wired | manager review clarification before approve or reject |
 
 ## What Is Covered Now
 
@@ -60,6 +63,7 @@ At the prompt-asset level, Helly now covers the necessary LLM surface for:
 - recovery and small talk
 - top-level bot control
 - state-specific in-flow assistance for the main candidate and vacancy intake states
+- state-specific in-flow assistance for invite, active interview, and manager review states
 
 ## Remaining Engineering Work
 
@@ -67,7 +71,7 @@ The remaining gap is no longer prompt design coverage. The remaining gap is surr
 
 1. add vector retrieval and embedding refresh
 2. add cleanup jobs and retention-aware deletion follow-up work
-3. add remaining state-policy prompts for invite/review and deletion-adjacent states
+3. add remaining state-policy prompts for deletion-adjacent states
 4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion

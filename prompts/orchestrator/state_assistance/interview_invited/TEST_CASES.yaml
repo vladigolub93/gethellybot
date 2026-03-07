@@ -1,0 +1,6 @@
+- name: duration_and_format
+  input: "How long does the interview take and can I answer by voice?"
+  expected_intent: "clarification_request"
+- name: what_is_this
+  input: "What is this interview for?"
+  expected_intent: "clarification_request"

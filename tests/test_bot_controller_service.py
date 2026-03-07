@@ -28,11 +28,27 @@ class FakeInterviewRepository:
 
 
 class FakeVacanciesRepository:
-    def __init__(self, vacancy=None):
+    def __init__(self, vacancy=None, vacancies=None):
         self.vacancy = vacancy
+        self.vacancies = vacancies or ([] if vacancy is None else [vacancy])
 
     def get_latest_incomplete_by_manager_user_id(self, user_id):
         return self.vacancy
+
+    def get_by_manager_user_id(self, user_id):
+        return list(self.vacancies)
+
+
+class FakeMatchingRepository:
+    def __init__(self, invited_match=None, manager_review_match=None):
+        self.invited_match = invited_match
+        self.manager_review_match = manager_review_match
+
+    def get_latest_invited_for_candidate(self, candidate_profile_id):
+        return self.invited_match
+
+    def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
+        return self.manager_review_match
 
 
 def test_build_recovery_message_for_candidate_summary_review() -> None:
@@ -42,6 +58,7 @@ def test_build_recovery_message_for_candidate_summary_review() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.build_recovery_message(user=user, latest_user_message="what now?")
@@ -56,6 +73,7 @@ def test_build_recovery_message_for_cv_pending_uses_state_guidance() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.build_recovery_message(user=user, latest_user_message="I do not have a CV")
@@ -70,6 +88,7 @@ def test_maybe_build_in_state_assistance_for_cv_pending_help_request() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -88,6 +107,7 @@ def test_maybe_build_in_state_assistance_does_not_intercept_likely_cv_text() -> 
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -108,6 +128,7 @@ def test_maybe_build_in_state_assistance_for_questions_pending_help_request() ->
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -126,6 +147,7 @@ def test_maybe_build_in_state_assistance_for_summary_review_help_request() -> No
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -143,6 +165,7 @@ def test_build_recovery_message_for_missing_contact() -> None:
     service.consents = FakeConsentsRepository(granted=False)
     service.candidates = FakeCandidateRepository()
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.build_recovery_message(user=user, latest_user_message="hello")
@@ -157,6 +180,7 @@ def test_maybe_build_in_state_assistance_for_verification_constraint() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -175,6 +199,7 @@ def test_maybe_build_in_state_assistance_for_vacancy_intake_without_jd() -> None
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository()
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository(vacancy)
 
     message = service.maybe_build_in_state_assistance(
@@ -193,6 +218,7 @@ def test_maybe_build_in_state_assistance_for_vacancy_clarification_question() ->
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository()
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository(vacancy)
 
     message = service.maybe_build_in_state_assistance(
@@ -211,6 +237,7 @@ def test_maybe_build_in_state_assistance_for_candidate_ready_question() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository(candidate)
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
 
     message = service.maybe_build_in_state_assistance(
@@ -228,6 +255,7 @@ def test_maybe_build_in_state_assistance_for_vacancy_open_question() -> None:
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateRepository()
     service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository(vacancy=None)
 
     message = service.maybe_build_in_state_assistance(
@@ -237,3 +265,60 @@ def test_maybe_build_in_state_assistance_for_vacancy_open_question() -> None:
 
     assert message is not None
     assert "vacancy is open" in message.lower() or "qualified" in message.lower() or "candidates" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_interview_invited_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="READY")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository(invited_match=SimpleNamespace(id="m1", status="invited"))
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="How long does this interview take and can I answer by voice?",
+    )
+
+    assert message is not None
+    assert "interview" in message.lower() or "telegram" in message.lower() or "voice" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_interview_in_progress_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="READY")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository(interview=SimpleNamespace(state="IN_PROGRESS"))
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="Can you repeat what you mean here?",
+    )
+
+    assert message is not None
+    assert "current interview question" in message.lower() or "text, voice, or video" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_manager_review_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
+    vacancy = SimpleNamespace(id="v1", state="OPEN")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository(manager_review_match=SimpleNamespace(id="m1", status="manager_review"))
+    service.vacancies = FakeVacanciesRepository(vacancy=None, vacancies=[vacancy])
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What do these scores mean before I approve or reject?",
+    )
+
+    assert message is not None
+    assert "approve" in message.lower() or "reject" in message.lower() or "evaluation" in message.lower()

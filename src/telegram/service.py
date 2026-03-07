@@ -283,6 +283,19 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+            )
+            if assistance_text:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {"text": assistance_text},
+                    )
+                )
+                return templates
             manager_result = self.evaluation_service.handle_manager_message(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -304,6 +317,20 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                )
+                if assistance_text:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "state_aware_help",
+                            {"text": assistance_text},
+                        )
+                    )
+                    return templates
             interview_result = self.interview_service.handle_candidate_message(
                 user=user,
                 raw_message_id=raw_message_id,

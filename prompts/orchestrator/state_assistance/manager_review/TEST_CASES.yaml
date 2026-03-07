@@ -1,0 +1,6 @@
+- name: scores_meaning
+  input: "What do these scores mean?"
+  expected_intent: "clarification_request"
+- name: approve_or_reject_effect
+  input: "What happens if I approve this candidate?"
+  expected_intent: "clarification_request"

@@ -104,6 +104,12 @@ Priority states:
 - `MANAGER_REVIEW`
 - `DELETE_CONFIRMATION`
 
+Status:
+
+- in progress
+- implemented so far: `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`
+- remaining priority state: `DELETE_CONFIRMATION`
+
 ### Step 6. Action Validation Layer
 
 Goal:
@@ -135,7 +141,7 @@ Required regression cases:
 
 The immediate next task is:
 
-- Step 3 and Step 4 continuation:
-  - add policy coverage for `READY` and `OPEN`
-  - then move to invite/interview/review states
+- Step 5 continuation:
+  - add policy coverage for deletion confirmation and deletion-adjacent states
+  - then add action validation and broader regression coverage
 The foundation and first major state-policy slice are now live in runtime.

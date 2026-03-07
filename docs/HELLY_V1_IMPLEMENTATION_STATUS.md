@@ -187,6 +187,7 @@ Status vs SRS:
 - `Implemented`: answer persistence
 - `Implemented`: session completion
 - `Implemented`: evaluation trigger on completion
+- `Implemented`: state-aware in-step AI help for interview invite, active interview, and manager review states
 
 ### What is only partial
 

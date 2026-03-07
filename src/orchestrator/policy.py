@@ -174,6 +174,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="INTERVIEW_INVITED",
         goal="Get a clear accept or skip decision for the interview invitation.",
         allowed_actions=["accept_interview", "skip_opportunity"],
+        assistance_prompt_slug="interview_invited",
         guidance_text="You can accept the interview or skip this opportunity.",
         help_text="You can accept the interview or skip this opportunity. The interview is short and happens inside Telegram.",
         missing_requirements=["interview_invitation_response"],
@@ -182,9 +183,22 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="INTERVIEW_IN_PROGRESS",
         goal="Complete the active interview one question at a time.",
         allowed_actions=["answer_current_question"],
+        assistance_prompt_slug="interview_in_progress",
         guidance_text="Please answer the current interview question. You can reply in text, voice, or video.",
         help_text="Please answer the current interview question. You can reply in text, voice, or video.",
         missing_requirements=["current_interview_answer"],
+    ),
+    "MANAGER_REVIEW": StatePolicyDefinition(
+        state="MANAGER_REVIEW",
+        goal="Get a clear approve or reject decision for the reviewed candidate.",
+        allowed_actions=["approve_candidate", "reject_candidate"],
+        assistance_prompt_slug="manager_review",
+        guidance_text="Review the candidate package and reply with approve or reject.",
+        help_text=(
+            "Review the candidate package and decide whether to approve or reject the candidate. "
+            "You can also ask what the evaluation means before deciding."
+        ),
+        missing_requirements=["manager_decision"],
     ),
 }
 
