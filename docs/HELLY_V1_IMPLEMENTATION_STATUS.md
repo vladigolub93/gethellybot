@@ -83,6 +83,7 @@ Status vs SRS:
 - `Not Implemented`: location input is not yet actively used in the runtime flow
 - `Implemented`: state-aware conversational assistance now covers intake, post-intake, interview, manager review, and delete-confirmation states
 - `Implemented`: AI-proposed actions are validated against state-allowed actions before any future execution path can use them
+- `Implemented`: regression coverage now includes both state-policy unit tests and Telegram routing interception tests for key help-first scenarios
 
 Status vs SRS:
 

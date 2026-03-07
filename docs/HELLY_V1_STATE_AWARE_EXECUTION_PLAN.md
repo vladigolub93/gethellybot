@@ -140,6 +140,12 @@ Required regression cases:
 - `I do not have a formal JD`
 - `Can I just paste the job details here?`
 
+Status:
+
+- in progress
+- controller-level regression coverage is in place for all major state families
+- telegram routing regression coverage is now in place for key help-first interception cases
+
 ## 4. Current Next Task
 
 The immediate next task is:
