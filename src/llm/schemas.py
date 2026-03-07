@@ -89,8 +89,9 @@ class InterviewAnswerParseSchema(BaseModel):
 class BotControllerDecisionSchema(BaseModel):
     intent: str
     tone: str
-    should_answer_directly: bool
-    should_use_recovery: bool
+    response_mode: str
+    keep_current_state: bool
+    proposed_action: Optional[str] = None
     response_text: Optional[str] = None
     reason_code: Optional[str] = None
 

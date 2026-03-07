@@ -162,7 +162,11 @@ def bot_controller_prompt(
     *,
     role: str | None,
     state: str | None,
+    state_goal: str | None,
     allowed_actions: list[str],
+    blocked_actions: list[str] | None,
+    missing_requirements: list[str] | None,
+    current_step_guidance: str | None,
     latest_user_message: str,
     recent_context: list[str] | None = None,
 ) -> str:
@@ -170,7 +174,11 @@ def bot_controller_prompt(
 
 Current role: {role}
 Current state: {state}
+State goal: {state_goal}
 Allowed actions: {allowed_actions}
+Blocked actions: {blocked_actions or []}
+Missing requirements: {missing_requirements or []}
+Current step guidance: {current_step_guidance or ""}
 Recent context: {recent_context or []}
 Latest user message:
 {latest_user_message}

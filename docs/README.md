@@ -25,6 +25,7 @@ This folder contains the working documentation set for Helly v1.
 ## Delivery Planning
 
 - [HELLY_V1_IMPLEMENTATION_PLAN.md](./HELLY_V1_IMPLEMENTATION_PLAN.md): phased implementation roadmap, epics, milestones, dependency order, suggested ticket breakdown, and definition-of-done guidance.
+- [HELLY_V1_STATE_AWARE_EXECUTION_PLAN.md](./HELLY_V1_STATE_AWARE_EXECUTION_PLAN.md): execution plan specifically for rolling out the state-aware AI assistance layer across all major workflow states.
 - [HELLY_V1_ENGINEERING_BACKLOG.md](./HELLY_V1_ENGINEERING_BACKLOG.md): initial implementation backlog with epic IDs, task IDs, priorities, dependencies, and acceptance guidance.
 - [HELLY_V1_MASTER_TASK_LIST.md](./HELLY_V1_MASTER_TASK_LIST.md): single ordered execution list from project bootstrap through staging, production launch, and post-launch stabilization.
 - [HELLY_V1_IMPLEMENTATION_STATUS.md](./HELLY_V1_IMPLEMENTATION_STATUS.md): current implementation audit against the SRS, with `implemented / partial / not implemented` coverage.

@@ -49,6 +49,20 @@ def test_build_recovery_message_for_candidate_summary_review() -> None:
     assert "current step" in message.lower() or "approve" in message.lower()
 
 
+def test_build_recovery_message_for_cv_pending_uses_state_guidance() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="CV_PENDING")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.build_recovery_message(user=user, latest_user_message="I do not have a CV")
+
+    assert "linkedin" in message.lower() or "voice" in message.lower() or "paste" in message.lower()
+
+
 def test_build_recovery_message_for_missing_contact() -> None:
     user = SimpleNamespace(id="u1", phone_number=None, is_candidate=False, is_hiring_manager=False)
     service = BotControllerService(session=object())
@@ -59,4 +73,4 @@ def test_build_recovery_message_for_missing_contact() -> None:
 
     message = service.build_recovery_message(user=user, latest_user_message="hello")
 
-    assert message == "Please share your contact to continue."
+    assert message == "Please share your contact using the button below to continue."

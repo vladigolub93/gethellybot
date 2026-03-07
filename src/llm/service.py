@@ -615,7 +615,11 @@ def bot_controller_decision_with_llm(
     *,
     role: str | None,
     state: str | None,
+    state_goal: str | None,
     allowed_actions: list[str],
+    blocked_actions: list[str] | None,
+    missing_requirements: list[str] | None,
+    current_step_guidance: str | None,
     latest_user_message: str,
     recent_context: list[str] | None = None,
 ) -> LLMResult:
@@ -625,18 +629,23 @@ def bot_controller_decision_with_llm(
         user_prompt=bot_controller_prompt(
             role=role,
             state=state,
+            state_goal=state_goal,
             allowed_actions=allowed_actions,
+            blocked_actions=blocked_actions,
+            missing_requirements=missing_requirements,
+            current_step_guidance=current_step_guidance,
             latest_user_message=latest_user_message,
             recent_context=recent_context,
         ),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="bot_controller_llm_v1",
+        prompt_version="bot_controller_llm_v2",
     )
     payload = {
         "intent": (result.payload.get("intent") or "unknown").strip().lower(),
         "tone": (result.payload.get("tone") or "neutral").strip().lower(),
-        "should_answer_directly": bool(result.payload.get("should_answer_directly")),
-        "should_use_recovery": bool(result.payload.get("should_use_recovery")),
+        "response_mode": (result.payload.get("response_mode") or "recover").strip().lower(),
+        "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+        "proposed_action": _clean_text(result.payload.get("proposed_action"), limit=120),
         "response_text": _clean_text(result.payload.get("response_text"), limit=500),
         "reason_code": result.payload.get("reason_code"),
     }
@@ -652,6 +661,8 @@ def bot_controller_decision_with_llm(
         payload["intent"] = "unknown"
     if payload["tone"] not in {"neutral", "friendly", "supportive", "firm"}:
         payload["tone"] = "neutral"
+    if payload["response_mode"] not in {"answer", "recover", "clarify", "redirect"}:
+        payload["response_mode"] = "recover"
     return LLMResult(
         payload=payload,
         model_name=result.model_name,
@@ -1110,7 +1121,11 @@ def safe_bot_controller_decision(
     *,
     role: str | None,
     state: str | None,
+    state_goal: str | None,
     allowed_actions: list[str],
+    blocked_actions: list[str] | None,
+    missing_requirements: list[str] | None,
+    current_step_guidance: str | None,
     latest_user_message: str,
     recent_context: list[str] | None = None,
 ) -> LLMResult:
@@ -1119,7 +1134,11 @@ def safe_bot_controller_decision(
             return bot_controller_decision_with_llm(
                 role=role,
                 state=state,
+                state_goal=state_goal,
                 allowed_actions=allowed_actions,
+                blocked_actions=blocked_actions,
+                missing_requirements=missing_requirements,
+                current_step_guidance=current_step_guidance,
                 latest_user_message=latest_user_message,
                 recent_context=recent_context,
             )
@@ -1130,24 +1149,42 @@ def safe_bot_controller_decision(
     payload = {
         "intent": "unknown",
         "tone": "friendly",
-        "should_answer_directly": True,
-        "should_use_recovery": True,
-        "response_text": "Please continue with the current step.",
+        "response_mode": "recover",
+        "keep_current_state": True,
+        "proposed_action": None,
+        "response_text": current_step_guidance or "Please continue with the current step.",
         "reason_code": "ambiguous_message",
     }
     if any(token in text for token in ["hi", "hello", "hey", "thanks", "thank you"]):
         payload.update(
             {
                 "intent": "small_talk",
-                "response_text": "Happy to help. Please continue with the current step.",
+                "response_mode": "redirect",
+                "response_text": f"Happy to help. {current_step_guidance or 'Please continue with the current step.'}",
                 "reason_code": "small_talk_redirect",
             }
         )
-    elif any(token in text for token in ["what next", "what should i do", "help", "how does this work"]):
+    elif any(
+        token in text
+        for token in [
+            "what next",
+            "what should i do",
+            "help",
+            "how does this work",
+            "what do i do",
+            "don't have a cv",
+            "do not have a cv",
+            "no cv",
+            "no resume",
+            "don't have resume",
+            "do not have resume",
+        ]
+    ):
         payload.update(
             {
                 "intent": "support_request",
-                "response_text": "Please follow the current step shown in the chat. If needed, send the required input again.",
+                "response_mode": "answer",
+                "response_text": current_step_guidance or "Please follow the current step shown in the chat.",
                 "reason_code": "help",
             }
         )
@@ -1155,6 +1192,7 @@ def safe_bot_controller_decision(
         payload.update(
             {
                 "intent": "destructive_intent",
+                "response_mode": "redirect",
                 "response_text": "Profile or vacancy deletion requires an explicit confirmation flow. Please wait for that step.",
                 "reason_code": "deletion_confirmation_needed",
             }
@@ -1163,14 +1201,16 @@ def safe_bot_controller_decision(
         payload.update(
             {
                 "intent": "clarification_request",
-                "response_text": f"Please continue with the current step. Expected actions: {', '.join(allowed_actions)}.",
+                "response_mode": "clarify",
+                "response_text": current_step_guidance
+                or f"Please continue with the current step. Expected actions: {', '.join(allowed_actions)}.",
                 "reason_code": "current_step_guidance",
             }
         )
     return LLMResult(
         payload=payload,
         model_name="baseline-deterministic",
-        prompt_version="baseline_bot_controller_v1",
+        prompt_version="baseline_bot_controller_v2",
     )
 
 

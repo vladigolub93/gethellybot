@@ -20,11 +20,16 @@
       "type": "string",
       "enum": ["neutral", "friendly", "supportive", "firm"]
     },
-    "should_answer_directly": {
+    "response_mode": {
+      "type": "string",
+      "enum": ["answer", "recover", "clarify", "redirect"]
+    },
+    "keep_current_state": {
       "type": "boolean"
     },
-    "should_use_recovery": {
-      "type": "boolean"
+    "proposed_action": {
+      "type": ["string", "null"],
+      "maxLength": 120
     },
     "response_text": {
       "type": ["string", "null"],
@@ -46,8 +51,9 @@
   "required": [
     "intent",
     "tone",
-    "should_answer_directly",
-    "should_use_recovery",
+    "response_mode",
+    "keep_current_state",
+    "proposed_action",
     "response_text",
     "reason_code"
   ]

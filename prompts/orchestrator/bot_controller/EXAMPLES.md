@@ -16,8 +16,9 @@ Output:
 {
   "intent": "clarification_request",
   "tone": "friendly",
-  "should_answer_directly": true,
-  "should_use_recovery": false,
+  "response_mode": "answer",
+  "keep_current_state": true,
+  "proposed_action": null,
   "response_text": "Please send your CV as text, a document, or a short voice description of your experience.",
   "reason_code": "current_step_guidance"
 }
