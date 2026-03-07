@@ -37,6 +37,11 @@ class CandidateProfile(Base, UpdateTimestampMixin):
     country_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     work_format: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    questions_context_json: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+    )
     seniority_normalized: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_role: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -109,4 +114,3 @@ class CandidateVerification(Base, TimestampMixin):
     )
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-

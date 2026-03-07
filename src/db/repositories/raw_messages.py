@@ -15,6 +15,10 @@ class RawMessagesRepository:
         stmt = select(RawMessage).where(RawMessage.telegram_update_id == telegram_update_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_by_id(self, raw_message_id: UUID) -> Optional[RawMessage]:
+        stmt = select(RawMessage).where(RawMessage.id == raw_message_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def create(
         self,
         user_id: Optional[UUID],

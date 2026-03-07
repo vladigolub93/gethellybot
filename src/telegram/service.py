@@ -194,7 +194,7 @@ class TelegramUpdateService:
             )
             if summary_review_result is not None:
                 message_map = {
-                    "candidate_summary_approved": "Summary approved. Next step: salary, location, and work format.",
+                    "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
                     "candidate_summary_edit_processing": "Summary edits received. Updating your profile summary.",
                     "candidate_summary_edit_limit_reached": "Summary edit limit reached. Please approve the latest summary or restart profile creation.",
                     "candidate_summary_edit_empty": "Please send summary edits after 'Edit summary:'.",
@@ -206,6 +206,24 @@ class TelegramUpdateService:
                         user.id,
                         summary_review_result.notification_template,
                         {"text": message_map[summary_review_result.notification_template]},
+                    )
+                )
+                return templates
+
+        if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
+            questions_result = self.candidate_service.handle_questions_answer(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                text=normalized_update.text,
+                file_id=file_id,
+            )
+            if questions_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        questions_result.notification_template,
+                        {"text": questions_result.notification_text},
                     )
                 )
                 return templates

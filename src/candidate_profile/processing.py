@@ -1,10 +1,13 @@
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CV_PROCESSING,
+    CANDIDATE_STATE_QUESTIONS_PENDING,
     CANDIDATE_STATE_SUMMARY_REVIEW,
 )
 from src.candidate_profile.summary_builder import build_candidate_summary
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.notifications import NotificationsRepository
+from src.db.repositories.raw_messages import RawMessagesRepository
+from src.candidate_profile.service import CandidateProfileService
 from src.state.service import StateService
 
 
@@ -13,13 +16,17 @@ class CandidateProcessingService:
         self.session = session
         self.repo = CandidateProfilesRepository(session)
         self.notifications = NotificationsRepository(session)
+        self.raw_messages = RawMessagesRepository(session)
         self.state_service = StateService(session)
+        self.candidate_service = CandidateProfileService(session)
 
     def process_job(self, job) -> dict:
         if job.job_type == "candidate_cv_extract_v1":
             return self._process_cv_extract(job)
         if job.job_type == "candidate_summary_edit_apply_v1":
             return self._process_summary_edit(job)
+        if job.job_type == "candidate_questions_parse_v1":
+            return self._process_questions_parse(job)
         raise ValueError(f"Unsupported job type: {job.job_type}")
 
     def _process_cv_extract(self, job) -> dict:
@@ -133,4 +140,52 @@ class CandidateProcessingService:
             "candidate_profile_id": str(profile.id),
             "candidate_profile_version_id": str(version.id),
             "edited": True,
+        }
+
+    def _process_questions_parse(self, job) -> dict:
+        payload = job.payload_json or {}
+        profile = self.repo.get_by_id(payload.get("candidate_profile_id"))
+        raw_message = self.raw_messages.get_by_id(payload.get("raw_message_id"))
+        if profile is None or raw_message is None:
+            raise ValueError("Candidate profile or raw message was not found for question processing.")
+        if profile.state != CANDIDATE_STATE_QUESTIONS_PENDING:
+            return {
+                "status": "ignored",
+                "candidate_profile_id": str(profile.id),
+                "raw_message_id": str(raw_message.id),
+            }
+
+        if not raw_message.text_content:
+            self.notifications.create(
+                user_id=profile.user_id,
+                entity_type="candidate_profile",
+                entity_id=profile.id,
+                template_key="candidate_questions_text_retry",
+                payload_json={
+                    "text": "Voice/video answer saved, but transcription is not connected yet. Please send salary, location, and work format in text.",
+                },
+            )
+            return {
+                "status": "transcription_pending",
+                "candidate_profile_id": str(profile.id),
+                "raw_message_id": str(raw_message.id),
+            }
+
+        result = self.candidate_service.process_question_answer_text(
+            profile=profile,
+            raw_message_id=raw_message.id,
+            text=raw_message.text_content,
+            trigger_type="job",
+        )
+        self.notifications.create(
+            user_id=profile.user_id,
+            entity_type="candidate_profile",
+            entity_id=profile.id,
+            template_key=result.notification_template,
+            payload_json={"text": result.notification_text},
+        )
+        return {
+            "status": result.status,
+            "candidate_profile_id": str(profile.id),
+            "raw_message_id": str(raw_message.id),
         }

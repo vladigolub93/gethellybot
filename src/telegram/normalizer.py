@@ -57,7 +57,7 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
         raise TelegramUpdateNormalizationError("Telegram chat is required.")
 
     content_type = "text"
-    text = message.get("text")
+    text = message.get("text") or message.get("caption")
     contact_payload = message.get("contact")
     document_payload = message.get("document")
     voice_payload = message.get("voice")

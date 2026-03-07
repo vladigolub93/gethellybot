@@ -84,6 +84,43 @@ class CandidateProfilesRepository:
         self.session.flush()
         return profile
 
+    def update_questions_context(self, profile: CandidateProfile, questions_context_json: dict) -> CandidateProfile:
+        profile.questions_context_json = questions_context_json
+        self.session.flush()
+        return profile
+
+    def update_question_answers(
+        self,
+        profile: CandidateProfile,
+        *,
+        salary_min=None,
+        salary_max=None,
+        salary_currency=None,
+        salary_period=None,
+        location_text=None,
+        country_code=None,
+        city=None,
+        work_format=None,
+    ) -> CandidateProfile:
+        if salary_min is not None:
+            profile.salary_min = salary_min
+        if salary_max is not None:
+            profile.salary_max = salary_max
+        if salary_currency is not None:
+            profile.salary_currency = salary_currency
+        if salary_period is not None:
+            profile.salary_period = salary_period
+        if location_text is not None:
+            profile.location_text = location_text
+        if country_code is not None:
+            profile.country_code = country_code
+        if city is not None:
+            profile.city = city
+        if work_format is not None:
+            profile.work_format = work_format
+        self.session.flush()
+        return profile
+
     def get_current_version(self, profile: CandidateProfile) -> Optional[CandidateProfileVersion]:
         if profile.current_version_id is None:
             return None
