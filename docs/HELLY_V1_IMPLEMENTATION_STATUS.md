@@ -53,10 +53,10 @@ Architectural status note:
 - candidate `SUMMARY_REVIEW` is now graph-owned for approve/correction execution and help handling
 - candidate `QUESTIONS_PENDING` is now graph-owned for text-based structured question-answer handoff and help handling
 - candidate `VERIFICATION_PENDING` is now graph-owned for verification guidance and graph-validated video submission handoff
-- candidate `READY` help handling has also started migrating through a graph-driven path
+- candidate `READY` is now graph-owned for status guidance and delete-profile initiation
 - manager `INTAKE_PENDING` is now graph-owned for text-based vacancy intake and help handling
 - Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: graph-owned execution now covers entry onboarding, `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and manager `INTAKE_PENDING`, but most remaining candidate, manager, interview, and review stages are still primarily help-oriented overlays around existing handlers
+- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, and manager `INTAKE_PENDING`, but most remaining manager, interview, and review stages are still primarily help-oriented overlays around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -149,7 +149,7 @@ Status vs SRS:
 - `Implemented`: `SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `QUESTIONS_PENDING` text-based structured answer handoff and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `VERIFICATION_PENDING` verification guidance and video-submission handoff now run through a graph-owned stage agent
-- `Partial`: `READY` still uses a graph-driven help slice while status/wait behavior remains in legacy handlers
+- `Implemented`: `READY` status guidance and delete-profile initiation now run through a graph-owned stage agent
 
 ### What is only partial
 

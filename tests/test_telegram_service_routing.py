@@ -1497,6 +1497,49 @@ def test_candidate_ready_help_is_intercepted_before_fallback() -> None:
     assert not service.bot_controller.calls
 
 
+def test_graph_ready_stage_can_own_delete_profile_intent() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="READY",
+            reply_text="I can help you remove the profile if you want to stop using Helly.",
+            stage_status="ready_for_transition",
+            proposed_action="delete_profile",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "delete_profile"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = SimpleNamespace(
+        status="confirmation_required",
+        notification_template="candidate_deletion_confirmation_required",
+        notification_text="Please confirm profile deletion.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5a",
+        build_update(text="Delete profile"),
+    )
+
+    assert templates == ["candidate_deletion_confirmation_required"]
+    assert service.candidate_service.deletion_calls
+    assert service.candidate_service.deletion_calls[-1]["text"] == "delete profile"
+
+
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(

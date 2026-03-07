@@ -277,3 +277,30 @@ def test_graph_candidate_stage_handles_ready_help() -> None:
 
     assert reply is not None
     assert "ready" in reply.lower() or "match" in reply.lower()
+
+
+def test_graph_candidate_stage_accepts_ready_delete_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8a", state="READY")
+    )
+
+    user = SimpleNamespace(
+        id="u11a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Delete profile",
+    )
+
+    assert result is not None
+    assert result.stage == "READY"
+    assert result.action_accepted is True
+    assert result.proposed_action == "delete_profile"
+    assert result.stage_status == "ready_for_transition"

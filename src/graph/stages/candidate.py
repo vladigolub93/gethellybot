@@ -171,6 +171,13 @@ def _is_candidate_ready_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _candidate_ready_help_patterns())
 
 
+def _detect_candidate_ready_action(text: str) -> tuple[str | None, dict]:
+    command = normalize_command_text(text or "")
+    if command in {"delete profile", "delete my profile", "remove profile"}:
+        return "delete_profile", {}
+    return None, {}
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
@@ -211,7 +218,18 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             return state
         is_help = _is_candidate_verification_help(text)
     elif state.active_stage == "READY":
-        is_help = _is_candidate_ready_help(text)
+        if _is_candidate_ready_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_candidate_ready_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+            return state
+        is_help = False
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "candidate_input"
@@ -279,6 +297,12 @@ def build_candidate_stage_reply_node(session):
             state.stage_status = "ready_for_transition"
             state.reply_text = "Thanks. I will use this video to complete your verification step."
             state.confidence = 0.95
+            return state
+
+        if state.active_stage == "READY" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "I can help you remove the profile if you want to stop using Helly."
+            state.confidence = 0.9
             return state
 
         state.reply_text = None

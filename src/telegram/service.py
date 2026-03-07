@@ -369,6 +369,38 @@ class TelegramUpdateService:
             return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
+            stage_result = self.stage_agents.maybe_run_stage(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            )
+            if (
+                stage_result is not None
+                and stage_result.stage == "READY"
+                and stage_result.action_accepted
+                and stage_result.proposed_action == "delete_profile"
+            ):
+                deletion_result = self.candidate_service.handle_deletion_message(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    text="delete profile",
+                )
+                if deletion_result is not None:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            deletion_result.notification_template,
+                            {
+                                "text": deletion_result.notification_text,
+                                "reply_markup": deletion_confirmation_keyboard("candidate")
+                                if deletion_result.status == "confirmation_required"
+                                else None,
+                            },
+                        )
+                    )
+                    return templates
+
+        if user.is_candidate and normalized_update.content_type == "text":
             deletion_result = self.candidate_service.handle_deletion_message(
                 user=user,
                 raw_message_id=raw_message_id,

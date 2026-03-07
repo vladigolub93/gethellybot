@@ -146,7 +146,8 @@ Status:
   - graph-driven backend handoff for parsed question payloads
   - graph-owned execution for `VERIFICATION_PENDING`
   - graph-driven validation and backend handoff for verification video submission
-  - graph-driven help handling for `READY`
+  - graph-owned execution for `READY` status guidance and delete-profile initiation
+  - graph-driven `delete_profile` validation and backend handoff into deletion confirmation flow
   - voice/document candidate experience input still falls through to the existing backend intake path
   - voice/video mandatory-question answers still fall through to the existing backend question parser path
   - only non-video verification interactions remain as in-stage guidance; actual verification completion happens through graph-validated video handoff into the existing backend video-verification service
