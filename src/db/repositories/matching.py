@@ -135,11 +135,19 @@ class MatchingRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def list_all_for_candidate(self, candidate_profile_id) -> list[Match]:
+        stmt = select(Match).where(Match.candidate_profile_id == candidate_profile_id)
+        return list(self.session.execute(stmt).scalars().all())
+
     def list_active_for_vacancy(self, vacancy_id) -> list[Match]:
         stmt = select(Match).where(
             Match.vacancy_id == vacancy_id,
             Match.status.in_(self.ACTIVE_MATCH_STATUSES),
         )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_all_for_vacancy(self, vacancy_id) -> list[Match]:
+        stmt = select(Match).where(Match.vacancy_id == vacancy_id)
         return list(self.session.execute(stmt).scalars().all())
 
     def mark_invited(self, match: Match) -> Match:

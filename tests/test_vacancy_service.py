@@ -247,3 +247,5 @@ def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
     assert vacancy.state == "DELETED"
     assert match.status == "cancelled"
     assert interview.state == "CANCELLED"
+    assert len(service.queue.messages) == 1
+    assert service.queue.messages[0].job_type == "cleanup_vacancy_deletion_v1"

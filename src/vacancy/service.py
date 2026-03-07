@@ -441,6 +441,15 @@ class VacancyService:
             },
         )
         self.repo.soft_delete(vacancy)
+        self.queue.enqueue(
+            JobMessage(
+                job_type="cleanup_vacancy_deletion_v1",
+                payload={"vacancy_id": str(vacancy.id)},
+                idempotency_key=f"cleanup_vacancy_deletion_v1:{vacancy.id}",
+                entity_type="vacancy",
+                entity_id=vacancy.id,
+            )
+        )
         details = []
         if cancelled_matches:
             details.append(f"{cancelled_matches} active match(es)")

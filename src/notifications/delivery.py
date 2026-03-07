@@ -25,6 +25,8 @@ class NotificationDeliveryService:
             raise ValueError("Notification was not found.")
         if notification.status == "sent":
             return {"status": "already_sent", "notification_id": str(notification.id)}
+        if notification.status == "cancelled":
+            return {"status": "cancelled", "notification_id": str(notification.id)}
         try:
             user = self.users.get_by_id(notification.user_id)
             if user is None or not user.telegram_chat_id:

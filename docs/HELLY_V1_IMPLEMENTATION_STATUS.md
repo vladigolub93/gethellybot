@@ -36,7 +36,7 @@ As of this audit, the project has:
 - background worker and scheduler
 - real OpenAI-backed extraction, parsing, interview planning, follow-up logic, reranking, vacancy inconsistency detection, response copywriting, and evaluation with deterministic fallback
 
-What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, and `pgvector` retrieval is now wired into matching. The remaining major gaps are deletion cleanup jobs, richer operational guardrails, and deeper production hardening.
+What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, `pgvector` retrieval is wired into matching, and deletion cleanup jobs now cancel stale notifications and restrict related files. The remaining major gaps are richer operational guardrails and deeper production hardening.
 
 ## 3. Infrastructure and Delivery Status
 
@@ -230,11 +230,11 @@ Status vs SRS:
 - `Implemented`: candidate profile deletion flow
 - `Implemented`: vacancy deletion flow
 - `Implemented`: cancellation policy for active invites/interviews on deletion
-- `Partial`: cleanup jobs for deleted entities are still missing
+- `Implemented`: cleanup jobs cancel stale notifications and mark related files as deleted/restricted
 
 Status vs SRS:
 
-- deletion requirements: implemented as soft-delete baseline
+- deletion requirements: implemented as soft-delete baseline plus async cleanup
 
 ## 4.9 LLM / AI Layer
 
@@ -290,7 +290,7 @@ Status vs SRS:
 - `Implemented`: private storage baseline
 - `Partial`: sensitive-data handling is structurally okay, but secrets were exposed during setup and should be rotated
 - `Not Implemented`: formal retention policy enforcement
-- `Not Implemented`: cleanup policy jobs
+- `Partial`: cleanup policy jobs exist for deleted entities, but retention-window automation is still minimal
 - `Not Implemented`: production-grade secret rotation and hardening runbook
 
 ## 5. Data Model Status
@@ -333,7 +333,7 @@ Current reality:
 - runtime now uses active prompt execution for extraction, parsing, interview planning, interview conducting, reranking, inconsistency detection, deletion confirmation, and evaluation
 - deterministic Python logic still exists as a runtime fallback layer
 
-The largest remaining gap is no longer prompt execution or basic multimodal ingestion. It is vector retrieval, cleanup jobs, and stronger quality controls around transcription and document extraction edge cases.
+The largest remaining gap is no longer prompt execution, multimodal ingestion, or basic deletion hygiene. It is stronger quality controls around transcription/document extraction, richer product UX, and production-grade operational hardening.
 
 ## 7. Production Readiness Assessment
 
@@ -363,12 +363,12 @@ The largest remaining gap is no longer prompt execution or basic multimodal inge
 - LLM-guided interview with follow-ups
 - baseline evaluation
 - deletion confirmation and soft-delete flows
+- deletion cleanup jobs for notifications and related files
 - asynchronous notification and file storage pipeline
 
 ### Still major work
 
 - improve Telegram UX with buttons and richer guidance
-- add cleanup jobs after deletion
 - add stronger transcript/document quality control and OCR handling
 - build production-grade smoke/e2e validation around live user flows
 
@@ -376,8 +376,8 @@ The largest remaining gap is no longer prompt execution or basic multimodal inge
 
 Recommended order from here:
 
-1. Add cleanup jobs and retention-aware deletion follow-up work.
-2. Improve Telegram UX and manager introduction flow.
-3. Add stronger transcript/document quality control and OCR handling.
-4. Add stronger readiness checks, metrics, and operational dashboards.
-5. Expand live smoke/e2e coverage against Railway + Supabase.
+1. Improve Telegram UX and manager introduction flow.
+2. Add stronger transcript/document quality control and OCR handling.
+3. Add stronger readiness checks, metrics, and operational dashboards.
+4. Expand live smoke/e2e coverage against Railway + Supabase.
+5. Add richer retention-window automation beyond immediate delete cleanup.

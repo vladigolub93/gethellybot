@@ -410,6 +410,8 @@ def test_candidate_deletion_requires_confirmation_then_soft_deletes() -> None:
     assert profile.state == "DELETED"
     assert match.status == "cancelled"
     assert interview.state == "CANCELLED"
+    assert len(service.queue.messages) == 1
+    assert service.queue.messages[0].job_type == "cleanup_candidate_deletion_v1"
 
 
 def test_verification_instruction_is_returned_for_non_video_input() -> None:

@@ -152,6 +152,18 @@ class InterviewsRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def list_for_candidate_profile(self, candidate_profile_id) -> list[InterviewSession]:
+        stmt = select(InterviewSession).where(
+            InterviewSession.candidate_profile_id == candidate_profile_id
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_for_vacancy(self, vacancy_id) -> list[InterviewSession]:
+        stmt = select(InterviewSession).where(
+            InterviewSession.vacancy_id == vacancy_id
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def advance_question_pointer(self, session: InterviewSession, next_order: int) -> InterviewSession:
         session.current_question_order = next_order
         self.session.flush()

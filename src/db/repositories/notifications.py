@@ -3,13 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from src.db.models.core import Notification
 
 
 class NotificationsRepository:
+    CANCELLABLE_STATUSES = ("pending", "queued")
+
     def __init__(self, session: Session):
         self.session = session
 
@@ -71,3 +73,36 @@ class NotificationsRepository:
         notification.last_error = error_message[:4000]
         self.session.flush()
         return notification
+
+    def mark_cancelled(self, notification: Notification, *, reason: Optional[str] = None) -> Notification:
+        notification.status = "cancelled"
+        if reason:
+            notification.last_error = reason[:4000]
+        self.session.flush()
+        return notification
+
+    def cancel_for_entities(
+        self,
+        *,
+        refs: list[tuple[str, object]],
+        exclude_template_keys: Optional[list[str]] = None,
+    ) -> int:
+        if not refs:
+            return 0
+        conditions = [
+            and_(Notification.entity_type == entity_type, Notification.entity_id == entity_id)
+            for entity_type, entity_id in refs
+        ]
+        stmt = select(Notification).where(
+            Notification.status.in_(self.CANCELLABLE_STATUSES),
+            or_(*conditions),
+        )
+        if exclude_template_keys:
+            stmt = stmt.where(Notification.template_key.not_in(exclude_template_keys))
+
+        rows = list(self.session.execute(stmt).scalars().all())
+        for row in rows:
+            row.status = "cancelled"
+            row.last_error = "cancelled_by_cleanup_job"
+        self.session.flush()
+        return len(rows)

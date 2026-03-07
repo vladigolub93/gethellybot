@@ -595,6 +595,15 @@ class CandidateProfileService:
             },
         )
         self.repo.soft_delete(profile)
+        self.queue.enqueue(
+            JobMessage(
+                job_type="cleanup_candidate_deletion_v1",
+                payload={"candidate_profile_id": str(profile.id)},
+                idempotency_key=f"cleanup_candidate_deletion_v1:{profile.id}",
+                entity_type="candidate_profile",
+                entity_id=profile.id,
+            )
+        )
         details = []
         if cancelled_matches:
             details.append(f"{cancelled_matches} active match(es)")

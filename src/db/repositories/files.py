@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -98,6 +99,15 @@ class FilesRepository:
         file_row.status = "storage_failed"
         current_metadata = dict(file_row.provider_metadata or {})
         current_metadata["storage_error"] = error_message[:1000]
+        file_row.provider_metadata = current_metadata
+        self.session.flush()
+        return file_row
+
+    def mark_deleted(self, file_row: File, *, reason: str) -> File:
+        file_row.status = "deleted"
+        file_row.deleted_at = datetime.now(timezone.utc)
+        current_metadata = dict(file_row.provider_metadata or {})
+        current_metadata["cleanup_reason"] = reason[:1000]
         file_row.provider_metadata = current_metadata
         self.session.flush()
         return file_row

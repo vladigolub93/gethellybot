@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -47,3 +49,9 @@ class CandidateVerificationsRepository:
         verification.submitted_at = datetime.now(timezone.utc)
         self.session.flush()
         return verification
+
+    def list_for_profile(self, profile_id) -> list[CandidateVerification]:
+        stmt = select(CandidateVerification).where(
+            CandidateVerification.profile_id == profile_id
+        )
+        return list(self.session.execute(stmt).scalars().all())
