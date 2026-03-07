@@ -9,6 +9,7 @@ class StatePolicyDefinition:
     goal: str
     allowed_actions: list[str]
     guidance_text: str
+    help_text: str | None = None
     missing_requirements: list[str] = field(default_factory=list)
     blocked_actions: list[str] = field(default_factory=list)
 
@@ -20,6 +21,7 @@ class ResolvedStateContext:
     goal: str
     allowed_actions: list[str]
     guidance_text: str
+    help_text: str | None
     missing_requirements: list[str]
     blocked_actions: list[str]
 
@@ -30,6 +32,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Collect a valid Telegram contact before onboarding begins.",
         allowed_actions=["share_contact"],
         guidance_text="Please share your contact using the button below to continue.",
+        help_text="Please share your contact using the button below to continue.",
         missing_requirements=["contact"],
     ),
     "CONSENT_REQUIRED": StatePolicyDefinition(
@@ -37,6 +40,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Collect explicit data-processing consent before profile creation.",
         allowed_actions=["reply_i_agree"],
         guidance_text="Please confirm data processing consent to continue.",
+        help_text="Helly needs your consent before storing profile data. Please confirm data processing consent to continue.",
         missing_requirements=["data_processing_consent"],
     ),
     "ROLE_SELECTION": StatePolicyDefinition(
@@ -44,6 +48,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Choose whether the user is onboarding as a candidate or hiring manager.",
         allowed_actions=["candidate", "hiring manager"],
         guidance_text="Choose your role: Candidate or Hiring Manager.",
+        help_text="Choose Candidate if you are looking for a job, or Hiring Manager if you want to hire for a role.",
         missing_requirements=["role_selection"],
     ),
     "CV_PENDING": StatePolicyDefinition(
@@ -54,6 +59,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "You can upload a CV, paste your work experience as text, send a voice description, "
             "or export your LinkedIn profile as PDF and send it here."
         ),
+        help_text=(
+            "No problem if you do not have a CV. You can paste your work experience as text, "
+            "send a voice description, or export your LinkedIn profile as PDF and send it here."
+        ),
         missing_requirements=["candidate_experience_source"],
     ),
     "CV_PROCESSING": StatePolicyDefinition(
@@ -61,6 +70,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Wait for CV parsing and summary generation to complete.",
         allowed_actions=["wait_for_summary"],
         guidance_text="Your experience is being processed. Please wait a moment while I prepare the summary.",
+        help_text="Your experience is being processed right now. Please wait a moment while I prepare the summary.",
     ),
     "SUMMARY_REVIEW": StatePolicyDefinition(
         state="SUMMARY_REVIEW",
@@ -69,6 +79,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         guidance_text=(
             "Review the summary and either approve it or tell me exactly what is incorrect. "
             "You can request one correction round."
+        ),
+        help_text=(
+            "Review the summary and either approve it or tell me exactly what is incorrect. "
+            "You can request one correction round before final approval."
         ),
         missing_requirements=["summary_approval"],
     ),
@@ -80,6 +94,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "Send your salary expectations, current location, and preferred work format "
             "(remote, hybrid, or office). You can answer in one message."
         ),
+        help_text=(
+            "I need your salary expectations, current location, and preferred work format "
+            "to match you with relevant roles correctly. You can answer in one message."
+        ),
         missing_requirements=["salary", "location", "work_format"],
     ),
     "VERIFICATION_PENDING": StatePolicyDefinition(
@@ -87,6 +105,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Collect a verification video with the required phrase.",
         allowed_actions=["send_verification_video"],
         guidance_text="Please record a short verification video saying the phrase shown in the chat.",
+        help_text=(
+            "Verification helps confirm that a real candidate is completing the profile. "
+            "Please record a short video saying the phrase shown in the chat."
+        ),
         missing_requirements=["verification_video"],
     ),
     "READY": StatePolicyDefinition(
@@ -94,6 +116,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Keep the candidate profile ready for matching.",
         allowed_actions=["wait_for_match", "delete_profile"],
         guidance_text="Your profile is ready. Helly will contact you when a strong match is found.",
+        help_text="Your profile is ready. Helly will contact you only when a strong match is found.",
     ),
     "INTAKE_PENDING": StatePolicyDefinition(
         state="INTAKE_PENDING",
@@ -103,6 +126,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "You can send a formal JD, paste the role details as text, or send a voice description "
             "of the position and requirements."
         ),
+        help_text=(
+            "If you do not have a formal JD, you can paste the role details as text or send a voice description "
+            "of the position, stack, and hiring constraints."
+        ),
         missing_requirements=["job_description_source"],
     ),
     "JD_PROCESSING": StatePolicyDefinition(
@@ -110,6 +137,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Wait for JD parsing and vacancy draft generation to complete.",
         allowed_actions=["wait_for_vacancy_analysis"],
         guidance_text="The job description is being processed. Clarification questions will follow if needed.",
+        help_text="The job description is being processed. Clarification questions will follow if needed.",
     ),
     "CLARIFICATION_QA": StatePolicyDefinition(
         state="CLARIFICATION_QA",
@@ -119,6 +147,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "Please provide the missing vacancy details such as budget, countries, work format, "
             "team context, project description, and main stack."
         ),
+        help_text=(
+            "I need the missing vacancy details so Helly can match correctly. "
+            "That usually includes budget, countries, work format, team context, project description, and main stack."
+        ),
         missing_requirements=["vacancy_clarifications"],
     ),
     "OPEN": StatePolicyDefinition(
@@ -126,12 +158,14 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Keep the vacancy active for matching and candidate review.",
         allowed_actions=["wait_for_matches", "delete_vacancy"],
         guidance_text="The vacancy is open. Helly is matching candidates and will only send qualified profiles.",
+        help_text="The vacancy is open. Helly is matching candidates and will only send qualified profiles.",
     ),
     "INTERVIEW_INVITED": StatePolicyDefinition(
         state="INTERVIEW_INVITED",
         goal="Get a clear accept or skip decision for the interview invitation.",
         allowed_actions=["accept_interview", "skip_opportunity"],
         guidance_text="You can accept the interview or skip this opportunity.",
+        help_text="You can accept the interview or skip this opportunity. The interview is short and happens inside Telegram.",
         missing_requirements=["interview_invitation_response"],
     ),
     "INTERVIEW_IN_PROGRESS": StatePolicyDefinition(
@@ -139,6 +173,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Complete the active interview one question at a time.",
         allowed_actions=["answer_current_question"],
         guidance_text="Please answer the current interview question. You can reply in text, voice, or video.",
+        help_text="Please answer the current interview question. You can reply in text, voice, or video.",
         missing_requirements=["current_interview_answer"],
     ),
 }
@@ -161,6 +196,7 @@ def resolve_state_context(*, role: str | None, state: str | None) -> ResolvedSta
         goal=definition.goal,
         allowed_actions=list(definition.allowed_actions),
         guidance_text=definition.guidance_text,
+        help_text=definition.help_text,
         missing_requirements=list(definition.missing_requirements),
         blocked_actions=list(definition.blocked_actions),
     )

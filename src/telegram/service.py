@@ -354,6 +354,20 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
+            if normalized_update.content_type == "text":
+                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                )
+                if assistance_text:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "state_aware_help",
+                            {"text": assistance_text},
+                        )
+                    )
+                    return templates
             verification_result = self.candidate_service.handle_verification_submission(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -371,6 +385,20 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                )
+                if assistance_text:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "state_aware_help",
+                            {"text": assistance_text},
+                        )
+                    )
+                    return templates
             questions_result = self.candidate_service.handle_questions_answer(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -389,6 +417,20 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                )
+                if assistance_text:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "state_aware_help",
+                            {"text": assistance_text},
+                        )
+                    )
+                    return templates
             clarification_result = self.vacancy_service.handle_clarification_answer(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -405,6 +447,21 @@ class TelegramUpdateService:
                 )
             )
             return templates
+
+        if user.is_hiring_manager and normalized_update.content_type == "text":
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+            )
+            if assistance_text:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {"text": assistance_text},
+                    )
+                )
+                return templates
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
             intake_result = self.vacancy_service.handle_jd_intake(
@@ -427,6 +484,21 @@ class TelegramUpdateService:
                 )
             )
             return templates
+
+        if user.is_candidate and normalized_update.content_type == "text":
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+            )
+            if assistance_text:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {"text": assistance_text},
+                    )
+                )
+                return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             intake_result = self.candidate_service.handle_cv_intake(

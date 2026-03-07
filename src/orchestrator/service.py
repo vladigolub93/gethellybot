@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
@@ -45,6 +47,38 @@ class BotControllerService:
             return response_text
         return default_response
 
+    def maybe_build_in_state_assistance(self, *, user, latest_user_message: str) -> str | None:
+        context = self._resolve_context(user)
+        if not latest_user_message.strip():
+            return None
+        if context.state not in {
+            "CV_PENDING",
+            "INTAKE_PENDING",
+            "QUESTIONS_PENDING",
+            "VERIFICATION_PENDING",
+            "CLARIFICATION_QA",
+        }:
+            return None
+        if not self._looks_like_help_or_constraint_message(
+            state=context.state,
+            latest_user_message=latest_user_message,
+        ):
+            return None
+
+        result = safe_bot_controller_decision(
+            self.session,
+            role=context.role,
+            state=context.state,
+            state_goal=context.goal,
+            allowed_actions=context.allowed_actions,
+            blocked_actions=context.blocked_actions,
+            missing_requirements=context.missing_requirements,
+            current_step_guidance=context.guidance_text,
+            latest_user_message=latest_user_message,
+            recent_context=[],
+        )
+        return result.payload.get("response_text") or context.help_text or context.guidance_text
+
     def _resolve_context(self, user) -> ResolvedStateContext:
         role = None
         if user.is_candidate:
@@ -86,3 +120,59 @@ class BotControllerService:
         if context.allowed_actions:
             return f"Please continue with the current step. Expected actions: {', '.join(context.allowed_actions)}."
         return "Please continue with the current step."
+
+    def _looks_like_help_or_constraint_message(self, *, state: str, latest_user_message: str) -> bool:
+        normalized = " ".join((latest_user_message or "").lower().split())
+        if not normalized:
+            return False
+
+        patterns_by_state = {
+            "CV_PENDING": [
+                r"\bi do not have (a )?(cv|resume)\b",
+                r"\bi don't have (a )?(cv|resume)\b",
+                r"\bno (cv|resume)\b",
+                r"\bwhat if\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcan i\b",
+                r"\bwhy\b",
+                r"\blinkedin\b",
+            ],
+            "INTAKE_PENDING": [
+                r"\bi do not have (a )?(jd|job description)\b",
+                r"\bi don't have (a )?(jd|job description)\b",
+                r"\bno (jd|job description)\b",
+                r"\bwhat if\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcan i\b",
+                r"\bwhy\b",
+            ],
+            "QUESTIONS_PENDING": [
+                r"\bwhy\b",
+                r"\bwhat for\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcan i\b",
+                r"\bgross\b",
+                r"\bnet\b",
+            ],
+            "VERIFICATION_PENDING": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcan i\b",
+                r"\bcamera\b",
+                r"\bdesktop\b",
+                r"\bvideo\b",
+            ],
+            "CLARIFICATION_QA": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bcan i\b",
+                r"\bwhat for\b",
+            ],
+        }
+        patterns = patterns_by_state.get(state, [])
+        return any(re.search(pattern, normalized) for pattern in patterns)
