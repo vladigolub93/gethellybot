@@ -79,7 +79,7 @@ def upgrade() -> None:
     )
 
     op.create_foreign_key(
-        "fk_candidate_profiles_current_version_id_candidate_profile_versions",
+        "fk_cand_profiles_current_version",
         "candidate_profiles",
         "candidate_profile_versions",
         ["current_version_id"],
@@ -112,7 +112,7 @@ def downgrade() -> None:
     op.drop_table("candidate_verifications")
 
     op.drop_constraint(
-        "fk_candidate_profiles_current_version_id_candidate_profile_versions",
+        "fk_cand_profiles_current_version",
         "candidate_profiles",
         type_="foreignkey",
     )
@@ -124,4 +124,3 @@ def downgrade() -> None:
     op.drop_index("ix_candidate_profiles_user_id_active", table_name="candidate_profiles")
     op.drop_index("ix_candidate_profiles_state", table_name="candidate_profiles")
     op.drop_table("candidate_profiles")
-
