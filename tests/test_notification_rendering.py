@@ -33,6 +33,29 @@ def test_render_notification_falls_back_to_template_name() -> None:
     assert rendered == "Helly notification: empty_case"
 
 
+def test_candidate_summary_review_prefers_candidate_facing_summary_text() -> None:
+    rendered = render_notification_text(
+        template_key="candidate_summary_ready_for_review",
+        payload={
+            "text": "Your profile summary is ready.",
+            "summary": {
+                "headline": "Senior Python backend engineer.",
+                "skills": ["python", "fastapi"],
+                "approval_summary_text": (
+                    "You are Ivan, a Senior Backend Engineer with 6 years of experience building backend APIs. "
+                    "You have strong hands-on experience with Python, FastAPI, and PostgreSQL. "
+                    "You have worked on SaaS and internal platform products that support business-critical workflows."
+                ),
+            },
+        },
+    )
+
+    assert "Your profile summary is ready." in rendered
+    assert "You are Ivan, a Senior Backend Engineer" in rendered
+    assert "Summary:" not in rendered
+    assert "Headline:" not in rendered
+
+
 def test_render_notification_reply_markup_returns_payload_markup() -> None:
     reply_markup = {
         "keyboard": [["Candidate", "Hiring Manager"]],

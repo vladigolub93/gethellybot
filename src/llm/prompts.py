@@ -22,16 +22,27 @@ Rules:
 
 
 def candidate_cv_prompt(source_text: str, source_type: str) -> str:
-    return f"""Task: extract a structured candidate profile summary from the source below.
+    return f"""Now analyze the following candidate CV source for Helly and return the requested structured output.
 
 Required output intent:
-- headline: 1 short sentence describing the candidate
-- experience_excerpt: concise summary of the most relevant experience
+- headline: one concise role-focused headline
+- experience_excerpt: concise recruiter-usable summary of the most relevant experience
 - years_experience: integer if stated or strongly implied, otherwise null
 - skills: normalized lowercase list of primary technologies, tools, and platforms
+- approval_summary_text: exactly 3 sentences in second person for candidate approval in chat
+
+Rules for approval_summary_text:
+- start with "You are [Candidate Name]" if the candidate name is clearly available
+- otherwise start with "You are a [main role]"
+- sentence 1 covers role and approximate years of experience
+- sentence 2 covers main technologies, infrastructure, or technical strengths
+- sentence 3 covers domains, product scale, or system types if available
+- do not invent technologies, companies, domains, or years
+- keep it concise, professional, and natural to read in Telegram
 
 Source type: {source_type}
-Candidate source:
+
+CV:
 {source_text}
 """
 
@@ -40,7 +51,7 @@ def candidate_summary_edit_prompt(base_summary: dict, edit_request_text: str) ->
     return f"""Task: merge a candidate's edit request into the existing structured summary.
 
 Keep existing correct facts unless the user explicitly corrects them.
-Preserve the same output structure.
+Preserve the same output structure, including `approval_summary_text`.
 
 Current summary:
 {base_summary}

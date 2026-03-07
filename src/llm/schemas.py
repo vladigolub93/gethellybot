@@ -12,6 +12,7 @@ class CandidateSummarySchema(BaseModel):
     experience_excerpt: Optional[str] = None
     years_experience: Optional[int] = None
     skills: List[str] = Field(default_factory=list)
+    approval_summary_text: Optional[str] = None
     candidate_edit_notes: Optional[str] = None
 
 

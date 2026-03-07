@@ -304,7 +304,7 @@ def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LL
         system_prompt=load_system_prompt("candidate", "cv_extract"),
         user_prompt=candidate_cv_prompt(source_text, source_type),
         primary_model=get_settings().openai_model_extraction,
-        prompt_version="candidate_cv_extract_llm_v1",
+        prompt_version="candidate_cv_extract_llm_v2",
     )
     summary = {
         "status": "draft",
@@ -316,6 +316,10 @@ def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LL
         ),
         "years_experience": result.payload.get("years_experience"),
         "skills": _normalize_skill_list(result.payload.get("skills") or []),
+        "approval_summary_text": _clean_text(
+            result.payload.get("approval_summary_text"),
+            limit=500,
+        ),
     }
     return LLMResult(
         payload={key: value for key, value in summary.items() if value not in (None, [])},
@@ -330,7 +334,7 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
         system_prompt=load_system_prompt("candidate", "summary_merge"),
         user_prompt=candidate_summary_edit_prompt(base_summary, edit_request_text),
         primary_model=get_settings().openai_model_extraction,
-        prompt_version="candidate_summary_edit_apply_llm_v1",
+        prompt_version="candidate_summary_edit_apply_llm_v2",
     )
     merged = dict(base_summary or {})
     merged.update(
@@ -347,6 +351,11 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
             ),
             "skills": _normalize_skill_list(
                 result.payload.get("skills") or merged.get("skills") or []
+            ),
+            "approval_summary_text": _clean_text(
+                result.payload.get("approval_summary_text")
+                or merged.get("approval_summary_text"),
+                limit=500,
             ),
             "candidate_edit_notes": _clean_text(edit_request_text, limit=500),
         }

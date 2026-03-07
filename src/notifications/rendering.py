@@ -25,7 +25,14 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
         lines.append(str(text).strip())
 
     summary = (payload or {}).get("summary")
-    if isinstance(summary, dict) and summary:
+    if (
+        template_key == "candidate_summary_ready_for_review"
+        and isinstance(summary, dict)
+        and summary.get("approval_summary_text")
+    ):
+        lines.append("")
+        lines.append(str(summary.get("approval_summary_text")).strip())
+    elif isinstance(summary, dict) and summary:
         lines.append("")
         lines.append("Summary:")
         lines.extend(_render_mapping(summary))

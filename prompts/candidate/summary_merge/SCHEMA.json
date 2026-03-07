@@ -28,6 +28,10 @@
       },
       "maxItems": 12
     },
+    "approval_summary_text": {
+      "type": ["string", "null"],
+      "maxLength": 500
+    },
     "candidate_edit_notes": {
       "type": ["string", "null"],
       "maxLength": 500
@@ -39,6 +43,7 @@
     "experience_excerpt",
     "years_experience",
     "skills",
+    "approval_summary_text",
     "candidate_edit_notes"
   ]
 }
