@@ -368,7 +368,11 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                ) or self.bot_controller.maybe_build_in_state_assistance(
                     user=user,
                     latest_user_message=normalized_update.text or "",
                 )
@@ -399,7 +403,11 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
-            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+            assistance_text = self.stage_agents.maybe_build_stage_reply(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            ) or self.bot_controller.maybe_build_in_state_assistance(
                 user=user,
                 latest_user_message=normalized_update.text or "",
             )
@@ -445,7 +453,11 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                ) or self.bot_controller.maybe_build_in_state_assistance(
                     user=user,
                     latest_user_message=normalized_update.text or "",
                 )
@@ -476,7 +488,11 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                ) or self.bot_controller.maybe_build_in_state_assistance(
                     user=user,
                     latest_user_message=normalized_update.text or "",
                 )
@@ -576,7 +592,11 @@ class TelegramUpdateService:
             return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
-            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+            assistance_text = self.stage_agents.maybe_build_stage_reply(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            ) or self.bot_controller.maybe_build_in_state_assistance(
                 user=user,
                 latest_user_message=normalized_update.text or "",
             )

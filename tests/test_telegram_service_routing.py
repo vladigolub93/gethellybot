@@ -50,6 +50,17 @@ class FakeStageAgentService:
         )
         return self.response
 
+    def maybe_build_stage_reply(self, *, user, latest_user_message: str, latest_message_type: str = "text"):
+        self.calls.append(
+            {
+                "user_id": user.id,
+                "text": latest_user_message,
+                "message_type": latest_message_type,
+                "kind": "stage",
+            }
+        )
+        return self.response
+
 
 class FailIfCalledService:
     def __getattr__(self, item):
@@ -605,8 +616,11 @@ def test_uppercase_manager_role_selection_starts_manager_onboarding() -> None:
 
 def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "No problem. You can paste your experience as text, send a voice note, or upload a LinkedIn PDF."
+    )
+    service.bot_controller = FakeBotController(
+        "Old fallback should not be used."
     )
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
@@ -624,6 +638,8 @@ def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
     assert not service.candidate_service.cv_calls
 
 

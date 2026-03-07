@@ -116,6 +116,14 @@ Exit:
 
 - candidate journey is graph-driven from CV request through ready state
 
+Status:
+
+- in progress
+- implemented:
+  - first candidate-stage graph slice for `CV_PENDING`
+  - graph-driven help handling for `CV_PENDING`
+  - non-help candidate experience input still falls through to the existing backend intake path
+
 ### Step 5. Hiring Manager Onboarding Agents
 
 Migrate:
