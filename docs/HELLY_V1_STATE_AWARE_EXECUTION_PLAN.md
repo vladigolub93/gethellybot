@@ -153,6 +153,7 @@ Status:
 - routing coverage now also protects successful entry transitions for consent grant, contact-with-consent, and role-based onboarding start for both candidate and hiring manager
 - routing coverage now also protects mixed-input onboarding paths across candidate and manager flows, including candidate CV intake over voice/document, manager JD intake over voice/video, and non-text recovery fallback outside any active role flow
 - routing coverage now also protects post-intake multimodal paths, including interview answers over voice/video, candidate question answers over voice, manager clarification answers over voice, and document-based recovery fallback outside any active role flow
+- routing coverage now also protects normalized action aliases and stricter flow-entry gating, including uppercase role selection, `accept` / `skip` interview aliases, and consent rejection before contact is shared
 
 ## 4. Current Next Task
 

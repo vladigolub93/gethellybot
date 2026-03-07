@@ -169,6 +169,18 @@ class TelegramUpdateService:
             return templates
 
         if text_value in {"i agree", "agree", "consent"}:
+            if not user.phone_number:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "request_contact",
+                        {
+                            "text": self._copy("Please share your contact using the button below before confirming consent."),
+                            "reply_markup": contact_request_keyboard(),
+                        },
+                    )
+                )
+                return templates
             self.identity_service.grant_data_processing_consent(
                 user, source_raw_message_id=raw_message_id
             )

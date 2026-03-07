@@ -92,6 +92,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover successful entry transitions for consent grant, contact-with-consent, and role-based onboarding start for both candidate and hiring manager
 - `Implemented`: routing regressions now also cover multimodal intake paths for candidate and manager onboarding, including candidate `voice/document` CV input, manager `voice/video` JD input, and non-text recovery fallback outside any active role flow
 - `Implemented`: routing regressions now also cover post-intake multimodal behavior, including interview answers over `voice/video`, candidate question answers over `voice`, manager clarification answers over `voice`, and `document` recovery fallback outside any active role flow
+- `Implemented`: routing regressions now also cover normalized aliases for role selection and interview accept/skip actions; this also fixed a real entry-gating issue where consent could be granted before contact was collected
 
 Status vs SRS:
 
