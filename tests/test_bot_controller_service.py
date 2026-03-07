@@ -119,6 +119,24 @@ def test_maybe_build_in_state_assistance_for_questions_pending_help_request() ->
     assert "match" in message.lower() or "salary" in message.lower()
 
 
+def test_maybe_build_in_state_assistance_for_summary_review_help_request() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="SUMMARY_REVIEW")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What should I change here if something is wrong?",
+    )
+
+    assert message is not None
+    assert "correction" in message.lower() or "incorrect" in message.lower() or "approve" in message.lower()
+
+
 def test_build_recovery_message_for_missing_contact() -> None:
     user = SimpleNamespace(id="u1", phone_number=None, is_candidate=False, is_hiring_manager=False)
     service = BotControllerService(session=object())

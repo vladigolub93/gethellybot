@@ -322,6 +322,19 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+            )
+            if assistance_text:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {"text": assistance_text},
+                    )
+                )
+                return templates
             summary_review_result = self.candidate_service.handle_summary_review_action(
                 user=user,
                 raw_message_id=raw_message_id,

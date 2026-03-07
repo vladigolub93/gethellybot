@@ -54,6 +54,7 @@ class BotControllerService:
         if context.state not in {
             "CV_PENDING",
             "INTAKE_PENDING",
+            "SUMMARY_REVIEW",
             "QUESTIONS_PENDING",
             "VERIFICATION_PENDING",
             "CLARIFICATION_QA",
@@ -172,6 +173,17 @@ class BotControllerService:
                 r"\bhelp\b",
                 r"\bcan i\b",
                 r"\bwhat for\b",
+            ],
+            "SUMMARY_REVIEW": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhat does this mean\b",
+                r"\bbased on what\b",
+                r"\bwhere did you get\b",
+                r"\bwhat should i change\b",
+                r"\bwhat do i change\b",
+                r"\bexplain\b",
             ],
         }
         patterns = patterns_by_state.get(state, [])
