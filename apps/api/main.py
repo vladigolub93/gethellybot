@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from src.config.logging import configure_logging
 from src.config.settings import get_settings
 from src.health.router import router as health_router
+from src.telegram.router import router as telegram_router
 
 
 def create_app() -> FastAPI:
@@ -16,6 +17,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.is_dev else None,
     )
     app.include_router(health_router)
+    app.include_router(telegram_router)
 
     @app.get("/", tags=["meta"])
     async def root() -> dict:
@@ -29,4 +31,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

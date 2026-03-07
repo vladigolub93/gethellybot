@@ -71,6 +71,12 @@ class File(Base, UpdateTimestampMixin):
 class RawMessage(Base, TimestampMixin):
     __tablename__ = "raw_messages"
     __table_args__ = (
+        Index(
+            "ix_raw_messages_telegram_update_id",
+            "telegram_update_id",
+            unique=True,
+            postgresql_where=text("telegram_update_id IS NOT NULL"),
+        ),
         Index("ix_raw_messages_user_id_created_at", "user_id", "created_at"),
         Index("ix_raw_messages_telegram_chat_id_created_at", "telegram_chat_id", "created_at"),
     )
@@ -79,7 +85,7 @@ class RawMessage(Base, TimestampMixin):
     user_id: Mapped[Optional[PyUUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
-    telegram_update_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, unique=True)
+    telegram_update_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     telegram_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     telegram_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     direction: Mapped[str] = mapped_column(Text, nullable=False)
