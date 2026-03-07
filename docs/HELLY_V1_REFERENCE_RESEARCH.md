@@ -340,7 +340,7 @@ Some Helly workflows need multi-source reasoning:
 ### What Helly should not copy directly
 
 - CrewAI as the primary orchestration runtime for core business flow
-- broad multi-agent decomposition for transactional logic that should stay deterministic
+- broad autonomous multi-agent decomposition for transactional logic without backend state validation
 - Zep-backed conversation memory as the default state holder
 
 ### Helly decision
@@ -350,8 +350,16 @@ Adopt the internal pattern selectively:
 - source collection
 - context filtering
 - schema-validated synthesis
+- bounded task and stage decomposition
+- explicit graph handoff between narrowly scoped agents
 
-Do not adopt the multi-agent execution model for core user journeys.
+Do not adopt the open-ended CrewAI-style execution model for core user journeys.
+
+Adopt instead:
+
+- `LangGraph` as the orchestration runtime
+- one bounded stage agent per major Helly workflow stage
+- backend-validated transitions over Postgres-backed domain state
 
 ## 6.7 `firecrawl-agent`
 

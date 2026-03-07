@@ -19,6 +19,12 @@ It is intended to guide:
 
 This is not a sprint commitment document. It is the canonical implementation roadmap used to create task backlogs.
 
+Architecture note:
+
+- the currently implemented state-aware controller/routing layer remains a working baseline
+- the new target orchestration architecture is now `LangGraph` stage-agent execution
+- future implementation work should therefore migrate orchestration from the current ad-hoc Telegram routing layer into bounded LangGraph stage agents while preserving the same backend state truth
+
 ## 2. Planning Assumptions
 
 This roadmap assumes:
@@ -28,19 +34,79 @@ This roadmap assumes:
 - Telegram-first delivery
 - no web dashboard in v1
 - one core engineering effort rather than many independent teams
+- `LangGraph` is the target orchestration runtime for user-facing workflow execution
 
 ## 3. Recommended Milestones
 
 Recommended milestone structure:
 
 1. Foundation
-2. State-Aware Conversation Layer
-3. Candidate Intake
-4. Vacancy Intake
-5. Matching
-6. Interviewing
-7. Evaluation and Manager Review
-8. Hardening and Launch Readiness
+2. State-Aware Conversation Layer Baseline
+3. LangGraph Stage-Agent Migration
+4. Candidate Intake
+5. Vacancy Intake
+6. Matching
+7. Interviewing
+8. Evaluation and Manager Review
+9. Hardening and Launch Readiness
+
+## 3A. Milestone 3: LangGraph Stage-Agent Migration
+
+Goal:
+
+Migrate user-facing orchestration from rigid Telegram routing plus shared assistance into bounded LangGraph stage agents.
+
+## 3A.1 Epics
+
+- graph runtime foundation
+- stage-agent contract
+- backend validation bridge
+- staged migration by workflow family
+
+## 3A.2 Deliverables
+
+- LangGraph runtime integration
+- shared graph state contract
+- reusable stage-agent nodes
+- graph router from active DB state to stage subgraph
+- backend validation bridge for agent-proposed actions
+
+## 3A.3 Suggested Tasks
+
+- add `langgraph` dependency and runtime module boundary
+- define canonical graph state for Helly stage agents
+- implement graph selector from active persisted state
+- implement reusable nodes for:
+  - context loading
+  - KB loading
+  - intent classification
+  - help/clarification response
+  - business-input parsing
+  - action proposal
+  - backend validation
+  - side-effect emission
+- migrate entry states:
+  - contact
+  - consent
+  - role selection
+- migrate candidate stages:
+  - CV
+  - summary review
+  - mandatory questions
+  - verification
+- migrate hiring manager stages:
+  - intake
+  - clarification
+- migrate interview invite and active interview
+- migrate manager review and deletion confirmation
+- deprecate old Telegram routing branches once graph paths are stable
+
+## 3A.4 Exit Criteria
+
+- every major user-facing stage is executed through a bounded LangGraph stage agent
+- backend state machines still remain authoritative
+- agent-proposed actions cannot bypass backend validation
+- old ad-hoc routing/controller paths are removed or reduced to thin transport glue
 
 ## 4. Milestone 1: Foundation
 

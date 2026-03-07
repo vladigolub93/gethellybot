@@ -1,0 +1,137 @@
+# HELLY v1 LangGraph Migration Plan
+
+Execution Plan for Migrating Helly to LangGraph Stage Agents
+
+Version: 1.0  
+Date: 2026-03-07
+
+## 1. Purpose
+
+This document turns the LangGraph stage-agent architecture decision into an execution sequence.
+
+It does not replace the full implementation roadmap.
+
+It focuses only on:
+
+- introducing LangGraph
+- migrating stage orchestration
+- preserving backend state authority
+
+## 2. Migration Goal
+
+Helly should move from:
+
+- Telegram routing
+- shared controller
+- shared state-assistance layer
+
+to:
+
+- LangGraph stage router
+- one bounded stage agent per major workflow stage
+- backend validation bridge
+
+## 3. Constraints
+
+During migration:
+
+- Postgres state machines remain authoritative
+- repositories and domain services remain reusable
+- no agent may mutate state directly
+- all side effects still go through backend services
+- migration should happen stage-family by stage-family
+
+## 4. Execution Order
+
+### Step 1. LangGraph Foundation
+
+Deliver:
+
+- `langgraph` dependency
+- `src/graph/` module boundary
+- shared Helly graph state contract
+- graph bootstrap and runner
+
+### Step 2. Backend Validation Bridge
+
+Deliver:
+
+- adapter from graph action proposal to backend validator
+- standard validated action result contract
+- common no-op and rejection handling
+
+### Step 3. Entry Stage Agents
+
+Migrate:
+
+- `CONTACT_REQUIRED`
+- `CONSENT_REQUIRED`
+- `ROLE_SELECTION`
+
+Exit:
+
+- `/start` and early onboarding no longer depend on old branchy Telegram handlers for decisioning
+
+### Step 4. Candidate Onboarding Agents
+
+Migrate:
+
+- `CV_PENDING`
+- `SUMMARY_REVIEW`
+- `QUESTIONS_PENDING`
+- `VERIFICATION_PENDING`
+- `READY`
+
+Exit:
+
+- candidate journey is graph-driven from CV request through ready state
+
+### Step 5. Hiring Manager Onboarding Agents
+
+Migrate:
+
+- `INTAKE_PENDING`
+- `CLARIFICATION_QA`
+- `OPEN`
+
+Exit:
+
+- manager vacancy onboarding is graph-driven
+
+### Step 6. Interview and Review Agents
+
+Migrate:
+
+- `INTERVIEW_INVITED`
+- `INTERVIEW_IN_PROGRESS`
+- `MANAGER_REVIEW`
+- `DELETE_CONFIRMATION`
+
+Exit:
+
+- invitation, interview, review, and deletion confirmation all run through bounded stage agents
+
+### Step 7. Routing Simplification
+
+Deliver:
+
+- remove old duplicated help interception branches
+- keep Telegram layer as transport and normalization glue
+- centralize stage execution entrypoint through LangGraph
+
+### Step 8. Regression and Production Hardening
+
+Deliver:
+
+- graph-path integration tests
+- migration parity tests against old behavior
+- production smoke tests for candidate and manager flows
+
+## 5. Definition of Done
+
+The migration is complete when:
+
+- all major user-facing stages execute through LangGraph
+- old state-aware routing/controller logic is no longer the main orchestration layer
+- backend state transitions remain validated and auditable
+- Telegram transport is reduced to ingress/egress plumbing

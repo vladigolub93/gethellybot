@@ -5,6 +5,12 @@ Deterministic State Machines with AI-Managed In-State Assistance
 Version: 1.0  
 Date: 2026-03-07
 
+Note:
+
+- this document defines the baseline state-aware conversation rules that Helly already implemented
+- the new target runtime architecture is now defined in [HELLY_V1_LANGGRAPH_STAGE_AGENT_ARCHITECTURE.md](./HELLY_V1_LANGGRAPH_STAGE_AGENT_ARCHITECTURE.md)
+- this document should now be treated as the behavioral foundation that the LangGraph stage agents must preserve and improve
+
 ## 1. Purpose
 
 This document defines how Helly should behave as an intelligent conversational system without handing workflow control to an unconstrained AI agent.

@@ -19,6 +19,8 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_DATA_MODEL_AND_ERD.md](./HELLY_V1_DATA_MODEL_AND_ERD.md): physical data model, entity relationships, suggested PostgreSQL schema, indexes, and retention strategy.
 - [HELLY_V1_STATE_MACHINES.md](./HELLY_V1_STATE_MACHINES.md): detailed state definitions, transition matrices, guards, side effects, and failure handling rules.
 - [HELLY_V1_STATE_AWARE_CONVERSATION_MODEL.md](./HELLY_V1_STATE_AWARE_CONVERSATION_MODEL.md): the state-by-state conversational control model that keeps deterministic state machines authoritative while allowing AI to assist intelligently inside every active step.
+- [HELLY_V1_LANGGRAPH_STAGE_AGENT_ARCHITECTURE.md](./HELLY_V1_LANGGRAPH_STAGE_AGENT_ARCHITECTURE.md): the new target orchestration model that introduces bounded LangGraph stage agents over the same deterministic backend state machines.
+- [HELLY_V1_LANGGRAPH_MIGRATION_PLAN.md](./HELLY_V1_LANGGRAPH_MIGRATION_PLAN.md): execution sequence for migrating the current state-aware controller/routing baseline into LangGraph stage agents.
 - [HELLY_V1_PROMPT_CATALOG.md](./HELLY_V1_PROMPT_CATALOG.md): AI capability inventory, prompt asset structure, schema contracts, model policy, and evaluation requirements.
 - [HELLY_V1_AGENT_KNOWLEDGE_BASE.md](./HELLY_V1_AGENT_KNOWLEDGE_BASE.md): canonical FAQ and product-truth grounding for all user-facing AI agents and state-specific prompts.
 - [HELLY_V1_LLM_COVERAGE.md](./HELLY_V1_LLM_COVERAGE.md): full prompt-family coverage matrix showing which LLM capabilities already have assets, which are runtime-wired, and which still need implementation wiring.
@@ -36,5 +38,5 @@ This folder contains the working documentation set for Helly v1.
 1. Read `HELLY_V1_SRS.md` for product truth.
 2. Read `HELLY_V1_REFERENCE_RESEARCH.md` to understand reusable external patterns and avoid copying the wrong examples.
 3. Read `HELLY_V1_ARCHITECTURE_BLUEPRINT.md` to establish implementation architecture.
-4. Read `HELLY_V1_DATA_MODEL_AND_ERD.md`, `HELLY_V1_STATE_MACHINES.md`, `HELLY_V1_STATE_AWARE_CONVERSATION_MODEL.md`, and `HELLY_V1_PROMPT_CATALOG.md` for implementation-grade design.
+4. Read `HELLY_V1_DATA_MODEL_AND_ERD.md`, `HELLY_V1_STATE_MACHINES.md`, `HELLY_V1_STATE_AWARE_CONVERSATION_MODEL.md`, `HELLY_V1_LANGGRAPH_STAGE_AGENT_ARCHITECTURE.md`, and `HELLY_V1_PROMPT_CATALOG.md` for implementation-grade design.
 5. Read `HELLY_V1_IMPLEMENTATION_PLAN.md`, `HELLY_V1_ENGINEERING_BACKLOG.md`, and `HELLY_V1_MASTER_TASK_LIST.md` to convert architecture into delivery sequencing and task execution.

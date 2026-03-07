@@ -40,7 +40,8 @@ Helly v1 must be implemented as:
 
 - a stateful backend system
 - with deterministic workflow control
-- using AI only for bounded reasoning tasks
+- with `LangGraph` orchestrating bounded stage agents
+- using AI for bounded stage execution, extraction, ranking, and evaluation
 - running on a modular monolith codebase with worker processes
 
 The correct architectural model is not:
@@ -52,8 +53,9 @@ The correct architectural model is:
 - a recruiting workflow engine
 - with multimodal ingestion
 - with explicit state machines
+- with LangGraph stage-agent orchestration over workflow stages
 - with AI-assisted extraction, ranking, and evaluation
-- with state-aware AI assistance inside every workflow step
+- with backend-validated transitions and side effects
 
 ## 4. Fixed v1 Infrastructure
 

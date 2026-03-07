@@ -204,7 +204,8 @@ Responsibilities:
 - request next required step
 - recover from unsupported input
 - coordinate with parsing and worker jobs
-- invoke state-aware policy prompts and validate proposed actions
+- invoke LangGraph stage agents for the active workflow stage
+- validate proposed actions before any persisted transition
 
 ## 6.4 `candidate_profile`
 
@@ -1058,7 +1059,7 @@ Helly should explicitly avoid:
 
 - putting business truth into prompts only
 - using one giant orchestrator prompt for all flows
-- using open-ended multi-agent frameworks to control transactional onboarding
+- using open-ended multi-agent frameworks to control transactional onboarding without backend validation
 - embedding vendor SDK calls deep in domain logic
 - recomputing critical package artifacts on the fly without version control
 - synchronous Telegram request handling for heavy AI tasks

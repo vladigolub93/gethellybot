@@ -40,6 +40,13 @@ What it still does not have is the full target AI pipeline. The core extraction/
 
 User-facing LLM responses are now additionally grounded in a shared Helly agent knowledge base, so orchestrator, messaging, and interview-conductor prompts can answer flow and product questions against one canonical FAQ source instead of relying only on local prompt wording.
 
+Architectural status note:
+
+- the current runtime uses a working state-aware controller/routing baseline
+- this is no longer the final target orchestration architecture
+- the new target is `LangGraph` stage-agent execution over the same backend state machines
+- that migration is not yet implemented in runtime
+
 ## 3. Infrastructure and Delivery Status
 
 ### 3.1 Repository and Deploy
@@ -102,7 +109,8 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
-- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `173` passing tests covering help interception, business-action passthrough, normalization, aliases, multimodal routing, and early identity/onboarding assistance
+- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `178` passing tests covering help interception, business-action passthrough, normalization, aliases, multimodal routing, and early identity/onboarding assistance
+- `Partial`: the current state-aware routing/controller layer is a baseline only; migration to LangGraph stage-agent orchestration is still pending
 
 Status vs SRS:
 

@@ -162,7 +162,7 @@ Status:
 - routing coverage now also includes direct unit coverage for shared command normalization and broader punctuation handling across summary edit, manager approval, interview skip, and vacancy deletion
 - early identity states are now covered by state-specific assistance as well, including `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - current verification point:
-  - `173 passed`
+  - `178 passed`
   - state-aware help interception is covered
   - valid business-action passthrough is covered
   - normalization and alias handling is covered

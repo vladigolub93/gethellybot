@@ -185,6 +185,17 @@ Status is intentionally omitted here. This file is meant to be updated during ex
 73E. `P0` Implement state policy families for vacancy onboarding states.
 73F. `P1` Implement state policy families for interview, manager review, and deletion states.
 73G. `P1` Add integration tests for off-happy-path messages inside major states.
+73H. `P0` Adopt `LangGraph` as the target orchestration runtime for user-facing workflow execution.
+73I. `P0` Define the canonical LangGraph state contract for Helly stage agents.
+73J. `P0` Implement graph selection from persisted DB state.
+73K. `P0` Implement reusable graph nodes for context loading, KB grounding, intent detection, parse, action proposal, validation, and side effects.
+73L. `P0` Migrate `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION` into LangGraph stage agents.
+73M. `P0` Migrate candidate onboarding stages into LangGraph stage agents.
+73N. `P0` Migrate vacancy onboarding stages into LangGraph stage agents.
+73O. `P1` Migrate interview invite and interview session handling into LangGraph stage agents.
+73P. `P1` Migrate manager review and deletion confirmation into LangGraph stage agents.
+73Q. `P1` Keep backend state machines authoritative and validate every agent-proposed action.
+73R. `P1` Replace old ad-hoc Telegram routing branches with thin transport glue once graph paths are stable.
 
 ## 9. Phase 6: Candidate Onboarding
 
