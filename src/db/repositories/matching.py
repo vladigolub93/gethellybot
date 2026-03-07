@@ -129,3 +129,18 @@ class MatchingRepository:
         match.candidate_response_at = datetime.now(timezone.utc)
         self.session.flush()
         return match
+
+    def mark_manager_decision(self, match: Match, *, status: str) -> Match:
+        match.status = status
+        match.manager_decision_at = datetime.now(timezone.utc)
+        self.session.flush()
+        return match
+
+    def get_latest_manager_review_for_manager(self, vacancy_ids: list, *, manager_review_only: bool = True) -> Optional[Match]:
+        if not vacancy_ids:
+            return None
+        stmt = select(Match).where(Match.vacancy_id.in_(vacancy_ids))
+        if manager_review_only:
+            stmt = stmt.where(Match.status == "manager_review")
+        stmt = stmt.order_by(Match.updated_at.desc()).limit(1)
+        return self.session.execute(stmt).scalar_one_or_none()

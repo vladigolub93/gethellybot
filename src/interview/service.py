@@ -278,6 +278,18 @@ class InterviewService:
                 actor_user_id=candidate.user_id,
                 state_field="status",
             )
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="evaluation_score_interview_v1",
+                    payload={
+                        "interview_session_id": str(session.id),
+                        "match_id": str(match.id),
+                    },
+                    idempotency_key=f"evaluation_score_interview_v1:{session.id}",
+                    entity_type="interview_session",
+                    entity_id=session.id,
+                )
+            )
             return InterviewUserResult(
                 status="completed",
                 notification_template="candidate_interview_completed",

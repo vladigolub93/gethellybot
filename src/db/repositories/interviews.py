@@ -18,6 +18,10 @@ class InterviewsRepository:
         stmt = select(InterviewSession).where(InterviewSession.match_id == match_id)
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def get_by_id(self, session_id) -> Optional[InterviewSession]:
+        stmt = select(InterviewSession).where(InterviewSession.id == session_id)
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def get_active_session_for_candidate(self, candidate_profile_id) -> Optional[InterviewSession]:
         stmt = (
             select(InterviewSession)
@@ -120,6 +124,10 @@ class InterviewsRepository:
         self.session.add(row)
         self.session.flush()
         return row
+
+    def list_answers_for_session(self, session_id) -> list[InterviewAnswer]:
+        stmt = select(InterviewAnswer).where(InterviewAnswer.session_id == session_id)
+        return list(self.session.execute(stmt).scalars().all())
 
     def advance_question_pointer(self, session: InterviewSession, next_order: int) -> InterviewSession:
         session.current_question_order = next_order

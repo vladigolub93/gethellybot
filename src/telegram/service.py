@@ -9,6 +9,7 @@ from src.db.repositories.files import FilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
+from src.evaluation.service import EvaluationService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.telegram.types import NormalizedTelegramUpdate
@@ -33,6 +34,7 @@ class TelegramUpdateService:
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
         self.candidate_service = CandidateProfileService(session)
+        self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
         self.vacancy_service = VacancyService(session)
 
@@ -193,6 +195,22 @@ class TelegramUpdateService:
                 )
             )
             return templates
+
+        if user.is_hiring_manager and normalized_update.content_type == "text":
+            manager_result = self.evaluation_service.handle_manager_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text or "",
+            )
+            if manager_result is not None:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        manager_result.notification_template,
+                        {"text": manager_result.notification_text},
+                    )
+                )
+                return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             interview_result = self.interview_service.handle_candidate_message(

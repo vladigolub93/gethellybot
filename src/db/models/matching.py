@@ -67,3 +67,4 @@ class Match(Base, UpdateTimestampMixin):
     rationale_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     invitation_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     candidate_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    manager_decision_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

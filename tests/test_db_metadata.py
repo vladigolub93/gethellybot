@@ -1,5 +1,5 @@
 from src.db.base import Base
-from src.db.models import candidates, core, interviews, matching, vacancies  # noqa: F401
+from src.db.models import candidates, core, evaluations, interviews, matching, vacancies  # noqa: F401
 
 
 def test_core_table_names_present() -> None:
@@ -22,6 +22,8 @@ def test_core_table_names_present() -> None:
         "interview_sessions",
         "interview_questions",
         "interview_answers",
+        "evaluation_results",
+        "introduction_events",
     }
 
     assert expected.issubset(set(Base.metadata.tables.keys()))
