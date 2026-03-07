@@ -149,6 +149,7 @@ Status:
 - routing coverage now also protects interview accept/skip passthrough, candidate/vacancy delete-confirm passthrough, and generic recovery fallback for users outside any active role flow
 - routing coverage now also protects valid business-action passthrough for summary approval, questions answering, verification video submission, manager clarification answers, and manager rejection
 - routing coverage now also protects candidate CV intake passthrough, manager JD intake passthrough, active interview answer passthrough, and cancel-delete passthrough for both candidate and vacancy flows
+- routing coverage now also protects contact/consent/role gating at flow entry, including `/start`, contact share, and blocked role selection before prerequisites are satisfied
 
 ## 4. Current Next Task
 

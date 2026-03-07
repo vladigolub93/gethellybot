@@ -50,6 +50,7 @@ class FakeCandidateService:
         self.question_calls = []
         self.summary_calls = []
         self.deletion_calls = []
+        self.start_calls = []
         self.summary_result = None
         self.deletion_result = None
         self.question_result = None
@@ -66,6 +67,9 @@ class FakeCandidateService:
     def handle_deletion_message(self, **kwargs):
         self.deletion_calls.append(kwargs)
         return self.deletion_result
+
+    def start_onboarding(self, user, trigger_ref_id):
+        self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
 
     def handle_summary_review_action(self, **kwargs):
         self.summary_calls.append(kwargs)
@@ -89,12 +93,16 @@ class FakeVacancyService:
         self.intake_calls = []
         self.clarification_calls = []
         self.deletion_calls = []
+        self.start_calls = []
         self.deletion_result = None
         self.clarification_result = None
 
     def handle_deletion_message(self, **kwargs):
         self.deletion_calls.append(kwargs)
         return self.deletion_result
+
+    def start_onboarding(self, user, trigger_ref_id):
+        self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
 
     def handle_clarification_answer(self, **kwargs):
         self.clarification_calls.append(kwargs)
@@ -136,7 +144,36 @@ class FakeInterviewService:
         return self.result
 
 
-def build_update(*, text: Optional[str] = None, content_type: str = "text") -> NormalizedTelegramUpdate:
+class FakeIdentityService:
+    def __init__(self, *, consent: bool = False):
+        self.consent = consent
+        self.attach_calls = []
+        self.grant_calls = []
+        self.set_role_calls = []
+
+    def attach_contact(self, user, normalized_update):
+        self.attach_calls.append({"user": user, "update": normalized_update})
+        user.phone_number = normalized_update.contact_phone_number
+
+    def has_data_processing_consent(self, user):
+        return self.consent
+
+    def grant_data_processing_consent(self, user, source_raw_message_id):
+        self.grant_calls.append({"user": user, "source_raw_message_id": source_raw_message_id})
+        self.consent = True
+
+    def set_role(self, user, role):
+        self.set_role_calls.append({"user": user, "role": role})
+        user.is_candidate = role == "candidate"
+        user.is_hiring_manager = role == "hiring_manager"
+
+
+def build_update(
+    *,
+    text: Optional[str] = None,
+    content_type: str = "text",
+    contact_phone_number: Optional[str] = None,
+) -> NormalizedTelegramUpdate:
     return NormalizedTelegramUpdate(
         update_id=1,
         telegram_user_id=100,
@@ -144,7 +181,7 @@ def build_update(*, text: Optional[str] = None, content_type: str = "text") -> N
         message_id=300,
         content_type=content_type,
         text=text,
-        contact_phone_number=None,
+        contact_phone_number=contact_phone_number,
         display_name="Test User",
         username="testuser",
         language_code="en",
@@ -158,6 +195,102 @@ def build_service() -> TelegramUpdateService:
     service.notifications_repo = FakeNotificationsRepository()
     service.messaging = FakeMessagingService()
     return service
+
+
+def test_start_without_contact_requests_contact() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+
+    user = SimpleNamespace(
+        id="g1",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g1", build_update(text="/start"))
+
+    assert templates == ["request_contact"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_contact"
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+
+
+def test_start_with_contact_but_without_consent_requests_consent() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+
+    user = SimpleNamespace(
+        id="g2",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g2", build_update(text="/start"))
+
+    assert templates == ["request_consent"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_consent"
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+
+
+def test_start_with_contact_and_consent_requests_role() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=True)
+
+    user = SimpleNamespace(
+        id="g3",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g3", build_update(text="/start"))
+
+    assert templates == ["request_role"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+
+
+def test_contact_share_without_consent_requests_consent() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+
+    user = SimpleNamespace(
+        id="g4",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw-g4",
+        build_update(contact_phone_number="+380974527344"),
+    )
+
+    assert templates == ["request_consent"]
+    assert service.identity_service.attach_calls
+    assert user.phone_number == "+380974527344"
+
+
+def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+    service.candidate_service = FakeCandidateService()
+    service.vacancy_service = FakeVacancyService()
+
+    user = SimpleNamespace(
+        id="g5",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g5", build_update(text="Candidate"))
+
+    assert templates == ["request_contact"]
+    assert not service.candidate_service.start_calls
+    assert not service.vacancy_service.start_calls
 
 
 def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
