@@ -49,10 +49,11 @@ Architectural status note:
 - the canonical supported runtime for LangGraph execution is now `Python 3.12`
 - Dockerized `Python 3.12` runtime has been validated locally with `langgraph` import and full test execution
 - entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
-- candidate `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
+- candidate `CV_PENDING` is now graph-owned for text-based stage completion and help handling
+- candidate `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
 - manager `INTAKE_PENDING` help handling has also started migrating through a graph-driven path
 - Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: currently migrated graph stages are still primarily help-oriented overlays around existing handlers, not yet full stage-owning agents that collect all required data for stage completion
+- important architectural gap: graph-owned execution now covers entry onboarding and `CV_PENDING`, but most remaining candidate, manager, interview, and review stages are still primarily help-oriented overlays around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -141,7 +142,8 @@ Status vs SRS:
 - `Implemented`: verification video submission step
 - `Implemented`: transition to `READY`
 - `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY`
-- `Partial`: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help execution have started migrating to bounded LangGraph stage agents, while the rest of candidate onboarding still runs through the legacy state-aware controller path
+- `Implemented`: `CV_PENDING` text-based stage completion and in-stage guidance now run through a graph-owned stage agent
+- `Partial`: `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` still use graph-driven help slices while actual stage completion remains in legacy handlers
 
 ### What is only partial
 

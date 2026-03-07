@@ -108,6 +108,22 @@ class LangGraphStageAgentService:
         latest_user_message: str,
         latest_message_type: str = "text",
     ) -> str | None:
+        result = self.maybe_run_stage(
+            user=user,
+            latest_user_message=latest_user_message,
+            latest_message_type=latest_message_type,
+        )
+        if result is None or result.action_accepted:
+            return None
+        return result.reply_text
+
+    def maybe_run_stage(
+        self,
+        *,
+        user,
+        latest_user_message: str,
+        latest_message_type: str = "text",
+    ) -> StageAgentExecutionResult | None:
         if latest_message_type != "text" or not latest_user_message.strip():
             return None
         stage = self._resolve_supported_stage(user)
@@ -119,7 +135,15 @@ class LangGraphStageAgentService:
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
         )
-        return result.get("reply_text")
+        return StageAgentExecutionResult(
+            stage=stage,
+            reply_text=result.get("reply_text"),
+            stage_status=result.get("stage_status"),
+            proposed_action=result.get("proposed_action"),
+            action_accepted=bool(result.get("validation_result", {}).get("accepted")),
+            structured_payload=result.get("structured_payload") or {},
+            validation_result=result.get("validation_result") or {},
+        )
 
     def _resolve_role(self, user) -> str | None:
         if getattr(user, "is_candidate", False):

@@ -158,6 +158,15 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
         is_help = _is_candidate_cv_help(text)
+        if is_help:
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+        else:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = "send_cv_text"
+            state.structured_payload = {"cv_text": text.strip()}
+        return state
     elif state.active_stage == "SUMMARY_REVIEW":
         is_help = _is_candidate_summary_help(text)
     elif state.active_stage == "QUESTIONS_PENDING":
@@ -175,6 +184,9 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
 def build_candidate_stage_reply_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
         context = resolve_state_context(role=state.role, state=state.active_stage)
+        state.stage_status = "in_progress"
+        state.follow_up_needed = False
+        state.confidence = 0.85
         if state.parsed_input.get("intent") == "help":
             result = safe_state_assistance_decision(
                 session,
@@ -183,7 +195,14 @@ def build_candidate_stage_reply_node(session):
                 recent_context=state.knowledge_snippets,
             )
             state.reply_text = result.payload.get("response_text") or context.help_text or context.guidance_text
-            state.proposed_action = result.payload.get("suggested_action")
+            state.follow_up_needed = True
+            state.follow_up_question = context.guidance_text
+            return state
+
+        if state.active_stage == "CV_PENDING" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "Thanks. I will use this experience summary to prepare your profile."
+            state.confidence = 0.9
             return state
 
         state.reply_text = None

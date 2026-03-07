@@ -62,6 +62,9 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
 def build_manager_stage_reply_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
         context = resolve_state_context(role=state.role, state=state.active_stage)
+        state.stage_status = "in_progress"
+        state.follow_up_needed = False
+        state.confidence = 0.85
         if state.parsed_input.get("intent") == "help":
             result = safe_state_assistance_decision(
                 session,
@@ -70,7 +73,8 @@ def build_manager_stage_reply_node(session):
                 recent_context=state.knowledge_snippets,
             )
             state.reply_text = result.payload.get("response_text") or context.help_text or context.guidance_text
-            state.proposed_action = result.payload.get("suggested_action")
+            state.follow_up_needed = True
+            state.follow_up_question = context.guidance_text
             return state
 
         state.reply_text = None

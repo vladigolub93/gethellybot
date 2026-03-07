@@ -701,6 +701,38 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
+            if normalized_update.content_type == "text":
+                stage_result = self.stage_agents.maybe_run_stage(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                )
+                if (
+                    stage_result is not None
+                    and stage_result.stage == "CV_PENDING"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action == "send_cv_text"
+                ):
+                    intake_result = self.candidate_service.handle_cv_intake(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        content_type="text",
+                        text=(stage_result.structured_payload or {}).get("cv_text") or normalized_update.text,
+                        file_id=file_id,
+                    )
+                    message_map = {
+                        "candidate_cv_received_processing": "CV or experience input received. Processing started.",
+                        "candidate_input_not_expected": "Candidate input is not expected at the current step.",
+                        "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
+                    }
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            intake_result.notification_template,
+                            {"text": self._copy(message_map[intake_result.notification_template])},
+                        )
+                    )
+                    return templates
             intake_result = self.candidate_service.handle_cv_intake(
                 user=user,
                 raw_message_id=raw_message_id,

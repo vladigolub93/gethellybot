@@ -39,9 +39,15 @@ class FakeBotController:
 
 
 class FakeStageAgentService:
-    def __init__(self, response: Optional[str], entry_result: StageAgentExecutionResult | None = None):
+    def __init__(
+        self,
+        response: Optional[str],
+        entry_result: StageAgentExecutionResult | None = None,
+        stage_result: StageAgentExecutionResult | None = None,
+    ):
         self.response = response
         self.entry_result = entry_result
+        self.stage_result = stage_result
         self.calls = []
 
     def maybe_build_entry_reply(self, *, user, latest_user_message: str, latest_message_type: str = "text"):
@@ -85,6 +91,17 @@ class FakeStageAgentService:
             }
         )
         return self.response
+
+    def maybe_run_stage(self, *, user, latest_user_message: str, latest_message_type: str = "text"):
+        self.calls.append(
+            {
+                "user_id": user.id,
+                "text": latest_user_message,
+                "message_type": latest_message_type,
+                "kind": "stage_execution",
+            }
+        )
+        return self.stage_result
 
 
 class FailIfCalledService:
@@ -795,6 +812,48 @@ def test_candidate_cv_passthrough_reaches_cv_handler() -> None:
 
     assert templates == ["candidate_cv_received_processing"]
     assert service.candidate_service.cv_calls
+
+
+def test_graph_cv_stage_can_own_text_cv_completion() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="CV_PENDING",
+            reply_text="Thanks. I will use this experience summary to prepare your profile.",
+            stage_status="ready_for_transition",
+            proposed_action="send_cv_text",
+            action_accepted=True,
+            structured_payload={"cv_text": "Senior backend engineer with 7 years in Python"},
+            validation_result={"accepted": True, "normalized_action": "send_cv_text"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.summary_result = None
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = None
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u1ax",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw1ax",
+        build_update(text="Senior backend engineer with 7 years in Python"),
+    )
+
+    assert templates == ["candidate_cv_received_processing"]
+    assert service.candidate_service.cv_calls
+    assert service.candidate_service.cv_calls[-1]["text"] == "Senior backend engineer with 7 years in Python"
 
 
 def test_candidate_voice_cv_passthrough_reaches_cv_handler() -> None:

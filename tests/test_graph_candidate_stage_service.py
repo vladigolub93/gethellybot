@@ -44,7 +44,7 @@ def test_graph_candidate_stage_handles_cv_pending_help() -> None:
     assert "cv" in reply.lower() or "experience" in reply.lower()
 
 
-def test_graph_candidate_stage_allows_passthrough_for_real_cv_text() -> None:
+def test_graph_candidate_stage_accepts_real_cv_text_transition() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
@@ -59,12 +59,17 @@ def test_graph_candidate_stage_allows_passthrough_for_real_cv_text() -> None:
         telegram_chat_id=200,
     )
 
-    reply = service.maybe_build_stage_reply(
+    result = service.maybe_run_stage(
         user=user,
         latest_user_message="Senior backend engineer with 7 years in Python, Go, AWS, and PostgreSQL.",
     )
 
-    assert reply is None
+    assert result is not None
+    assert result.stage == "CV_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_cv_text"
+    assert result.stage_status == "ready_for_transition"
+    assert "Senior backend engineer" in result.structured_payload["cv_text"]
 
 
 def test_graph_candidate_stage_handles_summary_review_help() -> None:
