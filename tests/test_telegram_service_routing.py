@@ -1016,6 +1016,66 @@ def test_interview_answer_passthrough_reaches_interview_handler() -> None:
     assert service.interview_service.calls
 
 
+def test_interview_voice_answer_passthrough_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="processing",
+        notification_template="candidate_interview_answer_processing",
+        notification_text="Voice answer received.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10d",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10d",
+        build_update(content_type="voice"),
+    )
+
+    assert templates == ["candidate_interview_answer_processing"]
+    assert service.interview_service.calls
+
+
+def test_interview_video_answer_passthrough_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="processing",
+        notification_template="candidate_interview_answer_processing",
+        notification_text="Video answer received.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10e",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10e",
+        build_update(content_type="video"),
+    )
+
+    assert templates == ["candidate_interview_answer_processing"]
+    assert service.interview_service.calls
+
+
 def test_candidate_questions_answer_passthrough_reaches_questions_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1042,6 +1102,38 @@ def test_candidate_questions_answer_passthrough_reaches_questions_handler() -> N
         user,
         "raw10a",
         build_update(text="I expect 4000 USD and I am based in Warsaw."),
+    )
+
+    assert templates == ["candidate_questions_followup"]
+    assert service.candidate_service.question_calls
+
+
+def test_candidate_questions_voice_answer_passthrough_reaches_questions_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = SimpleNamespace(
+        status="needs_followup",
+        notification_template="candidate_questions_followup",
+        notification_text="Please confirm your preferred work format.",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10f",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10f",
+        build_update(content_type="voice"),
     )
 
     assert templates == ["candidate_questions_followup"]
@@ -1230,6 +1322,37 @@ def test_manager_clarification_answer_passthrough_reaches_clarification_handler(
     assert service.vacancy_service.clarification_calls
 
 
+def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = SimpleNamespace(
+        status="open",
+        notification_template="vacancy_open",
+        notification_text="Vacancy is now open.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12d",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12d",
+        build_update(content_type="voice"),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.clarification_calls
+
+
 def test_manager_reject_passthrough_reaches_manager_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1314,3 +1437,31 @@ def test_unsupported_voice_input_uses_recovery_for_user_without_active_role_flow
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
     assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: voice"
+
+
+def test_unsupported_document_input_uses_recovery_for_user_without_active_role_flow() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u15",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw15",
+        build_update(content_type="document"),
+    )
+
+    assert templates == ["unsupported_input"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: document"
