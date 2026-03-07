@@ -2,10 +2,10 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import (
-    safe_copywrite_response,
     safe_detect_vacancy_inconsistencies,
     safe_extract_vacancy_summary,
 )
+from src.messaging.service import MessagingService
 from src.state.service import StateService
 from src.vacancy.service import VacancyService
 from src.vacancy.states import VACANCY_STATE_CLARIFICATION_QA, VACANCY_STATE_JD_PROCESSING
@@ -17,14 +17,12 @@ class VacancyProcessingService:
         self.repo = VacanciesRepository(session)
         self.notifications = NotificationsRepository(session)
         self.raw_messages = RawMessagesRepository(session)
+        self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.vacancy_service = VacancyService(session)
 
     def _copy(self, approved_intent: str) -> str:
-        return safe_copywrite_response(
-            self.session,
-            approved_intent=approved_intent,
-        ).payload["message"]
+        return self.messaging.compose(approved_intent)
 
     def process_job(self, job) -> dict:
         if job.job_type == "vacancy_jd_extract_v1":

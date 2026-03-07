@@ -30,13 +30,13 @@ As of this audit, the project has:
 - live Telegram webhook
 - candidate onboarding baseline
 - hiring manager vacancy onboarding baseline
-- baseline matching
-- baseline interview flow
+- LLM-reranked matching
+- LLM-guided interview flow
 - baseline evaluation and manager review flow
 - background worker and scheduler
-- real OpenAI-backed extraction, parsing, interview planning, and evaluation with deterministic fallback
+- real OpenAI-backed extraction, parsing, interview planning, follow-up logic, reranking, vacancy inconsistency detection, response copywriting, and evaluation with deterministic fallback
 
-What it still does not have is the full target AI pipeline. The core extraction/parsing/evaluation path is now OpenAI-backed, but transcript ingestion, vector retrieval, reranking, and deletion/cleanup flows are still incomplete.
+What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, but transcript ingestion, vector retrieval, and deletion cleanup jobs are still incomplete.
 
 ## 3. Infrastructure and Delivery Status
 
@@ -162,13 +162,13 @@ Status vs SRS:
 ### What is only partial
 
 - `Partial`: a baseline `embedding_score` exists conceptually in code, but it is not based on true embeddings or vector search
+- `Partial`: retrieval is still deterministic-first, even though final shortlist ordering is now LLM-reranked
 
 ### What is missing
 
 - `Not Implemented`: real embedding generation
 - `Not Implemented`: `pgvector` retrieval
 - `Not Implemented`: top-50 vector retrieval stage
-- `Not Implemented`: true LLM reranking
 - `Not Implemented`: configurable multi-wave invitation policy beyond the current baseline dispatch
 
 Status vs SRS:
@@ -176,7 +176,7 @@ Status vs SRS:
 - hard filters: implemented
 - embedding similarity: not implemented in production form
 - deterministic scoring: implemented
-- LLM reranking: not implemented
+- LLM reranking: implemented
 
 ## 4.6 Interview Invitations and AI Interview
 
@@ -186,26 +186,25 @@ Status vs SRS:
 - `Implemented`: candidate can accept or skip
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
+- `Implemented`: one follow-up-per-topic runtime
 - `Implemented`: answer persistence
 - `Implemented`: session completion
 - `Implemented`: evaluation trigger on completion
 
 ### What is only partial
 
-- `Partial`: interview questions are now OpenAI-generated for text-ready flows
+- `Partial`: interview questions, answer parsing, follow-up logic, and turn-by-turn conductor copy are OpenAI-backed for text-ready flows
 - `Partial`: voice/video answers are accepted structurally but still fall back to asking for text when no transcript is available
 
 ### What is missing
 
-- `Not Implemented`: AI follow-up decision logic
-- `Not Implemented`: one follow-up-per-question runtime beyond basic question progression
 - `Not Implemented`: real voice/video transcript processing
 
 Status vs SRS:
 
 - invitation flow: implemented
 - AI interview quality: partial
-- follow-up policy: largely not implemented in the intended AI form
+- follow-up policy: implemented for text-ready runtime
 
 ## 4.7 Interview Evaluation and Manager Review
 
@@ -235,14 +234,14 @@ Status vs SRS:
 
 ## 4.8 Deletion Flows
 
-- `Not Implemented`: candidate profile deletion flow
-- `Not Implemented`: vacancy deletion flow
-- `Not Implemented`: cancellation policy for active invites/interviews on deletion
-- `Not Implemented`: cleanup jobs for deleted entities
+- `Implemented`: candidate profile deletion flow
+- `Implemented`: vacancy deletion flow
+- `Implemented`: cancellation policy for active invites/interviews on deletion
+- `Partial`: cleanup jobs for deleted entities are still missing
 
 Status vs SRS:
 
-- deletion requirements: not implemented
+- deletion requirements: implemented as soft-delete baseline
 
 ## 4.9 LLM / AI Layer
 
@@ -255,15 +254,21 @@ Status vs SRS:
 - `Implemented`: OpenAI structured parsing for candidate mandatory answers
 - `Implemented`: OpenAI structured extraction for vacancy summaries
 - `Implemented`: OpenAI structured parsing for vacancy clarifications
+- `Implemented`: OpenAI vacancy inconsistency detection
 - `Implemented`: OpenAI-generated interview question plans
+- `Implemented`: OpenAI interview answer parsing
+- `Implemented`: OpenAI follow-up decision logic
+- `Implemented`: OpenAI interview session conductor copy
+- `Implemented`: OpenAI candidate reranking
 - `Implemented`: OpenAI-backed interview evaluation
+- `Implemented`: OpenAI-backed response copywriting for key Telegram flows
+- `Implemented`: OpenAI-backed deletion confirmation wording
 - `Implemented`: automatic fallback from `gpt-5.4` to `gpt-5.2`
 
 ### What is missing in runtime
 
-- `Not Implemented`: true OpenAI follow-up generation
-- `Not Implemented`: true OpenAI reranking
 - `Not Implemented`: transcript-aware OpenAI processing for voice/video/document flows
+- `Not Implemented`: full specialized messaging-family wiring for every prompt family
 
 Status vs SRS:
 
@@ -332,10 +337,10 @@ Documentation for prompt capabilities exists, but most of those prompt assets ar
 Current reality:
 
 - prompt catalog exists in docs
-- runtime now uses active prompt execution for extraction, parsing, interview planning, and evaluation
+- runtime now uses active prompt execution for extraction, parsing, interview planning, interview conducting, reranking, inconsistency detection, deletion confirmation, and evaluation
 - deterministic Python logic still exists as a runtime fallback layer
 
-The largest remaining gap is no longer prompt execution itself. It is transcript/document ingestion, reranking, and vector retrieval.
+The largest remaining gap is no longer prompt execution itself. It is transcript/document ingestion, vector retrieval, and completion of the remaining specialized messaging families.
 
 ## 7. Production Readiness Assessment
 
@@ -346,13 +351,11 @@ The largest remaining gap is no longer prompt execution itself. It is transcript
 - webhook
 - Supabase schema
 - worker/scheduler orchestration
-- end-to-end deterministic baseline flows
+- end-to-end AI-assisted baseline flows
 
 ### Not ready yet for full product claims
 
-- AI-powered reranking
 - transcript-aware multimodal ingestion
-- deletion flows
 - richer manager introduction workflow
 - production observability and retention policies
 
@@ -363,17 +366,18 @@ The largest remaining gap is no longer prompt execution itself. It is transcript
 - deployment
 - candidate baseline onboarding
 - manager baseline vacancy onboarding
-- baseline matching
-- baseline interview
+- LLM-reranked matching
+- LLM-guided interview with follow-ups
 - baseline evaluation
+- deletion confirmation and soft-delete flows
 - asynchronous notification and file storage pipeline
 
 ### Still major work
 
-- implement deletion and cleanup flows
 - improve Telegram UX with buttons and richer guidance
 - implement actual transcript/document extraction integrations
-- implement vector search and reranking
+- implement vector search and retrieval
+- add cleanup jobs after deletion
 - build production-grade smoke/e2e validation around live user flows
 
 ## 9. Recommended Next Build Priorities
@@ -381,7 +385,7 @@ The largest remaining gap is no longer prompt execution itself. It is transcript
 Recommended order from here:
 
 1. Implement transcript/document ingestion for non-text CV/JD/interview inputs.
-2. Implement vector embeddings and reranking.
-3. Implement deletion flows and cleanup jobs.
+2. Implement vector embeddings and retrieval.
+3. Add cleanup jobs and retention-aware deletion follow-up work.
 4. Improve Telegram UX and manager introduction flow.
 5. Add stronger readiness checks, metrics, and operational dashboards.

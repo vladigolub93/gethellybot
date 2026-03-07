@@ -12,7 +12,7 @@ from src.db.repositories.users import UsersRepository
 from src.evaluation.service import EvaluationService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
-from src.llm.service import safe_copywrite_response
+from src.messaging.service import MessagingService
 from src.orchestrator.service import BotControllerService
 from src.telegram.types import NormalizedTelegramUpdate
 from src.vacancy.service import VacancyService
@@ -35,6 +35,7 @@ class TelegramUpdateService:
         self.files_repo = FilesRepository(session)
         self.notifications_repo = NotificationsRepository(session)
         self.identity_service = IdentityService(self.users_repo, self.consents_repo)
+        self.messaging = MessagingService(session)
         self.candidate_service = CandidateProfileService(session)
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
@@ -42,10 +43,7 @@ class TelegramUpdateService:
         self.vacancy_service = VacancyService(session)
 
     def _copy(self, approved_intent: str) -> str:
-        return safe_copywrite_response(
-            self.session,
-            approved_intent=approved_intent,
-        ).payload["message"]
+        return self.messaging.compose(approved_intent)
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
@@ -104,12 +102,12 @@ class TelegramUpdateService:
                         user.id,
                         "request_consent",
                         {
-                            "text": "Please confirm data processing consent by replying 'I agree'.",
+                            "text": self._copy("Please confirm data processing consent by replying 'I agree'."),
                         },
                     )
                 )
             else:
-                templates.append(self._notify(user.id, "request_role", {"text": "Choose your role: Candidate or Hiring Manager."}))
+                templates.append(self._notify(user.id, "request_role", {"text": self._copy("Choose your role: Candidate or Hiring Manager.")}))
             return templates
 
         if text_value == "/start":
@@ -118,7 +116,7 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_contact",
-                        {"text": "Please share your contact to continue."},
+                        {"text": self._copy("Please share your contact to continue.")},
                     )
                 )
                 return templates
@@ -128,7 +126,7 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_consent",
-                        {"text": "Please confirm data processing consent by replying 'I agree'."},
+                        {"text": self._copy("Please confirm data processing consent by replying 'I agree'.")},
                     )
                 )
                 return templates
@@ -137,7 +135,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": "Choose your role: Candidate or Hiring Manager."},
+                    {"text": self._copy("Choose your role: Candidate or Hiring Manager.")},
                 )
             )
             return templates
@@ -150,7 +148,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": "Consent recorded. Choose your role: Candidate or Hiring Manager."},
+                    {"text": self._copy("Consent recorded. Choose your role: Candidate or Hiring Manager.")},
                 )
             )
             return templates
@@ -161,7 +159,7 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_contact",
-                        {"text": "Please share your contact before choosing a role."},
+                        {"text": self._copy("Please share your contact before choosing a role.")},
                     )
                 )
                 return templates
@@ -171,7 +169,7 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_consent",
-                        {"text": "Please confirm consent before choosing a role."},
+                        {"text": self._copy("Please confirm consent before choosing a role.")},
                     )
                 )
                 return templates

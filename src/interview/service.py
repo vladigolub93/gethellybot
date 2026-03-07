@@ -24,6 +24,7 @@ from src.llm.service import (
     safe_decide_interview_followup,
     safe_parse_interview_answer,
 )
+from src.messaging.service import MessagingService
 from src.state.service import StateService
 
 
@@ -43,8 +44,12 @@ class InterviewService:
         self.interviews = InterviewsRepository(session)
         self.notifications = NotificationsRepository(session)
         self.raw_messages = RawMessagesRepository(session)
+        self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return self.messaging.compose(approved_intent)
 
     @staticmethod
     def _question_prompt_text(question) -> str:
@@ -121,7 +126,7 @@ class InterviewService:
                 entity_id=match.id,
                 template_key="candidate_interview_invitation",
                 payload_json={
-                    "text": "You have a new interview invitation. Reply 'Accept interview' or 'Skip opportunity'.",
+                    "text": self._copy("You have a new interview invitation. Reply 'Accept interview' or 'Skip opportunity'."),
                 },
             )
             invited_count += 1
@@ -176,13 +181,13 @@ class InterviewService:
             return InterviewUserResult(
                 status="skipped",
                 notification_template="candidate_interview_skipped",
-                notification_text="Opportunity skipped.",
+                notification_text=self._copy("Opportunity skipped."),
             )
 
         return InterviewUserResult(
             status="invite_pending",
             notification_template="candidate_interview_invitation_help",
-            notification_text="Reply 'Accept interview' or 'Skip opportunity'.",
+            notification_text=self._copy("Reply 'Accept interview' or 'Skip opportunity'."),
         )
 
     def _accept_invitation(self, *, candidate, match, raw_message_id):
@@ -312,13 +317,13 @@ class InterviewService:
             return InterviewUserResult(
                 status="queued",
                 notification_template="candidate_interview_answer_processing",
-                notification_text="Answer received. Processing it now.",
+                notification_text=self._copy("Answer received. Processing it now."),
             )
 
         return InterviewUserResult(
             status="unsupported",
             notification_template="candidate_interview_answer_unsupported",
-            notification_text="Please answer with text, voice, or video.",
+            notification_text=self._copy("Please answer with text, voice, or video."),
         )
 
     def _handle_interview_answer_text(self, *, candidate, session, raw_message_id, text):
@@ -327,7 +332,7 @@ class InterviewService:
             return InterviewUserResult(
                 status="missing_question",
                 notification_template="candidate_interview_state_error",
-                notification_text="Interview state is inconsistent. Please try again.",
+                notification_text=self._copy("Interview state is inconsistent. Please try again."),
             )
 
         self.interviews.create_answer(

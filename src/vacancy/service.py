@@ -12,9 +12,9 @@ from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
 from src.llm.service import (
     safe_build_deletion_confirmation,
-    safe_copywrite_response,
     safe_parse_vacancy_clarifications,
 )
+from src.messaging.service import MessagingService
 from src.state.service import StateService
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
@@ -57,14 +57,12 @@ class VacancyService:
         self.repo = VacanciesRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
+        self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
 
     def _copy(self, approved_intent: str) -> str:
-        return safe_copywrite_response(
-            self.session,
-            approved_intent=approved_intent,
-        ).payload["message"]
+        return self.messaging.compose(approved_intent)
 
     def ensure_active_intake_vacancy_for_manager(self, user) -> object:
         vacancy = self.repo.get_latest_incomplete_by_manager_user_id(user.id)

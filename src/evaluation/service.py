@@ -8,6 +8,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_evaluate_candidate
+from src.messaging.service import MessagingService
 from src.state.service import StateService
 
 
@@ -28,7 +29,11 @@ class EvaluationService:
         self.notifications = NotificationsRepository(session)
         self.evaluations = EvaluationsRepository(session)
         self.users = UsersRepository(session)
+        self.messaging = MessagingService(session)
         self.state_service = StateService(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return self.messaging.compose(approved_intent)
 
     def evaluate_interview(self, *, interview_session_id) -> dict:
         session = self.interviews.get_by_id(interview_session_id)
@@ -89,7 +94,7 @@ class EvaluationService:
                 entity_type="match",
                 entity_id=match.id,
                 template_key="candidate_auto_rejected",
-                payload_json={"text": "This opportunity did not move forward after evaluation."},
+                payload_json={"text": self._copy("This opportunity did not move forward after evaluation.")},
             )
         else:
             self.state_service.transition(
@@ -114,7 +119,7 @@ class EvaluationService:
                 entity_id=match.id,
                 template_key="manager_candidate_review_ready",
                 payload_json={
-                    "text": "A qualified candidate is ready for review. Reply 'Approve candidate' or 'Reject candidate'.",
+                    "text": self._copy("A qualified candidate is ready for review. Reply 'Approve candidate' or 'Reject candidate'."),
                     "candidate_summary": (candidate_version.summary_json or {}) if candidate_version else {},
                     "evaluation": evaluation,
                 },
@@ -147,7 +152,7 @@ class EvaluationService:
         return ManagerDecisionResult(
             status="help",
             notification_template="manager_candidate_review_help",
-            notification_text="Reply 'Approve candidate' or 'Reject candidate'.",
+            notification_text=self._copy("Reply 'Approve candidate' or 'Reject candidate'."),
         )
 
     def _approve_candidate(self, *, user, match, raw_message_id):
@@ -182,19 +187,19 @@ class EvaluationService:
             entity_type="match",
             entity_id=match.id,
             template_key="candidate_approved_introduction",
-            payload_json={"text": f"You have been approved for {vacancy.role_title or 'the vacancy'}. Helly will introduce you to the manager."},
+            payload_json={"text": self._copy(f"You have been approved for {vacancy.role_title or 'the vacancy'}. Helly will introduce you to the manager.")},
         )
         self.notifications.create(
             user_id=user.id,
             entity_type="match",
             entity_id=match.id,
             template_key="manager_candidate_approved",
-            payload_json={"text": "Candidate approved. Introduction event logged."},
+            payload_json={"text": self._copy("Candidate approved. Introduction event logged.")},
         )
         return ManagerDecisionResult(
             status="approved",
             notification_template="manager_candidate_approved",
-            notification_text="Candidate approved. Introduction event logged.",
+            notification_text=self._copy("Candidate approved. Introduction event logged."),
         )
 
     def _reject_candidate(self, *, user, match, raw_message_id):
@@ -222,10 +227,10 @@ class EvaluationService:
             entity_type="match",
             entity_id=match.id,
             template_key="manager_candidate_rejected",
-            payload_json={"text": "Candidate rejected."},
+            payload_json={"text": self._copy("Candidate rejected.")},
         )
         return ManagerDecisionResult(
             status="rejected",
             notification_template="manager_candidate_rejected",
-            notification_text="Candidate rejected.",
+            notification_text=self._copy("Candidate rejected."),
         )
