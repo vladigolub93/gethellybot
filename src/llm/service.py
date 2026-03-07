@@ -11,7 +11,7 @@ from src.config.logging import get_logger
 from src.config.settings import get_settings
 from src.evaluation.scoring import evaluate_candidate
 from src.interview.question_plan import build_question_plan
-from src.llm.assets import load_system_prompt
+from src.llm.assets import build_user_facing_grounded_system_prompt, load_system_prompt
 from src.llm.prompts import (
     STATE_ASSISTANCE_SYSTEM_PROMPT,
     bot_controller_prompt,
@@ -628,7 +628,7 @@ def bot_controller_decision_with_llm(
 ) -> LLMResult:
     result = _client.parse(
         schema=BotControllerDecisionSchema,
-        system_prompt=load_system_prompt("orchestrator", "bot_controller"),
+        system_prompt=build_user_facing_grounded_system_prompt("orchestrator", "bot_controller"),
         user_prompt=bot_controller_prompt(
             role=role,
             state=state,
@@ -685,7 +685,7 @@ def state_assistance_decision_with_llm(
         system_prompt="\n\n".join(
             [
                 STATE_ASSISTANCE_SYSTEM_PROMPT.strip(),
-                load_system_prompt("orchestrator", "state_assistance", state_prompt_slug),
+                build_user_facing_grounded_system_prompt("orchestrator", "state_assistance", state_prompt_slug),
             ]
         ),
         user_prompt=state_assistance_prompt(
@@ -733,7 +733,7 @@ def conduct_interview_turn_with_llm(
 ) -> LLMResult:
     result = _client.parse(
         schema=InterviewSessionConductorTurnSchema,
-        system_prompt=load_system_prompt("interview", "session_conductor"),
+        system_prompt=build_user_facing_grounded_system_prompt("interview", "session_conductor"),
         user_prompt=interview_session_conductor_prompt(
             mode=mode,
             candidate_first_name=candidate_first_name,
@@ -834,7 +834,7 @@ def detect_vacancy_inconsistencies_with_llm(*, source_text: str, summary: dict) 
 def copywrite_response_with_llm(*, approved_intent: str) -> LLMResult:
     result = _client.parse(
         schema=ResponseCopywriterSchema,
-        system_prompt=load_system_prompt("messaging", "response_copywriter"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "response_copywriter"),
         user_prompt=response_copywriter_prompt(approved_intent=approved_intent),
         primary_model=get_settings().openai_model_reasoning,
         prompt_version="response_copywriter_llm_v1",
@@ -854,7 +854,7 @@ def build_deletion_confirmation_with_llm(
 ) -> LLMResult:
     result = _client.parse(
         schema=DeletionConfirmationSchema,
-        system_prompt=load_system_prompt("messaging", "deletion_confirmation"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "deletion_confirmation"),
         user_prompt=deletion_confirmation_prompt(
             entity_type=entity_type,
             has_active_interview=has_active_interview,
@@ -878,7 +878,7 @@ def build_deletion_confirmation_with_llm(
 def build_small_talk_reply_with_llm(*, latest_user_message: str, current_step_guidance: str | None) -> LLMResult:
     result = _client.parse(
         schema=ResponseCopywriterSchema,
-        system_prompt=load_system_prompt("messaging", "small_talk"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "small_talk"),
         user_prompt=small_talk_prompt(
             latest_user_message=latest_user_message,
             current_step_guidance=current_step_guidance,
@@ -896,7 +896,7 @@ def build_small_talk_reply_with_llm(*, latest_user_message: str, current_step_gu
 def build_recovery_message_with_llm(*, state: str | None, allowed_actions: list[str], latest_user_message: str) -> LLMResult:
     result = _client.parse(
         schema=ResponseCopywriterSchema,
-        system_prompt=load_system_prompt("messaging", "recovery"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "recovery"),
         user_prompt=recovery_prompt(
             state=state,
             allowed_actions=allowed_actions,
@@ -915,7 +915,7 @@ def build_recovery_message_with_llm(*, state: str | None, allowed_actions: list[
 def build_role_selection_reply_with_llm(*, latest_user_message: str | None = None) -> LLMResult:
     result = _client.parse(
         schema=ResponseCopywriterSchema,
-        system_prompt=load_system_prompt("messaging", "role_selection"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "role_selection"),
         user_prompt=role_selection_prompt(latest_user_message=latest_user_message),
         primary_model=get_settings().openai_model_reasoning,
         prompt_version="role_selection_reply_llm_v1",
@@ -930,7 +930,7 @@ def build_role_selection_reply_with_llm(*, latest_user_message: str | None = Non
 def build_interview_invitation_copy_with_llm(*, role_title: str | None) -> LLMResult:
     result = _client.parse(
         schema=ResponseCopywriterSchema,
-        system_prompt=load_system_prompt("messaging", "interview_invitation_copy"),
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "interview_invitation_copy"),
         user_prompt=interview_invitation_copy_prompt(role_title=role_title),
         primary_model=get_settings().openai_model_reasoning,
         prompt_version="interview_invitation_copy_llm_v1",

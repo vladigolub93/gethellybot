@@ -38,6 +38,8 @@ As of this audit, the project has:
 
 What it still does not have is the full target AI pipeline. The core extraction/parsing/reranking/evaluation path is now OpenAI-backed, multimodal ingestion is connected for text/document/voice/video inputs, `pgvector` retrieval is wired into matching, and deletion cleanup jobs now cancel stale notifications and restrict related files. The remaining major gaps are richer operational guardrails and deeper production hardening.
 
+User-facing LLM responses are now additionally grounded in a shared Helly agent knowledge base, so orchestrator, messaging, and interview-conductor prompts can answer flow and product questions against one canonical FAQ source instead of relying only on local prompt wording.
+
 ## 3. Infrastructure and Delivery Status
 
 ### 3.1 Repository and Deploy
