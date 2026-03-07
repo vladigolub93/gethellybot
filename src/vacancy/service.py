@@ -16,6 +16,7 @@ from src.llm.service import (
 )
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.shared.text import normalize_command_text
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
     follow_up_prompt,
@@ -337,7 +338,7 @@ class VacancyService:
         if vacancy is None:
             return None
 
-        normalized_text = (text or "").strip().lower()
+        normalized_text = normalize_command_text(text)
         deletion_context = self._ensure_deletion_context(vacancy)
         pending = bool(deletion_context.get("pending"))
 

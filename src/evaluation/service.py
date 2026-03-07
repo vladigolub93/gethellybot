@@ -10,6 +10,7 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_evaluate_candidate
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.shared.text import normalize_command_text
 from src.telegram.keyboards import manager_review_keyboard
 
 
@@ -145,7 +146,7 @@ class EvaluationService:
         if match is None:
             return None
 
-        lowered = (text or "").strip().lower()
+        lowered = normalize_command_text(text)
         if lowered in {"approve candidate", "approve"}:
             return self._approve_candidate(user=user, match=match, raw_message_id=raw_message_id)
         if lowered in {"reject candidate", "reject"}:

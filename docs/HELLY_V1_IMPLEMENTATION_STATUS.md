@@ -97,6 +97,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
 - `Implemented`: routing regressions now also cover normalization variants, including trimmed whitespace around canonical commands and consent aliases such as `agree` and `consent`
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
+- `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 
 Status vs SRS:
 

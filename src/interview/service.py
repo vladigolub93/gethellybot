@@ -26,6 +26,7 @@ from src.llm.service import (
 )
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.shared.text import normalize_command_text
 from src.telegram.keyboards import interview_invitation_keyboard
 
 
@@ -165,7 +166,7 @@ class InterviewService:
         if invited_match is None:
             return None
 
-        lowered = (text or "").strip().lower()
+        lowered = normalize_command_text(text)
         if content_type == "text" and lowered in {"accept interview", "accept"}:
             return self._accept_invitation(
                 candidate=candidate,

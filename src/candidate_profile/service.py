@@ -33,6 +33,7 @@ from src.jobs.queue import JobMessage
 from src.llm.service import safe_build_deletion_confirmation, safe_parse_candidate_questions
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.shared.text import normalize_command_text
 
 
 @dataclass(frozen=True)
@@ -233,7 +234,7 @@ class CandidateProfileService:
                 notification_template="candidate_summary_review_help",
             )
 
-        lowered = normalized_text.lower()
+        lowered = normalize_command_text(normalized_text)
         if lowered in {"approve summary", "approve", "approve profile"}:
             current_version = self.repo.get_current_version(profile)
             if current_version is None:
@@ -499,7 +500,7 @@ class CandidateProfileService:
         if profile is None:
             return None
 
-        normalized_text = (text or "").strip().lower()
+        normalized_text = normalize_command_text(text)
         deletion_context = self._ensure_deletion_context(profile)
         pending = bool(deletion_context.get("pending"))
 

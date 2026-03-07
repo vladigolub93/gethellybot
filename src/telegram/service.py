@@ -14,6 +14,7 @@ from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
 from src.orchestrator.service import BotControllerService
+from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
     consent_keyboard,
     contact_request_keyboard,
@@ -101,7 +102,7 @@ class TelegramUpdateService:
         file_id=None,
     ) -> List[str]:
         templates: List[str] = []
-        text_value = (normalized_update.text or "").strip().lower()
+        text_value = normalize_command_text(normalized_update.text)
 
         if normalized_update.contact_phone_number:
             self.identity_service.attach_contact(user, normalized_update)

@@ -158,6 +158,7 @@ Status:
 - routing coverage now also protects generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
 - routing coverage now also protects normalization variants such as trimmed whitespace around commands and consent aliases like `agree` / `consent`
 - routing coverage now also protects uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
+- routing coverage now also protects punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation
 
 ## 4. Current Next Task
 
