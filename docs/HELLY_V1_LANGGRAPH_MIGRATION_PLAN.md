@@ -71,6 +71,14 @@ Deliver:
 - standard validated action result contract
 - common no-op and rejection handling
 
+Status:
+
+- in progress
+- implemented:
+  - graph-to-backend action validation adapter
+  - normalized validation result contract
+  - graph node integration for action validation
+
 ### Step 3. Entry Stage Agents
 
 Migrate:
