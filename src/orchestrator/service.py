@@ -213,6 +213,8 @@ class BotControllerService:
             "CV_PENDING": [
                 r"\bi do not have (a )?(cv|resume)\b",
                 r"\bi don't have (a )?(cv|resume)\b",
+                r"\bif i do not have\b",
+                r"\bif i don't have\b",
                 r"\bno (cv|resume)\b",
                 r"\bwhat if\b",
                 r"\bhow\b",
@@ -220,6 +222,9 @@ class BotControllerService:
                 r"\bcan i\b",
                 r"\bwhy\b",
                 r"\blinkedin\b",
+                r"\bskip\b",
+                r"\blater\b",
+                r"\bfor now\b",
             ],
             "INTAKE_PENDING": [
                 r"\bi do not have (a )?(jd|job description)\b",

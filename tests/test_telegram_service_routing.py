@@ -588,6 +588,30 @@ def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
     assert not service.candidate_service.cv_calls
 
 
+def test_candidate_cv_short_help_question_is_intercepted_before_cv_intake() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(
+        "No problem. You can paste your experience as text, send a voice note, or upload a LinkedIn PDF."
+    )
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u1short",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw1short", build_update(text="If I don't have?"))
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert not service.candidate_service.cv_calls
+
+
 def test_candidate_cv_passthrough_reaches_cv_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
