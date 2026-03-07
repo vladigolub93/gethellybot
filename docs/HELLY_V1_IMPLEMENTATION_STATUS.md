@@ -51,10 +51,12 @@ Architectural status note:
 - entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - candidate `CV_PENDING` is now graph-owned for text-based stage completion and help handling
 - candidate `SUMMARY_REVIEW` is now graph-owned for approve/correction execution and help handling
-- candidate `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` help handling have also started migrating through graph-driven paths
+- candidate `QUESTIONS_PENDING` is now graph-owned for text-based structured question-answer handoff and help handling
+- candidate `VERIFICATION_PENDING` is now graph-owned for verification guidance and graph-validated video submission handoff
+- candidate `READY` help handling has also started migrating through a graph-driven path
 - manager `INTAKE_PENDING` help handling has also started migrating through a graph-driven path
 - Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: graph-owned execution now covers entry onboarding, `CV_PENDING`, and `SUMMARY_REVIEW`, but most remaining candidate, manager, interview, and review stages are still primarily help-oriented overlays around existing handlers
+- important architectural gap: graph-owned execution now covers entry onboarding, `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, and `VERIFICATION_PENDING`, but most remaining candidate, manager, interview, and review stages are still primarily help-oriented overlays around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -145,7 +147,9 @@ Status vs SRS:
 - `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY`
 - `Implemented`: `CV_PENDING` text-based stage completion and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent
-- `Partial`: `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY` still use graph-driven help slices while actual stage completion remains in legacy handlers
+- `Implemented`: `QUESTIONS_PENDING` text-based structured answer handoff and in-stage guidance now run through a graph-owned stage agent
+- `Implemented`: `VERIFICATION_PENDING` verification guidance and video-submission handoff now run through a graph-owned stage agent
+- `Partial`: `READY` still uses a graph-driven help slice while status/wait behavior remains in legacy handlers
 
 ### What is only partial
 

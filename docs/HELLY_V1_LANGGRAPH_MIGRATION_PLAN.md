@@ -141,12 +141,15 @@ Status:
   - graph-driven structured action proposal for summary approval
   - graph-driven structured action proposal for summary correction
   - graph-driven backend handoff for summary approval and one-round correction
-  - graph-driven help handling for `QUESTIONS_PENDING`
-  - graph-driven help handling for `VERIFICATION_PENDING`
+  - graph-owned execution for `QUESTIONS_PENDING`
+  - graph-driven structured parsing for salary, location, and work-format answers
+  - graph-driven backend handoff for parsed question payloads
+  - graph-owned execution for `VERIFICATION_PENDING`
+  - graph-driven validation and backend handoff for verification video submission
   - graph-driven help handling for `READY`
   - voice/document candidate experience input still falls through to the existing backend intake path
-  - non-help mandatory-question answers still fall through to the existing backend question parser path
-  - non-help verification submission still falls through to the existing backend video-verification path
+  - voice/video mandatory-question answers still fall through to the existing backend question parser path
+  - only non-video verification interactions remain as in-stage guidance; actual verification completion happens through graph-validated video handoff into the existing backend video-verification service
 
 ### Step 5. Hiring Manager Onboarding Agents
 

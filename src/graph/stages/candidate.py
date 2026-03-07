@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from src.graph.state import HellyGraphState
-from src.llm.service import safe_state_assistance_decision
+from src.llm.service import safe_parse_candidate_questions, safe_state_assistance_decision
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 
@@ -203,6 +203,12 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
     elif state.active_stage == "QUESTIONS_PENDING":
         is_help = _is_candidate_questions_help(text)
     elif state.active_stage == "VERIFICATION_PENDING":
+        if state.latest_message_type == "video":
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = "send_verification_video"
+            state.structured_payload = {"submission_type": "video"}
+            return state
         is_help = _is_candidate_verification_help(text)
     elif state.active_stage == "READY":
         is_help = _is_candidate_ready_help(text)
@@ -250,6 +256,30 @@ def build_candidate_stage_reply_node(session):
                     state.reply_text = "Thanks. I will update the summary based on your correction."
                 state.confidence = 0.9
                 return state
+
+        if state.active_stage == "QUESTIONS_PENDING" and state.parsed_input.get("intent") == "candidate_input":
+            parsed = dict(safe_parse_candidate_questions(session, state.latest_user_message).payload or {})
+            if parsed:
+                state.stage_status = "ready_for_transition"
+                state.proposed_action = "send_salary_location_work_format"
+                state.structured_payload = parsed
+                state.reply_text = "Thanks. I will update your profile details from this answer."
+                state.confidence = 0.9
+            else:
+                state.reply_text = context.guidance_text
+                state.follow_up_needed = True
+                state.follow_up_question = context.guidance_text
+            return state
+
+        if (
+            state.active_stage == "VERIFICATION_PENDING"
+            and state.parsed_input.get("intent") == "stage_completion_input"
+            and state.latest_message_type == "video"
+        ):
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "Thanks. I will use this video to complete your verification step."
+            state.confidence = 0.95
+            return state
 
         state.reply_text = None
         state.proposed_action = None

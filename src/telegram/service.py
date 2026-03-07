@@ -450,6 +450,31 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
+                stage_result = self.stage_agents.maybe_run_stage(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                )
+                if (
+                    stage_result is not None
+                    and stage_result.stage == "QUESTIONS_PENDING"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action == "send_salary_location_work_format"
+                ):
+                    questions_result = self.candidate_service.handle_questions_parsed_payload(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        parsed_payload=stage_result.structured_payload or {},
+                    )
+                    if questions_result is not None:
+                        templates.append(
+                            self._notify(
+                                user.id,
+                                questions_result.notification_template,
+                                {"text": questions_result.notification_text},
+                            )
+                        )
+                        return templates
                 assistance_text = self.stage_agents.maybe_build_stage_reply(
                     user=user,
                     latest_user_message=normalized_update.text or "",
@@ -581,11 +606,38 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
-            if normalized_update.content_type == "text":
-                assistance_text = self.stage_agents.maybe_build_stage_reply(
+            stage_result = self.stage_agents.maybe_run_stage(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            )
+            if (
+                stage_result is not None
+                and stage_result.stage == "VERIFICATION_PENDING"
+                and stage_result.action_accepted
+                and stage_result.proposed_action == "send_verification_video"
+                and normalized_update.content_type == "video"
+            ):
+                verification_result = self.candidate_service.handle_verification_submission(
                     user=user,
-                    latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
+                    raw_message_id=raw_message_id,
+                    content_type=normalized_update.content_type,
+                    file_id=file_id,
+                )
+                if verification_result is not None:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            verification_result.notification_template,
+                            {"text": verification_result.notification_text},
+                        )
+                    )
+                    return templates
+            if normalized_update.content_type == "text":
+                assistance_text = (
+                    stage_result.reply_text
+                    if stage_result is not None and not stage_result.action_accepted
+                    else None
                 ) or self.bot_controller.maybe_build_in_state_assistance(
                     user=user,
                     latest_user_message=normalized_update.text or "",

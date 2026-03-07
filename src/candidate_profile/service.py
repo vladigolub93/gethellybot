@@ -400,6 +400,24 @@ class CandidateProfileService:
             trigger_type=trigger_type,
         )
 
+    def handle_questions_parsed_payload(
+        self,
+        *,
+        user,
+        raw_message_id,
+        parsed_payload: dict,
+    ) -> Optional[CandidateQuestionsResult]:
+        profile = self.ensure_profile_for_user(user)
+        if profile.state != CANDIDATE_STATE_QUESTIONS_PENDING:
+            return None
+        return self._apply_question_payload(
+            profile=profile,
+            raw_message_id=raw_message_id,
+            parsed=dict(parsed_payload or {}),
+            actor_user_id=user.id,
+            trigger_type="user_action",
+        )
+
     def _apply_question_answer_text(
         self,
         *,
@@ -418,7 +436,24 @@ class CandidateProfileService:
             )
 
         llm_result = safe_parse_candidate_questions(self.session, normalized_text)
-        parsed = llm_result.payload
+        parsed = dict(llm_result.payload or {})
+        return self._apply_question_payload(
+            profile=profile,
+            raw_message_id=raw_message_id,
+            parsed=parsed,
+            actor_user_id=actor_user_id,
+            trigger_type=trigger_type,
+        )
+
+    def _apply_question_payload(
+        self,
+        *,
+        profile,
+        raw_message_id,
+        parsed: dict,
+        actor_user_id=None,
+        trigger_type: str,
+    ) -> CandidateQuestionsResult:
         if parsed:
             self.repo.update_question_answers(profile, **parsed)
 

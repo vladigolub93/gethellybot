@@ -387,6 +387,38 @@ def test_questions_answer_requests_follow_up_when_partial() -> None:
     assert profile.location_text is not None
 
 
+def test_parsed_questions_payload_completion_moves_profile_to_verification_pending() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+
+    result = service.handle_questions_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "salary_min": 5000,
+            "salary_max": 5000,
+            "salary_currency": "USD",
+            "salary_period": "month",
+            "location_text": "Warsaw, Poland",
+            "city": "Warsaw",
+            "country_code": "PL",
+            "work_format": "remote",
+        },
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+
+
 def test_questions_voice_answer_enqueues_processing_job() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()

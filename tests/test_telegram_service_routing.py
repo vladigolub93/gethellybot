@@ -148,6 +148,10 @@ class FakeCandidateService:
         self.question_calls.append(kwargs)
         return self.question_result
 
+    def handle_questions_parsed_payload(self, **kwargs):
+        self.question_calls.append(kwargs)
+        return self.question_result
+
     def handle_cv_intake(self, **kwargs):
         self.cv_calls.append(kwargs)
         return self.cv_result
@@ -2014,6 +2018,56 @@ def test_candidate_questions_answer_passthrough_reaches_questions_handler() -> N
     assert service.candidate_service.question_calls
 
 
+def test_graph_questions_stage_can_own_text_questions_completion() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="QUESTIONS_PENDING",
+            reply_text="Thanks. I will update your profile details from this answer.",
+            stage_status="ready_for_transition",
+            proposed_action="send_salary_location_work_format",
+            action_accepted=True,
+            structured_payload={
+                "salary_min": 4000,
+                "salary_max": 4000,
+                "salary_currency": "USD",
+                "location_text": "Warsaw",
+            },
+            validation_result={"accepted": True, "normalized_action": "send_salary_location_work_format"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = SimpleNamespace(
+        status="needs_followup",
+        notification_template="candidate_questions_followup",
+        notification_text="Please confirm whether you prefer remote, hybrid, or office work.",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10ax",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10ax",
+        build_update(text="I expect 4000 USD and I am based in Warsaw."),
+    )
+
+    assert templates == ["candidate_questions_followup"]
+    assert service.candidate_service.question_calls
+    assert service.candidate_service.question_calls[-1]["parsed_payload"]["salary_min"] == 4000
+
+
 def test_candidate_questions_voice_answer_passthrough_reaches_questions_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -2075,6 +2129,51 @@ def test_candidate_verification_video_passthrough_reaches_verification_handler()
 
     assert templates == ["candidate_ready"]
     assert service.candidate_service.verification_calls
+
+
+def test_graph_verification_stage_can_own_video_submission() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VERIFICATION_PENDING",
+            reply_text="Thanks. I will use this video to complete your verification step.",
+            stage_status="ready_for_transition",
+            proposed_action="send_verification_video",
+            action_accepted=True,
+            structured_payload={"submission_type": "video"},
+            validation_result={"accepted": True, "normalized_action": "send_verification_video"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.verification_result = SimpleNamespace(
+        status="ready",
+        notification_template="candidate_ready",
+        notification_text="Profile ready.",
+    )
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10bv",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10bv",
+        build_update(content_type="video"),
+        file_id="file-1",
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.verification_calls
+    assert service.candidate_service.verification_calls[-1]["content_type"] == "video"
 
 
 def test_candidate_delete_confirm_passthrough_reaches_deletion_handler() -> None:

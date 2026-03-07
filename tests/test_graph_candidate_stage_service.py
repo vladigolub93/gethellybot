@@ -173,7 +173,7 @@ def test_graph_candidate_stage_handles_questions_pending_help() -> None:
     assert "salary" in reply.lower() or "matching" in reply.lower()
 
 
-def test_graph_candidate_stage_allows_passthrough_for_real_questions_answer() -> None:
+def test_graph_candidate_stage_accepts_real_questions_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
@@ -188,12 +188,18 @@ def test_graph_candidate_stage_allows_passthrough_for_real_questions_answer() ->
         telegram_chat_id=200,
     )
 
-    reply = service.maybe_build_stage_reply(
+    result = service.maybe_run_stage(
         user=user,
-        latest_user_message="3000 USD net per month, Warsaw, remote.",
+        latest_user_message="3000 USD net per month. Location: Warsaw. Remote.",
     )
 
-    assert reply is None
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["salary_min"] == 3000
+    assert result.structured_payload["location_text"] == "Warsaw"
+    assert result.structured_payload["work_format"] == "remote"
 
 
 def test_graph_candidate_stage_handles_verification_pending_help() -> None:
@@ -218,6 +224,35 @@ def test_graph_candidate_stage_handles_verification_pending_help() -> None:
 
     assert reply is not None
     assert "video" in reply.lower() or "later" in reply.lower()
+
+
+def test_graph_candidate_stage_accepts_verification_video_submission() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp7a", state="VERIFICATION_PENDING")
+    )
+
+    user = SimpleNamespace(
+        id="u10a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="",
+        latest_message_type="video",
+    )
+
+    assert result is not None
+    assert result.stage == "VERIFICATION_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_verification_video"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["submission_type"] == "video"
 
 
 def test_graph_candidate_stage_handles_ready_help() -> None:

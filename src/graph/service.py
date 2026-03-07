@@ -124,9 +124,16 @@ class LangGraphStageAgentService:
         latest_user_message: str,
         latest_message_type: str = "text",
     ) -> StageAgentExecutionResult | None:
-        if latest_message_type != "text" or not latest_user_message.strip():
+        if latest_message_type == "text" and not latest_user_message.strip():
             return None
-        stage = self._resolve_supported_stage(user)
+        if latest_message_type != "text":
+            stage = self._resolve_supported_stage(user)
+            if stage != "VERIFICATION_PENDING" or latest_message_type != "video":
+                return None
+        if latest_message_type == "text":
+            stage = self._resolve_supported_stage(user)
+        else:
+            stage = self._resolve_supported_stage(user)
         if stage is None:
             return None
         result = self._run_stage_graph(
