@@ -1,0 +1,6 @@
+- name: approximate_budget
+  input: "Can I send an approximate budget range?"
+  expected_intent: "clarification_request"
+- name: why_details
+  input: "Why do you need all these vacancy details?"
+  expected_intent: "clarification_request"

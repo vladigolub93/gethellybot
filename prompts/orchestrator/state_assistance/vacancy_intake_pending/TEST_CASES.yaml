@@ -1,0 +1,6 @@
+- name: no_jd
+  input: "I don't have a formal JD."
+  expected_intent: "constraint_report"
+- name: what_to_include
+  input: "What should I include in the text?"
+  expected_intent: "clarification_request"

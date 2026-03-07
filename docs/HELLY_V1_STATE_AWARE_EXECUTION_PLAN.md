@@ -37,7 +37,7 @@ Deliverables:
 
 Status:
 
-- in progress
+- completed
 
 ### Step 2. Upgrade Global Bot Controller
 
@@ -50,6 +50,10 @@ Deliverables:
 - prompt/schema v2
 - runtime parser mapping
 - baseline fallback aligned to the same contract
+
+Status:
+
+- completed
 
 ### Step 3. Candidate State Policies
 
@@ -65,6 +69,12 @@ Priority states:
 - `VERIFICATION_PENDING`
 - `READY`
 
+Status:
+
+- in progress
+- implemented so far: `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`
+- remaining priority state: `READY`
+
 ### Step 4. Vacancy State Policies
 
 Goal:
@@ -76,6 +86,12 @@ Priority states:
 - `JD_PENDING`
 - `CLARIFICATION_QA`
 - `OPEN`
+
+Status:
+
+- in progress
+- implemented so far: `JD_PENDING` runtime is mapped to `INTAKE_PENDING`, and `CLARIFICATION_QA`
+- remaining priority state: `OPEN`
 
 ### Step 5. Interview and Review State Policies
 
@@ -121,6 +137,7 @@ Required regression cases:
 
 The immediate next task is:
 
-- Step 1: define and wire the runtime contract for state-aware conversation
-
-This is the foundation for every later state policy.
+- Step 3 and Step 4 continuation:
+  - add policy coverage for `READY` and `OPEN`
+  - then move to invite/interview/review states
+The foundation and first major state-policy slice are now live in runtime.

@@ -9,6 +9,7 @@ class StatePolicyDefinition:
     goal: str
     allowed_actions: list[str]
     guidance_text: str
+    assistance_prompt_slug: str | None = None
     help_text: str | None = None
     missing_requirements: list[str] = field(default_factory=list)
     blocked_actions: list[str] = field(default_factory=list)
@@ -21,6 +22,7 @@ class ResolvedStateContext:
     goal: str
     allowed_actions: list[str]
     guidance_text: str
+    assistance_prompt_slug: str | None
     help_text: str | None
     missing_requirements: list[str]
     blocked_actions: list[str]
@@ -55,6 +57,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="CV_PENDING",
         goal="Collect usable candidate experience input.",
         allowed_actions=["send_cv_text", "send_cv_document", "send_cv_voice"],
+        assistance_prompt_slug="candidate_cv_pending",
         guidance_text=(
             "You can upload a CV, paste your work experience as text, send a voice description, "
             "or export your LinkedIn profile as PDF and send it here."
@@ -76,6 +79,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="SUMMARY_REVIEW",
         goal="Get approval for the generated summary or collect one correction round.",
         allowed_actions=["approve_summary", "request_summary_change"],
+        assistance_prompt_slug="candidate_summary_review",
         guidance_text=(
             "Review the summary and either approve it or tell me exactly what is incorrect. "
             "You can request one correction round."
@@ -90,6 +94,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="QUESTIONS_PENDING",
         goal="Collect salary expectations, location, and preferred work format.",
         allowed_actions=["send_salary_location_work_format"],
+        assistance_prompt_slug="candidate_questions_pending",
         guidance_text=(
             "Send your salary expectations, current location, and preferred work format "
             "(remote, hybrid, or office). You can answer in one message."
@@ -104,6 +109,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="VERIFICATION_PENDING",
         goal="Collect a verification video with the required phrase.",
         allowed_actions=["send_verification_video"],
+        assistance_prompt_slug="candidate_verification_pending",
         guidance_text="Please record a short verification video saying the phrase shown in the chat.",
         help_text=(
             "Verification helps confirm that a real candidate is completing the profile. "
@@ -122,6 +128,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="INTAKE_PENDING",
         goal="Collect a usable job description source.",
         allowed_actions=["send_job_description_text", "send_job_description_document", "send_job_description_voice"],
+        assistance_prompt_slug="vacancy_intake_pending",
         guidance_text=(
             "You can send a formal JD, paste the role details as text, or send a voice description "
             "of the position and requirements."
@@ -143,6 +150,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="CLARIFICATION_QA",
         goal="Resolve mandatory vacancy fields before opening the vacancy.",
         allowed_actions=["send_vacancy_clarifications"],
+        assistance_prompt_slug="vacancy_clarification_qa",
         guidance_text=(
             "Please provide the missing vacancy details such as budget, countries, work format, "
             "team context, project description, and main stack."
@@ -196,6 +204,7 @@ def resolve_state_context(*, role: str | None, state: str | None) -> ResolvedSta
         goal=definition.goal,
         allowed_actions=list(definition.allowed_actions),
         guidance_text=definition.guidance_text,
+        assistance_prompt_slug=definition.assistance_prompt_slug,
         help_text=definition.help_text,
         missing_requirements=list(definition.missing_requirements),
         blocked_actions=list(definition.blocked_actions),

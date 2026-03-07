@@ -1,0 +1,6 @@
+- name: no_cv_help
+  input: "I do not have a CV yet."
+  expected_intent: "constraint_report"
+- name: next_step
+  input: "What should I do here?"
+  expected_intent: "clarification_request"

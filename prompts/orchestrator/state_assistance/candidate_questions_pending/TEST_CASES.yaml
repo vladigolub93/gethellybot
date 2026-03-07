@@ -1,0 +1,6 @@
+- name: why_salary
+  input: "Why do you need my salary?"
+  expected_intent: "clarification_request"
+- name: gross_or_net
+  input: "Should I send gross or net salary?"
+  expected_intent: "clarification_request"

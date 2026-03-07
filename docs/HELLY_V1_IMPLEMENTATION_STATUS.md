@@ -81,7 +81,7 @@ Status vs SRS:
 - `Implemented`: inbound and outbound raw messages are persisted
 - `Partial`: keyboards/helpers are still basic
 - `Not Implemented`: location input is not yet actively used in the runtime flow
-- `Partial`: state-aware conversational assistance exists in some places, but the bot still relies on rigid handlers in several states instead of a complete policy layer across all major flows
+- `Partial`: state-aware conversational assistance is now implemented for the main candidate and vacancy intake states, but coverage is not yet complete across `READY`, `OPEN`, interview invite/review, and all edge states
 
 Status vs SRS:
 
@@ -103,6 +103,7 @@ Status vs SRS:
 - `Implemented`: verification phrase generation
 - `Implemented`: verification video submission step
 - `Implemented`: transition to `READY`
+- `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, and `VERIFICATION_PENDING`
 
 ### What is only partial
 
@@ -129,6 +130,7 @@ Status vs SRS:
 - `Implemented`: vacancy clarification step
 - `Implemented`: required fields for budget, countries, work format, team size, project description, primary stack
 - `Implemented`: vacancy transitions to `OPEN`
+- `Implemented`: state-aware in-step AI help for `INTAKE_PENDING` and `CLARIFICATION_QA`
 
 ### What is only partial
 

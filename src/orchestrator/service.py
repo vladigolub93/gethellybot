@@ -6,7 +6,7 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.vacancies import VacanciesRepository
-from src.llm.service import safe_bot_controller_decision
+from src.llm.service import safe_bot_controller_decision, safe_state_assistance_decision
 from src.messaging.service import MessagingService
 from src.orchestrator.policy import ResolvedStateContext, resolve_state_context
 
@@ -66,15 +66,9 @@ class BotControllerService:
         ):
             return None
 
-        result = safe_bot_controller_decision(
+        result = safe_state_assistance_decision(
             self.session,
-            role=context.role,
-            state=context.state,
-            state_goal=context.goal,
-            allowed_actions=context.allowed_actions,
-            blocked_actions=context.blocked_actions,
-            missing_requirements=context.missing_requirements,
-            current_step_guidance=context.guidance_text,
+            context=context,
             latest_user_message=latest_user_message,
             recent_context=[],
         )
@@ -142,7 +136,10 @@ class BotControllerService:
             "INTAKE_PENDING": [
                 r"\bi do not have (a )?(jd|job description)\b",
                 r"\bi don't have (a )?(jd|job description)\b",
+                r"\bi do not have (a )?formal (jd|job description)\b",
+                r"\bi don't have (a )?formal (jd|job description)\b",
                 r"\bno (jd|job description)\b",
+                r"\bno formal (jd|job description)\b",
                 r"\bwhat if\b",
                 r"\bhow\b",
                 r"\bhelp\b",

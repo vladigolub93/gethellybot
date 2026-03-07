@@ -1,0 +1,6 @@
+- name: cannot_record_now
+  input: "I can't record video now."
+  expected_intent: "constraint_report"
+- name: why_needed
+  input: "Why do you need a verification video?"
+  expected_intent: "clarification_request"

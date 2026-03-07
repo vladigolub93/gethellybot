@@ -148,3 +148,57 @@ def test_build_recovery_message_for_missing_contact() -> None:
     message = service.build_recovery_message(user=user, latest_user_message="hello")
 
     assert message == "Please share your contact using the button below to continue."
+
+
+def test_maybe_build_in_state_assistance_for_verification_constraint() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1", state="VERIFICATION_PENDING")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="I cannot record a video right now because I am on desktop.",
+    )
+
+    assert message is not None
+    assert "later" in message.lower() or "device" in message.lower() or "video" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_vacancy_intake_without_jd() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
+    vacancy = SimpleNamespace(id="v1", state="INTAKE_PENDING")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository(vacancy)
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="I do not have a formal JD. What should I send instead?",
+    )
+
+    assert message is not None
+    assert "text" in message.lower() or "voice" in message.lower() or "role details" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_vacancy_clarification_question() -> None:
+    user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=True)
+    vacancy = SimpleNamespace(id="v1", state="CLARIFICATION_QA")
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.vacancies = FakeVacanciesRepository(vacancy)
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="Can I send an approximate budget for now?",
+    )
+
+    assert message is not None
+    assert "budget" in message.lower() or "approximate" in message.lower() or "range" in message.lower()

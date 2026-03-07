@@ -96,6 +96,14 @@ class BotControllerDecisionSchema(BaseModel):
     reason_code: Optional[str] = None
 
 
+class StateAssistanceDecisionSchema(BaseModel):
+    response_text: str
+    intent: str
+    keep_current_state: bool = True
+    suggested_action: Optional[str] = None
+    reason_code: Optional[str] = None
+
+
 class InterviewSessionConductorTurnSchema(BaseModel):
     mode: str
     utterance: str

@@ -36,6 +36,12 @@ It distinguishes between:
 | `messaging/deletion_confirmation` | Asset Ready | Runtime Wired | active in candidate and vacancy deletion flows |
 | `messaging/interview_invitation_copy` | Asset Ready | Runtime Wired | active in invitation dispatch |
 | `messaging/response_copywriter` | Asset Ready | Runtime Wired | used as centralized messaging refinement layer |
+| `orchestrator/state_assistance/candidate_cv_pending` | Asset Ready | Runtime Wired | candidate CV help and blocked-user guidance |
+| `orchestrator/state_assistance/candidate_summary_review` | Asset Ready | Runtime Wired | summary review clarifications without misclassifying edits |
+| `orchestrator/state_assistance/candidate_questions_pending` | Asset Ready | Runtime Wired | salary/location/work-format help inside state |
+| `orchestrator/state_assistance/candidate_verification_pending` | Asset Ready | Runtime Wired | verification blockers and why-needed guidance |
+| `orchestrator/state_assistance/vacancy_intake_pending` | Asset Ready | Runtime Wired | manager help when no formal JD exists |
+| `orchestrator/state_assistance/vacancy_clarification_qa` | Asset Ready | Runtime Wired | clarification-stage vacancy guidance |
 
 ## What Is Covered Now
 
@@ -51,6 +57,7 @@ At the prompt-asset level, Helly now covers the necessary LLM surface for:
 - reranking
 - recovery and small talk
 - top-level bot control
+- state-specific in-flow assistance for the main candidate and vacancy intake states
 
 ## Remaining Engineering Work
 
@@ -58,7 +65,7 @@ The remaining gap is no longer prompt design coverage. The remaining gap is surr
 
 1. add vector retrieval and embedding refresh
 2. add cleanup jobs and retention-aware deletion follow-up work
-3. continue migrating remaining hard-coded low-priority text into the centralized messaging layer
+3. add remaining state-policy prompts for `READY`, `OPEN`, invite/review, and deletion-adjacent states
 4. add transcription/OCR confidence policies and fallback handling
 
 ## Conclusion

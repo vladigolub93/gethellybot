@@ -13,6 +13,7 @@ from src.evaluation.scoring import evaluate_candidate
 from src.interview.question_plan import build_question_plan
 from src.llm.assets import load_system_prompt
 from src.llm.prompts import (
+    STATE_ASSISTANCE_SYSTEM_PROMPT,
     bot_controller_prompt,
     candidate_rerank_prompt,
     candidate_cv_prompt,
@@ -33,6 +34,7 @@ from src.llm.prompts import (
     vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
 )
+from src.llm.state_assistance import state_assistance_prompt
 from src.llm.schemas import (
     BotControllerDecisionSchema,
     CandidateRerankSchema,
@@ -45,6 +47,7 @@ from src.llm.schemas import (
     InterviewQuestionPlanSchema,
     InterviewSessionConductorTurnSchema,
     ResponseCopywriterSchema,
+    StateAssistanceDecisionSchema,
     VacancyInconsistencySchema,
     VacancyClarificationSchema,
     VacancySummarySchema,
@@ -670,6 +673,51 @@ def bot_controller_decision_with_llm(
     )
 
 
+def state_assistance_decision_with_llm(
+    *,
+    state_prompt_slug: str,
+    context,
+    latest_user_message: str,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=StateAssistanceDecisionSchema,
+        system_prompt="\n\n".join(
+            [
+                STATE_ASSISTANCE_SYSTEM_PROMPT.strip(),
+                load_system_prompt("orchestrator", "state_assistance", state_prompt_slug),
+            ]
+        ),
+        user_prompt=state_assistance_prompt(
+            context=context,
+            latest_user_message=latest_user_message,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version=f"state_assistance_{state_prompt_slug}_llm_v1",
+    )
+    payload = {
+        "response_text": _clean_text(result.payload.get("response_text"), limit=500) or "",
+        "intent": (result.payload.get("intent") or "support_request").strip().lower(),
+        "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+        "suggested_action": _clean_text(result.payload.get("suggested_action"), limit=120),
+        "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+    }
+    if payload["intent"] not in {
+        "support_request",
+        "clarification_request",
+        "constraint_report",
+        "small_talk",
+        "unknown",
+    }:
+        payload["intent"] = "unknown"
+    return LLMResult(
+        payload=payload,
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def conduct_interview_turn_with_llm(
     *,
     mode: str,
@@ -1211,6 +1259,56 @@ def safe_bot_controller_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_bot_controller_v2",
+    )
+
+
+def safe_state_assistance_decision(
+    session,
+    *,
+    context,
+    latest_user_message: str,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    state_prompt_slug = getattr(context, "assistance_prompt_slug", None)
+    if state_prompt_slug and should_use_llm_runtime(session):
+        try:
+            return state_assistance_decision_with_llm(
+                state_prompt_slug=state_prompt_slug,
+                context=context,
+                latest_user_message=latest_user_message,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "state_assistance_fallback_to_baseline",
+                state=context.state,
+                prompt_slug=state_prompt_slug,
+                error=str(exc),
+            )
+
+    text = (latest_user_message or "").strip().lower()
+    response_text = context.help_text or context.guidance_text or "Please continue with the current step."
+    intent = "support_request"
+    reason_code = "state_help_fallback"
+    suggested_action = None
+
+    if any(token in text for token in ["hi", "hello", "hey", "thanks", "thank you"]):
+        intent = "small_talk"
+        reason_code = "small_talk_redirect"
+        response_text = f"Happy to help. {context.guidance_text or response_text}"
+    elif context.allowed_actions:
+        suggested_action = context.allowed_actions[0]
+
+    return LLMResult(
+        payload={
+            "response_text": response_text,
+            "intent": intent,
+            "keep_current_state": True,
+            "suggested_action": suggested_action,
+            "reason_code": reason_code,
+        },
+        model_name="baseline-deterministic",
+        prompt_version=f"baseline_state_assistance_{context.state.lower()}_v1",
     )
 
 

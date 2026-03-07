@@ -1,0 +1,6 @@
+- name: ask_what_to_change
+  input: "What should I change here?"
+  expected_intent: "clarification_request"
+- name: source_question
+  input: "Where did this summary come from?"
+  expected_intent: "clarification_request"
