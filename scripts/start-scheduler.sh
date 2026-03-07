@@ -2,4 +2,3 @@
 set -euo pipefail
 
 exec python -m apps.scheduler.main
-

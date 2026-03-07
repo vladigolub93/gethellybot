@@ -20,5 +20,4 @@ COPY scripts /app/scripts
 
 RUN pip install --upgrade pip && pip install .
 
-CMD ["bash", "scripts/start-api.sh"]
-
+CMD ["bash", "scripts/start.sh"]
