@@ -94,6 +94,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover post-intake multimodal behavior, including interview answers over `voice/video`, candidate question answers over `voice`, manager clarification answers over `voice`, and `document` recovery fallback outside any active role flow
 - `Implemented`: routing regressions now also cover normalized aliases for role selection and interview accept/skip actions; this also fixed a real entry-gating issue where consent could be granted before contact was collected
 - `Implemented`: routing regressions now also cover near-canonical phrasing variants across summary review, manager decisions, and deletion cancellation, including `approve profile`, `edit summary`, `approve`, `reject`, and `don't delete`
+- `Implemented`: routing regressions now also cover generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
 
 Status vs SRS:
 

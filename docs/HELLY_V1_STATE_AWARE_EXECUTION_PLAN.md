@@ -155,6 +155,7 @@ Status:
 - routing coverage now also protects post-intake multimodal paths, including interview answers over voice/video, candidate question answers over voice, manager clarification answers over voice, and document-based recovery fallback outside any active role flow
 - routing coverage now also protects normalized action aliases and stricter flow-entry gating, including uppercase role selection, `accept` / `skip` interview aliases, and consent rejection before contact is shared
 - routing coverage now also protects near-canonical phrasing variants across summary review, manager decisions, and deletion cancellation, including `approve profile`, `edit summary`, `approve`, `reject`, and `don't delete`
+- routing coverage now also protects generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
 
 ## 4. Current Next Task
 
