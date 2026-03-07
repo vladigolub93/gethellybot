@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     app_base_url: str = Field(default="http://localhost:8000", alias="APP_BASE_URL")
 
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
-    api_port: int = Field(default=8000, alias="API_PORT")
+    api_port: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("API_PORT", "PORT"),
+    )
 
     worker_poll_interval_seconds: int = Field(
         default=5, alias="WORKER_POLL_INTERVAL_SECONDS"

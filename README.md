@@ -2,32 +2,42 @@
 
 Helly is a Telegram-first AI recruitment platform.
 
-This repository has been reset to a clean baseline. The previous codebase was intentionally removed from the active implementation path because it is no longer considered a valid foundation.
+## Repository Status
 
-## Current Repository Role
+This repository now contains:
 
-The repository currently serves as the canonical product and architecture workspace for Helly v1.
-
-It contains:
-
-- product specification
-- architecture blueprint
-- infrastructure decisions
-- data model and state machines
-- AI prompt catalog
-- implementation roadmap and engineering backlog
+- working product and architecture documentation
+- backend baseline implementation
+- Alembic migrations
+- Telegram webhook intake
+- candidate and vacancy onboarding flows
+- matching, interview, and evaluation foundations
+- Supabase and Telegram integration baseline
+- Railway deployment baseline
 
 ## Start Here
 
 - [docs/README.md](/Users/vladigolub/Desktop/gethellybot/docs/README.md)
+- [docs/HELLY_V1_PROJECT_ARCHITECTURE.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_PROJECT_ARCHITECTURE.md)
+- [docs/HELLY_V1_MASTER_TASK_LIST.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_MASTER_TASK_LIST.md)
+- [docs/HELLY_V1_RAILWAY_DEPLOYMENT.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_RAILWAY_DEPLOYMENT.md)
 
-## Confirmed v1 Stack
+## Local Commands
 
-- Supabase
-- Railway
-- Telegram Bot API
-- OpenAI
+```bash
+make run-api
+make run-worker
+make run-scheduler
+make test
+make db-upgrade
+```
 
-## Next Phase
+## Deploy Commands
 
-The next implementation phase is to build a new backend baseline directly from the documents in `docs/`, instead of continuing the removed legacy code.
+Railway service start commands:
+
+```bash
+bash scripts/start-api.sh
+bash scripts/start-worker.sh
+bash scripts/start-scheduler.sh
+```

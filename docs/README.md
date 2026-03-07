@@ -11,6 +11,7 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_REFERENCE_RESEARCH.md](./HELLY_V1_REFERENCE_RESEARCH.md): detailed study of the `patchy631/ai-engineering-hub` repository and a decision matrix for what Helly should reuse, adapt, or ignore.
 - [HELLY_V1_ARCHITECTURE_BLUEPRINT.md](./HELLY_V1_ARCHITECTURE_BLUEPRINT.md): target backend architecture, module boundaries, data flows, AI orchestration model, infrastructure baseline, and quality controls.
 - [HELLY_V1_INFRA_DECISIONS.md](./HELLY_V1_INFRA_DECISIONS.md): fixed infrastructure choices for v1, including Supabase, Railway, Telegram, and OpenAI integration assumptions.
+- [HELLY_V1_RAILWAY_DEPLOYMENT.md](./HELLY_V1_RAILWAY_DEPLOYMENT.md): Railway deployment shape, service layout, env contract, webhook setup, and smoke-test checklist.
 - [HELLY_V1_PROJECT_ARCHITECTURE.md](./HELLY_V1_PROJECT_ARCHITECTURE.md): consolidated project architecture file that combines product, technical, infrastructure, and implementation decisions into one execution-oriented view.
 
 ## Detailed Design
