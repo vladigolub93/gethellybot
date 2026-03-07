@@ -1,0 +1,13 @@
+version: 1
+capability: candidate_rerank
+cases:
+  - id: rank_direct_stack_fit_higher
+    input:
+      vacancy_stack: [python, fastapi]
+      candidates:
+        - candidate_ref: a
+          skills: [python, fastapi]
+        - candidate_ref: b
+          skills: [java, spring]
+    expected:
+      top_candidate_ref: a

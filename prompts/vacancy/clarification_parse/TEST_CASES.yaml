@@ -1,0 +1,15 @@
+version: 1
+capability: vacancy_clarification_parse
+cases:
+  - id: vacancy_parse_full
+    input: "Budget 8k EUR monthly, remote, Poland and Germany, team size 5, project is internal analytics, stack Python and Snowflake."
+    expected:
+      budget_currency: EUR
+      work_format: remote
+      team_size: 5
+      countries_contains: [PL, DE]
+  - id: vacancy_parse_partial
+    input: "Hybrid team in Spain, project is logistics automation."
+    expected:
+      work_format: hybrid
+      countries_contains: [ES]

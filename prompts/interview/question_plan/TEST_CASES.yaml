@@ -1,0 +1,26 @@
+version: 1
+capability: interview_question_plan
+cases:
+  - id: question_plan_backend
+    input:
+      vacancy:
+        role_title: Senior Python Engineer
+        primary_tech_stack_json: [python, fastapi, postgresql]
+      candidate_summary:
+        years_experience: 6
+        skills: [python, fastapi, aws]
+    expected:
+      exact_question_count: 4
+      types_in_order: [behavioral, situational, role_specific, motivation]
+      references_stack: true
+      fallback_used: false
+  - id: question_plan_fallback
+    input:
+      vacancy:
+        role_title: Backend Engineer
+      candidate_summary:
+        skills: []
+    expected:
+      exact_question_count: 4
+      types_in_order: [behavioral, situational, role_specific, motivation]
+      fallback_used: true

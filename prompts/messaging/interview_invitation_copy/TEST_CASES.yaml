@@ -1,0 +1,8 @@
+version: 1
+capability: interview_invitation_copy
+cases:
+  - id: invitation_short_clear
+    input:
+      role_title: Backend Engineer
+    expected:
+      mentions_accept_or_skip: true

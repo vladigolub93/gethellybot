@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VacancyClarificationParse",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "role_title": { "type": ["string", "null"], "maxLength": 120 },
+    "seniority_normalized": {
+      "type": ["string", "null"],
+      "enum": ["junior", "middle", "senior", null]
+    },
+    "budget_min": { "type": ["number", "null"] },
+    "budget_max": { "type": ["number", "null"] },
+    "budget_currency": {
+      "type": ["string", "null"],
+      "enum": ["USD", "EUR", "GBP", null]
+    },
+    "budget_period": {
+      "type": ["string", "null"],
+      "enum": ["month", "year", null]
+    },
+    "countries_allowed_json": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 2, "maxLength": 2 },
+      "maxItems": 20
+    },
+    "work_format": {
+      "type": ["string", "null"],
+      "enum": ["remote", "hybrid", "office", null]
+    },
+    "team_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 5000 },
+    "project_description": { "type": ["string", "null"], "maxLength": 1200 },
+    "primary_tech_stack_json": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 12
+    }
+  },
+  "required": [
+    "role_title",
+    "seniority_normalized",
+    "budget_min",
+    "budget_max",
+    "budget_currency",
+    "budget_period",
+    "countries_allowed_json",
+    "work_format",
+    "team_size",
+    "project_description",
+    "primary_tech_stack_json"
+  ]
+}

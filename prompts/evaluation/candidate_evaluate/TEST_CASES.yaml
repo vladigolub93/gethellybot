@@ -1,0 +1,27 @@
+version: 1
+capability: candidate_evaluate
+cases:
+  - id: evaluation_strong_match
+    input:
+      candidate_summary:
+        skills: [python, fastapi, postgresql]
+        years_experience: 6
+      vacancy:
+        primary_tech_stack_json: [python, fastapi, postgresql]
+      answer_texts:
+        - "I built production APIs with FastAPI."
+        - "I tuned PostgreSQL queries under load."
+        - "I handled incidents and release rollbacks."
+    expected:
+      recommendation: advance
+  - id: evaluation_weak_match
+    input:
+      candidate_summary:
+        skills: [react]
+        years_experience: 1
+      vacancy:
+        primary_tech_stack_json: [java, spring]
+      answer_texts:
+        - "I mostly worked on dashboards."
+    expected:
+      recommendation: reject

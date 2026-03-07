@@ -11,21 +11,26 @@ from src.config.logging import get_logger
 from src.config.settings import get_settings
 from src.evaluation.scoring import evaluate_candidate
 from src.interview.question_plan import build_question_plan
+from src.llm.assets import load_system_prompt
 from src.llm.prompts import (
-    EXTRACTION_SYSTEM_PROMPT,
-    REASONING_SYSTEM_PROMPT,
+    bot_controller_prompt,
     candidate_cv_prompt,
     candidate_questions_prompt,
     candidate_summary_edit_prompt,
+    interview_answer_parse_prompt,
     interview_evaluation_prompt,
+    interview_followup_decision_prompt,
     interview_question_plan_prompt,
     vacancy_clarifications_prompt,
     vacancy_jd_prompt,
 )
 from src.llm.schemas import (
+    BotControllerDecisionSchema,
     CandidateQuestionParseSchema,
     CandidateSummarySchema,
+    InterviewAnswerParseSchema,
     InterviewEvaluationSchema,
+    InterviewFollowupDecisionSchema,
     InterviewQuestionPlanSchema,
     VacancyClarificationSchema,
     VacancySummarySchema,
@@ -204,10 +209,34 @@ def _normalize_country_codes(values: list[str]) -> list[str]:
     return normalized
 
 
+def _vacancy_context(vacancy) -> dict:
+    return {
+        "role_title": getattr(vacancy, "role_title", None),
+        "seniority_normalized": getattr(vacancy, "seniority_normalized", None),
+        "primary_tech_stack_json": getattr(vacancy, "primary_tech_stack_json", None),
+        "project_description": getattr(vacancy, "project_description", None),
+        "budget_min": getattr(vacancy, "budget_min", None),
+        "budget_max": getattr(vacancy, "budget_max", None),
+        "work_format": getattr(vacancy, "work_format", None),
+    }
+
+
+def _fallback_interview_question_plan(vacancy, candidate_summary: dict) -> dict:
+    baseline_questions = build_question_plan(vacancy=vacancy, candidate_summary=candidate_summary)[:4]
+    default_types = ["behavioral", "situational", "role_specific", "motivation"]
+    return {
+        "questions": [
+            {"id": index, "type": default_types[index - 1], "question": question}
+            for index, question in enumerate(baseline_questions, start=1)
+        ],
+        "fallback_used": True,
+    }
+
+
 def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LLMResult:
     result = _client.parse(
         schema=CandidateSummarySchema,
-        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("candidate", "cv_extract"),
         user_prompt=candidate_cv_prompt(source_text, source_type),
         primary_model=get_settings().openai_model_extraction,
         prompt_version="candidate_cv_extract_llm_v1",
@@ -233,7 +262,7 @@ def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LL
 def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str) -> LLMResult:
     result = _client.parse(
         schema=CandidateSummarySchema,
-        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("candidate", "summary_merge"),
         user_prompt=candidate_summary_edit_prompt(base_summary, edit_request_text),
         primary_model=get_settings().openai_model_extraction,
         prompt_version="candidate_summary_edit_apply_llm_v1",
@@ -267,7 +296,7 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
 def parse_candidate_questions_with_llm(text: str) -> LLMResult:
     result = _client.parse(
         schema=CandidateQuestionParseSchema,
-        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("candidate", "mandatory_field_parse"),
         user_prompt=candidate_questions_prompt(text),
         primary_model=get_settings().openai_model_extraction,
         prompt_version="candidate_questions_parse_llm_v1",
@@ -294,7 +323,7 @@ def parse_candidate_questions_with_llm(text: str) -> LLMResult:
 def extract_vacancy_summary_with_llm(source_text: str, source_type: str) -> LLMResult:
     result = _client.parse(
         schema=VacancySummarySchema,
-        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("vacancy", "jd_extract"),
         user_prompt=vacancy_jd_prompt(source_text, source_type),
         primary_model=get_settings().openai_model_extraction,
         prompt_version="vacancy_jd_extract_llm_v1",
@@ -324,7 +353,7 @@ def extract_vacancy_summary_with_llm(source_text: str, source_type: str) -> LLMR
 def parse_vacancy_clarifications_with_llm(text: str) -> LLMResult:
     result = _client.parse(
         schema=VacancyClarificationSchema,
-        system_prompt=EXTRACTION_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("vacancy", "clarification_parse"),
         user_prompt=vacancy_clarifications_prompt(text),
         primary_model=get_settings().openai_model_extraction,
         prompt_version="vacancy_clarification_parse_llm_v1",
@@ -358,44 +387,47 @@ def parse_vacancy_clarifications_with_llm(text: str) -> LLMResult:
 
 
 def build_interview_question_plan_with_llm(vacancy, candidate_summary: dict) -> LLMResult:
-    vacancy_context = {
-        "role_title": getattr(vacancy, "role_title", None),
-        "seniority_normalized": getattr(vacancy, "seniority_normalized", None),
-        "primary_tech_stack_json": getattr(vacancy, "primary_tech_stack_json", None),
-        "project_description": getattr(vacancy, "project_description", None),
-    }
+    vacancy_context = _vacancy_context(vacancy)
     result = _client.parse(
         schema=InterviewQuestionPlanSchema,
-        system_prompt=REASONING_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("interview", "question_plan"),
         user_prompt=interview_question_plan_prompt(vacancy_context, candidate_summary),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="interview_question_plan_llm_v1",
+        prompt_version="interview_question_plan_llm_v2",
     )
-    questions = [
-        _clean_text(question, limit=220)
-        for question in (result.payload.get("questions") or [])
-        if _clean_text(question, limit=220)
-    ]
+    questions = []
+    for item in (result.payload.get("questions") or []):
+        if not isinstance(item, dict):
+            continue
+        question_text = _clean_text(item.get("question"), limit=260)
+        question_kind = (item.get("type") or "").strip().lower()
+        question_id = item.get("id")
+        if not question_text:
+            continue
+        if question_kind not in {"behavioral", "situational", "role_specific", "motivation"}:
+            continue
+        questions.append(
+            {
+                "id": int(question_id) if isinstance(question_id, int) else len(questions) + 1,
+                "type": question_kind,
+                "question": question_text,
+            }
+        )
     return LLMResult(
-        payload={"questions": questions[:7]},
+        payload={
+            "questions": questions[:4],
+            "fallback_used": bool(result.payload.get("fallback_used", False)),
+        },
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
 
 
 def evaluate_candidate_with_llm(candidate_summary: dict, vacancy, answer_texts: list[str]) -> LLMResult:
-    vacancy_context = {
-        "role_title": getattr(vacancy, "role_title", None),
-        "seniority_normalized": getattr(vacancy, "seniority_normalized", None),
-        "primary_tech_stack_json": getattr(vacancy, "primary_tech_stack_json", None),
-        "project_description": getattr(vacancy, "project_description", None),
-        "budget_min": getattr(vacancy, "budget_min", None),
-        "budget_max": getattr(vacancy, "budget_max", None),
-        "work_format": getattr(vacancy, "work_format", None),
-    }
+    vacancy_context = _vacancy_context(vacancy)
     result = _client.parse(
         schema=InterviewEvaluationSchema,
-        system_prompt=REASONING_SYSTEM_PROMPT,
+        system_prompt=load_system_prompt("evaluation", "candidate_evaluate"),
         user_prompt=interview_evaluation_prompt(candidate_summary, vacancy_context, answer_texts),
         primary_model=get_settings().openai_model_reasoning,
         prompt_version="interview_evaluation_llm_v1",
@@ -414,6 +446,138 @@ def evaluate_candidate_with_llm(candidate_summary: dict, vacancy, answer_texts: 
         "interview_summary": _clean_text(result.payload.get("interview_summary"), limit=1500)
         or "",
     }
+    return LLMResult(
+        payload=payload,
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def parse_interview_answer_with_llm(
+    *,
+    question_text: str,
+    candidate_answer: str,
+    candidate_summary: dict | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=InterviewAnswerParseSchema,
+        system_prompt=load_system_prompt("interview", "answer_parse"),
+        user_prompt=interview_answer_parse_prompt(
+            question_text=question_text,
+            candidate_answer=candidate_answer,
+            candidate_summary=candidate_summary,
+        ),
+        primary_model=get_settings().openai_model_extraction,
+        prompt_version="interview_answer_parse_llm_v1",
+    )
+    payload = {
+        "answer_summary": _clean_text(result.payload.get("answer_summary"), limit=500) or "",
+        "technologies": _normalize_skill_list(result.payload.get("technologies") or []),
+        "systems_or_projects": [
+            _clean_text(value, limit=120)
+            for value in (result.payload.get("systems_or_projects") or [])
+            if _clean_text(value, limit=120)
+        ][:8],
+        "ownership_level": (result.payload.get("ownership_level") or "weak").strip().lower(),
+        "is_concrete": bool(result.payload.get("is_concrete")),
+        "possible_profile_conflict": bool(result.payload.get("possible_profile_conflict")),
+    }
+    if payload["ownership_level"] not in {"strong", "mixed", "weak"}:
+        payload["ownership_level"] = "weak"
+    return LLMResult(
+        payload=payload,
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def decide_interview_followup_with_llm(
+    *,
+    question_text: str,
+    question_kind: str,
+    candidate_answer: str,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    follow_up_already_used: bool,
+    answer_parse: dict | None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=InterviewFollowupDecisionSchema,
+        system_prompt=load_system_prompt("interview", "followup_decision"),
+        user_prompt=interview_followup_decision_prompt(
+            question_text=question_text,
+            question_kind=question_kind,
+            candidate_answer=candidate_answer,
+            candidate_summary=candidate_summary,
+            vacancy_context=vacancy_context,
+            follow_up_already_used=follow_up_already_used,
+            answer_parse=answer_parse,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="interview_followup_decision_llm_v1",
+    )
+    followup_reason = (result.payload.get("followup_reason") or "none").strip().lower()
+    if followup_reason not in {"deepen", "clarify", "verify", "none"}:
+        followup_reason = "none"
+    payload = {
+        "answer_quality": (result.payload.get("answer_quality") or "weak").strip().lower(),
+        "ask_followup": bool(result.payload.get("ask_followup")) and not follow_up_already_used,
+        "followup_reason": followup_reason,
+        "followup_question": _clean_text(result.payload.get("followup_question"), limit=220),
+    }
+    if payload["answer_quality"] not in {"strong", "mixed", "weak"}:
+        payload["answer_quality"] = "weak"
+    if not payload["ask_followup"]:
+        payload["followup_reason"] = "none"
+        payload["followup_question"] = None
+    return LLMResult(
+        payload=payload,
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def bot_controller_decision_with_llm(
+    *,
+    role: str | None,
+    state: str | None,
+    allowed_actions: list[str],
+    latest_user_message: str,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=BotControllerDecisionSchema,
+        system_prompt=load_system_prompt("orchestrator", "bot_controller"),
+        user_prompt=bot_controller_prompt(
+            role=role,
+            state=state,
+            allowed_actions=allowed_actions,
+            latest_user_message=latest_user_message,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="bot_controller_llm_v1",
+    )
+    payload = {
+        "intent": (result.payload.get("intent") or "unknown").strip().lower(),
+        "tone": (result.payload.get("tone") or "neutral").strip().lower(),
+        "should_answer_directly": bool(result.payload.get("should_answer_directly")),
+        "should_use_recovery": bool(result.payload.get("should_use_recovery")),
+        "response_text": _clean_text(result.payload.get("response_text"), limit=500),
+        "reason_code": result.payload.get("reason_code"),
+    }
+    if payload["intent"] not in {
+        "on_flow_input",
+        "small_talk",
+        "support_request",
+        "clarification_request",
+        "off_topic",
+        "destructive_intent",
+        "unknown",
+    }:
+        payload["intent"] = "unknown"
+    if payload["tone"] not in {"neutral", "friendly", "supportive", "firm"}:
+        payload["tone"] = "neutral"
     return LLMResult(
         payload=payload,
         model_name=result.model_name,
@@ -495,13 +659,13 @@ def safe_build_interview_question_plan(session, vacancy, candidate_summary: dict
         try:
             result = build_interview_question_plan_with_llm(vacancy, candidate_summary)
             questions = result.payload.get("questions") or []
-            if len(questions) >= 5:
+            if len(questions) >= 4:
                 return result
             raise RuntimeError("LLM returned too few interview questions.")
         except Exception as exc:  # noqa: BLE001
             logger.warning("interview_plan_fallback_to_baseline", error=str(exc))
     return LLMResult(
-        payload={"questions": build_question_plan(vacancy=vacancy, candidate_summary=candidate_summary)},
+        payload=_fallback_interview_question_plan(vacancy, candidate_summary),
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_question_plan_v1",
     )
@@ -521,4 +685,192 @@ def safe_evaluate_candidate(session, candidate_summary: dict, vacancy, answer_te
         ),
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_evaluation_v1",
+    )
+
+
+def safe_parse_interview_answer(
+    session,
+    *,
+    question_text: str,
+    candidate_answer: str,
+    candidate_summary: dict | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return parse_interview_answer_with_llm(
+                question_text=question_text,
+                candidate_answer=candidate_answer,
+                candidate_summary=candidate_summary,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("interview_answer_parse_fallback_to_baseline", error=str(exc))
+
+    answer_text = _clean_text(candidate_answer, limit=500) or ""
+    lowered = answer_text.lower()
+    ownership_level = "weak"
+    if any(token in lowered for token in ["i designed", "i implemented", "i built", "i owned", "i led"]):
+        ownership_level = "strong"
+    elif any(token in lowered for token in ["i worked on", "i helped", "i supported", "i was involved"]):
+        ownership_level = "mixed"
+    technologies = [
+        skill
+        for skill in _normalize_skill_list((candidate_summary or {}).get("skills") or [])
+        if skill in lowered
+    ]
+    is_concrete = len(answer_text.split()) >= 20 and any(
+        marker in lowered for marker in ["because", "when", "after", "before", "project", "system", "service", "api"]
+    )
+    return LLMResult(
+        payload={
+            "answer_summary": answer_text,
+            "technologies": technologies[:12],
+            "systems_or_projects": [],
+            "ownership_level": ownership_level,
+            "is_concrete": is_concrete,
+            "possible_profile_conflict": False,
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_interview_answer_parse_v1",
+    )
+
+
+def safe_decide_interview_followup(
+    session,
+    *,
+    question_text: str,
+    question_kind: str,
+    candidate_answer: str,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    follow_up_already_used: bool,
+    answer_parse: dict | None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return decide_interview_followup_with_llm(
+                question_text=question_text,
+                question_kind=question_kind,
+                candidate_answer=candidate_answer,
+                candidate_summary=candidate_summary,
+                vacancy_context=vacancy_context,
+                follow_up_already_used=follow_up_already_used,
+                answer_parse=answer_parse,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("interview_followup_fallback_to_baseline", error=str(exc))
+
+    parsed = answer_parse or {}
+    answer_quality = "weak"
+    if parsed.get("ownership_level") == "strong" and parsed.get("is_concrete"):
+        answer_quality = "strong"
+    elif parsed.get("ownership_level") in {"strong", "mixed"} or parsed.get("is_concrete"):
+        answer_quality = "mixed"
+
+    if follow_up_already_used:
+        return LLMResult(
+            payload={
+                "answer_quality": answer_quality,
+                "ask_followup": False,
+                "followup_reason": "none",
+                "followup_question": None,
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_followup_v1",
+        )
+
+    followup_reason = "none"
+    followup_question = None
+    ask_followup = False
+    lowered = (candidate_answer or "").lower()
+    if parsed.get("possible_profile_conflict"):
+        ask_followup = True
+        followup_reason = "verify"
+        followup_question = "What exactly was your personal role in that part?"
+    elif answer_quality == "strong":
+        ask_followup = True
+        followup_reason = "deepen"
+        followup_question = "What was the biggest challenge there, and how did you handle it?"
+    elif answer_quality == "mixed" and len(lowered.split()) >= 8:
+        ask_followup = True
+        followup_reason = "clarify"
+        followup_question = "Could you walk me through a more specific example?"
+
+    return LLMResult(
+        payload={
+            "answer_quality": answer_quality,
+            "ask_followup": ask_followup,
+            "followup_reason": followup_reason,
+            "followup_question": followup_question,
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_interview_followup_v1",
+    )
+
+
+def safe_bot_controller_decision(
+    session,
+    *,
+    role: str | None,
+    state: str | None,
+    allowed_actions: list[str],
+    latest_user_message: str,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return bot_controller_decision_with_llm(
+                role=role,
+                state=state,
+                allowed_actions=allowed_actions,
+                latest_user_message=latest_user_message,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("bot_controller_fallback_to_baseline", error=str(exc))
+
+    text = (latest_user_message or "").strip().lower()
+    payload = {
+        "intent": "unknown",
+        "tone": "friendly",
+        "should_answer_directly": True,
+        "should_use_recovery": True,
+        "response_text": "Please continue with the current step.",
+        "reason_code": "ambiguous_message",
+    }
+    if any(token in text for token in ["hi", "hello", "hey", "thanks", "thank you"]):
+        payload.update(
+            {
+                "intent": "small_talk",
+                "response_text": "Happy to help. Please continue with the current step.",
+                "reason_code": "small_talk_redirect",
+            }
+        )
+    elif any(token in text for token in ["what next", "what should i do", "help", "how does this work"]):
+        payload.update(
+            {
+                "intent": "support_request",
+                "response_text": "Please follow the current step shown in the chat. If needed, send the required input again.",
+                "reason_code": "help",
+            }
+        )
+    elif any(token in text for token in ["delete", "remove", "erase"]):
+        payload.update(
+            {
+                "intent": "destructive_intent",
+                "response_text": "Profile or vacancy deletion requires an explicit confirmation flow. Please wait for that step.",
+                "reason_code": "deletion_confirmation_needed",
+            }
+        )
+    elif allowed_actions:
+        payload.update(
+            {
+                "intent": "clarification_request",
+                "response_text": f"Please continue with the current step. Expected actions: {', '.join(allowed_actions)}.",
+                "reason_code": "current_step_guidance",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_bot_controller_v1",
     )

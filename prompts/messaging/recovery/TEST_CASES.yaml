@@ -1,0 +1,8 @@
+version: 1
+capability: recovery_message
+cases:
+  - id: contact_required_recovery
+    input:
+      state: CONTACT_REQUIRED
+    expected:
+      mentions_next_action: true

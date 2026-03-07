@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VacancyInconsistencyDetect",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["stack_conflict", "seniority_conflict", "work_format_conflict", "scope_ambiguity", "other"]
+          },
+          "finding": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "required": ["severity", "category", "finding"]
+      }
+    }
+  },
+  "required": ["findings"]
+}

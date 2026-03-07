@@ -1,0 +1,17 @@
+version: 1
+capability: vacancy_jd_extract
+cases:
+  - id: vacancy_extract_backend
+    input:
+      source_type: pasted_text
+      source_text: "Senior Java engineer for cloud APIs. Stack: Java, Spring, AWS, PostgreSQL."
+    expected:
+      role_title_present: true
+      seniority_normalized: senior
+      primary_tech_stack_contains: [java, aws, postgresql]
+  - id: vacancy_extract_mixed_stack
+    input:
+      source_type: pasted_text
+      source_text: "Backend role requiring Java, Python, and Node as core stacks."
+    expected:
+      inconsistency_issues_present: true

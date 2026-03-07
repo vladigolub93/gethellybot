@@ -1,0 +1,16 @@
+version: 1
+capability: interview_followup_decision
+cases:
+  - id: deepen_strong_answer
+    input:
+      answer: "I designed the service and owned the rollout."
+      follow_up_already_used: false
+    expected:
+      ask_followup: true
+      followup_reason: deepen
+  - id: no_second_followup
+    input:
+      answer: "I designed the service."
+      follow_up_already_used: true
+    expected:
+      ask_followup: false

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterviewSessionConductorTurn",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "opening",
+        "wait_for_confirmation",
+        "ask_main_question",
+        "ask_follow_up",
+        "move_to_next_question",
+        "closing",
+        "closed"
+      ]
+    },
+    "utterance": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "current_question_id": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 20
+    },
+    "current_question_type": {
+      "type": ["string", "null"],
+      "enum": ["behavioral", "situational", "role_specific", "motivation", null]
+    },
+    "answer_quality": {
+      "type": ["string", "null"],
+      "enum": ["strong", "mixed", "weak", null]
+    },
+    "follow_up_used": {
+      "type": "boolean"
+    },
+    "follow_up_reason": {
+      "type": ["string", "null"],
+      "enum": ["deepen", "clarify", "verify", "none", null]
+    },
+    "move_to_next_question": {
+      "type": "boolean"
+    },
+    "interview_complete": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "mode",
+    "utterance",
+    "current_question_id",
+    "current_question_type",
+    "answer_quality",
+    "follow_up_used",
+    "follow_up_reason",
+    "move_to_next_question",
+    "interview_complete"
+  ]
+}

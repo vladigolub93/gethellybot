@@ -12,6 +12,7 @@ from src.db.repositories.users import UsersRepository
 from src.evaluation.service import EvaluationService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
+from src.orchestrator.service import BotControllerService
 from src.telegram.types import NormalizedTelegramUpdate
 from src.vacancy.service import VacancyService
 
@@ -36,6 +37,7 @@ class TelegramUpdateService:
         self.candidate_service = CandidateProfileService(session)
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
+        self.bot_controller = BotControllerService(session)
         self.vacancy_service = VacancyService(session)
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
@@ -355,7 +357,13 @@ class TelegramUpdateService:
             self._notify(
                 user.id,
                 "unsupported_input",
-                {"text": "Unsupported input for the current baseline. Use /start to begin."},
+                {
+                    "text": self.bot_controller.build_recovery_message(
+                        user=user,
+                        latest_user_message=normalized_update.text
+                        or normalized_update.content_type,
+                    )
+                },
             )
         )
         return templates

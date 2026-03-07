@@ -15,7 +15,11 @@ from src.interview.states import (
 )
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
-from src.llm.service import safe_build_interview_question_plan
+from src.llm.service import (
+    safe_build_interview_question_plan,
+    safe_decide_interview_followup,
+    safe_parse_interview_answer,
+)
 from src.state.service import StateService
 
 
@@ -37,6 +41,20 @@ class InterviewService:
         self.raw_messages = RawMessagesRepository(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
+
+    @staticmethod
+    def _question_prompt_text(question) -> str:
+        return question.question_text
+
+    @staticmethod
+    def _vacancy_context(vacancy) -> dict:
+        return {
+            "role_title": getattr(vacancy, "role_title", None),
+            "seniority_normalized": getattr(vacancy, "seniority_normalized", None),
+            "primary_tech_stack_json": getattr(vacancy, "primary_tech_stack_json", None),
+            "project_description": getattr(vacancy, "project_description", None),
+            "work_format": getattr(vacancy, "work_format", None),
+        }
 
     def dispatch_invites_for_vacancy(self, *, vacancy_id, limit: int = 3) -> dict:
         matches = self.matches.list_shortlisted_for_vacancy(vacancy_id, limit=limit)
@@ -164,11 +182,18 @@ class InterviewService:
                 trigger_type="system",
                 metadata_json={"match_id": str(match.id)},
             )
-            for order_no, question_text in enumerate(plan, start=1):
+            for order_no, plan_item in enumerate(plan, start=1):
+                if isinstance(plan_item, dict):
+                    question_text = plan_item.get("question")
+                    question_kind = plan_item.get("type") or "primary"
+                else:
+                    question_text = str(plan_item)
+                    question_kind = "primary"
                 self.interviews.create_question(
                     session_id=session.id,
                     order_no=order_no,
                     question_text=question_text,
+                    question_kind=question_kind,
                 )
             self.interviews.set_total_questions(session, len(plan))
 
@@ -261,8 +286,57 @@ class InterviewService:
             raw_message_id=raw_message_id,
             content_type="text",
             answer_text=text,
+            is_follow_up_answer=question.question_kind == "follow_up",
         )
         self.interviews.mark_question_answered(question)
+
+        match = self.matches.get_by_id(session.match_id)
+        candidate_version = (
+            self.candidates.get_version_by_id(match.candidate_profile_version_id)
+            if match is not None
+            else None
+        )
+        vacancy = self.vacancies.get_by_id(session.vacancy_id)
+        candidate_summary = (candidate_version.summary_json or {}) if candidate_version else {}
+        answer_parse = safe_parse_interview_answer(
+            self.session,
+            question_text=question.question_text,
+            candidate_answer=text or "",
+            candidate_summary=candidate_summary,
+        )
+        followup_decision = safe_decide_interview_followup(
+            self.session,
+            question_text=question.question_text,
+            question_kind=question.question_kind,
+            candidate_answer=text or "",
+            candidate_summary=candidate_summary,
+            vacancy_context=self._vacancy_context(vacancy),
+            follow_up_already_used=question.question_kind == "follow_up",
+            answer_parse=answer_parse.payload,
+        )
+
+        if (
+            question.question_kind != "follow_up"
+            and followup_decision.payload.get("ask_followup")
+            and followup_decision.payload.get("followup_question")
+        ):
+            next_order = session.current_question_order + 1
+            self.interviews.shift_questions_from_order(session.id, next_order)
+            followup = self.interviews.create_question(
+                session_id=session.id,
+                order_no=next_order,
+                question_text=followup_decision.payload["followup_question"],
+                question_kind="follow_up",
+                parent_question_id=question.id,
+            )
+            self.interviews.set_total_questions(session, session.total_questions + 1)
+            self.interviews.advance_question_pointer(session, next_order)
+            self.interviews.mark_question_asked(followup)
+            return InterviewUserResult(
+                status="follow_up_question",
+                notification_template="candidate_interview_follow_up_question",
+                notification_text=self._question_prompt_text(followup),
+            )
 
         if session.current_question_order >= session.total_questions:
             self.state_service.transition(
@@ -274,7 +348,6 @@ class InterviewService:
                 actor_user_id=candidate.user_id,
             )
             self.interviews.mark_completed(session)
-            match = self.matches.get_by_id(session.match_id)
             self.state_service.transition(
                 entity_type="match",
                 entity=match,
@@ -310,5 +383,5 @@ class InterviewService:
         return InterviewUserResult(
             status="next_question",
             notification_template="candidate_interview_next_question",
-            notification_text=next_question.question_text if next_question is not None else "Next question is ready.",
+            notification_text=self._question_prompt_text(next_question) if next_question is not None else "Next question is ready.",
         )

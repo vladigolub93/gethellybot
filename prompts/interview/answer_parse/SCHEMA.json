@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterviewAnswerParse",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "answer_summary": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "technologies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 12
+    },
+    "systems_or_projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 8
+    },
+    "ownership_level": {
+      "type": "string",
+      "enum": ["strong", "mixed", "weak"]
+    },
+    "is_concrete": {
+      "type": "boolean"
+    },
+    "possible_profile_conflict": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "answer_summary",
+    "technologies",
+    "systems_or_projects",
+    "ownership_level",
+    "is_concrete",
+    "possible_profile_conflict"
+  ]
+}

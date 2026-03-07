@@ -1,0 +1,8 @@
+version: 1
+capability: response_copywriter
+cases:
+  - id: concise_rewrite
+    input:
+      meaning: ask for contact
+    expected:
+      concise: true

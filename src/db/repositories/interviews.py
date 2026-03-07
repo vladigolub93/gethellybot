@@ -91,6 +91,20 @@ class InterviewsRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def shift_questions_from_order(self, session_id, start_order: int, delta: int = 1) -> None:
+        stmt = (
+            select(InterviewQuestion)
+            .where(
+                InterviewQuestion.session_id == session_id,
+                InterviewQuestion.order_no >= start_order,
+            )
+            .order_by(InterviewQuestion.order_no.desc())
+        )
+        rows = list(self.session.execute(stmt).scalars().all())
+        for row in rows:
+            row.order_no += delta
+        self.session.flush()
+
     def mark_question_asked(self, question: InterviewQuestion) -> InterviewQuestion:
         question.asked_at = datetime.now(timezone.utc)
         self.session.flush()

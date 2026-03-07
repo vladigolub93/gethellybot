@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BotControllerDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "on_flow_input",
+        "small_talk",
+        "support_request",
+        "clarification_request",
+        "off_topic",
+        "destructive_intent",
+        "unknown"
+      ]
+    },
+    "tone": {
+      "type": "string",
+      "enum": ["neutral", "friendly", "supportive", "firm"]
+    },
+    "should_answer_directly": {
+      "type": "boolean"
+    },
+    "should_use_recovery": {
+      "type": "boolean"
+    },
+    "response_text": {
+      "type": ["string", "null"],
+      "maxLength": 500
+    },
+    "reason_code": {
+      "type": ["string", "null"],
+      "enum": [
+        "current_step_guidance",
+        "unsupported_input",
+        "small_talk_redirect",
+        "help",
+        "deletion_confirmation_needed",
+        "ambiguous_message",
+        null
+      ]
+    }
+  },
+  "required": [
+    "intent",
+    "tone",
+    "should_answer_directly",
+    "should_use_recovery",
+    "response_text",
+    "reason_code"
+  ]
+}

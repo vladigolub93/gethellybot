@@ -1,0 +1,9 @@
+version: 1
+capability: small_talk
+cases:
+  - id: greet_and_redirect
+    input:
+      state: CV_PENDING
+      user_message: "hi"
+    expected:
+      short_reply: true

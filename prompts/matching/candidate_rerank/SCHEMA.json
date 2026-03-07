@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateRerank",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ranked_candidates": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate_ref": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "fit_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "rationale": {
+            "type": "string",
+            "maxLength": 280
+          }
+        },
+        "required": ["candidate_ref", "rank", "fit_score", "rationale"]
+      }
+    }
+  },
+  "required": ["ranked_candidates"]
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DeletionConfirmationReply",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string",
+      "maxLength": 350
+    },
+    "is_explicit_confirmation_required": {
+      "type": "boolean"
+    }
+  },
+  "required": ["message", "is_explicit_confirmation_required"]
+}

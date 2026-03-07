@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateEvaluate",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "final_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "strengths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 10
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 10
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": ["advance", "reject"]
+    },
+    "interview_summary": {
+      "type": "string",
+      "maxLength": 1500
+    }
+  },
+  "required": [
+    "final_score",
+    "strengths",
+    "risks",
+    "recommendation",
+    "interview_summary"
+  ]
+}

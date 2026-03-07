@@ -1,0 +1,17 @@
+version: 1
+capability: bot_controller
+cases:
+  - id: small_talk_redirect
+    input:
+      state: CV_PENDING
+      latest_user_message: "how are you?"
+    expected:
+      intent: small_talk
+      should_answer_directly: true
+  - id: unsupported_input_recovery
+    input:
+      state: CONTACT_REQUIRED
+      latest_user_message: "skip"
+    expected:
+      should_use_recovery: true
+      reason_code: unsupported_input

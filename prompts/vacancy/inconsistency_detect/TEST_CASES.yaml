@@ -1,0 +1,11 @@
+version: 1
+capability: vacancy_inconsistency_detect
+cases:
+  - id: detect_conflicting_work_format
+    input: "Remote role with mandatory daily office attendance."
+    expected:
+      findings_present: true
+  - id: ignore_normal_stack
+    input: "Python, PostgreSQL, Redis, AWS."
+    expected:
+      findings_present: false

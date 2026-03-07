@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateMandatoryFieldParse",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "salary_min": { "type": ["number", "null"] },
+    "salary_max": { "type": ["number", "null"] },
+    "salary_currency": {
+      "type": ["string", "null"],
+      "enum": ["USD", "EUR", "GBP", null]
+    },
+    "salary_period": {
+      "type": ["string", "null"],
+      "enum": ["month", "year", null]
+    },
+    "location_text": { "type": ["string", "null"], "maxLength": 160 },
+    "city": { "type": ["string", "null"], "maxLength": 80 },
+    "country_code": { "type": ["string", "null"], "minLength": 2, "maxLength": 2 },
+    "work_format": {
+      "type": ["string", "null"],
+      "enum": ["remote", "hybrid", "office", null]
+    }
+  },
+  "required": [
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "salary_period",
+    "location_text",
+    "city",
+    "country_code",
+    "work_format"
+  ]
+}

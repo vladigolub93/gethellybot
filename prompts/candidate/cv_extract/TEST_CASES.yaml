@@ -1,0 +1,18 @@
+version: 1
+capability: candidate_cv_extract
+cases:
+  - id: cv_extract_basic_backend
+    input:
+      source_type: pasted_text
+      source_text: "Python engineer with 5 years experience building FastAPI and PostgreSQL services on AWS."
+    expected:
+      status: draft
+      years_experience: 5
+      skills_contains: [python, fastapi, postgresql, aws]
+  - id: cv_extract_sparse_input
+    input:
+      source_type: voice_description
+      source_text: "Worked mainly in React and TypeScript on fintech dashboards."
+    expected:
+      status: draft
+      skills_contains: [react, typescript]

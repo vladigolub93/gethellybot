@@ -50,8 +50,15 @@ class VacancyClarificationSchema(BaseModel):
     primary_tech_stack_json: List[str] = Field(default_factory=list)
 
 
+class InterviewQuestionItemSchema(BaseModel):
+    id: int
+    type: str
+    question: str
+
+
 class InterviewQuestionPlanSchema(BaseModel):
-    questions: List[str] = Field(default_factory=list)
+    questions: List[InterviewQuestionItemSchema] = Field(default_factory=list)
+    fallback_used: bool = False
 
 
 class InterviewEvaluationSchema(BaseModel):
@@ -60,3 +67,28 @@ class InterviewEvaluationSchema(BaseModel):
     risks: List[str] = Field(default_factory=list)
     recommendation: str
     interview_summary: str
+
+
+class InterviewFollowupDecisionSchema(BaseModel):
+    answer_quality: str
+    ask_followup: bool
+    followup_reason: Optional[str] = None
+    followup_question: Optional[str] = None
+
+
+class InterviewAnswerParseSchema(BaseModel):
+    answer_summary: str
+    technologies: List[str] = Field(default_factory=list)
+    systems_or_projects: List[str] = Field(default_factory=list)
+    ownership_level: str
+    is_concrete: bool
+    possible_profile_conflict: bool
+
+
+class BotControllerDecisionSchema(BaseModel):
+    intent: str
+    tone: str
+    should_answer_directly: bool
+    should_use_recovery: bool
+    response_text: Optional[str] = None
+    reason_code: Optional[str] = None

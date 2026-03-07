@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InterviewFollowupDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "answer_quality": {
+      "type": "string",
+      "enum": ["strong", "mixed", "weak"]
+    },
+    "ask_followup": {
+      "type": "boolean"
+    },
+    "followup_reason": {
+      "type": ["string", "null"],
+      "enum": ["deepen", "clarify", "verify", "none", null]
+    },
+    "followup_question": {
+      "type": ["string", "null"],
+      "maxLength": 220
+    }
+  },
+  "required": [
+    "answer_quality",
+    "ask_followup",
+    "followup_reason",
+    "followup_question"
+  ]
+}

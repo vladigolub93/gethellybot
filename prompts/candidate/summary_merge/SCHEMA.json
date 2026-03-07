@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CandidateSummaryMerge",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["draft"]
+    },
+    "headline": {
+      "type": ["string", "null"],
+      "maxLength": 180
+    },
+    "experience_excerpt": {
+      "type": ["string", "null"],
+      "maxLength": 1200
+    },
+    "years_experience": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 50
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 12
+    },
+    "candidate_edit_notes": {
+      "type": ["string", "null"],
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "status",
+    "headline",
+    "experience_excerpt",
+    "years_experience",
+    "skills",
+    "candidate_edit_notes"
+  ]
+}

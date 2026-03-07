@@ -145,3 +145,73 @@ Vacancy context:
 Interview answers:
 {answer_texts}
 """
+
+
+def bot_controller_prompt(
+    *,
+    role: str | None,
+    state: str | None,
+    allowed_actions: list[str],
+    latest_user_message: str,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: classify the latest user message and draft a workflow-safe Telegram reply.
+
+Current role: {role}
+Current state: {state}
+Allowed actions: {allowed_actions}
+Recent context: {recent_context or []}
+Latest user message:
+{latest_user_message}
+"""
+
+
+def interview_answer_parse_prompt(
+    *,
+    question_text: str,
+    candidate_answer: str,
+    candidate_summary: dict | None = None,
+) -> str:
+    return f"""Task: parse the interview answer into structured evidence.
+
+Question:
+{question_text}
+
+Candidate answer:
+{candidate_answer}
+
+Candidate summary:
+{candidate_summary or {}}
+"""
+
+
+def interview_followup_decision_prompt(
+    *,
+    question_text: str,
+    question_kind: str,
+    candidate_answer: str,
+    candidate_summary: dict | None,
+    vacancy_context: dict | None,
+    follow_up_already_used: bool,
+    answer_parse: dict | None,
+) -> str:
+    return f"""Task: decide whether this answer deserves one follow-up question.
+
+Question kind: {question_kind}
+Question:
+{question_text}
+
+Candidate answer:
+{candidate_answer}
+
+Candidate summary:
+{candidate_summary or {}}
+
+Vacancy context:
+{vacancy_context or {}}
+
+Parsed answer evidence:
+{answer_parse or {}}
+
+Follow-up already used for this topic: {follow_up_already_used}
+"""

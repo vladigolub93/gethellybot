@@ -1,0 +1,8 @@
+version: 1
+capability: deletion_confirmation
+cases:
+  - id: explicit_confirmation
+    input:
+      entity_type: candidate_profile
+    expected:
+      is_explicit_confirmation_required: true

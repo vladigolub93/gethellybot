@@ -19,6 +19,7 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_DATA_MODEL_AND_ERD.md](./HELLY_V1_DATA_MODEL_AND_ERD.md): physical data model, entity relationships, suggested PostgreSQL schema, indexes, and retention strategy.
 - [HELLY_V1_STATE_MACHINES.md](./HELLY_V1_STATE_MACHINES.md): detailed state definitions, transition matrices, guards, side effects, and failure handling rules.
 - [HELLY_V1_PROMPT_CATALOG.md](./HELLY_V1_PROMPT_CATALOG.md): AI capability inventory, prompt asset structure, schema contracts, model policy, and evaluation requirements.
+- [HELLY_V1_LLM_COVERAGE.md](./HELLY_V1_LLM_COVERAGE.md): full prompt-family coverage matrix showing which LLM capabilities already have assets, which are runtime-wired, and which still need implementation wiring.
 
 ## Delivery Planning
 

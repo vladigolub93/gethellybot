@@ -1,0 +1,9 @@
+version: 1
+capability: role_selection_message
+cases:
+  - id: explain_two_roles
+    input:
+      user_message: "which role should I pick?"
+    expected:
+      mentions_candidate: true
+      mentions_hiring_manager: true

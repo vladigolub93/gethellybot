@@ -1,0 +1,12 @@
+version: 1
+capability: interview_answer_parse
+cases:
+  - id: concrete_answer
+    input: "I designed a Redis-backed queue and implemented retry handling."
+    expected:
+      is_concrete: true
+      ownership_level: strong
+  - id: vague_answer
+    input: "I was involved in many systems."
+    expected:
+      is_concrete: false

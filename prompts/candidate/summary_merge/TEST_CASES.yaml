@@ -1,0 +1,20 @@
+version: 1
+capability: candidate_summary_merge
+cases:
+  - id: merge_updates_years_and_skills
+    input:
+      base_summary:
+        years_experience: 5
+        skills: [python, postgresql]
+      edit_request_text: "Actually 6 years and I used FastAPI."
+    expected:
+      years_experience: 6
+      skills_contains: [python, postgresql, fastapi]
+  - id: merge_preserves_existing_facts
+    input:
+      base_summary:
+        years_experience: 4
+        skills: [react, typescript]
+      edit_request_text: "Please mention more frontend architecture work."
+    expected:
+      skills_contains: [react, typescript]

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SmallTalkReply",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "message": {
+      "type": "string",
+      "maxLength": 240
+    }
+  },
+  "required": ["message"]
+}

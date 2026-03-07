@@ -1,0 +1,63 @@
+version: 1
+capability: interview_session_conductor
+cases:
+  - id: opening_real_role_not_demo
+    input:
+      candidate:
+        first_name: Alex
+      vacancy:
+        role_title: Senior Python Engineer
+      stage: opening
+    expected:
+      mode: wait_for_confirmation
+      mentions_demo: false
+      mentions_role: true
+  - id: strong_answer_deepen_once
+    input:
+      current_question:
+        id: 1
+        type: behavioral
+      candidate_answer: "I designed and implemented a FastAPI service, owned schema changes, and led rollout."
+      follow_up_already_used: false
+    expected:
+      answer_quality: strong
+      mode: ask_follow_up
+      follow_up_used: true
+      follow_up_reason: deepen
+  - id: vague_answer_clarify_once
+    input:
+      current_question:
+        id: 2
+        type: role_specific
+      candidate_answer: "I worked with it a bit."
+      follow_up_already_used: false
+    expected:
+      answer_quality: weak
+      mode: ask_follow_up
+      follow_up_reason: clarify
+  - id: no_second_followup_same_topic
+    input:
+      current_question:
+        id: 2
+        type: role_specific
+      candidate_answer: "Still hard to explain."
+      follow_up_already_used: true
+    expected:
+      move_to_next_question: true
+  - id: inconsistent_claim_neutral_verify
+    input:
+      current_question:
+        id: 3
+        type: role_specific
+      candidate_answer: "I also built a distributed search platform from scratch."
+      claim_not_in_profile: true
+      follow_up_already_used: false
+    expected:
+      mode: ask_follow_up
+      follow_up_reason: verify
+  - id: closing_after_all_questions
+    input:
+      all_questions_covered: true
+    expected:
+      mode: closing
+      interview_complete: true

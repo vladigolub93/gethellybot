@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from src.interview.service import InterviewService
 
 
@@ -120,6 +122,14 @@ class FakeInterviewsRepository:
         session.current_question_order = next_order
         return session
 
+    def shift_questions_from_order(self, session_id, start_order, delta=1):
+        for question in sorted(
+            [item for item in self.questions if item.session_id == session_id and item.order_no >= start_order],
+            key=lambda item: item.order_no,
+            reverse=True,
+        ):
+            question.order_no += delta
+
     def mark_accepted(self, session):
         session.accepted_at = "now"
         return session
@@ -215,7 +225,7 @@ def test_accept_invitation_starts_interview() -> None:
     assert match.status == "accepted"
     assert service.interviews.session is not None
     assert service.interviews.session.state == "IN_PROGRESS"
-    assert len(service.interviews.questions) == 5
+    assert len(service.interviews.questions) == 4
 
 
 def test_interview_answers_complete_session() -> None:
@@ -229,7 +239,7 @@ def test_interview_answers_complete_session() -> None:
         text="Accept interview",
     )
 
-    for index in range(5):
+    for index in range(4):
         result = service.handle_candidate_message(
             user=user,
             raw_message_id=uuid4(),
@@ -241,4 +251,57 @@ def test_interview_answers_complete_session() -> None:
     assert result.status == "completed"
     assert service.interviews.session.state == "COMPLETED"
     assert match.status == "interview_completed"
-    assert len(service.interviews.answers) == 5
+    assert len(service.interviews.answers) == 4
+
+
+def test_strong_answer_inserts_followup_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    service, candidate, match, _vacancy = _build_service()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+    service.handle_candidate_message(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="Accept interview",
+    )
+
+    monkeypatch.setattr(
+        "src.interview.service.safe_parse_interview_answer",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "answer_summary": "Candidate explained a concrete ownership-heavy example.",
+                "technologies": ["python"],
+                "systems_or_projects": ["payments api"],
+                "ownership_level": "strong",
+                "is_concrete": True,
+                "possible_profile_conflict": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "src.interview.service.safe_decide_interview_followup",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "answer_quality": "strong",
+                "ask_followup": True,
+                "followup_reason": "deepen",
+                "followup_question": "What trade-off did you make there?",
+            }
+        ),
+    )
+
+    result = service.handle_candidate_message(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="I designed and implemented the API myself.",
+    )
+
+    assert result is not None
+    assert result.status == "follow_up_question"
+    assert result.notification_text == "What trade-off did you make there?"
+    assert service.interviews.session.current_question_order == 2
+    assert service.interviews.session.total_questions == 5
+    inserted = service.interviews.get_question_by_order(service.interviews.session.id, 2)
+    assert inserted is not None
+    assert inserted.question_kind == "follow_up"

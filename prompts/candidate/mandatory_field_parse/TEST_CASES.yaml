@@ -1,0 +1,16 @@
+version: 1
+capability: candidate_mandatory_field_parse
+cases:
+  - id: candidate_parse_complete
+    input: "Salary 4500 EUR monthly, Berlin, Germany, hybrid."
+    expected:
+      salary_currency: EUR
+      salary_period: month
+      city: Berlin
+      country_code: DE
+      work_format: hybrid
+  - id: candidate_parse_partial
+    input: "Remote from Lisbon."
+    expected:
+      location_text_present: true
+      work_format: remote
