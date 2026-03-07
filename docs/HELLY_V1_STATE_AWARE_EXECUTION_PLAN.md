@@ -146,6 +146,7 @@ Status:
 - controller-level regression coverage is in place for all major state families
 - telegram routing regression coverage is now in place for key help-first interception cases across candidate intake, candidate questions, candidate ready, verification, manager intake, interview invite, and manager review
 - routing coverage now also protects summary review help vs real correction input, delete-confirmation help flows, and manager-approve passthrough behavior
+- routing coverage now also protects interview accept/skip passthrough, candidate/vacancy delete-confirm passthrough, and generic recovery fallback for users outside any active role flow
 
 ## 4. Current Next Task
 

@@ -85,6 +85,7 @@ Status vs SRS:
 - `Implemented`: AI-proposed actions are validated against state-allowed actions before any future execution path can use them
 - `Implemented`: regression coverage now includes both state-policy unit tests and Telegram routing interception tests for key help-first scenarios across candidate, interview, and manager paths
 - `Implemented`: routing regressions now also cover summary-review help vs correction, delete-confirmation help, and manager-action passthrough
+- `Implemented`: routing regressions now also cover interview accept/skip passthrough, delete-confirm passthrough, and the generic unsupported-input recovery path for users outside an active role flow
 
 Status vs SRS:
 

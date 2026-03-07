@@ -117,14 +117,15 @@ class FakeEvaluationService:
 class FakeInterviewService:
     def __init__(self):
         self.calls = []
-
-    def handle_candidate_message(self, **kwargs):
-        self.calls.append(kwargs)
-        return SimpleNamespace(
+        self.result = SimpleNamespace(
             status="invite_pending",
             notification_template="candidate_interview_invitation_help",
             notification_text="Reply 'Accept interview' or 'Skip opportunity'.",
         )
+
+    def handle_candidate_message(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
 
 
 def build_update(*, text: str) -> NormalizedTelegramUpdate:
@@ -482,3 +483,151 @@ def test_manager_approve_passthrough_reaches_manager_handler() -> None:
 
     assert templates == ["manager_candidate_approved"]
     assert service.evaluation_service.calls
+
+
+def test_interview_accept_passthrough_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="accepted",
+        notification_template="candidate_interview_started",
+        notification_text="Interview started.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u9",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw9",
+        build_update(text="Accept interview"),
+    )
+
+    assert templates == ["candidate_interview_started"]
+    assert service.interview_service.calls
+
+
+def test_interview_skip_passthrough_reaches_interview_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="skipped",
+        notification_template="candidate_interview_skipped",
+        notification_text="Opportunity skipped.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10",
+        build_update(text="Skip opportunity"),
+    )
+
+    assert templates == ["candidate_interview_skipped"]
+    assert service.interview_service.calls
+
+
+def test_candidate_delete_confirm_passthrough_reaches_deletion_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="candidate_deleted",
+        notification_text="Profile deleted.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u11",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw11",
+        build_update(text="Confirm delete profile"),
+    )
+
+    assert templates == ["candidate_deleted"]
+    assert service.candidate_service.deletion_calls
+
+
+def test_vacancy_delete_confirm_passthrough_reaches_deletion_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="vacancy_deleted",
+        notification_text="Vacancy deleted.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u12",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12",
+        build_update(text="Confirm delete vacancy"),
+    )
+
+    assert templates == ["vacancy_deleted"]
+    assert service.vacancy_service.deletion_calls
+
+
+def test_unsupported_input_uses_recovery_for_user_without_active_role_flow() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u13",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw13",
+        build_update(text="random unsupported thing"),
+    )
+
+    assert templates == ["unsupported_input"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"].startswith("Recovery:")
