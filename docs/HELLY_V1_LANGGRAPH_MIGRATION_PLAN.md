@@ -52,6 +52,17 @@ Deliver:
 - shared Helly graph state contract
 - graph bootstrap and runner
 
+Status:
+
+- in progress
+- implemented:
+  - dependency baseline
+  - `src/graph/` foundation package
+  - canonical `HellyGraphState`
+  - stage registry
+  - foundation stage graph bootstrap
+  - router skeleton
+
 ### Step 2. Backend Validation Bridge
 
 Deliver:

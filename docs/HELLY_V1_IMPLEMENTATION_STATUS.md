@@ -45,7 +45,7 @@ Architectural status note:
 - the current runtime uses a working state-aware controller/routing baseline
 - this is no longer the final target orchestration architecture
 - the new target is `LangGraph` stage-agent execution over the same backend state machines
-- that migration is not yet implemented in runtime
+- `LangGraph` foundation modules and canonical graph state contract are now added, but runtime stage execution has not yet been migrated
 
 ## 3. Infrastructure and Delivery Status
 
