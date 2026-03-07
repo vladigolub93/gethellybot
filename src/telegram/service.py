@@ -330,11 +330,11 @@ class TelegramUpdateService:
             if summary_review_result is not None:
                 message_map = {
                     "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
-                    "candidate_summary_edit_processing": "Summary edits received. Updating your profile summary.",
-                    "candidate_summary_edit_limit_reached": "Summary edit limit reached. Please approve the latest summary or restart profile creation.",
-                    "candidate_summary_edit_empty": "Please send summary edits after 'Edit summary:'.",
+                    "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
+                    "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
+                    "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
                     "candidate_summary_not_available": "No current summary is available to review.",
-                    "candidate_summary_review_help": "Reply 'Approve summary' or 'Edit summary: ...' while reviewing your summary.",
+                    "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
                 }
                 templates.append(
                     self._notify(
@@ -342,8 +342,11 @@ class TelegramUpdateService:
                         summary_review_result.notification_template,
                         {
                             "text": self._copy(message_map[summary_review_result.notification_template]),
-                            "reply_markup": summary_review_keyboard()
-                            if summary_review_result.notification_template == "candidate_summary_review_help"
+                            "reply_markup": summary_review_keyboard(edit_allowed=True)
+                            if summary_review_result.notification_template in {
+                                "candidate_summary_review_help",
+                                "candidate_summary_edit_empty",
+                            }
                             else None,
                         },
                     )

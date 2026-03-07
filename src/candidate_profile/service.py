@@ -258,67 +258,75 @@ class CandidateProfileService:
                 notification_template="candidate_summary_approved",
             )
 
+        correction_count = self.repo.count_versions_by_source_type(profile.id, "summary_user_edit")
+        if correction_count >= 1:
+            return CandidateSummaryReviewResult(
+                status="limit_reached",
+                notification_template="candidate_summary_edit_limit_reached",
+            )
+
+        if lowered in {"change summary", "edit summary", "change", "edit"}:
+            return CandidateSummaryReviewResult(
+                status="awaiting_edit_details",
+                notification_template="candidate_summary_edit_empty",
+            )
+
+        edit_text = normalized_text
         if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
             edit_text = normalized_text.split(":", 1)[1].strip()
-            if not edit_text:
-                return CandidateSummaryReviewResult(
-                    status="empty_edit",
-                    notification_template="candidate_summary_edit_empty",
-                )
 
-            correction_count = self.repo.count_versions_by_source_type(profile.id, "summary_user_edit")
-            if correction_count >= 3:
-                return CandidateSummaryReviewResult(
-                    status="limit_reached",
-                    notification_template="candidate_summary_edit_limit_reached",
-                )
-
-            current_version = self.repo.get_current_version(profile)
-            if current_version is None:
-                return CandidateSummaryReviewResult(
-                    status="missing",
-                    notification_template="candidate_summary_not_available",
-                )
-
-            self.state_service.transition(
-                entity_type="candidate_profile",
-                entity=profile,
-                to_state=CANDIDATE_STATE_CV_PROCESSING,
-                trigger_type="user_action",
-                trigger_ref_id=raw_message_id,
-                actor_user_id=user.id,
-                metadata_json={"action": "edit_summary"},
-            )
-            new_version = self.repo.create_version(
-                profile_id=profile.id,
-                version_no=self.repo.next_version_no(profile.id),
-                source_type="summary_user_edit",
-                source_raw_message_id=raw_message_id,
-                summary_json={
-                    "edit_request_text": edit_text,
-                    "base_version_id": str(current_version.id),
-                },
-                normalization_json={"edit_request_text": edit_text},
-            )
-            self.repo.set_current_version(profile, new_version.id)
-            self.queue.enqueue(
-                JobMessage(
-                    job_type="candidate_summary_edit_apply_v1",
-                    payload={
-                        "candidate_profile_id": str(profile.id),
-                        "candidate_profile_version_id": str(new_version.id),
-                        "base_version_id": str(current_version.id),
-                        "edit_request_text": edit_text,
-                    },
-                    idempotency_key=f"candidate_summary_edit_apply_v1:{new_version.id}",
-                    entity_type="candidate_profile_version",
-                    entity_id=new_version.id,
-                )
-            )
+        if not edit_text:
             return CandidateSummaryReviewResult(
-                status="accepted",
-                notification_template="candidate_summary_edit_processing",
+                status="empty_edit",
+                notification_template="candidate_summary_edit_empty",
             )
+
+        current_version = self.repo.get_current_version(profile)
+        if current_version is None:
+            return CandidateSummaryReviewResult(
+                status="missing",
+                notification_template="candidate_summary_not_available",
+            )
+
+        self.state_service.transition(
+            entity_type="candidate_profile",
+            entity=profile,
+            to_state=CANDIDATE_STATE_CV_PROCESSING,
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=user.id,
+            metadata_json={"action": "edit_summary"},
+        )
+        new_version = self.repo.create_version(
+            profile_id=profile.id,
+            version_no=self.repo.next_version_no(profile.id),
+            source_type="summary_user_edit",
+            source_raw_message_id=raw_message_id,
+            summary_json={
+                "edit_request_text": edit_text,
+                "base_version_id": str(current_version.id),
+            },
+            normalization_json={"edit_request_text": edit_text},
+        )
+        self.repo.set_current_version(profile, new_version.id)
+        self.queue.enqueue(
+            JobMessage(
+                job_type="candidate_summary_edit_apply_v1",
+                payload={
+                    "candidate_profile_id": str(profile.id),
+                    "candidate_profile_version_id": str(new_version.id),
+                    "base_version_id": str(current_version.id),
+                    "edit_request_text": edit_text,
+                },
+                idempotency_key=f"candidate_summary_edit_apply_v1:{new_version.id}",
+                entity_type="candidate_profile_version",
+                entity_id=new_version.id,
+            )
+        )
+        return CandidateSummaryReviewResult(
+            status="accepted",
+            notification_template="candidate_summary_edit_processing",
+        )
 
         return CandidateSummaryReviewResult(
             status="unsupported",

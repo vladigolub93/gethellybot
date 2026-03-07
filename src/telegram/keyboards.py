@@ -32,9 +32,12 @@ def role_selection_keyboard() -> dict:
     }
 
 
-def summary_review_keyboard() -> dict:
+def summary_review_keyboard(*, edit_allowed: bool = True) -> dict:
+    keyboard = [["Approve summary"]]
+    if edit_allowed:
+        keyboard.append(["Change summary"])
     return {
-        "keyboard": [["Approve summary"], ["Edit summary: ..."]],
+        "keyboard": keyboard,
         "resize_keyboard": True,
         "one_time_keyboard": False,
     }

@@ -253,7 +253,7 @@ def test_edit_summary_enqueues_processing_job() -> None:
     result = service.handle_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Edit summary: emphasize backend leadership",
+        text="Please emphasize backend leadership and platform ownership.",
     )
 
     assert result is not None
@@ -261,7 +261,78 @@ def test_edit_summary_enqueues_processing_job() -> None:
     assert profile.state == CANDIDATE_STATE_CV_PROCESSING
     assert len(fake_repo.versions) == 2
     assert fake_repo.versions[-1].source_type == "summary_user_edit"
+    assert fake_repo.versions[-1].normalization_json["edit_request_text"] == "Please emphasize backend leadership and platform ownership."
     assert len(fake_queue.messages) == 1
+
+
+def test_summary_change_prompt_requests_specific_correction() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=1,
+        source_type="pasted_text",
+        summary_json={"headline": "Python engineer"},
+    )
+    fake_repo.set_current_version(profile, version.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="Change summary",
+    )
+
+    assert result is not None
+    assert result.status == "awaiting_edit_details"
+    assert profile.state == CANDIDATE_STATE_SUMMARY_REVIEW
+    assert len(fake_queue.messages) == 0
+
+
+def test_second_summary_edit_is_rejected() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_SUMMARY_REVIEW)
+    fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=1,
+        source_type="pasted_text",
+        summary_json={"headline": "Python engineer"},
+    )
+    edited = fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=2,
+        source_type="summary_user_edit",
+        summary_json={"headline": "Python backend engineer"},
+    )
+    fake_repo.set_current_version(profile, edited.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="Actually change it again",
+    )
+
+    assert result is not None
+    assert result.status == "limit_reached"
+    assert profile.state == CANDIDATE_STATE_SUMMARY_REVIEW
+    assert len(fake_queue.messages) == 0
 
 
 def test_questions_answer_completion_moves_profile_to_verification_pending() -> None:

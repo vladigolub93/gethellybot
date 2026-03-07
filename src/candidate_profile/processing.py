@@ -117,9 +117,9 @@ class CandidateProcessingService:
             entity_id=profile.id,
             template_key="candidate_summary_ready_for_review",
             payload_json={
-                "text": "Your profile summary is ready. Use the buttons below to approve it or request edits.",
+                "text": "Does this summary look correct, or would you like to change anything?",
                 "summary": summary,
-                "reply_markup": summary_review_keyboard(),
+                "reply_markup": summary_review_keyboard(edit_allowed=True),
             },
         )
         return {
@@ -177,9 +177,9 @@ class CandidateProcessingService:
             entity_id=profile.id,
             template_key="candidate_summary_ready_for_review",
             payload_json={
-                "text": "Updated summary is ready. Use the buttons below to approve it or request more edits.",
+                "text": "Here is your updated summary. This is the final version for approval.",
                 "summary": merged_summary,
-                "reply_markup": summary_review_keyboard(),
+                "reply_markup": summary_review_keyboard(edit_allowed=False),
             },
         )
         return {
