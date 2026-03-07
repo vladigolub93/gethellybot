@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
+from src.db.repositories.vacancies import VacanciesRepository
 from src.graph.bootstrap import register_foundation_stage_graphs
 from src.graph.registry import registry
 from src.graph.router import StageGraphRouter
@@ -18,22 +19,31 @@ from src.graph.stages.entry import (
     load_entry_context_node,
     load_entry_knowledge_node,
 )
+from src.graph.stages.manager import (
+    build_manager_stage_reply_node,
+    detect_manager_stage_intent_node,
+    load_manager_stage_context_node,
+    load_manager_stage_knowledge_node,
+)
 from src.orchestrator.policy import resolve_state_context
 
 
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
     CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING", "VERIFICATION_PENDING", "READY"}
+    MANAGER_STAGES = {"INTAKE_PENDING"}
 
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
         self.consents = UserConsentsRepository(session)
+        self.vacancies = VacanciesRepository(session)
         self.router = StageGraphRouter()
         register_foundation_stage_graphs()
         self._compiled_graphs = {}
         self._register_entry_stage_nodes()
         self._register_candidate_stage_nodes()
+        self._register_manager_stage_nodes()
 
     def maybe_build_entry_reply(
         self,
@@ -115,7 +125,17 @@ class LangGraphStageAgentService:
         return None
 
     def _resolve_supported_stage(self, user) -> str | None:
-        return self._resolve_entry_stage(user) or self._resolve_candidate_stage(user)
+        return self._resolve_entry_stage(user) or self._resolve_candidate_stage(user) or self._resolve_manager_stage(user)
+
+    def _resolve_manager_stage(self, user) -> str | None:
+        if not getattr(user, "is_hiring_manager", False):
+            return None
+        vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
+        if vacancy is None:
+            return None
+        if vacancy.state in self.MANAGER_STAGES:
+            return vacancy.state
+        return None
 
     def _register_entry_stage_nodes(self) -> None:
         for stage in self.ENTRY_STAGES:
@@ -148,6 +168,25 @@ class LangGraphStageAgentService:
                     "load_knowledge": load_candidate_stage_knowledge_node,
                     "detect_intent": detect_candidate_stage_intent_node,
                     "propose_action": build_candidate_stage_reply_node(self.session),
+                    "validate_action": registry.get_nodes(stage).get("validate_action")
+                    or (lambda state: state),
+                    "emit_side_effects": registry.get_nodes(stage).get("emit_side_effects")
+                    or (lambda state: state),
+                },
+            )
+
+    def _register_manager_stage_nodes(self) -> None:
+        for stage in self.MANAGER_STAGES:
+            definition = registry.get_definition(stage)
+            if definition is None:
+                continue
+            registry.register_stage(
+                definition=definition,
+                nodes={
+                    "load_context": load_manager_stage_context_node,
+                    "load_knowledge": load_manager_stage_knowledge_node,
+                    "detect_intent": detect_manager_stage_intent_node,
+                    "propose_action": build_manager_stage_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),
                     "emit_side_effects": registry.get_nodes(stage).get("emit_side_effects")

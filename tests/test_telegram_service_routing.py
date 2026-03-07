@@ -756,8 +756,11 @@ def test_candidate_document_cv_passthrough_reaches_cv_handler() -> None:
 
 def test_manager_jd_help_is_intercepted_before_jd_intake() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "Yes. You can paste the role title, stack, seniority, budget, and work format as plain text."
+    )
+    service.bot_controller = FakeBotController(
+        "Old manager intake fallback should not be used."
     )
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -775,6 +778,8 @@ def test_manager_jd_help_is_intercepted_before_jd_intake() -> None:
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
     assert not service.vacancy_service.intake_calls
 
 

@@ -143,6 +143,14 @@ Exit:
 
 - manager vacancy onboarding is graph-driven
 
+Status:
+
+- in progress
+- implemented:
+  - first manager-stage graph slice for `INTAKE_PENDING`
+  - graph-driven help handling for `INTAKE_PENDING`
+  - non-help vacancy JD input still falls through to the existing backend intake path
+
 ### Step 6. Interview and Review Agents
 
 Migrate:
