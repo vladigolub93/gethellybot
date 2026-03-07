@@ -7,10 +7,10 @@ from src.graph.registry import registry
 from src.graph.router import StageGraphRouter
 from src.graph.runtime import compile_stage_graph
 from src.graph.stages.candidate import (
-    build_candidate_cv_reply_node,
-    detect_candidate_cv_intent_node,
-    load_candidate_cv_context_node,
-    load_candidate_cv_knowledge_node,
+    build_candidate_stage_reply_node,
+    detect_candidate_stage_intent_node,
+    load_candidate_stage_context_node,
+    load_candidate_stage_knowledge_node,
 )
 from src.graph.stages.entry import (
     build_entry_reply_node,
@@ -23,7 +23,7 @@ from src.orchestrator.policy import resolve_state_context
 
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
-    CANDIDATE_STAGES = {"CV_PENDING"}
+    CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW"}
 
     def __init__(self, session):
         self.session = session
@@ -144,10 +144,10 @@ class LangGraphStageAgentService:
             registry.register_stage(
                 definition=definition,
                 nodes={
-                    "load_context": load_candidate_cv_context_node,
-                    "load_knowledge": load_candidate_cv_knowledge_node,
-                    "detect_intent": detect_candidate_cv_intent_node,
-                    "propose_action": build_candidate_cv_reply_node(self.session),
+                    "load_context": load_candidate_stage_context_node,
+                    "load_knowledge": load_candidate_stage_knowledge_node,
+                    "detect_intent": detect_candidate_stage_intent_node,
+                    "propose_action": build_candidate_stage_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),
                     "emit_side_effects": registry.get_nodes(stage).get("emit_side_effects")

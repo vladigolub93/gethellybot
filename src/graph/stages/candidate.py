@@ -5,6 +5,7 @@ import re
 from src.graph.state import HellyGraphState
 from src.llm.service import safe_state_assistance_decision
 from src.orchestrator.policy import resolve_state_context
+from src.shared.text import normalize_command_text
 
 
 def _candidate_cv_help_patterns() -> tuple[str, ...]:
@@ -28,7 +29,21 @@ def _candidate_cv_help_patterns() -> tuple[str, ...]:
     )
 
 
-def load_candidate_cv_context_node(state: HellyGraphState) -> HellyGraphState:
+def _candidate_summary_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat should i change\b",
+        r"\bwhat kind of changes\b",
+        r"\bwhere did .*summary come from\b",
+        r"\bwhere does .*summary come from\b",
+        r"\bwhy .*approval\b",
+        r"\bwhy .*approve\b",
+        r"\bhow .*summary\b",
+        r"\bhelp .*summary\b",
+        r"\bwhat if .*wrong\b",
+    )
+
+
+def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
     state.missing_requirements = list(context.missing_requirements)
@@ -36,7 +51,7 @@ def load_candidate_cv_context_node(state: HellyGraphState) -> HellyGraphState:
     return state
 
 
-def load_candidate_cv_knowledge_node(state: HellyGraphState) -> HellyGraphState:
+def load_candidate_stage_knowledge_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     snippets = [context.goal, context.guidance_text]
     if context.help_text:
@@ -45,16 +60,46 @@ def load_candidate_cv_knowledge_node(state: HellyGraphState) -> HellyGraphState:
     return state
 
 
-def detect_candidate_cv_intent_node(state: HellyGraphState) -> HellyGraphState:
-    normalized = " ".join((state.latest_user_message or "").lower().split())
-    is_help = any(re.search(pattern, normalized) for pattern in _candidate_cv_help_patterns())
-    if not is_help and len(normalized) <= 40 and "?" in normalized:
-        is_help = True
+def _is_candidate_cv_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    if any(re.search(pattern, normalized) for pattern in _candidate_cv_help_patterns()):
+        return True
+    return len(normalized) <= 40 and "?" in normalized
+
+
+def _is_candidate_summary_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    command = normalize_command_text(text or "")
+    if command in {
+        "approve summary",
+        "approve",
+        "approve profile",
+        "change summary",
+        "edit summary",
+        "change",
+        "edit",
+    }:
+        return False
+    if command.startswith("edit summary:") or command.startswith("edit:"):
+        return False
+    if any(re.search(pattern, normalized) for pattern in _candidate_summary_help_patterns()):
+        return True
+    return False
+
+
+def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
+    text = state.latest_user_message or ""
+    if state.active_stage == "CV_PENDING":
+        is_help = _is_candidate_cv_help(text)
+    elif state.active_stage == "SUMMARY_REVIEW":
+        is_help = _is_candidate_summary_help(text)
+    else:
+        is_help = False
     state.parsed_input["intent"] = "help" if is_help else "candidate_input"
     return state
 
 
-def build_candidate_cv_reply_node(session):
+def build_candidate_stage_reply_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
         context = resolve_state_context(role=state.role, state=state.active_stage)
         if state.parsed_input.get("intent") == "help":

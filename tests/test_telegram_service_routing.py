@@ -916,8 +916,11 @@ def test_candidate_questions_help_is_intercepted_before_questions_handler() -> N
 
 def test_summary_review_help_is_intercepted_before_summary_handler() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
+    service.stage_agents = FakeStageAgentService(
         "Tell me exactly what is wrong in the summary, and I will revise it once."
+    )
+    service.bot_controller = FakeBotController(
+        "Old summary fallback should not be used."
     )
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
@@ -939,6 +942,8 @@ def test_summary_review_help_is_intercepted_before_summary_handler() -> None:
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
     assert not service.candidate_service.summary_calls
 
 

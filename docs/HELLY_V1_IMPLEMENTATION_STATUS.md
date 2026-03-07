@@ -47,7 +47,7 @@ Architectural status note:
 - the new target is `LangGraph` stage-agent execution over the same backend state machines
 - `LangGraph` foundation modules and canonical graph state contract are now added
 - entry-stage runtime execution has started migrating through a graph-driven path for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
-- candidate `CV_PENDING` help handling has also started migrating through a graph-driven path
+- candidate `CV_PENDING` and `SUMMARY_REVIEW` help handling have also started migrating through graph-driven paths
 - Telegram still falls back to the old controller/routing layer for all remaining stages
 
 ## 3. Infrastructure and Delivery Status
@@ -137,7 +137,7 @@ Status vs SRS:
 - `Implemented`: verification video submission step
 - `Implemented`: transition to `READY`
 - `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY`
-- `Partial`: `CV_PENDING` help execution has started migrating to a bounded LangGraph stage agent, while the rest of candidate onboarding still runs through the legacy state-aware controller path
+- `Partial`: `CV_PENDING` and `SUMMARY_REVIEW` help execution have started migrating to bounded LangGraph stage agents, while the rest of candidate onboarding still runs through the legacy state-aware controller path
 
 ### What is only partial
 
