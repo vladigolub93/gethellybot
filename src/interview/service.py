@@ -26,6 +26,7 @@ from src.llm.service import (
 )
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.telegram.keyboards import interview_invitation_keyboard
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,7 @@ class InterviewService:
                     "text": self.messaging.compose_interview_invitation(
                         role_title=getattr(vacancy, "role_title", None)
                     ),
+                    "reply_markup": interview_invitation_keyboard(),
                 },
             )
             invited_count += 1

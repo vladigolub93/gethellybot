@@ -10,6 +10,7 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_evaluate_candidate
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.telegram.keyboards import manager_review_keyboard
 
 
 @dataclass(frozen=True)
@@ -119,9 +120,10 @@ class EvaluationService:
                 entity_id=match.id,
                 template_key="manager_candidate_review_ready",
                 payload_json={
-                    "text": self._copy("A qualified candidate is ready for review. Reply 'Approve candidate' or 'Reject candidate'."),
+                    "text": self._copy("A qualified candidate is ready for review. Use the buttons below to approve or reject."),
                     "candidate_summary": (candidate_version.summary_json or {}) if candidate_version else {},
                     "evaluation": evaluation,
+                    "reply_markup": manager_review_keyboard(),
                 },
             )
 

@@ -14,6 +14,15 @@ from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
 from src.orchestrator.service import BotControllerService
+from src.telegram.keyboards import (
+    consent_keyboard,
+    contact_request_keyboard,
+    deletion_confirmation_keyboard,
+    interview_invitation_keyboard,
+    manager_review_keyboard,
+    role_selection_keyboard,
+    summary_review_keyboard,
+)
 from src.telegram.types import NormalizedTelegramUpdate
 from src.vacancy.service import VacancyService
 
@@ -102,12 +111,22 @@ class TelegramUpdateService:
                         user.id,
                         "request_consent",
                         {
-                            "text": self._copy("Please confirm data processing consent by replying 'I agree'."),
+                            "text": self._copy("Please confirm data processing consent using the button below."),
+                            "reply_markup": consent_keyboard(),
                         },
                     )
                 )
             else:
-                templates.append(self._notify(user.id, "request_role", {"text": self.messaging.compose_role_selection()}))
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "request_role",
+                        {
+                            "text": self.messaging.compose_role_selection(),
+                            "reply_markup": role_selection_keyboard(),
+                        },
+                    )
+                )
             return templates
 
         if text_value == "/start":
@@ -116,7 +135,10 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_contact",
-                        {"text": self._copy("Please share your contact to continue.")},
+                        {
+                            "text": self._copy("Please share your contact using the button below to continue."),
+                            "reply_markup": contact_request_keyboard(),
+                        },
                     )
                 )
                 return templates
@@ -126,7 +148,10 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_consent",
-                        {"text": self._copy("Please confirm data processing consent by replying 'I agree'.")},
+                        {
+                            "text": self._copy("Please confirm data processing consent using the button below."),
+                            "reply_markup": consent_keyboard(),
+                        },
                     )
                 )
                 return templates
@@ -135,7 +160,10 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": self.messaging.compose_role_selection()},
+                    {
+                        "text": self.messaging.compose_role_selection(),
+                        "reply_markup": role_selection_keyboard(),
+                    },
                 )
             )
             return templates
@@ -148,7 +176,10 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     "request_role",
-                    {"text": self.messaging.compose_role_selection(latest_user_message="consent confirmed")},
+                    {
+                        "text": self.messaging.compose_role_selection(latest_user_message="consent confirmed"),
+                        "reply_markup": role_selection_keyboard(),
+                    },
                 )
             )
             return templates
@@ -159,7 +190,10 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_contact",
-                        {"text": self._copy("Please share your contact before choosing a role.")},
+                        {
+                            "text": self._copy("Please share your contact using the button below before choosing a role."),
+                            "reply_markup": contact_request_keyboard(),
+                        },
                     )
                 )
                 return templates
@@ -169,7 +203,10 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         "request_consent",
-                        {"text": self._copy("Please confirm consent before choosing a role.")},
+                        {
+                            "text": self._copy("Please confirm consent using the button below before choosing a role."),
+                            "reply_markup": consent_keyboard(),
+                        },
                     )
                 )
                 return templates
@@ -214,7 +251,12 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         deletion_result.notification_template,
-                        {"text": deletion_result.notification_text},
+                        {
+                            "text": deletion_result.notification_text,
+                            "reply_markup": deletion_confirmation_keyboard("candidate")
+                            if deletion_result.status == "confirmation_required"
+                            else None,
+                        },
                     )
                 )
                 return templates
@@ -230,7 +272,12 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         deletion_result.notification_template,
-                        {"text": deletion_result.notification_text},
+                        {
+                            "text": deletion_result.notification_text,
+                            "reply_markup": deletion_confirmation_keyboard("vacancy")
+                            if deletion_result.status == "confirmation_required"
+                            else None,
+                        },
                     )
                 )
                 return templates
@@ -246,7 +293,12 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         manager_result.notification_template,
-                        {"text": manager_result.notification_text},
+                        {
+                            "text": manager_result.notification_text,
+                            "reply_markup": manager_review_keyboard()
+                            if manager_result.status == "help"
+                            else None,
+                        },
                     )
                 )
                 return templates
@@ -288,7 +340,12 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         summary_review_result.notification_template,
-                        {"text": self._copy(message_map[summary_review_result.notification_template])},
+                        {
+                            "text": self._copy(message_map[summary_review_result.notification_template]),
+                            "reply_markup": summary_review_keyboard()
+                            if summary_review_result.notification_template == "candidate_summary_review_help"
+                            else None,
+                        },
                     )
                 )
                 return templates

@@ -1,4 +1,7 @@
-from src.notifications.rendering import render_notification_text
+from src.notifications.rendering import (
+    render_notification_reply_markup,
+    render_notification_text,
+)
 
 
 def test_render_notification_with_summary_and_evaluation() -> None:
@@ -28,3 +31,17 @@ def test_render_notification_with_summary_and_evaluation() -> None:
 def test_render_notification_falls_back_to_template_name() -> None:
     rendered = render_notification_text(template_key="empty_case", payload={})
     assert rendered == "Helly notification: empty_case"
+
+
+def test_render_notification_reply_markup_returns_payload_markup() -> None:
+    reply_markup = {
+        "keyboard": [["Candidate", "Hiring Manager"]],
+        "resize_keyboard": True,
+    }
+
+    rendered = render_notification_reply_markup(
+        template_key="request_role",
+        payload={"text": "Choose role", "reply_markup": reply_markup},
+    )
+
+    assert rendered == reply_markup

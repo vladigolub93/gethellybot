@@ -4,7 +4,10 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
 from src.integrations.telegram_bot import TelegramBotClient
-from src.notifications.rendering import render_notification_text
+from src.notifications.rendering import (
+    render_notification_reply_markup,
+    render_notification_text,
+)
 
 
 class NotificationDeliveryService:
@@ -36,9 +39,14 @@ class NotificationDeliveryService:
                 template_key=notification.template_key,
                 payload=notification.payload_json or {},
             )
+            reply_markup = render_notification_reply_markup(
+                template_key=notification.template_key,
+                payload=notification.payload_json or {},
+            )
             telegram_result = self.telegram.send_text_message(
                 chat_id=user.telegram_chat_id,
                 text=text,
+                reply_markup=reply_markup,
             )
             self.raw_messages.create(
                 user_id=user.id,

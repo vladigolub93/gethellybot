@@ -17,15 +17,18 @@ class TelegramBotClient:
         self.file_base_url = f"https://api.telegram.org/file/bot{self.token}"
         self.timeout_seconds = timeout_seconds
 
-    def send_text_message(self, *, chat_id: int, text: str) -> dict:
+    def send_text_message(self, *, chat_id: int, text: str, reply_markup: Optional[dict] = None) -> dict:
+        body = {
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": True,
+        }
+        if reply_markup is not None:
+            body["reply_markup"] = reply_markup
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(
                 f"{self.api_base_url}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "disable_web_page_preview": True,
-                },
+                json=body,
             )
             response.raise_for_status()
             payload = response.json()

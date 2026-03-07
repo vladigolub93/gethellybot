@@ -52,3 +52,7 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
     if not rendered:
         rendered = f"Helly notification: {template_key}"
     return rendered[:3900]
+
+
+def render_notification_reply_markup(*, template_key: str, payload: dict):
+    return (payload or {}).get("reply_markup")

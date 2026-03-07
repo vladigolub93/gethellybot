@@ -11,6 +11,7 @@ from src.embeddings.service import EmbeddingService
 from src.ingestion.service import ContentIngestionService
 from src.llm.service import safe_extract_candidate_summary, safe_merge_candidate_summary
 from src.state.service import StateService
+from src.telegram.keyboards import summary_review_keyboard
 
 
 class CandidateProcessingService:
@@ -116,8 +117,9 @@ class CandidateProcessingService:
             entity_id=profile.id,
             template_key="candidate_summary_ready_for_review",
             payload_json={
-                "text": "Your profile summary is ready. Reply 'Approve summary' or 'Edit summary: ...'.",
+                "text": "Your profile summary is ready. Use the buttons below to approve it or request edits.",
                 "summary": summary,
+                "reply_markup": summary_review_keyboard(),
             },
         )
         return {
@@ -175,8 +177,9 @@ class CandidateProcessingService:
             entity_id=profile.id,
             template_key="candidate_summary_ready_for_review",
             payload_json={
-                "text": "Updated summary is ready. Reply 'Approve summary' or 'Edit summary: ...'.",
+                "text": "Updated summary is ready. Use the buttons below to approve it or request more edits.",
                 "summary": merged_summary,
+                "reply_markup": summary_review_keyboard(),
             },
         )
         return {
