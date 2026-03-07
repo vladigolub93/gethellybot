@@ -33,14 +33,19 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="CONTACT_REQUIRED",
         goal="Collect a valid Telegram contact before onboarding begins.",
         allowed_actions=["share_contact"],
+        assistance_prompt_slug="contact_required",
         guidance_text="Please share your contact using the button below to continue.",
-        help_text="Please share your contact using the button below to continue.",
+        help_text=(
+            "Helly needs your contact so it can link your Telegram account to one profile and continue onboarding. "
+            "Please share your contact using the button below to continue."
+        ),
         missing_requirements=["contact"],
     ),
     "CONSENT_REQUIRED": StatePolicyDefinition(
         state="CONSENT_REQUIRED",
         goal="Collect explicit data-processing consent before profile creation.",
         allowed_actions=["reply_i_agree"],
+        assistance_prompt_slug="consent_required",
         guidance_text="Please confirm data processing consent to continue.",
         help_text="Helly needs your consent before storing profile data. Please confirm data processing consent to continue.",
         missing_requirements=["data_processing_consent"],
@@ -49,6 +54,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         state="ROLE_SELECTION",
         goal="Choose whether the user is onboarding as a candidate or hiring manager.",
         allowed_actions=["candidate", "hiring manager"],
+        assistance_prompt_slug="role_selection",
         guidance_text="Choose your role: Candidate or Hiring Manager.",
         help_text="Choose Candidate if you are looking for a job, or Hiring Manager if you want to hire for a role.",
         missing_requirements=["role_selection"],

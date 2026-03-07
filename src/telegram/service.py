@@ -130,6 +130,37 @@ class TelegramUpdateService:
                 )
             return templates
 
+        should_offer_identity_assistance = (
+            not user.phone_number
+            or (not user.is_candidate and not user.is_hiring_manager)
+        )
+
+        if (
+            should_offer_identity_assistance
+            and normalized_update.content_type == "text"
+            and text_value not in {
+            "/start",
+            "i agree",
+            "agree",
+            "consent",
+            "candidate",
+            "hiring manager",
+            }
+        ):
+            assistance_text = self.bot_controller.maybe_build_in_state_assistance(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+            )
+            if assistance_text:
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {"text": assistance_text},
+                    )
+                )
+                return templates
+
         if text_value == "/start":
             if not user.phone_number:
                 templates.append(

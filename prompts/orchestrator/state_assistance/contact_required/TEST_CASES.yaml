@@ -1,0 +1,6 @@
+- name: why_contact
+  input: "Why do you need my contact?"
+  expected_intent: "clarification_request"
+- name: what_to_do
+  input: "What should I do here?"
+  expected_intent: "guidance_request"

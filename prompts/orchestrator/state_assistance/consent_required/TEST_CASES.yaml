@@ -1,0 +1,6 @@
+- name: why_consent
+  input: "Why do you need my consent?"
+  expected_intent: "clarification_request"
+- name: what_now
+  input: "What should I do now?"
+  expected_intent: "guidance_request"

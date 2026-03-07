@@ -1,0 +1,6 @@
+- name: why_role
+  input: "Why do I need to choose a role?"
+  expected_intent: "clarification_request"
+- name: which_role
+  input: "Which one should I choose?"
+  expected_intent: "guidance_request"

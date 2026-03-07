@@ -62,6 +62,7 @@ What it still does not have is the full target AI pipeline. The core extraction/
 - `Implemented`: contact is required before onboarding starts
 - `Implemented`: consent capture exists
 - `Implemented`: role selection exists
+- `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
   - the `User` table can technically support multiple role flags
@@ -81,7 +82,7 @@ Status vs SRS:
 - `Implemented`: inbound and outbound raw messages are persisted
 - `Partial`: keyboards/helpers are still basic
 - `Not Implemented`: location input is not yet actively used in the runtime flow
-- `Implemented`: state-aware conversational assistance now covers intake, post-intake, interview, manager review, and delete-confirmation states
+- `Implemented`: state-aware conversational assistance now covers identity entry, intake, post-intake, interview, manager review, and delete-confirmation states
 - `Implemented`: AI-proposed actions are validated against state-allowed actions before any future execution path can use them
 - `Implemented`: regression coverage now includes both state-policy unit tests and Telegram routing interception tests for key help-first scenarios across candidate, interview, and manager paths
 - `Implemented`: routing regressions now also cover summary-review help vs correction, delete-confirmation help, and manager-action passthrough
@@ -99,7 +100,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
-- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `160` passing tests covering help interception, business-action passthrough, normalization, aliases, and multimodal routing for the major user flows
+- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `173` passing tests covering help interception, business-action passthrough, normalization, aliases, multimodal routing, and early identity/onboarding assistance
 
 Status vs SRS:
 

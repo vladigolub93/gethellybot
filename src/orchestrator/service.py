@@ -60,6 +60,9 @@ class BotControllerService:
         if not latest_user_message.strip():
             return None
         if context.state not in {
+            "CONTACT_REQUIRED",
+            "CONSENT_REQUIRED",
+            "ROLE_SELECTION",
             "CV_PENDING",
             "INTAKE_PENDING",
             "SUMMARY_REVIEW",
@@ -172,6 +175,41 @@ class BotControllerService:
             return False
 
         patterns_by_state = {
+            "CONTACT_REQUIRED": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhat for\b",
+                r"\bwhat do i do\b",
+                r"\bwhat should i do\b",
+                r"\bcontact\b",
+                r"\bphone\b",
+                r"\bnumber\b",
+                r"\bprivacy\b",
+            ],
+            "CONSENT_REQUIRED": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhat for\b",
+                r"\bconsent\b",
+                r"\bdata\b",
+                r"\bprivacy\b",
+                r"\bstore\b",
+                r"\bneed\b",
+            ],
+            "ROLE_SELECTION": [
+                r"\bwhy\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhat for\b",
+                r"\brole\b",
+                r"\bcandidate\b",
+                r"\bhiring manager\b",
+                r"\bchoose\b",
+                r"\bwhich one\b",
+                r"\bdifference\b",
+            ],
             "CV_PENDING": [
                 r"\bi do not have (a )?(cv|resume)\b",
                 r"\bi don't have (a )?(cv|resume)\b",

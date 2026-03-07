@@ -160,12 +160,14 @@ Status:
 - routing coverage now also protects uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - routing coverage now also protects punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation
 - routing coverage now also includes direct unit coverage for shared command normalization and broader punctuation handling across summary edit, manager approval, interview skip, and vacancy deletion
+- early identity states are now covered by state-specific assistance as well, including `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
 - current verification point:
-  - `160 passed`
+  - `173 passed`
   - state-aware help interception is covered
   - valid business-action passthrough is covered
   - normalization and alias handling is covered
   - multimodal routing coverage is in place for major candidate and manager paths
+  - early onboarding guidance is covered for contact, consent, and role entry
 
 ## 4. Current Next Task
 

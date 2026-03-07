@@ -215,6 +215,25 @@ def test_start_without_contact_requests_contact() -> None:
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
 
 
+def test_contact_required_help_intercepts_before_identity_gating() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+    service.bot_controller = FakeBotController("Please use the contact button so Helly can continue onboarding.")
+
+    user = SimpleNamespace(
+        id="g1h",
+        phone_number=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g1h", build_update(text="Why do you need my contact?"))
+
+    assert templates == ["state_aware_help"]
+    assert service.bot_controller.calls
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+
+
 def test_start_with_contact_but_without_consent_requests_consent() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
@@ -233,6 +252,25 @@ def test_start_with_contact_but_without_consent_requests_consent() -> None:
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
 
 
+def test_consent_required_help_intercepts_before_identity_gating() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+    service.bot_controller = FakeBotController("Helly needs consent before storing profile data.")
+
+    user = SimpleNamespace(
+        id="g2h",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g2h", build_update(text="Why do you need my consent?"))
+
+    assert templates == ["state_aware_help"]
+    assert service.bot_controller.calls
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+
+
 def test_start_with_contact_and_consent_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
@@ -249,6 +287,25 @@ def test_start_with_contact_and_consent_requests_role() -> None:
     assert templates == ["request_role"]
     assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+
+
+def test_role_selection_help_intercepts_before_identity_gating() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=True)
+    service.bot_controller = FakeBotController("Choose Candidate if you are job searching, or Hiring Manager if you want to hire.")
+
+    user = SimpleNamespace(
+        id="g3h",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g3h", build_update(text="Why do I need to choose my role?"))
+
+    assert templates == ["state_aware_help"]
+    assert service.bot_controller.calls
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
 
 
 def test_contact_share_without_consent_requests_consent() -> None:

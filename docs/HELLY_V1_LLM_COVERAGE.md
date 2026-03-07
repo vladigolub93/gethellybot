@@ -36,6 +36,9 @@ It distinguishes between:
 | `messaging/deletion_confirmation` | Asset Ready | Runtime Wired | active in candidate and vacancy deletion flows |
 | `messaging/interview_invitation_copy` | Asset Ready | Runtime Wired | active in invitation dispatch |
 | `messaging/response_copywriter` | Asset Ready | Runtime Wired | used as centralized messaging refinement layer |
+| `orchestrator/state_assistance/contact_required` | Asset Ready | Runtime Wired | early onboarding help for contact collection and contact-purpose questions |
+| `orchestrator/state_assistance/consent_required` | Asset Ready | Runtime Wired | early onboarding help for consent questions and privacy-related clarification |
+| `orchestrator/state_assistance/role_selection` | Asset Ready | Runtime Wired | early onboarding help for candidate vs hiring-manager flow choice |
 | `orchestrator/state_assistance/candidate_cv_pending` | Asset Ready | Runtime Wired | candidate CV help and blocked-user guidance |
 | `orchestrator/state_assistance/candidate_summary_review` | Asset Ready | Runtime Wired | summary review clarifications without misclassifying edits |
 | `orchestrator/state_assistance/candidate_questions_pending` | Asset Ready | Runtime Wired | salary/location/work-format help inside state |
@@ -63,6 +66,7 @@ At the prompt-asset level, Helly now covers the necessary LLM surface for:
 - reranking
 - recovery and small talk
 - top-level bot control
+- state-specific in-flow assistance for early identity and role-entry states
 - state-specific in-flow assistance for the main candidate and vacancy intake states
 - state-specific in-flow assistance for invite, active interview, and manager review states
 - state-specific in-flow assistance for delete confirmation
