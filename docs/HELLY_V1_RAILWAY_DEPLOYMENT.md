@@ -32,9 +32,25 @@ Only `helly-api` needs public networking.
 
 Use the repository `Dockerfile` at project root.
 
-Default image behavior starts the API service, but each Railway service should override the start command.
+This repository also includes service-specific Railway config-as-code files:
 
-## 4. Start Commands
+- `/deploy/railway/api.railway.json`
+- `/deploy/railway/worker.railway.json`
+- `/deploy/railway/scheduler.railway.json`
+
+Per Railway docs, each service can point to its own custom config file path in service settings.
+
+## 4. Service Config Paths
+
+Recommended custom config file path per Railway service:
+
+- `helly-api` -> `/deploy/railway/api.railway.json`
+- `helly-worker` -> `/deploy/railway/worker.railway.json`
+- `helly-scheduler` -> `/deploy/railway/scheduler.railway.json`
+
+These files define builder, start command, and restart policy.
+
+## 5. Start Commands
 
 For `helly-api`:
 
@@ -54,7 +70,7 @@ For `helly-scheduler`:
 bash scripts/start-scheduler.sh
 ```
 
-## 5. API Service Settings
+## 6. API Service Settings
 
 Recommended Railway settings for `helly-api`:
 
@@ -69,7 +85,7 @@ Recommended Railway settings for `helly-api`:
 
 This is acceptable for the current single-instance baseline.
 
-## 6. Required Environment Variables
+## 7. Required Environment Variables
 
 Set these in Railway for all services:
 
@@ -97,7 +113,7 @@ Notes:
 - `SUPABASE_DB_URL` should use the session pooler DSN.
 - For SQLAlchemy, the DSN should start with `postgresql+psycopg://`.
 
-## 7. Recommended DSN Format
+## 8. Recommended DSN Format
 
 Example:
 
@@ -105,18 +121,18 @@ Example:
 postgresql+psycopg://postgres.<project-ref>:<password>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
 ```
 
-## 8. Deploy Procedure
+## 9. Deploy Procedure
 
 1. Create the 3 Railway services from the same GitHub repository.
-2. Point all 3 services at the root `Dockerfile`.
-3. Set the service-specific start command for each service.
+2. For each service, set the custom config file path to the matching file in `/deploy/railway/`.
+3. Confirm all 3 services build from the root `Dockerfile`.
 4. Add the shared environment variables to all 3 services.
 5. Deploy `helly-api`.
 6. Confirm `/health` returns `200`.
 7. Deploy `helly-worker`.
 8. Deploy `helly-scheduler`.
 
-## 9. Telegram Webhook Setup
+## 10. Telegram Webhook Setup
 
 After `helly-api` is deployed and has a public domain:
 
@@ -140,7 +156,7 @@ To verify:
 curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 ```
 
-## 10. Smoke Test Checklist
+## 11. Smoke Test Checklist
 
 After deploy:
 
@@ -152,14 +168,14 @@ After deploy:
 6. Confirm a notification is returned from the live bot
 7. Confirm `raw_messages`, `notifications`, and `job_execution_logs` are populated in Supabase
 
-## 11. Operational Notes
+## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker
 - Telegram media storage sync is asynchronous via the scheduler and worker
 - the current queue backend is Postgres-backed
 - if worker throughput becomes insufficient, scale `helly-worker` first
 
-## 12. What Is Still Manual
+## 13. What Is Still Manual
 
 Current deployment still requires manual actions in Railway:
 
