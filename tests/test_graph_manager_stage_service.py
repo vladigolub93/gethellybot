@@ -59,9 +59,13 @@ def test_graph_manager_stage_allows_passthrough_for_real_jd_text() -> None:
         telegram_chat_id=200,
     )
 
-    reply = service.maybe_build_stage_reply(
+    result = service.maybe_run_stage(
         user=user,
         latest_user_message="Senior Python engineer, fintech product, remote in Europe, budget 6000 EUR.",
     )
 
-    assert reply is None
+    assert result is not None
+    assert result.stage == "INTAKE_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_job_description_text"
+    assert "Senior Python engineer" in result.structured_payload["job_description_text"]

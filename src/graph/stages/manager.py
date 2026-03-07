@@ -53,6 +53,15 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
         is_help = _is_manager_intake_help(text)
+        if is_help:
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+        else:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = "send_job_description_text"
+            state.structured_payload = {"job_description_text": text.strip()}
+        return state
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "manager_input"
@@ -75,6 +84,12 @@ def build_manager_stage_reply_node(session):
             state.reply_text = result.payload.get("response_text") or context.help_text or context.guidance_text
             state.follow_up_needed = True
             state.follow_up_question = context.guidance_text
+            return state
+
+        if state.active_stage == "INTAKE_PENDING" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "Thanks. I will use this job description to prepare the vacancy draft."
+            state.confidence = 0.9
             return state
 
         state.reply_text = None

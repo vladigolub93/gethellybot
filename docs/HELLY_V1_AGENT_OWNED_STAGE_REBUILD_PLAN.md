@@ -335,7 +335,8 @@ Current execution note:
 - `SUMMARY_REVIEW` is now implemented as a graph-owned approval/correction stage
 - `QUESTIONS_PENDING` is now implemented as a graph-owned structured-answer stage
 - `VERIFICATION_PENDING` is now implemented as a graph-owned verification stage with graph-validated video handoff
-- the next rebuild target is the rest of candidate flow, starting with `READY`
+- `INTAKE_PENDING` is now implemented as a graph-owned manager text-intake stage
+- the next rebuild target is the rest of candidate and manager flow, starting with `READY` and `CLARIFICATION_QA`
 
 ## 9. Definition of Done
 

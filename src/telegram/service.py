@@ -759,6 +759,38 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                stage_result = self.stage_agents.maybe_run_stage(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    latest_message_type=normalized_update.content_type,
+                )
+                if (
+                    stage_result is not None
+                    and stage_result.stage == "INTAKE_PENDING"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action == "send_job_description_text"
+                ):
+                    intake_result = self.vacancy_service.handle_jd_intake(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        content_type=normalized_update.content_type,
+                        text=(stage_result.structured_payload or {}).get("job_description_text") or normalized_update.text,
+                        file_id=file_id,
+                    )
+                    message_map = {
+                        "vacancy_jd_received_processing": "Job description received. Processing started.",
+                        "manager_input_not_expected": "Manager input is not expected at the current step.",
+                        "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
+                    }
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            intake_result.notification_template,
+                            {"text": self._copy(message_map[intake_result.notification_template])},
+                        )
+                    )
+                    return templates
             intake_result = self.vacancy_service.handle_jd_intake(
                 user=user,
                 raw_message_id=raw_message_id,

@@ -974,6 +974,51 @@ def test_manager_jd_passthrough_reaches_jd_handler() -> None:
     assert service.vacancy_service.intake_calls
 
 
+def test_graph_manager_intake_stage_can_own_text_jd_completion() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTAKE_PENDING",
+            reply_text="Thanks. I will use this job description to prepare the vacancy draft.",
+            stage_status="ready_for_transition",
+            proposed_action="send_job_description_text",
+            action_accepted=True,
+            structured_payload={
+                "job_description_text": "Senior Python engineer, fintech product, remote in Europe, budget 6000 EUR."
+            },
+            validation_result={"accepted": True, "normalized_action": "send_job_description_text"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = None
+
+    user = SimpleNamespace(
+        id="u2ax",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw2ax",
+        build_update(text="Senior Python engineer, fintech product, remote in Europe, budget 6000 EUR."),
+    )
+
+    assert templates == ["vacancy_jd_received_processing"]
+    assert service.vacancy_service.intake_calls
+    assert (
+        service.vacancy_service.intake_calls[-1]["text"]
+        == "Senior Python engineer, fintech product, remote in Europe, budget 6000 EUR."
+    )
+
+
 def test_manager_voice_jd_passthrough_reaches_jd_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)

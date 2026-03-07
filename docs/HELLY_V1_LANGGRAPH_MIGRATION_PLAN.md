@@ -167,9 +167,11 @@ Status:
 
 - in progress
 - implemented:
-  - first manager-stage graph slice for `INTAKE_PENDING`
+  - graph-owned text-stage execution for `INTAKE_PENDING`
   - graph-driven help handling for `INTAKE_PENDING`
-  - non-help vacancy JD input still falls through to the existing backend intake path
+  - graph-driven structured action proposal for manager text JD input
+  - graph-driven `send_job_description_text` validation and backend handoff
+  - non-text vacancy JD input still falls through to the existing backend intake path
 
 ### Step 6. Interview and Review Agents
 
