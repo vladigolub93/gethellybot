@@ -115,3 +115,17 @@ class CandidateRerankItemSchema(BaseModel):
 
 class CandidateRerankSchema(BaseModel):
     ranked_candidates: List[CandidateRerankItemSchema] = Field(default_factory=list)
+
+
+class VacancyInconsistencyFindingSchema(BaseModel):
+    severity: str
+    category: str
+    finding: str
+
+
+class VacancyInconsistencySchema(BaseModel):
+    findings: List[VacancyInconsistencyFindingSchema] = Field(default_factory=list)
+
+
+class ResponseCopywriterSchema(BaseModel):
+    message: str

@@ -269,3 +269,22 @@ Vacancy context:
 Shortlisted candidates:
 {shortlisted_candidates}
 """
+
+
+def vacancy_inconsistency_detect_prompt(*, source_text: str, summary: dict) -> str:
+    return f"""Task: detect meaningful inconsistencies or ambiguities in this vacancy draft.
+
+Original JD text:
+{source_text}
+
+Extracted vacancy summary:
+{summary}
+"""
+
+
+def response_copywriter_prompt(*, approved_intent: str) -> str:
+    return f"""Task: rewrite this approved response intent into concise Telegram copy.
+
+Approved response intent:
+{approved_intent}
+"""

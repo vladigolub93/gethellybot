@@ -12,6 +12,7 @@ from src.db.repositories.users import UsersRepository
 from src.evaluation.service import EvaluationService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
+from src.llm.service import safe_copywrite_response
 from src.orchestrator.service import BotControllerService
 from src.telegram.types import NormalizedTelegramUpdate
 from src.vacancy.service import VacancyService
@@ -39,6 +40,12 @@ class TelegramUpdateService:
         self.interview_service = InterviewService(session)
         self.bot_controller = BotControllerService(session)
         self.vacancy_service = VacancyService(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return safe_copywrite_response(
+            self.session,
+            approved_intent=approved_intent,
+        ).payload["message"]
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
@@ -193,7 +200,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     template_key,
-                    {"text": message_text},
+                    {"text": self._copy(message_text)},
                 )
             )
             return templates
@@ -251,7 +258,7 @@ class TelegramUpdateService:
                     self._notify(
                         user.id,
                         summary_review_result.notification_template,
-                        {"text": message_map[summary_review_result.notification_template]},
+                        {"text": self._copy(message_map[summary_review_result.notification_template])},
                     )
                 )
                 return templates
@@ -302,12 +309,12 @@ class TelegramUpdateService:
             if clarification_result is not None:
                 templates.append(
                     self._notify(
-                        user.id,
-                        clarification_result.notification_template,
-                        {"text": clarification_result.notification_text},
-                    )
+                    user.id,
+                    clarification_result.notification_template,
+                    {"text": self._copy(clarification_result.notification_text)},
                 )
-                return templates
+            )
+            return templates
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
             intake_result = self.vacancy_service.handle_jd_intake(
@@ -326,7 +333,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     intake_result.notification_template,
-                    {"text": message_map[intake_result.notification_template]},
+                    {"text": self._copy(message_map[intake_result.notification_template])},
                 )
             )
             return templates
@@ -348,7 +355,7 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     intake_result.notification_template,
-                    {"text": message_map[intake_result.notification_template]},
+                    {"text": self._copy(message_map[intake_result.notification_template])},
                 )
             )
             return templates

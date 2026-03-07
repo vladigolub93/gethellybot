@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
-from src.llm.service import safe_parse_vacancy_clarifications
+from src.llm.service import safe_copywrite_response, safe_parse_vacancy_clarifications
 from src.state.service import StateService
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
@@ -44,6 +44,12 @@ class VacancyService:
         self.repo = VacanciesRepository(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return safe_copywrite_response(
+            self.session,
+            approved_intent=approved_intent,
+        ).payload["message"]
 
     def ensure_active_intake_vacancy_for_manager(self, user) -> object:
         vacancy = self.repo.get_latest_incomplete_by_manager_user_id(user.id)
@@ -182,12 +188,12 @@ class VacancyService:
             return VacancyClarificationResult(
                 status="queued",
                 notification_template="vacancy_clarification_processing",
-                notification_text="Clarification answer received. Processing vacancy details.",
+                notification_text=self._copy("Clarification answer received. Processing vacancy details."),
             )
         return VacancyClarificationResult(
             status="unsupported",
             notification_template="vacancy_clarification_unsupported",
-            notification_text="Please answer with text, voice, or video.",
+            notification_text=self._copy("Please answer with text, voice, or video."),
         )
 
     def process_clarification_text(
@@ -256,7 +262,7 @@ class VacancyService:
             return VacancyClarificationResult(
                 status="completed",
                 notification_template="vacancy_open",
-                notification_text="Vacancy is now open and ready for matching.",
+                notification_text=self._copy("Vacancy is now open and ready for matching."),
             )
 
         questions_context = self._ensure_questions_context(vacancy)

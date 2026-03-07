@@ -23,7 +23,9 @@ from src.llm.prompts import (
     interview_followup_decision_prompt,
     interview_question_plan_prompt,
     interview_session_conductor_prompt,
+    response_copywriter_prompt,
     vacancy_clarifications_prompt,
+    vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
 )
 from src.llm.schemas import (
@@ -36,6 +38,8 @@ from src.llm.schemas import (
     InterviewFollowupDecisionSchema,
     InterviewQuestionPlanSchema,
     InterviewSessionConductorTurnSchema,
+    ResponseCopywriterSchema,
+    VacancyInconsistencySchema,
     VacancyClarificationSchema,
     VacancySummarySchema,
 )
@@ -256,6 +260,36 @@ def _normalize_followup_reason(value: Optional[str]) -> Optional[str]:
     if normalized in {"deepen", "clarify", "verify", "none"}:
         return normalized
     return None
+
+
+def _normalize_inconsistency_findings(findings: list[dict]) -> list[dict]:
+    normalized = []
+    for item in findings or []:
+        if not isinstance(item, dict):
+            continue
+        severity = (item.get("severity") or "").strip().lower()
+        category = (item.get("category") or "").strip().lower()
+        finding = _clean_text(item.get("finding"), limit=240)
+        if severity not in {"low", "medium", "high"}:
+            continue
+        if category not in {
+            "stack_conflict",
+            "seniority_conflict",
+            "work_format_conflict",
+            "scope_ambiguity",
+            "other",
+        }:
+            continue
+        if not finding:
+            continue
+        normalized.append(
+            {
+                "severity": severity,
+                "category": category,
+                "finding": finding,
+            }
+        )
+    return normalized[:12]
 
 
 def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LLMResult:
@@ -701,6 +735,43 @@ def rerank_candidates_with_llm(*, vacancy, shortlisted_candidates: list[dict]) -
     )
 
 
+def detect_vacancy_inconsistencies_with_llm(*, source_text: str, summary: dict) -> LLMResult:
+    result = _client.parse(
+        schema=VacancyInconsistencySchema,
+        system_prompt=load_system_prompt("vacancy", "inconsistency_detect"),
+        user_prompt=vacancy_inconsistency_detect_prompt(
+            source_text=source_text,
+            summary=summary,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="vacancy_inconsistency_detect_llm_v1",
+    )
+    findings = _normalize_inconsistency_findings(result.payload.get("findings") or [])
+    return LLMResult(
+        payload={
+            "findings": findings,
+            "issues": [item["finding"] for item in findings],
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def copywrite_response_with_llm(*, approved_intent: str) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=load_system_prompt("messaging", "response_copywriter"),
+        user_prompt=response_copywriter_prompt(approved_intent=approved_intent),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="response_copywriter_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=400) or approved_intent[:400]},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def safe_extract_candidate_summary(session, source_text: str, source_type: str) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
@@ -1091,4 +1162,47 @@ def safe_rerank_candidates(session, *, vacancy, shortlisted_candidates: list[dic
         payload={"ranked_candidates": ranked},
         model_name="baseline-deterministic",
         prompt_version="baseline_candidate_rerank_v1",
+    )
+
+
+def safe_detect_vacancy_inconsistencies(session, *, source_text: str, summary: dict, fallback_issues: list[str] | None = None) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return detect_vacancy_inconsistencies_with_llm(
+                source_text=source_text,
+                summary=summary,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_inconsistency_fallback_to_baseline", error=str(exc))
+
+    issues = []
+    for value in fallback_issues or []:
+        issue = _clean_text(value, limit=240)
+        if issue and issue not in issues:
+            issues.append(issue)
+    findings = [
+        {
+            "severity": "medium",
+            "category": "other",
+            "finding": issue,
+        }
+        for issue in issues
+    ]
+    return LLMResult(
+        payload={"findings": findings, "issues": issues},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_inconsistency_detect_v1",
+    )
+
+
+def safe_copywrite_response(session, *, approved_intent: str) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return copywrite_response_with_llm(approved_intent=approved_intent)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("response_copywriter_fallback_to_baseline", error=str(exc))
+    return LLMResult(
+        payload={"message": approved_intent[:400]},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_response_copywriter_v1",
     )

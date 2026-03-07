@@ -1,7 +1,11 @@
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
-from src.llm.service import safe_extract_vacancy_summary
+from src.llm.service import (
+    safe_copywrite_response,
+    safe_detect_vacancy_inconsistencies,
+    safe_extract_vacancy_summary,
+)
 from src.state.service import StateService
 from src.vacancy.service import VacancyService
 from src.vacancy.states import VACANCY_STATE_CLARIFICATION_QA, VACANCY_STATE_JD_PROCESSING
@@ -15,6 +19,12 @@ class VacancyProcessingService:
         self.raw_messages = RawMessagesRepository(session)
         self.state_service = StateService(session)
         self.vacancy_service = VacancyService(session)
+
+    def _copy(self, approved_intent: str) -> str:
+        return safe_copywrite_response(
+            self.session,
+            approved_intent=approved_intent,
+        ).payload["message"]
 
     def process_job(self, job) -> dict:
         if job.job_type == "vacancy_jd_extract_v1":
@@ -43,7 +53,7 @@ class VacancyProcessingService:
                 entity_type="vacancy",
                 entity_id=vacancy.id,
                 template_key="vacancy_jd_text_retry",
-                payload_json={"text": "Job description saved, but extraction is not connected for this format yet. Please resend it in text."},
+                payload_json={"text": self._copy("Job description saved, but extraction is not connected for this format yet. Please resend it in text.")},
             )
             return {"status": "ingestion_pending", "vacancy_id": str(vacancy.id), "vacancy_version_id": str(version.id)}
 
@@ -53,13 +63,23 @@ class VacancyProcessingService:
             version.source_type,
         )
         summary = llm_result.payload["summary"]
-        inconsistency_json = llm_result.payload["inconsistency_json"]
+        inconsistency_result = safe_detect_vacancy_inconsistencies(
+            self.session,
+            source_text=source_text,
+            summary=summary,
+            fallback_issues=(llm_result.payload.get("inconsistency_json") or {}).get("issues") or [],
+        )
+        inconsistency_json = inconsistency_result.payload
         self.repo.update_version_analysis(
             version,
             summary_json=summary,
-            normalization_json={"processor": llm_result.prompt_version, "ingestion_ready": True},
+            normalization_json={
+                "processor": llm_result.prompt_version,
+                "ingestion_ready": True,
+                "inconsistency_processor": inconsistency_result.prompt_version,
+            },
             inconsistency_json=inconsistency_json,
-            prompt_version=llm_result.prompt_version,
+            prompt_version=f"{llm_result.prompt_version}+{inconsistency_result.prompt_version}",
             model_name=llm_result.model_name,
         )
         self.repo.update_clarifications(
@@ -84,7 +104,9 @@ class VacancyProcessingService:
             entity_id=vacancy.id,
             template_key="vacancy_clarification_ready",
             payload_json={
-                "text": "Vacancy draft is ready. Send budget range, countries allowed, work format, team size, project description, and primary tech stack.",
+                "text": self._copy(
+                    "Vacancy draft is ready. Send budget range, countries allowed, work format, team size, project description, and primary tech stack."
+                ),
                 "summary": summary,
                 "inconsistencies": inconsistency_json,
             },
@@ -105,7 +127,7 @@ class VacancyProcessingService:
                 entity_type="vacancy",
                 entity_id=vacancy.id,
                 template_key="vacancy_clarification_text_retry",
-                payload_json={"text": "Voice/video clarification saved, but transcription is not connected yet. Please resend the clarification in text."},
+                payload_json={"text": self._copy("Voice/video clarification saved, but transcription is not connected yet. Please resend the clarification in text.")},
             )
             return {"status": "transcription_pending", "vacancy_id": str(vacancy.id), "raw_message_id": str(raw_message.id)}
 
