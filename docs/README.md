@@ -12,6 +12,7 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_ARCHITECTURE_BLUEPRINT.md](./HELLY_V1_ARCHITECTURE_BLUEPRINT.md): target backend architecture, module boundaries, data flows, AI orchestration model, infrastructure baseline, and quality controls.
 - [HELLY_V1_INFRA_DECISIONS.md](./HELLY_V1_INFRA_DECISIONS.md): fixed infrastructure choices for v1, including Supabase, Railway, Telegram, and OpenAI integration assumptions.
 - [HELLY_V1_RAILWAY_DEPLOYMENT.md](./HELLY_V1_RAILWAY_DEPLOYMENT.md): Railway deployment shape, service layout, env contract, webhook setup, and smoke-test checklist.
+- [HELLY_V1_LIVE_SMOKE_RUNBOOK.md](./HELLY_V1_LIVE_SMOKE_RUNBOOK.md): live Telegram smoke scenarios with validation commands for candidate, manager, interview, and deletion paths.
 - [HELLY_V1_PROJECT_ARCHITECTURE.md](./HELLY_V1_PROJECT_ARCHITECTURE.md): consolidated project architecture file that combines product, technical, infrastructure, and implementation decisions into one execution-oriented view.
 
 ## Detailed Design
