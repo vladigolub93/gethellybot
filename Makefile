@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state validate-stage-help-safety validate-no-post-message-transition validate-graph-stage-logs reset-telegram-user report-telegram-user watch-telegram-user check-telegram-user-checkpoint
+.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state validate-stage-help-safety validate-no-post-message-transition validate-graph-stage-logs validate-live-stage-checkpoint reset-telegram-user report-telegram-user watch-telegram-user check-telegram-user-checkpoint
 
 run-api:
 	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -36,6 +36,9 @@ validate-no-post-message-transition:
 
 validate-graph-stage-logs:
 	.venv/bin/python scripts/validate_graph_stage_logs.py --expect-telegram-user-id $(TELEGRAM_USER_ID)
+
+validate-live-stage-checkpoint:
+	.venv/bin/python scripts/validate_live_stage_checkpoint.py --telegram-user-id $(TELEGRAM_USER_ID)
 
 reset-telegram-user:
 	.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id $(TELEGRAM_USER_ID)

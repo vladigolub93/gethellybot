@@ -301,6 +301,22 @@ This requires:
 - `RAILWAY_API_TOKEN`
 - `RAILWAY_ENVIRONMENT_ID`
 
+To validate a full live checkpoint in one command:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_live_stage_checkpoint.py \
+  --telegram-user-id <telegram-user-id> \
+  --expect-candidate-state SUMMARY_REVIEW \
+  --expect-inbound-contains "How long" \
+  --forbid-candidate-version-source-type summary_user_edit \
+  --expect-log-stage SUMMARY_REVIEW \
+  --railway-token "$RAILWAY_API_TOKEN" \
+  --railway-environment-id "$RAILWAY_ENVIRONMENT_ID"
+```
+
 ## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker

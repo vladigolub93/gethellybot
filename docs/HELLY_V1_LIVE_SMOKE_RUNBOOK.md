@@ -41,6 +41,8 @@ Useful tools:
   - `.venv/bin/python scripts/validate_no_post_message_transition.py --telegram-user-id <id> ...`
 - validate that Railway logs contain the graph-owned stage execution event:
   - `.venv/bin/python scripts/validate_graph_stage_logs.py --expect-telegram-user-id <id> --expect-stage <stage>`
+- run one composite validation for a live checkpoint:
+  - `.venv/bin/python scripts/validate_live_stage_checkpoint.py --telegram-user-id <id> ...`
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -266,6 +268,22 @@ set +a
 .venv/bin/python scripts/validate_graph_stage_logs.py \
   --expect-telegram-user-id <manager-id> \
   --expect-stage VACANCY_SUMMARY_REVIEW
+```
+
+Composite validation for the same step:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_live_stage_checkpoint.py \
+  --telegram-user-id <manager-id> \
+  --expect-vacancy-state VACANCY_SUMMARY_REVIEW \
+  --expect-inbound-contains "How long" \
+  --forbid-vacancy-version-source-type summary_user_edit \
+  --expect-log-stage VACANCY_SUMMARY_REVIEW \
+  --railway-token "$RAILWAY_API_TOKEN" \
+  --railway-environment-id "$RAILWAY_ENVIRONMENT_ID"
 ```
 
 ## 7. Delete Confirmation Smoke
