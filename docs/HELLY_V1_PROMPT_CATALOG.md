@@ -96,6 +96,23 @@ Primary grounding document:
 
 If a prompt needs to explain product behavior, privacy expectations, introduction timing, or the purpose of a step, it should stay consistent with that knowledge base.
 
+## 2.8 Shared Telegram Recruiter Style Rules
+
+All runtime-loaded `SYSTEM.md` prompts are automatically extended with shared Telegram delivery rules from:
+
+- `prompts/_shared/TELEGRAM_STYLE.md`
+
+Those shared rules define a common user-facing baseline:
+
+- concise Telegram chat writing
+- no long formal walls of text by default
+- split long replies into multiple short chat-sized messages conceptually
+- friendly AI recruiter tone for both candidates and hiring managers
+- light IT slang or humor allowed when appropriate
+- do not sound robotic or bureaucratic
+
+For structured extraction and evaluation prompts, these rules only apply to user-facing text fields, not to the schema mechanics themselves.
+
 ## 3. Recommended Prompt Repository Layout
 
 ```text

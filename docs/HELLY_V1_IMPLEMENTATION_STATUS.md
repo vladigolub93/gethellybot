@@ -40,6 +40,8 @@ What it still does not have is the full target AI pipeline. The core extraction/
 
 User-facing LLM responses are now additionally grounded in a shared Helly agent knowledge base, so orchestrator, messaging, and interview-conductor prompts can answer flow and product questions against one canonical FAQ source instead of relying only on local prompt wording.
 
+All graph-owned stage agents now also have dedicated prompt assets under `prompts/orchestrator/state_assistance/*`, and every runtime-loaded `SYSTEM.md` prompt automatically receives a shared Telegram recruiter style layer from `prompts/_shared/TELEGRAM_STYLE.md`.
+
 Architectural status note:
 
 - the current runtime uses a working state-aware controller/routing baseline
