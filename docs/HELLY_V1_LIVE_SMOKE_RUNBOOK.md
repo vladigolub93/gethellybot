@@ -22,6 +22,11 @@ Before running live smoke checks:
 3. The Telegram webhook must point to the live validation base URL used in step 1, ending with `/telegram/webhook`.
 4. You must know the tester `telegram_user_id` or `telegram_chat_id`.
 5. The tester's old rows should be cleared if you want a clean onboarding run.
+6. Before attempting automated Phase L checks, run:
+   - `.venv/bin/python scripts/report_phase_l_readiness.py`
+7. Treat Phase L readiness in two modes:
+   - `can_validate_after_real_user_input`: live DB/log validation can run after you manually send the Telegram message
+   - `can_drive_synthetic_webhook_posts`: this machine can also replay synthetic webhook traffic without manual Telegram input
 
 Useful tools:
 
@@ -47,6 +52,9 @@ Useful tools:
   - `.venv/bin/python scripts/validate_live_smoke_scenario.py --telegram-user-id <id> --scenario <scenario>`
 - run all remaining Phase L validations together:
   - `.venv/bin/python scripts/validate_phase_l.py --telegram-user-id <id>`
+- print readiness/blockers for automated Phase L validation:
+  - `.venv/bin/python scripts/report_phase_l_readiness.py`
+  - this now reports both global blockers and per-scenario readiness for the remaining Phase L checks
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -328,6 +336,12 @@ set +a
 .venv/bin/python scripts/validate_phase_l.py \
   --telegram-user-id <id>
 ```
+
+Interpretation:
+
+- if `report_phase_l_readiness.py` says `can_validate_after_real_user_input=true`, you can complete Phase L by interacting with the live bot and then running the validators locally
+- if it also says `can_drive_synthetic_webhook_posts=true`, this machine can drive synthetic webhook replay in addition to post-message validation
+- if both are `false`, fix the reported blockers before expecting automated Phase L completion
 
 ## 7. Delete Confirmation Smoke
 
