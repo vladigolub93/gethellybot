@@ -243,6 +243,17 @@ Status:
   - migrated stage help resolution no longer depends on `bot_controller` fallback for candidate, manager, interview, review, and delete conversational paths
   - entry-stage consent and role-selection execution no longer depends on legacy raw-text command branches
   - entry-stage help resolution no longer depends on `bot_controller` fallback; if graph provides no stage-owned reply, runtime falls through to generic recovery instead
+  - graph-native sequential flow tests now cover candidate stage progression:
+    - `CV_PENDING`
+    - `SUMMARY_REVIEW`
+    - `QUESTIONS_PENDING`
+    - `VERIFICATION_PENDING`
+    - `READY`
+  - graph-native sequential flow tests now cover manager stage progression:
+    - `INTAKE_PENDING`
+    - `CLARIFICATION_QA`
+    - `OPEN`
+    - `DELETE_CONFIRMATION`
   - full test suite currently passes with graph-owned routing and stage-resolution coverage
 
 ## 5. Definition of Done
