@@ -26,9 +26,12 @@ Before running live smoke checks:
 Useful tools:
 
 - inspect current state:
-  - `python3 scripts/inspect_telegram_user.py --telegram-user-id <id>`
+  - `.venv/bin/python scripts/inspect_telegram_user.py --telegram-user-id <id>`
 - validate expected state:
-  - `python3 scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
+  - `.venv/bin/python scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
+- reset a tester to a clean slate:
+  - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
+  - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
 
 ## 3. Candidate Onboarding Smoke
 
@@ -71,6 +74,15 @@ set +a
   --telegram-user-id <id> \
   --require-user \
   --expect-candidate-state READY
+```
+
+Optional clean reset before rerunning:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute
 ```
 
 ## 4. Manager Onboarding Smoke

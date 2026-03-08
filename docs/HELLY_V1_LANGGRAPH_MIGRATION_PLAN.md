@@ -253,6 +253,8 @@ Status:
   - live DB inspection run against Supabase completed successfully for a non-existent Telegram user id and returned a valid empty snapshot
   - `scripts/validate_telegram_user_state.py`
   - smoke validator run against Supabase completed successfully in failure mode, correctly rejecting `--require-user` for a non-existent Telegram user id
+  - `scripts/reset_telegram_user.py`
+  - live reset tooling now supports clean-slate smoke reruns and defaults to dry-run unless `--execute` is passed
 
 ### Step 8. Regression and Production Hardening
 

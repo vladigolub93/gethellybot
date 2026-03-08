@@ -197,7 +197,7 @@ To inspect live DB state for a Telegram user after a smoke test:
 set -a
 source .env
 set +a
-python3 scripts/inspect_telegram_user.py --telegram-user-id <telegram-user-id>
+.venv/bin/python scripts/inspect_telegram_user.py --telegram-user-id <telegram-user-id>
 ```
 
 This prints a JSON snapshot of:
@@ -209,13 +209,22 @@ This prints a JSON snapshot of:
 - latest notification
 - row counts for messages, notifications, files, matches, vacancies
 
+To reset one Telegram tester to a clean slate before repeating a live smoke flow:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <telegram-user-id> --execute
+```
+
 To assert an expected live state after a manual smoke step:
 
 ```bash
 set -a
 source .env
 set +a
-python3 scripts/validate_telegram_user_state.py \
+.venv/bin/python scripts/validate_telegram_user_state.py \
   --telegram-user-id <telegram-user-id> \
   --expect-candidate-state READY \
   --expect-notification-template candidate_verification_completed

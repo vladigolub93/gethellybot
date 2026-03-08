@@ -370,6 +370,7 @@ Current execution note:
 - live production validation tooling now also supports `VALIDATION_APP_BASE_URL`, so Railway checks can run cleanly even when local `.env` keeps `APP_BASE_URL` on localhost
 - Phase 11 now also includes a live DB inspection tool for Telegram-user smoke tests, and the script has been validated against the live Supabase environment
 - Phase 11 now also includes an assertion-oriented Telegram-user smoke validator for expected candidate/vacancy/interview/match/notification state after a manual bot run
+- Phase 11 now also includes a safe-by-default Telegram-user reset tool for clean live smoke reruns without manual SQL
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage
 
 ## 9. Definition of Done
