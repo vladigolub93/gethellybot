@@ -556,10 +556,41 @@ class CandidateProfileService:
             return None
 
         normalized_text = normalize_command_text(text)
+        if normalized_text in {"delete profile", "delete my profile", "remove profile"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="delete_profile",
+            )
+        if normalized_text in {"confirm delete", "confirm delete profile"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="confirm_delete",
+            )
+        if normalized_text in {"cancel delete", "keep profile", "don't delete", "dont delete"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="cancel_delete",
+            )
+        return None
+
+    def execute_deletion_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+    ) -> Optional[CandidateDeletionResult]:
+        profile = self.repo.get_active_by_user_id(user.id)
+        if profile is None:
+            return None
+
         deletion_context = self._ensure_deletion_context(profile)
         pending = bool(deletion_context.get("pending"))
 
-        if normalized_text in {"cancel delete", "keep profile", "don't delete", "dont delete"} and pending:
+        if action == "cancel_delete" and pending:
             deletion_context["pending"] = False
             self._update_deletion_context(profile, deletion_context)
             return CandidateDeletionResult(
@@ -568,21 +599,12 @@ class CandidateProfileService:
                 notification_text=self._copy("Profile deletion cancelled. Your profile remains active."),
             )
 
-        if normalized_text not in {
-            "delete profile",
-            "delete my profile",
-            "remove profile",
-            "confirm delete",
-            "confirm delete profile",
-        }:
-            return None
-
         active_matches = self.matching.list_active_for_candidate(profile.id)
         has_active_interview = any(
             self.interviews.get_active_by_match_id(match.id) is not None for match in active_matches
         )
 
-        if normalized_text in {"confirm delete", "confirm delete profile"} and pending:
+        if action == "confirm_delete" and pending:
             return self._execute_deletion(
                 profile=profile,
                 raw_message_id=raw_message_id,
@@ -590,19 +612,21 @@ class CandidateProfileService:
                 active_matches=active_matches,
             )
 
-        deletion_context["pending"] = True
-        self._update_deletion_context(profile, deletion_context)
-        confirmation = safe_build_deletion_confirmation(
-            self.session,
-            entity_type="candidate_profile",
-            has_active_interview=has_active_interview,
-            has_active_matches=bool(active_matches),
-        )
-        return CandidateDeletionResult(
-            status="confirmation_required",
-            notification_template="candidate_deletion_confirmation_required",
-            notification_text=confirmation.payload["message"],
-        )
+        if action == "delete_profile":
+            deletion_context["pending"] = True
+            self._update_deletion_context(profile, deletion_context)
+            confirmation = safe_build_deletion_confirmation(
+                self.session,
+                entity_type="candidate_profile",
+                has_active_interview=has_active_interview,
+                has_active_matches=bool(active_matches),
+            )
+            return CandidateDeletionResult(
+                status="confirmation_required",
+                notification_template="candidate_deletion_confirmation_required",
+                notification_text=confirmation.payload["message"],
+            )
+        return None
 
     def _ensure_deletion_context(self, profile) -> dict:
         current = dict(profile.questions_context_json or {})

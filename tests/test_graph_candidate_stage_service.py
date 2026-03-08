@@ -267,6 +267,39 @@ def test_graph_candidate_stage_accepts_delete_confirmation() -> None:
     assert result.stage_status == "ready_for_transition"
 
 
+def test_graph_candidate_stage_does_not_treat_delete_question_as_confirm() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp4f",
+            state="READY",
+            questions_context_json={"deletion": {"pending": True}},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u7f",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="What exactly will be cancelled if I confirm?",
+    )
+
+    assert result is not None
+    assert result.stage == "DELETE_CONFIRMATION"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_handles_questions_pending_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

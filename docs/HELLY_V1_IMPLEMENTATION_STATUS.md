@@ -67,6 +67,7 @@ Architectural status note:
 - `INTERVIEW_IN_PROGRESS` text-turn meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification/help questions no longer rely on regex help classification
 - `MANAGER_REVIEW` is now graph-owned for review guidance and approve/reject execution
 - `DELETE_CONFIRMATION` is now graph-owned for confirm/cancel execution and deletion-consequence guidance
+- `DELETE_CONFIRMATION` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; help questions no longer rely on regex patterns and candidate/vacancy services now execute validated delete actions directly
 - Telegram now uses graph-first execution as the primary path for all migrated stages and only falls back to the old controller/routing layer as a compatibility path when graph does not return a stage-owned answer
 - graph-native integration coverage now includes stage-resolution priority tests for candidate and manager families, verifying that higher-priority interaction stages override lower-priority status stages in the expected order
 - Telegram transport now reuses a single graph stage result per migrated candidate/manager update instead of re-running graph execution in each downstream branch

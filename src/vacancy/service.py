@@ -512,10 +512,41 @@ class VacancyService:
             return None
 
         normalized_text = normalize_command_text(text)
+        if normalized_text in {"delete vacancy", "delete this vacancy", "remove vacancy"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="delete_vacancy",
+            )
+        if normalized_text in {"confirm delete", "confirm delete vacancy"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="confirm_delete",
+            )
+        if normalized_text in {"cancel delete", "keep vacancy", "don't delete", "dont delete"}:
+            return self.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="cancel_delete",
+            )
+        return None
+
+    def execute_deletion_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+    ) -> Optional[VacancyDeletionResult]:
+        vacancy = self.repo.get_latest_active_by_manager_user_id(user.id)
+        if vacancy is None:
+            return None
+
         deletion_context = self._ensure_deletion_context(vacancy)
         pending = bool(deletion_context.get("pending"))
 
-        if normalized_text in {"cancel delete", "keep vacancy", "don't delete", "dont delete"} and pending:
+        if action == "cancel_delete" and pending:
             deletion_context["pending"] = False
             self._update_deletion_context(vacancy, deletion_context)
             return VacancyDeletionResult(
@@ -524,21 +555,12 @@ class VacancyService:
                 notification_text=self._copy("Vacancy deletion cancelled. The vacancy remains active."),
             )
 
-        if normalized_text not in {
-            "delete vacancy",
-            "delete this vacancy",
-            "remove vacancy",
-            "confirm delete",
-            "confirm delete vacancy",
-        }:
-            return None
-
         active_matches = self.matching.list_active_for_vacancy(vacancy.id)
         has_active_interview = any(
             self.interviews.get_active_by_match_id(match.id) is not None for match in active_matches
         )
 
-        if normalized_text in {"confirm delete", "confirm delete vacancy"} and pending:
+        if action == "confirm_delete" and pending:
             return self._execute_deletion(
                 vacancy=vacancy,
                 raw_message_id=raw_message_id,
@@ -546,19 +568,21 @@ class VacancyService:
                 active_matches=active_matches,
             )
 
-        deletion_context["pending"] = True
-        self._update_deletion_context(vacancy, deletion_context)
-        confirmation = safe_build_deletion_confirmation(
-            self.session,
-            entity_type="vacancy",
-            has_active_interview=has_active_interview,
-            has_active_matches=bool(active_matches),
-        )
-        return VacancyDeletionResult(
-            status="confirmation_required",
-            notification_template="vacancy_deletion_confirmation_required",
-            notification_text=confirmation.payload["message"],
-        )
+        if action == "delete_vacancy":
+            deletion_context["pending"] = True
+            self._update_deletion_context(vacancy, deletion_context)
+            confirmation = safe_build_deletion_confirmation(
+                self.session,
+                entity_type="vacancy",
+                has_active_interview=has_active_interview,
+                has_active_matches=bool(active_matches),
+            )
+            return VacancyDeletionResult(
+                status="confirmation_required",
+                notification_template="vacancy_deletion_confirmation_required",
+                notification_text=confirmation.payload["message"],
+            )
+        return None
 
     def _ensure_deletion_context(self, vacancy) -> dict:
         current = dict(vacancy.questions_context_json or {})

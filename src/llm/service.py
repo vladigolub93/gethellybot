@@ -19,6 +19,7 @@ from src.llm.prompts import (
     candidate_cv_prompt,
     candidate_questions_decision_prompt,
     candidate_questions_prompt,
+    delete_confirmation_decision_prompt,
     interview_in_progress_decision_prompt,
     candidate_summary_review_decision_prompt,
     candidate_summary_edit_prompt,
@@ -45,6 +46,7 @@ from src.llm.schemas import (
     CandidateRerankSchema,
     CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
+    DeleteConfirmationDecisionSchema,
     CandidateSummaryReviewDecisionSchema,
     CandidateSummarySchema,
     DeletionConfirmationSchema,
@@ -641,6 +643,42 @@ def vacancy_summary_review_decision_with_llm(
             "response_text": response_text,
             "proposed_action": proposed_action,
             "edit_text": edit_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def delete_confirmation_decision_with_llm(
+    *,
+    latest_user_message: str,
+    entity_label: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=DeleteConfirmationDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("deletion", "confirmation_decision"),
+        user_prompt=delete_confirmation_decision_prompt(
+            latest_user_message=latest_user_message,
+            entity_label=entity_label,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="delete_confirmation_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "confirm_delete", "cancel_delete"}:
+        proposed_action = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -1928,6 +1966,72 @@ def safe_vacancy_summary_review_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_vacancy_summary_review_decision_v1",
+    )
+
+
+def safe_delete_confirmation_decision(
+    session,
+    *,
+    latest_user_message: str,
+    entity_label: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return delete_confirmation_decision_with_llm(
+                latest_user_message=latest_user_message,
+                entity_label=entity_label,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("delete_confirmation_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance or f"Review the deletion details for this {entity_label} and either confirm or cancel.",
+        "proposed_action": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "delete_confirmation_help_fallback",
+    }
+    if command in {"confirm delete", "confirm delete profile", "confirm delete vacancy"}:
+        payload.update(
+            {
+                "intent": "confirm",
+                "response_text": f"Understood. I will delete the {entity_label} now.",
+                "proposed_action": "confirm_delete",
+                "needs_follow_up": False,
+                "reason_code": "delete_confirmation_confirm",
+            }
+        )
+    elif command in {"cancel delete", "keep profile", "keep vacancy", "don't delete", "dont delete"}:
+        payload.update(
+            {
+                "intent": "cancel",
+                "response_text": f"Understood. I will keep the {entity_label} active.",
+                "proposed_action": "cancel_delete",
+                "needs_follow_up": False,
+                "reason_code": "delete_confirmation_cancel",
+            }
+        )
+    elif any(token in lowered for token in ["what happens", "what exactly", "what will be cancelled", "can i cancel", "how do i cancel", "undo", "why", "help", "?"]):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance or f"Review the deletion details for this {entity_label} and either confirm or cancel.",
+                "needs_follow_up": True,
+                "reason_code": "delete_confirmation_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_delete_confirmation_decision_v1",
     )
 
 

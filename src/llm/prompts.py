@@ -229,6 +229,41 @@ Text:
 """
 
 
+def delete_confirmation_decision_prompt(
+    *,
+    latest_user_message: str,
+    entity_label: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the user means in a delete confirmation step.
+
+Entity being discussed:
+{entity_label}
+
+Valid outcomes:
+- help question or clarification about deletion consequences
+- explicit confirmation to delete
+- explicit cancellation / keep intent
+
+Rules:
+- treat questions like "what exactly will be cancelled?", "can I cancel this?", "why?", and "what happens?" as help, not as confirmation
+- only propose `confirm_delete` when the user is explicitly confirming deletion
+- only propose `cancel_delete` when the user is explicitly cancelling deletion or saying they want to keep the entity
+- do not invent side effects
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def interview_question_plan_prompt(vacancy_context: dict, candidate_summary: dict, cv_text: str | None = None) -> str:
     return f"""Task: generate 5 to 7 short interview questions for this candidate-vacancy pair.
 

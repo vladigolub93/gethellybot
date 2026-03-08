@@ -284,12 +284,18 @@ class TelegramUpdateService:
                 if stage_result.proposed_action == "confirm_delete"
                 else "Cancel delete"
             )
-
-        deletion_result = self.candidate_service.handle_deletion_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=deletion_text,
-        )
+        if hasattr(self.candidate_service, "execute_deletion_action"):
+            deletion_result = self.candidate_service.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="delete_profile" if stage_result.stage == "READY" else stage_result.proposed_action,
+            )
+        else:
+            deletion_result = self.candidate_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=deletion_text,
+            )
         if deletion_result is None:
             return None
         return [
@@ -330,12 +336,18 @@ class TelegramUpdateService:
                 if stage_result.proposed_action == "confirm_delete"
                 else "Cancel delete"
             )
-
-        deletion_result = self.vacancy_service.handle_deletion_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=deletion_text,
-        )
+        if hasattr(self.vacancy_service, "execute_deletion_action"):
+            deletion_result = self.vacancy_service.execute_deletion_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="delete_vacancy" if stage_result.stage == "OPEN" else stage_result.proposed_action,
+            )
+        else:
+            deletion_result = self.vacancy_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=deletion_text,
+            )
         if deletion_result is None:
             return None
         return [
