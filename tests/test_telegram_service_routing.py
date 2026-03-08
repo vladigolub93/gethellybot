@@ -308,6 +308,31 @@ def build_service() -> TelegramUpdateService:
     return service
 
 
+def make_summary_stage_result(action: str, *, edit_text: str | None = None) -> StageAgentExecutionResult:
+    payload = {"edit_text": edit_text} if edit_text is not None else {}
+    return StageAgentExecutionResult(
+        stage="SUMMARY_REVIEW",
+        reply_text="graph summary stage",
+        stage_status="ready_for_transition",
+        proposed_action=action,
+        action_accepted=True,
+        structured_payload=payload,
+        validation_result={"accepted": True, "normalized_action": action},
+    )
+
+
+def make_manager_review_stage_result(action: str) -> StageAgentExecutionResult:
+    return StageAgentExecutionResult(
+        stage="MANAGER_REVIEW",
+        reply_text="graph manager review stage",
+        stage_status="ready_for_transition",
+        proposed_action=action,
+        action_accepted=True,
+        structured_payload={},
+        validation_result={"accepted": True, "normalized_action": action},
+    )
+
+
 def test_start_without_contact_requests_contact() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
@@ -1286,6 +1311,7 @@ def test_summary_review_approve_passthrough_reaches_summary_handler() -> None:
 
 def test_summary_review_approve_with_whitespace_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("approve_summary"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1316,6 +1342,7 @@ def test_summary_review_approve_with_whitespace_reaches_summary_handler() -> Non
 
 def test_summary_review_uppercase_approve_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("approve_summary"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1346,6 +1373,7 @@ def test_summary_review_uppercase_approve_reaches_summary_handler() -> None:
 
 def test_summary_review_approve_with_punctuation_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("approve_summary"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1376,6 +1404,7 @@ def test_summary_review_approve_with_punctuation_reaches_summary_handler() -> No
 
 def test_summary_review_approve_profile_alias_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("approve_summary"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1406,6 +1435,7 @@ def test_summary_review_approve_profile_alias_reaches_summary_handler() -> None:
 
 def test_summary_review_edit_alias_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("request_summary_change"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1436,6 +1466,7 @@ def test_summary_review_edit_alias_reaches_summary_handler() -> None:
 
 def test_summary_review_edit_with_punctuation_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("request_summary_change"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1466,6 +1497,7 @@ def test_summary_review_edit_with_punctuation_reaches_summary_handler() -> None:
 
 def test_summary_review_change_summary_alias_reaches_summary_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_summary_stage_result("request_summary_change"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FakeCandidateService()
     service.candidate_service.summary_result = SimpleNamespace(
@@ -1795,6 +1827,7 @@ def test_graph_manager_review_stage_can_own_help_response() -> None:
 
 def test_manager_approve_passthrough_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("approve_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -1871,6 +1904,7 @@ def test_graph_manager_review_stage_can_own_approve() -> None:
 
 def test_manager_approve_alias_passthrough_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("approve_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -1901,6 +1935,7 @@ def test_manager_approve_alias_passthrough_reaches_manager_handler() -> None:
 
 def test_manager_uppercase_approve_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("approve_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -1931,6 +1966,7 @@ def test_manager_uppercase_approve_reaches_manager_handler() -> None:
 
 def test_manager_approve_with_punctuation_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("approve_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -3407,6 +3443,7 @@ def test_manager_voice_clarification_passthrough_reaches_clarification_handler()
 
 def test_manager_reject_passthrough_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("reject_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -3437,6 +3474,7 @@ def test_manager_reject_passthrough_reaches_manager_handler() -> None:
 
 def test_manager_reject_alias_passthrough_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("reject_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
@@ -3467,6 +3505,7 @@ def test_manager_reject_alias_passthrough_reaches_manager_handler() -> None:
 
 def test_manager_reject_with_punctuation_reaches_manager_handler() -> None:
     service = build_service()
+    service.stage_agents = FakeStageAgentService(None, stage_result=make_manager_review_stage_result("reject_candidate"))
     service.bot_controller = FakeBotController(None)
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()

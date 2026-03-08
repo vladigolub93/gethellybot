@@ -1077,11 +1077,7 @@ class TelegramUpdateService:
         )
         if assistance_templates is not None:
             return assistance_templates
-        return self._handle_candidate_summary_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=normalized_update.text or "",
-        )
+        return None
 
     def _apply_candidate_verification_segment(
         self,
@@ -1243,11 +1239,7 @@ class TelegramUpdateService:
         )
         if assistance_templates is not None:
             return assistance_templates
-        return self._handle_manager_review_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=latest_user_message,
-        )
+        return None
 
     def _apply_manager_clarification_segment(
         self,
@@ -1308,44 +1300,7 @@ class TelegramUpdateService:
         )
         if assistance_templates is not None:
             return assistance_templates
-        summary_review_result = self.vacancy_service.handle_summary_review_action(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=normalized_update.text or "",
-        )
-        if summary_review_result is None:
-            return None
-        message_map = {
-            "vacancy_summary_approved": "Summary approved. Now send budget range, countries allowed, work format, team size, project description, and primary tech stack.",
-            "vacancy_summary_edit_processing": "Thanks. Updating the vacancy summary based on your correction.",
-            "vacancy_summary_edit_limit_reached": "You can only change the vacancy summary once. Please approve the latest version to continue.",
-            "vacancy_summary_edit_empty": "Tell me exactly what is incorrect in the vacancy summary, and I will update it once.",
-            "vacancy_summary_not_available": "No current vacancy summary is available to review.",
-            "vacancy_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
-        }
-        return [
-            self._notify_result(
-                user_id=user.id,
-                template_key=summary_review_result.notification_template,
-                text=self._copy(message_map[summary_review_result.notification_template]),
-                reply_markup=(
-                    summary_review_keyboard(edit_allowed=True)
-                    if summary_review_result.notification_template in {
-                        "vacancy_summary_review_help",
-                        "vacancy_summary_edit_empty",
-                    }
-                    else summary_review_keyboard(edit_allowed=False)
-                    if summary_review_result.notification_template
-                    == "vacancy_summary_edit_limit_reached"
-                    else remove_keyboard()
-                    if summary_review_result.notification_template in {
-                        "vacancy_summary_approved",
-                        "vacancy_summary_edit_processing",
-                    }
-                    else None
-                ),
-            )
-        ]
+        return None
 
     def _apply_manager_intake_segment(
         self,
