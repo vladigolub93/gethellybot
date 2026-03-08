@@ -118,6 +118,31 @@ class TelegramUpdateService:
             },
         )
 
+    def _maybe_handle_graph_help(
+        self,
+        *,
+        user,
+        latest_user_message: str,
+        user_id,
+        stage_result=None,
+        reply_markup=None,
+    ) -> List[str] | None:
+        assistance_text = self._resolve_graph_help_text(
+            user=user,
+            latest_user_message=latest_user_message,
+            stage_result=stage_result,
+        )
+        if not assistance_text:
+            return None
+        return [
+            self._notify_result(
+                user_id=user_id,
+                template_key="state_aware_help",
+                text=assistance_text,
+                reply_markup=reply_markup,
+            )
+        ]
+
     def _handle_candidate_delete_stage_action(
         self,
         *,
@@ -706,18 +731,16 @@ class TelegramUpdateService:
             )
             if deletion_templates is not None:
                 return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION" and not stage_result.action_accepted and stage_result.reply_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {
-                            "text": stage_result.reply_text,
-                            "reply_markup": deletion_confirmation_keyboard("candidate"),
-                        },
-                    )
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                    reply_markup=deletion_confirmation_keyboard("candidate"),
                 )
-                return templates
+                if assistance_templates is not None:
+                    return assistance_templates
 
         if user.is_candidate and normalized_update.content_type == "text":
             deletion_result = self.candidate_service.handle_deletion_message(
@@ -749,18 +772,16 @@ class TelegramUpdateService:
             )
             if deletion_templates is not None:
                 return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION" and not stage_result.action_accepted and stage_result.reply_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {
-                            "text": stage_result.reply_text,
-                            "reply_markup": deletion_confirmation_keyboard("vacancy"),
-                        },
-                    )
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                    reply_markup=deletion_confirmation_keyboard("vacancy"),
                 )
-                return templates
+                if assistance_templates is not None:
+                    return assistance_templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
             deletion_result = self.vacancy_service.handle_deletion_message(
@@ -792,20 +813,14 @@ class TelegramUpdateService:
             )
             if manager_templates is not None:
                 return manager_templates
-            assistance_text = self._resolve_graph_help_text(
+            assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=normalized_update.text or "",
+                user_id=user.id,
                 stage_result=stage_result,
             )
-            if assistance_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {"text": assistance_text},
-                    )
-                )
-                return templates
+            if assistance_templates is not None:
+                return assistance_templates
             manager_result = self.evaluation_service.handle_manager_message(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -838,20 +853,14 @@ class TelegramUpdateService:
                 )
                 if candidate_interaction_templates is not None:
                     return candidate_interaction_templates
-                assistance_text = self._resolve_graph_help_text(
+                assistance_templates = self._maybe_handle_graph_help(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
                     stage_result=stage_result,
                 )
-                if assistance_text:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "state_aware_help",
-                            {"text": assistance_text},
-                        )
-                    )
-                    return templates
+                if assistance_templates is not None:
+                    return assistance_templates
             interview_result = self.interview_service.handle_candidate_message(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -880,20 +889,14 @@ class TelegramUpdateService:
             if summary_templates is not None:
                 return summary_templates
 
-            assistance_text = self._resolve_graph_help_text(
+            assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=normalized_update.text or "",
+                user_id=user.id,
                 stage_result=stage_result,
             )
-            if assistance_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {"text": assistance_text},
-                    )
-                )
-                return templates
+            if assistance_templates is not None:
+                return assistance_templates
             summary_review_result = self.candidate_service.handle_summary_review_action(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -937,20 +940,14 @@ class TelegramUpdateService:
             if verification_templates is not None:
                 return verification_templates
             if normalized_update.content_type == "text":
-                assistance_text = self._resolve_graph_help_text(
+                assistance_templates = self._maybe_handle_graph_help(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
                     stage_result=stage_result,
                 )
-                if assistance_text:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "state_aware_help",
-                            {"text": assistance_text},
-                        )
-                    )
-                    return templates
+                if assistance_templates is not None:
+                    return assistance_templates
             verification_result = self.candidate_service.handle_verification_submission(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -969,20 +966,13 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self._resolve_graph_help_text(
+                assistance_templates = self._maybe_handle_graph_help(
                     user=user,
                     latest_user_message=normalized_update.text or "",
-                    stage_result=None,
+                    user_id=user.id,
                 )
-                if assistance_text:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "state_aware_help",
-                            {"text": assistance_text},
-                        )
-                    )
-                    return templates
+                if assistance_templates is not None:
+                    return assistance_templates
             questions_result = self.candidate_service.handle_questions_answer(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -1010,20 +1000,14 @@ class TelegramUpdateService:
                 )
                 if clarification_templates is not None:
                     return clarification_templates
-                assistance_text = self._resolve_graph_help_text(
+                assistance_templates = self._maybe_handle_graph_help(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
                     stage_result=stage_result,
                 )
-                if assistance_text:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "state_aware_help",
-                            {"text": assistance_text},
-                        )
-                    )
-                    return templates
+                if assistance_templates is not None:
+                    return assistance_templates
             clarification_result = self.vacancy_service.handle_clarification_answer(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -1042,20 +1026,13 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
-            assistance_text = self._resolve_graph_help_text(
+            assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=normalized_update.text or "",
-                stage_result=None,
+                user_id=user.id,
             )
-            if assistance_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {"text": assistance_text},
-                    )
-                )
-                return templates
+            if assistance_templates is not None:
+                return assistance_templates
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
             if normalized_update.content_type == "text":
@@ -1102,20 +1079,14 @@ class TelegramUpdateService:
                 )
                 if candidate_intake_templates is not None:
                     return candidate_intake_templates
-                assistance_text = self._resolve_graph_help_text(
+                assistance_templates = self._maybe_handle_graph_help(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
                     stage_result=stage_result,
                 )
-                if assistance_text:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "state_aware_help",
-                            {"text": assistance_text},
-                        )
-                    )
-                    return templates
+                if assistance_templates is not None:
+                    return assistance_templates
             intake_result = self.candidate_service.handle_cv_intake(
                 user=user,
                 raw_message_id=raw_message_id,
