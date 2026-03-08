@@ -248,6 +248,8 @@ Status:
     - `pending_update_count` was `0`
   - `scripts/inspect_telegram_user.py`
   - live DB inspection run against Supabase completed successfully for a non-existent Telegram user id and returned a valid empty snapshot
+  - `scripts/validate_telegram_user_state.py`
+  - smoke validator run against Supabase completed successfully in failure mode, correctly rejecting `--require-user` for a non-existent Telegram user id
 
 ### Step 8. Regression and Production Hardening
 

@@ -208,6 +208,26 @@ This prints a JSON snapshot of:
 - latest notification
 - row counts for messages, notifications, files, matches, vacancies
 
+To assert an expected live state after a manual smoke step:
+
+```bash
+set -a
+source .env
+set +a
+python3 scripts/validate_telegram_user_state.py \
+  --telegram-user-id <telegram-user-id> \
+  --expect-candidate-state READY \
+  --expect-notification-template candidate_verification_completed
+```
+
+Supported assertions:
+
+- candidate state
+- vacancy state
+- interview state
+- match status
+- latest notification template
+
 ## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker

@@ -79,6 +79,7 @@ Architectural status note:
 - a reusable production validation script now checks Railway API health and Telegram webhook registration against the configured `APP_BASE_URL`
 - the reusable production validation script has already been run successfully against the live Railway deployment, confirming `health: ok`, webhook correctness, and zero pending Telegram updates at validation time
 - a reusable live DB inspection script now queries Supabase state for a Telegram user and has been validated successfully against the live environment
+- a reusable Telegram-user smoke validator now asserts expected candidate/vacancy/interview/match/notification state from live Supabase snapshots and has been validated in failure mode against the live environment
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status
