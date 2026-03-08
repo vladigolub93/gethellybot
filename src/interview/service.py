@@ -210,10 +210,10 @@ class InterviewService:
 
         active_session = self.interviews.get_active_session_for_candidate(candidate.id)
         if active_session is not None:
-            return self._handle_interview_answer(
-                candidate=candidate,
-                session=active_session,
+            return self.execute_active_interview_action(
+                user=user,
                 raw_message_id=raw_message_id,
+                action="answer_current_question",
                 content_type=content_type,
                 text=text,
                 file_id=file_id,
@@ -241,6 +241,40 @@ class InterviewService:
             status="invite_pending",
             notification_template="candidate_interview_invitation_help",
             notification_text=self._copy("Reply 'Accept interview' or 'Skip opportunity'."),
+        )
+
+    def execute_active_interview_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+        content_type: str,
+        text=None,
+        file_id=None,
+    ) -> Optional[InterviewUserResult]:
+        candidate = self.candidates.get_active_by_user_id(user.id)
+        if candidate is None:
+            return None
+
+        session = self.interviews.get_active_session_for_candidate(candidate.id)
+        if session is None:
+            return None
+
+        if action != "answer_current_question":
+            return InterviewUserResult(
+                status="help",
+                notification_template="candidate_interview_answer_help",
+                notification_text=self._copy("Answer the current question in text, voice, or video."),
+            )
+
+        return self._handle_interview_answer(
+            candidate=candidate,
+            session=session,
+            raw_message_id=raw_message_id,
+            content_type=content_type,
+            text=text,
+            file_id=file_id,
         )
 
     def execute_invitation_action(

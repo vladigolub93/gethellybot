@@ -346,6 +346,29 @@ def test_interview_answers_complete_session() -> None:
     assert len(service.interviews.answers) == 4
 
 
+def test_execute_active_interview_action_answers_current_question() -> None:
+    service, candidate, match, _vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+    service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    result = service.execute_active_interview_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="answer_current_question",
+        content_type="text",
+        text="I owned the API design and rollout.",
+    )
+
+    assert result is not None
+    assert result.status in {"next_question", "follow_up_question", "completed"}
+    assert len(service.interviews.answers) == 1
+
+
 def test_strong_answer_inserts_followup_question(monkeypatch: pytest.MonkeyPatch) -> None:
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)

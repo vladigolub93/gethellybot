@@ -257,6 +257,10 @@ class FakeInterviewService:
         self.calls.append(kwargs)
         return self.result
 
+    def execute_active_interview_action(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
 
 class FakeIdentityService:
     def __init__(self, *, consent: bool = False):

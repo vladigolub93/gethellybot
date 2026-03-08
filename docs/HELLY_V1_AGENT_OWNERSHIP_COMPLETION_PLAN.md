@@ -283,7 +283,7 @@ Exit:
 
 45. Refactor candidate service methods so they execute actions, not interpret raw user intent.
 46. Refactor vacancy service methods so they execute actions, not interpret raw user intent.
-47. Refactor interview service methods so they execute actions, not interpret raw user intent.
+47. Refactor interview service methods so they execute actions, not interpret raw user intent. `Completed`
 48. Keep only action-oriented execution methods in domain services.
 
 Exit:

@@ -435,32 +435,32 @@ class TelegramUpdateService:
             stage_result.stage == "INTERVIEW_IN_PROGRESS"
             and stage_result.proposed_action == "answer_current_question"
         ):
-            text = (stage_result.structured_payload or {}).get("answer_text") or normalized_update.text
+            interview_result = self.interview_service.execute_active_interview_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="answer_current_question",
+                content_type=normalized_update.content_type,
+                text=(stage_result.structured_payload or {}).get("answer_text") or normalized_update.text,
+                file_id=file_id,
+            )
+            if interview_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=interview_result.notification_template,
+                    text=interview_result.notification_text,
+                    reply_markup=interview_invitation_keyboard()
+                    if interview_result.status == "invite_pending"
+                    else remove_keyboard(),
+                )
+            ]
         elif (
             stage_result.stage != "INTERVIEW_IN_PROGRESS"
             or stage_result.proposed_action != "answer_current_question"
         ):
             return None
-        text = (stage_result.structured_payload or {}).get("answer_text") or normalized_update.text
-        interview_result = self.interview_service.handle_candidate_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            content_type=normalized_update.content_type,
-            text=text,
-            file_id=file_id,
-        )
-        if interview_result is None:
-            return None
-        return [
-            self._notify_result(
-                user_id=user.id,
-                template_key=interview_result.notification_template,
-                text=interview_result.notification_text,
-                reply_markup=interview_invitation_keyboard()
-                if interview_result.status == "invite_pending"
-                else remove_keyboard(),
-            )
-        ]
+        return None
 
     def _handle_candidate_summary_stage_action(
         self,
