@@ -63,6 +63,7 @@ Architectural status note:
 - `DELETE_CONFIRMATION` is now graph-owned for confirm/cancel execution and deletion-consequence guidance
 - Telegram now uses graph-first execution as the primary path for all migrated stages and only falls back to the old controller/routing layer as a compatibility path when graph does not return a stage-owned answer
 - graph-native integration coverage now includes stage-resolution priority tests for candidate and manager families, verifying that higher-priority interaction stages override lower-priority status stages in the expected order
+- Telegram transport now reuses a single graph stage result per migrated candidate/manager update instead of re-running graph execution in each downstream branch
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status

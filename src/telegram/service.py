@@ -92,6 +92,20 @@ class TelegramUpdateService:
             latest_user_message=latest_user_message,
         )
 
+    def _maybe_run_graph_stage(
+        self,
+        *,
+        user,
+        normalized_update: NormalizedTelegramUpdate,
+    ):
+        if normalized_update.content_type == "text" and not (normalized_update.text or "").strip():
+            return None
+        return self.stage_agents.maybe_run_stage(
+            user=user,
+            latest_user_message=normalized_update.text or "",
+            latest_message_type=normalized_update.content_type,
+        )
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -140,6 +154,8 @@ class TelegramUpdateService:
     ) -> List[str]:
         templates: List[str] = []
         text_value = normalize_command_text(normalized_update.text)
+        candidate_stage_result = None
+        manager_stage_result = None
 
         if normalized_update.contact_phone_number:
             self.identity_service.attach_contact(user, normalized_update)
@@ -392,12 +408,20 @@ class TelegramUpdateService:
             )
             return templates
 
-        if user.is_candidate and normalized_update.content_type == "text":
-            stage_result = self.stage_agents.maybe_run_stage(
+        if user.is_candidate and normalized_update.content_type in {"text", "video"}:
+            candidate_stage_result = self._maybe_run_graph_stage(
                 user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
+                normalized_update=normalized_update,
             )
+
+        if user.is_hiring_manager and normalized_update.content_type == "text":
+            manager_stage_result = self._maybe_run_graph_stage(
+                user=user,
+                normalized_update=normalized_update,
+            )
+
+        if user.is_candidate and normalized_update.content_type == "text":
+            stage_result = candidate_stage_result
             if (
                 stage_result is not None
                 and stage_result.stage == "READY"
@@ -493,11 +517,7 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
-            stage_result = self.stage_agents.maybe_run_stage(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            )
+            stage_result = manager_stage_result
             if (
                 stage_result is not None
                 and stage_result.stage == "OPEN"
@@ -593,11 +613,7 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
-            stage_result = self.stage_agents.maybe_run_stage(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            )
+            stage_result = manager_stage_result
             if (
                 stage_result is not None
                 and stage_result.stage == "MANAGER_REVIEW"
@@ -664,11 +680,7 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                stage_result = self.stage_agents.maybe_run_stage(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                )
+                stage_result = candidate_stage_result
                 if (
                     stage_result is not None
                     and stage_result.stage == "INTERVIEW_INVITED"
@@ -770,11 +782,7 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
-            stage_result = self.stage_agents.maybe_run_stage(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            )
+            stage_result = candidate_stage_result
             if (
                 stage_result is not None
                 and stage_result.stage == "SUMMARY_REVIEW"
@@ -863,11 +871,7 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
-            stage_result = self.stage_agents.maybe_run_stage(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            )
+            stage_result = candidate_stage_result
             if (
                 stage_result is not None
                 and stage_result.stage == "VERIFICATION_PENDING"
@@ -956,11 +960,7 @@ class TelegramUpdateService:
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                stage_result = self.stage_agents.maybe_run_stage(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                )
+                stage_result = manager_stage_result
                 if (
                     stage_result is not None
                     and stage_result.stage == "CLARIFICATION_QA"
@@ -1030,11 +1030,7 @@ class TelegramUpdateService:
 
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
             if normalized_update.content_type == "text":
-                stage_result = self.stage_agents.maybe_run_stage(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                )
+                stage_result = manager_stage_result
                 if (
                     stage_result is not None
                     and stage_result.stage == "INTAKE_PENDING"
@@ -1084,11 +1080,7 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             if normalized_update.content_type == "text":
-                stage_result = self.stage_agents.maybe_run_stage(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                )
+                stage_result = candidate_stage_result
                 if (
                     stage_result is not None
                     and stage_result.stage == "CV_PENDING"

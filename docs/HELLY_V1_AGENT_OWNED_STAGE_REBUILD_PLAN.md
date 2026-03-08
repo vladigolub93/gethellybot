@@ -345,6 +345,7 @@ Current execution note:
 - `MANAGER_REVIEW` is now implemented as a graph-owned review-decision stage
 - `DELETE_CONFIRMATION` is now implemented as a graph-owned deletion-decision stage
 - Telegram routing now prefers graph-owned stage replies and graph-owned action handoff before falling back to legacy controller assistance in migrated paths
+- Telegram routing now reuses one graph stage result per migrated candidate/manager message path instead of repeatedly re-invoking graph execution inside the same update
 - graph-native stage-resolution coverage now verifies priority ordering across candidate and manager stage families, including `READY`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`
 - the next rebuild target is Phase 9 and Phase 10 cleanup work: removing remaining legacy controller ownership, simplifying Telegram routing around graph-first execution, and expanding graph-native end-to-end coverage
 
