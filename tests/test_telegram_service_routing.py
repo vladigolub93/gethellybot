@@ -710,6 +710,9 @@ def test_candidate_role_selection_starts_candidate_onboarding() -> None:
     assert service.identity_service.set_role_calls[-1]["role"] == "candidate"
     assert service.candidate_service.start_calls
     assert not service.vacancy_service.start_calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] == {
+        "remove_keyboard": True
+    }
 
 
 def test_graph_entry_stage_can_grant_consent() -> None:
@@ -1396,6 +1399,9 @@ def test_summary_review_approve_passthrough_reaches_summary_handler() -> None:
 
     assert templates == ["candidate_summary_approved"]
     assert service.candidate_service.summary_calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] == {
+        "remove_keyboard": True
+    }
 
 
 def test_summary_review_approve_with_whitespace_reaches_summary_handler() -> None:
@@ -1899,6 +1905,9 @@ def test_manager_approve_passthrough_reaches_manager_handler() -> None:
 
     assert templates == ["manager_candidate_approved"]
     assert service.evaluation_service.calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] == {
+        "remove_keyboard": True
+    }
 
 
 def test_graph_manager_review_stage_can_own_approve() -> None:
@@ -2062,6 +2071,9 @@ def test_interview_accept_passthrough_reaches_interview_handler() -> None:
 
     assert templates == ["candidate_interview_started"]
     assert service.interview_service.calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] == {
+        "remove_keyboard": True
+    }
 
 
 def test_graph_interview_invited_stage_can_own_accept() -> None:
@@ -2686,6 +2698,9 @@ def test_candidate_delete_confirm_passthrough_reaches_deletion_handler() -> None
 
     assert templates == ["candidate_deleted"]
     assert service.candidate_service.deletion_calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] == {
+        "remove_keyboard": True
+    }
 
 
 def test_graph_delete_confirmation_stage_can_own_candidate_confirm() -> None:

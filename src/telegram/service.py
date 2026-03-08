@@ -24,6 +24,7 @@ from src.telegram.keyboards import (
     deletion_confirmation_keyboard,
     interview_invitation_keyboard,
     manager_review_keyboard,
+    remove_keyboard,
     role_selection_keyboard,
     summary_review_keyboard,
 )
@@ -178,7 +179,10 @@ class TelegramUpdateService:
                 self._notify(
                     user.id,
                     template_key,
-                    {"text": self._copy(message_text)},
+                    {
+                        "text": self._copy(message_text),
+                        "reply_markup": remove_keyboard(),
+                    },
                 )
             ]
 
@@ -310,7 +314,7 @@ class TelegramUpdateService:
                 text=deletion_result.notification_text,
                 reply_markup=deletion_confirmation_keyboard("candidate")
                 if deletion_result.status == "confirmation_required"
-                else None,
+                else remove_keyboard(),
             )
         ]
 
@@ -356,7 +360,7 @@ class TelegramUpdateService:
                 text=deletion_result.notification_text,
                 reply_markup=deletion_confirmation_keyboard("vacancy")
                 if deletion_result.status == "confirmation_required"
-                else None,
+                else remove_keyboard(),
             )
         ]
 
@@ -393,7 +397,7 @@ class TelegramUpdateService:
                 text=manager_result.notification_text,
                 reply_markup=manager_review_keyboard()
                 if manager_result.status == "help"
-                else None,
+                else remove_keyboard(),
             )
         ]
 
@@ -457,6 +461,9 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=interview_result.notification_template,
                 text=interview_result.notification_text,
+                reply_markup=interview_invitation_keyboard()
+                if interview_result.status == "invite_pending"
+                else remove_keyboard(),
             )
         ]
 
@@ -500,12 +507,22 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=summary_review_result.notification_template,
                 text=self._copy(message_map[summary_review_result.notification_template]),
-                reply_markup=summary_review_keyboard(edit_allowed=True)
-                if summary_review_result.notification_template in {
-                    "candidate_summary_review_help",
-                    "candidate_summary_edit_empty",
-                }
-                else None,
+                reply_markup=(
+                    summary_review_keyboard(edit_allowed=True)
+                    if summary_review_result.notification_template in {
+                        "candidate_summary_review_help",
+                        "candidate_summary_edit_empty",
+                    }
+                    else summary_review_keyboard(edit_allowed=False)
+                    if summary_review_result.notification_template
+                    == "candidate_summary_edit_limit_reached"
+                    else remove_keyboard()
+                    if summary_review_result.notification_template in {
+                        "candidate_summary_approved",
+                        "candidate_summary_edit_processing",
+                    }
+                    else None
+                ),
             )
         ]
 
@@ -664,7 +681,7 @@ class TelegramUpdateService:
                 text=manager_result.notification_text,
                 reply_markup=manager_review_keyboard()
                 if manager_result.status == "help"
-                else None,
+                else remove_keyboard(),
             )
         ]
 
@@ -690,6 +707,9 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=interview_result.notification_template,
                 text=interview_result.notification_text,
+                reply_markup=interview_invitation_keyboard()
+                if interview_result.status == "invite_pending"
+                else remove_keyboard(),
             )
         ]
 
@@ -720,12 +740,22 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=summary_review_result.notification_template,
                 text=self._copy(message_map[summary_review_result.notification_template]),
-                reply_markup=summary_review_keyboard(edit_allowed=True)
-                if summary_review_result.notification_template in {
-                    "candidate_summary_review_help",
-                    "candidate_summary_edit_empty",
-                }
-                else None,
+                reply_markup=(
+                    summary_review_keyboard(edit_allowed=True)
+                    if summary_review_result.notification_template in {
+                        "candidate_summary_review_help",
+                        "candidate_summary_edit_empty",
+                    }
+                    else summary_review_keyboard(edit_allowed=False)
+                    if summary_review_result.notification_template
+                    == "candidate_summary_edit_limit_reached"
+                    else remove_keyboard()
+                    if summary_review_result.notification_template in {
+                        "candidate_summary_approved",
+                        "candidate_summary_edit_processing",
+                    }
+                    else None
+                ),
             )
         ]
 
@@ -900,7 +930,7 @@ class TelegramUpdateService:
                     "text": deletion_result.notification_text,
                     "reply_markup": deletion_confirmation_keyboard("candidate")
                     if deletion_result.status == "confirmation_required"
-                    else None,
+                    else remove_keyboard(),
                 },
             )
         ]
@@ -1101,7 +1131,7 @@ class TelegramUpdateService:
                     "text": deletion_result.notification_text,
                     "reply_markup": deletion_confirmation_keyboard("vacancy")
                     if deletion_result.status == "confirmation_required"
-                    else None,
+                    else remove_keyboard(),
                 },
             )
         ]
