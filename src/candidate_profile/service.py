@@ -223,6 +223,7 @@ class CandidateProfileService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[CandidateSummaryReviewResult]:
+        # Compatibility wrapper for legacy/raw-text callers.
         normalized_text = (text or "").strip()
         lowered = normalize_command_text(normalized_text)
         action = None
@@ -551,6 +552,7 @@ class CandidateProfileService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[CandidateDeletionResult]:
+        # Compatibility wrapper for legacy/raw-text callers.
         profile = self.repo.get_active_by_user_id(user.id)
         if profile is None:
             return None

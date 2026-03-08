@@ -275,6 +275,37 @@ def test_vacancy_summary_review_edit_queues_one_correction_round() -> None:
     assert fake_queue.messages[-1].job_type == "vacancy_summary_edit_apply_v1"
 
 
+def test_execute_vacancy_summary_review_action_approve_moves_to_clarification() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        vacancy_id=vacancy.id,
+        version_no=1,
+        source_type="pasted_text",
+        approval_summary_text="Summary",
+        summary_json={"approval_summary_text": "Summary"},
+    )
+    fake_repo.set_current_version(vacancy, version.id)
+
+    result = service.execute_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_summary",
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert version.approval_status == "approved"
+
+
 def test_clarification_requests_follow_up_when_partial() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()
@@ -368,3 +399,41 @@ def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
     assert interview.state == "CANCELLED"
     assert len(service.queue.messages) == 1
     assert service.queue.messages[0].job_type == "cleanup_vacancy_deletion_v1"
+
+
+def test_execute_vacancy_deletion_action_confirm_soft_deletes_vacancy() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    match = SimpleNamespace(id=uuid4(), vacancy_id=vacancy.id, status="manager_review")
+    interview = SimpleNamespace(id=uuid4(), match_id=match.id, state="IN_PROGRESS")
+    service.matching.active_matches.append(match)
+    service.interviews.sessions_by_match_id[match.id] = interview
+
+    first = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="delete_vacancy",
+    )
+    second = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="confirm_delete",
+    )
+
+    assert first is not None
+    assert first.status == "confirmation_required"
+    assert second is not None
+    assert second.status == "deleted"
+    assert vacancy.deleted_at == "now"
+    assert vacancy.state == "DELETED"
+    assert match.status == "cancelled"
+    assert interview.state == "CANCELLED"

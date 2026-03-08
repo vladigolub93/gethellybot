@@ -265,6 +265,75 @@ def test_edit_summary_enqueues_processing_job() -> None:
     assert len(fake_queue.messages) == 1
 
 
+def test_execute_summary_review_action_approve_moves_candidate_to_questions_pending() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        profile_id=profile.id,
+        version_no=1,
+        source_type="pasted_text",
+        summary_json={"headline": "Python engineer"},
+    )
+    fake_repo.set_current_version(profile, version.id)
+
+    result = service.execute_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_summary",
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
+    assert version.approval_status == "approved"
+
+
+def test_execute_deletion_action_confirm_soft_deletes_candidate_profile() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+    match = SimpleNamespace(id=uuid4(), candidate_profile_id=profile.id, status="manager_review")
+    interview = SimpleNamespace(id=uuid4(), match_id=match.id, state="IN_PROGRESS")
+    service.matching.active_matches.append(match)
+    service.interviews.sessions_by_match_id[match.id] = interview
+
+    first = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="delete_profile",
+    )
+    second = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="confirm_delete",
+    )
+
+    assert first is not None
+    assert first.status == "confirmation_required"
+    assert second is not None
+    assert second.status == "deleted"
+    assert profile.deleted_at == "now"
+    assert profile.state == "DELETED"
+    assert match.status == "cancelled"
+    assert interview.state == "CANCELLED"
+
+
 def test_summary_change_prompt_requests_specific_correction() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()

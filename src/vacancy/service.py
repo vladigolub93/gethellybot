@@ -259,6 +259,7 @@ class VacancyService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[VacancySummaryReviewResult]:
+        # Compatibility wrapper for legacy/raw-text callers.
         normalized_text = (text or "").strip()
         lowered = normalize_command_text(normalized_text)
         action = None
@@ -507,6 +508,7 @@ class VacancyService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[VacancyDeletionResult]:
+        # Compatibility wrapper for legacy/raw-text callers.
         vacancy = self.repo.get_latest_active_by_manager_user_id(user.id)
         if vacancy is None:
             return None
