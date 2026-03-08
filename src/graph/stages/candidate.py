@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 
 from src.graph.state import HellyGraphState
-from src.llm.service import safe_parse_candidate_questions, safe_state_assistance_decision
+from src.llm.service import (
+    safe_candidate_summary_review_decision,
+    safe_parse_candidate_questions,
+    safe_state_assistance_decision,
+)
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 
@@ -26,20 +30,6 @@ def _candidate_cv_help_patterns() -> tuple[str, ...]:
         r"\bwhat do i send\b",
         r"\bwhat can i send\b",
         r"\bwhat next\b",
-    )
-
-
-def _candidate_summary_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhat should i change\b",
-        r"\bwhat kind of changes\b",
-        r"\bwhere did .*summary come from\b",
-        r"\bwhere does .*summary come from\b",
-        r"\bwhy .*approval\b",
-        r"\bwhy .*approve\b",
-        r"\bhow .*summary\b",
-        r"\bhelp .*summary\b",
-        r"\bwhat if .*wrong\b",
     )
 
 
@@ -145,43 +135,6 @@ def _is_candidate_cv_help(text: str) -> bool:
     return len(normalized) <= 40 and "?" in normalized
 
 
-def _is_candidate_summary_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    command = normalize_command_text(text or "")
-    if command in {
-        "approve summary",
-        "approve",
-        "approve profile",
-        "change summary",
-        "edit summary",
-        "change",
-        "edit",
-    }:
-        return False
-    if command.startswith("edit summary:") or command.startswith("edit:"):
-        return False
-    if any(re.search(pattern, normalized) for pattern in _candidate_summary_help_patterns()):
-        return True
-    return False
-
-
-def _detect_summary_review_action(text: str) -> tuple[str | None, dict]:
-    normalized_text = (text or "").strip()
-    command = normalize_command_text(text or "")
-    if command in {"approve summary", "approve", "approve profile"}:
-        return "approve_summary", {}
-    if command in {"change summary", "edit summary", "change", "edit"}:
-        return None, {"needs_edit_details": True}
-
-    edit_text = normalized_text
-    if command.startswith("edit summary:") or command.startswith("edit:"):
-        edit_text = normalized_text.split(":", 1)[1].strip()
-
-    if edit_text:
-        return "request_summary_change", {"edit_text": edit_text}
-    return None, {}
-
-
 def _is_candidate_questions_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _candidate_questions_help_patterns())
@@ -223,6 +176,100 @@ def _is_candidate_interview_in_progress_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _candidate_interview_in_progress_help_patterns())
 
 
+def build_candidate_stage_detect_node(session):
+    def _node(state: HellyGraphState) -> HellyGraphState:
+        text = state.latest_user_message or ""
+        if state.active_stage == "CV_PENDING":
+            is_help = _is_candidate_cv_help(text)
+            if is_help:
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+            else:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = "send_cv_text"
+                state.structured_payload = {"cv_text": text.strip()}
+            return state
+        elif state.active_stage == "SUMMARY_REVIEW":
+            decision = safe_candidate_summary_review_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
+                state.parsed_input["intent"] = "stage_completion_input"
+            elif state.intent == "needs_clarification":
+                state.parsed_input["intent"] = "needs_clarification"
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("edit_text"):
+                state.structured_payload = {"edit_text": payload.get("edit_text")}
+            else:
+                state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
+        elif state.active_stage == "QUESTIONS_PENDING":
+            is_help = _is_candidate_questions_help(text)
+        elif state.active_stage == "VERIFICATION_PENDING":
+            if state.latest_message_type == "video":
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = "send_verification_video"
+                state.structured_payload = {"submission_type": "video"}
+                return state
+            is_help = _is_candidate_verification_help(text)
+        elif state.active_stage == "READY":
+            if _is_candidate_ready_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+                return state
+            proposed_action, payload = _detect_candidate_ready_action(text)
+            if proposed_action is not None:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = proposed_action
+                state.structured_payload = payload
+                return state
+            is_help = False
+        elif state.active_stage == "INTERVIEW_INVITED":
+            if _is_candidate_interview_invited_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+                return state
+            proposed_action, payload = _detect_candidate_interview_invited_action(text)
+            if proposed_action is not None:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = proposed_action
+                state.structured_payload = payload
+                return state
+            is_help = False
+        elif state.active_stage == "INTERVIEW_IN_PROGRESS":
+            if _is_candidate_interview_in_progress_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+            else:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = "answer_current_question"
+                state.structured_payload = {"answer_text": text.strip()}
+            return state
+        else:
+            is_help = False
+        state.parsed_input["intent"] = "help" if is_help else "candidate_input"
+        return state
+
+    return _node
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
@@ -237,20 +284,8 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             state.structured_payload = {"cv_text": text.strip()}
         return state
     elif state.active_stage == "SUMMARY_REVIEW":
-        if _is_candidate_summary_help(text):
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-            return state
-        proposed_action, payload = _detect_summary_review_action(text)
-        if proposed_action is not None:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = proposed_action
-            state.structured_payload = payload
-        else:
-            state.intent = "needs_clarification"
-            state.parsed_input["intent"] = "needs_clarification"
-            state.structured_payload = payload
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
         return state
     elif state.active_stage == "QUESTIONS_PENDING":
         is_help = _is_candidate_questions_help(text)
@@ -334,12 +369,17 @@ def build_candidate_stage_reply_node(session):
                 state.follow_up_needed = True
                 state.follow_up_question = state.reply_text
                 return state
+            if state.parsed_input.get("intent") == "help":
+                state.reply_text = state.reply_text or context.help_text or context.guidance_text
+                state.follow_up_needed = True
+                state.follow_up_question = state.reply_text
+                return state
             if state.parsed_input.get("intent") == "stage_completion_input":
                 state.stage_status = "ready_for_transition"
                 if state.proposed_action == "approve_summary":
-                    state.reply_text = "Thanks. I will approve the summary and move to the next step."
+                    state.reply_text = state.reply_text or "Thanks. I will approve the summary and move to the next step."
                 else:
-                    state.reply_text = "Thanks. I will update the summary based on your correction."
+                    state.reply_text = state.reply_text or "Thanks. I will update the summary based on your correction."
                 state.confidence = 0.9
                 return state
 

@@ -472,10 +472,15 @@ class TelegramUpdateService:
             if stage_result.proposed_action == "approve_summary"
             else (stage_result.structured_payload or {}).get("edit_text") or normalized_update.text
         )
-        summary_review_result = self.candidate_service.handle_summary_review_action(
+        summary_review_result = self.candidate_service.execute_summary_review_action(
             user=user,
             raw_message_id=raw_message_id,
-            text=summary_input_text,
+            action=stage_result.proposed_action,
+            structured_payload={
+                "edit_text": summary_input_text
+            }
+            if stage_result.proposed_action == "request_summary_change"
+            else {},
         )
         if summary_review_result is None:
             return None

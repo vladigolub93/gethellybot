@@ -223,19 +223,47 @@ class CandidateProfileService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[CandidateSummaryReviewResult]:
+        normalized_text = (text or "").strip()
+        lowered = normalize_command_text(normalized_text)
+        action = None
+        payload: dict = {}
+        if lowered in {"approve summary", "approve", "approve profile"}:
+            action = "approve_summary"
+        else:
+            if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
+                normalized_text = normalized_text.split(":", 1)[1].strip()
+            if lowered in {"change summary", "edit summary", "change", "edit"}:
+                payload["needs_edit_details"] = True
+            elif normalized_text:
+                action = "request_summary_change"
+                payload["edit_text"] = normalized_text
+        return self.execute_summary_review_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=action,
+            structured_payload=payload,
+        )
+
+    def execute_summary_review_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+        structured_payload: dict | None = None,
+    ) -> Optional[CandidateSummaryReviewResult]:
         profile = self.ensure_profile_for_user(user)
         if profile.state != CANDIDATE_STATE_SUMMARY_REVIEW:
             return None
 
-        normalized_text = (text or "").strip()
-        if not normalized_text:
+        payload = dict(structured_payload or {})
+        if action is None and not payload:
             return CandidateSummaryReviewResult(
                 status="empty",
                 notification_template="candidate_summary_review_help",
             )
 
-        lowered = normalize_command_text(normalized_text)
-        if lowered in {"approve summary", "approve", "approve profile"}:
+        if action == "approve_summary":
             current_version = self.repo.get_current_version(profile)
             if current_version is None:
                 return CandidateSummaryReviewResult(
@@ -266,16 +294,13 @@ class CandidateProfileService:
                 notification_template="candidate_summary_edit_limit_reached",
             )
 
-        if lowered in {"change summary", "edit summary", "change", "edit"}:
+        if payload.get("needs_edit_details"):
             return CandidateSummaryReviewResult(
                 status="awaiting_edit_details",
                 notification_template="candidate_summary_edit_empty",
             )
 
-        edit_text = normalized_text
-        if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
-            edit_text = normalized_text.split(":", 1)[1].strip()
-
+        edit_text = (payload.get("edit_text") or "").strip()
         if not edit_text:
             return CandidateSummaryReviewResult(
                 status="empty_edit",
@@ -327,11 +352,6 @@ class CandidateProfileService:
         return CandidateSummaryReviewResult(
             status="accepted",
             notification_template="candidate_summary_edit_processing",
-        )
-
-        return CandidateSummaryReviewResult(
-            status="unsupported",
-            notification_template="candidate_summary_review_help",
         )
 
     def handle_questions_answer(

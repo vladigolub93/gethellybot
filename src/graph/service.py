@@ -15,6 +15,7 @@ from src.graph.router import StageGraphRouter
 from src.graph.runtime import compile_stage_graph
 from src.graph.stages.candidate import (
     build_candidate_stage_reply_node,
+    build_candidate_stage_detect_node,
     detect_candidate_stage_intent_node,
     load_candidate_stage_context_node,
     load_candidate_stage_knowledge_node,
@@ -318,7 +319,7 @@ class LangGraphStageAgentService:
                 nodes={
                     "load_context": load_candidate_stage_context_node,
                     "load_knowledge": load_candidate_stage_knowledge_node,
-                    "detect_intent": detect_candidate_stage_intent_node,
+                    "detect_intent": build_candidate_stage_detect_node(self.session),
                     "propose_action": build_candidate_stage_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),

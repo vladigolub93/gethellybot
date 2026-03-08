@@ -77,6 +77,28 @@ Candidate corrections:
 """
 
 
+def candidate_summary_review_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the summary review step.
+
+Valid outcomes:
+- help question or clarification
+- explicit summary approval
+- explicit summary correction request
+- request for clarification because the candidate said they want to edit but gave no details
+
+Current step guidance: {current_step_guidance or ""}
+Recent context: {recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def candidate_questions_prompt(text: str) -> str:
     return f"""Task: parse candidate mandatory profile answers from the text below.
 

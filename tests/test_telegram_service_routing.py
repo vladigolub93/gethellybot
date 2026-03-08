@@ -155,6 +155,10 @@ class FakeCandidateService:
         self.summary_calls.append(kwargs)
         return self.summary_result
 
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        return self.summary_result
+
     def handle_questions_answer(self, **kwargs):
         self.question_calls.append(kwargs)
         return self.question_result
@@ -1186,6 +1190,42 @@ def test_summary_review_actual_correction_reaches_summary_handler() -> None:
 
     assert templates == ["candidate_summary_edit_processing"]
     assert service.candidate_service.summary_calls
+
+
+def test_summary_review_help_question_does_not_reach_summary_handler() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="SUMMARY_REVIEW",
+            reply_text="I can answer questions about the summary. If it looks correct, approve it. If something is wrong, tell me exactly what to change.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.bot_controller = FakeBotController("Legacy summary fallback should not be used.")
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u4ba",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw4ba",
+        build_update(text="How long will this take?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert not service.candidate_service.summary_calls
 
 
 def test_summary_review_approve_passthrough_reaches_summary_handler() -> None:

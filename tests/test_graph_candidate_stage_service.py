@@ -118,6 +118,35 @@ def test_graph_candidate_stage_handles_summary_review_help() -> None:
     assert "summary" in reply.lower() or "approve" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_timing_question_as_summary_edit() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp3b", state="SUMMARY_REVIEW")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u6b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="How long will this take?",
+    )
+
+    assert result is not None
+    assert result.stage == "SUMMARY_REVIEW"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_summary_review_correction() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

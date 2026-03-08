@@ -1,0 +1,6 @@
+- input: "Approve summary"
+  expected_action: "approve_summary"
+- input: "How long will this take?"
+  expected_intent: "help"
+- input: "The summary is wrong: I work mostly with Go, not Python."
+  expected_action: "request_summary_change"

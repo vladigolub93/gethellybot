@@ -18,6 +18,7 @@ from src.llm.prompts import (
     candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_prompt,
+    candidate_summary_review_decision_prompt,
     candidate_summary_edit_prompt,
     deletion_confirmation_prompt,
     interview_invitation_copy_prompt,
@@ -40,6 +41,7 @@ from src.llm.schemas import (
     BotControllerDecisionSchema,
     CandidateRerankSchema,
     CandidateQuestionParseSchema,
+    CandidateSummaryReviewDecisionSchema,
     CandidateSummarySchema,
     DeletionConfirmationSchema,
     InterviewAnswerParseSchema,
@@ -53,6 +55,7 @@ from src.llm.schemas import (
     VacancyClarificationSchema,
     VacancySummarySchema,
 )
+from src.shared.text import normalize_command_text
 from src.vacancy.question_parser import parse_vacancy_clarifications
 from src.vacancy.summary_builder import (
     build_vacancy_approval_summary_text,
@@ -389,6 +392,50 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
         )
     return LLMResult(
         payload={key: value for key, value in merged.items() if value not in (None, [])},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def candidate_summary_review_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateSummaryReviewDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt(
+            "candidate",
+            "summary_review_decision",
+        ),
+        user_prompt=candidate_summary_review_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_summary_review_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "approve_summary", "request_summary_change"}:
+        proposed_action = None
+    intent = _clean_text(result.payload.get("intent"), limit=80) or "help"
+    response_text = _clean_text(result.payload.get("response_text"), limit=400)
+    edit_text = _clean_text(result.payload.get("edit_text"), limit=500)
+    if proposed_action == "request_summary_change" and not edit_text:
+        proposed_action = None
+        intent = "needs_clarification"
+    return LLMResult(
+        payload={
+            "intent": intent,
+            "response_text": response_text,
+            "proposed_action": proposed_action,
+            "edit_text": edit_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -1422,6 +1469,97 @@ def safe_state_assistance_decision(
         },
         model_name="baseline-deterministic",
         prompt_version=f"baseline_state_assistance_{context.state.lower()}_v1",
+    )
+
+
+def safe_candidate_summary_review_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_summary_review_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_summary_review_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance or "Review the summary and either approve it or tell me what is incorrect.",
+        "proposed_action": None,
+        "edit_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "summary_review_help_fallback",
+    }
+    if command in {"approve summary", "approve", "approve profile"}:
+        payload.update(
+            {
+                "intent": "approve",
+                "response_text": "Thanks. I will approve the summary and move to the next step.",
+                "proposed_action": "approve_summary",
+                "needs_follow_up": False,
+                "reason_code": "summary_review_approve",
+            }
+        )
+    elif command in {"change summary", "edit summary", "change", "edit"}:
+        payload.update(
+            {
+                "intent": "needs_clarification",
+                "response_text": "Tell me exactly what is incorrect in the summary, and I will update it once.",
+                "needs_follow_up": True,
+                "reason_code": "summary_review_needs_edit_details",
+            }
+        )
+    elif command.startswith("edit summary:") or command.startswith("edit:"):
+        edit_text = normalized_text.split(":", 1)[1].strip()
+        if edit_text:
+            payload.update(
+                {
+                    "intent": "correction",
+                    "response_text": "Thanks. I will update the summary based on your correction.",
+                    "proposed_action": "request_summary_change",
+                    "edit_text": edit_text,
+                    "needs_follow_up": False,
+                    "reason_code": "summary_review_edit_request",
+                }
+            )
+    elif any(token in lowered for token in ["how long", "when", "why", "how", "what if", "what should", "?"]):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance or "Review the summary and either approve it or tell me what is incorrect.",
+                "needs_follow_up": True,
+                "reason_code": "summary_review_help_question",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in ["wrong", "incorrect", "not ", "actually", "should be", "i work", "i use", "change to"]
+    ):
+        payload.update(
+            {
+                "intent": "correction",
+                "response_text": "Thanks. I will update the summary based on your correction.",
+                "proposed_action": "request_summary_change",
+                "edit_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "summary_review_edit_request",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_summary_review_decision_v1",
     )
 
 

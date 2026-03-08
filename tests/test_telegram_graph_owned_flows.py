@@ -92,6 +92,10 @@ class FakeCandidateService:
         self.summary_calls.append(kwargs)
         return None
 
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        return None
+
     def handle_verification_submission(self, **kwargs):
         self.verification_calls.append(kwargs)
         return None

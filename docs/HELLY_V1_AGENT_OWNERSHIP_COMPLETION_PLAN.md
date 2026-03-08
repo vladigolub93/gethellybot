@@ -215,17 +215,17 @@ Exit:
 ### Phase F. Rebuild Candidate Stages to LLM-First Intent
 
 20. Remove deterministic intent classification from `CV_PENDING`.
-21. Remove deterministic intent classification from `SUMMARY_REVIEW`.
+21. Remove deterministic intent classification from `SUMMARY_REVIEW`. `Completed`
 22. Remove deterministic intent classification from `QUESTIONS_PENDING`.
 23. Remove deterministic intent classification from `VERIFICATION_PENDING`.
 24. Remove deterministic intent classification from `READY`.
 
 For `SUMMARY_REVIEW` specifically:
 
-25. Ensure timing questions are treated as help.
-26. Ensure “why do I need to approve this?” is treated as help.
-27. Ensure only explicit correction intent becomes `request_summary_change`.
-28. Ensure only explicit approval intent becomes `approve_summary`.
+25. Ensure timing questions are treated as help. `Completed`
+26. Ensure “why do I need to approve this?” is treated as help. `In progress`
+27. Ensure only explicit correction intent becomes `request_summary_change`. `Completed`
+28. Ensure only explicit approval intent becomes `approve_summary`. `Completed`
 
 For `QUESTIONS_PENDING` specifically:
 
