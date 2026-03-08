@@ -42,9 +42,9 @@ The target is a more natural, more human, more Telegram-native Helly that feels 
 
 21. Define the minimal local conversation memory payload per stage. Completed.
 22. Feed recent user/bot turns into user-facing stage agents. Completed.
-23. Add rules to avoid repeating the same explanation twice in a row.
-24. Add rules to reference the user's most recent concern directly.
-25. Add tests for repeated-question handling.
+23. Add rules to avoid repeating the same explanation twice in a row. Completed.
+24. Add rules to reference the user's most recent concern directly. Completed.
+25. Add tests for repeated-question handling. Completed.
 
 ## 6. Phase E. Microcopy Cleanup
 

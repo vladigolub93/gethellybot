@@ -94,3 +94,5 @@ def test_shared_telegram_style_is_appended_to_system_prompts() -> None:
     assert "You are communicating inside Telegram" in prompt
     assert "friendly recruiter from the IT world" in prompt
     assert "Answer the actual question before pushing the next step." in prompt
+    assert "do not repeat the same explanation verbatim" in prompt
+    assert "Reference the user's most recent concern directly" in prompt

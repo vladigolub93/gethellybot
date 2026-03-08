@@ -21,6 +21,11 @@ Current step guidance: {context.guidance_text}
 Fallback help text: {context.help_text or ""}
 Recent context: {recent_context or []}
 
+Extra behavior rules:
+- if recent context shows that Helly already explained the same point, do not repeat that explanation verbatim
+- answer the user's latest concern directly and only then guide them back to the current step
+- prefer a shorter clarifying answer over re-sending a long reusable explanation
+
 Latest user message:
 {latest_user_message}
 """

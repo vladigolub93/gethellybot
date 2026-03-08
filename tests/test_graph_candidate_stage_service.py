@@ -3,6 +3,14 @@ from types import SimpleNamespace
 from src.graph.service import LangGraphStageAgentService
 
 
+class FakeRawMessagesRepository:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def list_recent_text_context(self, *, user_id, limit=6):
+        return list(self.rows)[:limit]
+
+
 class FakeConsentsRepository:
     def __init__(self, *, granted: bool):
         self.granted = granted
@@ -327,6 +335,65 @@ def test_graph_candidate_stage_does_not_treat_delete_question_as_confirm() -> No
     assert result.action_accepted is False
     assert result.proposed_action is None
     assert result.reply_text is not None
+
+
+def test_graph_candidate_stage_passes_repeated_question_context_to_state_assistance(monkeypatch) -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp4g", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+    service.raw_messages = FakeRawMessagesRepository(
+        [
+            "User: So when do I hear back?",
+            "Helly: Short version: once there is a strong match, I will ping you here.",
+        ]
+    )
+
+    captured = {}
+
+    def _fake_ready_decision(_session, *, latest_user_message, current_step_guidance, recent_context):
+        captured["detect_recent_context"] = list(recent_context)
+        return SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "Let me answer that.",
+                "reason_code": "status_question",
+                "needs_follow_up": True,
+            }
+        )
+
+    def _fake_state_assistance(_session, *, context, latest_user_message, recent_context):
+        captured["reply_recent_context"] = list(recent_context)
+        captured["latest_user_message"] = latest_user_message
+        return SimpleNamespace(
+            payload={
+                "response_text": "Short version: I’ll message you here when there’s a strong match.",
+            }
+        )
+
+    monkeypatch.setattr("src.graph.stages.candidate.safe_candidate_ready_decision", _fake_ready_decision)
+    monkeypatch.setattr("src.graph.stages.candidate.safe_state_assistance_decision", _fake_state_assistance)
+
+    user = SimpleNamespace(
+        id="u7g",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="So when do I hear back?",
+    )
+
+    assert reply == "Short version: I’ll message you here when there’s a strong match."
+    assert captured["latest_user_message"] == "So when do I hear back?"
+    assert "User: So when do I hear back?" in captured["detect_recent_context"]
+    assert "Helly: Short version: once there is a strong match, I will ping you here." in captured["reply_recent_context"]
 
 
 def test_graph_candidate_stage_handles_questions_pending_help() -> None:

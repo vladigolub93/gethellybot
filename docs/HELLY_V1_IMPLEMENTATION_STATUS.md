@@ -494,6 +494,8 @@ Recent stage-ownership progress:
 - notification delivery now has a first multi-message pacing foundation: long user-facing notifications can be split into multiple shorter Telegram messages while keeping reply keyboards on the final message, which creates a cleaner explanation-plus-CTA rhythm.
 - explicit multi-message choreography is now applied to the most visible review/invitation notifications, including candidate summary review, vacancy summary review, interview invitation, and manager review handoff.
 - stage agents now receive a compact recent-turn memory assembled from persisted `raw_messages`, so entry, candidate, manager, and deletion stages can see the latest local user/bot context instead of responding from the current message alone.
+- the shared Telegram style layer and state-assistance prompt contract now explicitly prohibit repeating the same explanation verbatim and require replies to address the user's latest concern directly.
+- repeated-question handling is now covered by graph-stage tests, including a regression that verifies `READY` help replies receive prior user/bot turns so the stage agent can answer follow-up status questions with local conversational memory.
 
 ## 7. Production Readiness Assessment
 
