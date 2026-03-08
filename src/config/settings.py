@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     supabase_storage_bucket_private: str = Field(
         default="helly-private", alias="SUPABASE_STORAGE_BUCKET_PRIVATE"
     )
+    db_pool_size: int = Field(default=2, alias="DB_POOL_SIZE")
+    db_pool_max_overflow: int = Field(default=0, alias="DB_POOL_MAX_OVERFLOW")
+    db_pool_timeout_seconds: int = Field(default=30, alias="DB_POOL_TIMEOUT_SECONDS")
 
     queue_backend: str = Field(default="database", alias="QUEUE_BACKEND")
     redis_url: str = Field(default="", alias="REDIS_URL")

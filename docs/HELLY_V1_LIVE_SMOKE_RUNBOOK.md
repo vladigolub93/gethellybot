@@ -35,9 +35,9 @@ Useful tools:
 - print a compact smoke report:
   - `.venv/bin/python scripts/report_telegram_user.py --telegram-user-id <id>`
 - export recent conversation turns:
-  - `.venv/bin/python scripts/export_telegram_conversation.py --telegram-user-id <id> --format markdown`
+  - `.venv/bin/python scripts/export_telegram_conversation.py --telegram-user-id <id> --include-pending-notifications --format markdown`
 - review likely robotic Helly turns:
-  - `.venv/bin/python scripts/review_conversation_quality.py --telegram-user-id <id>`
+  - `.venv/bin/python scripts/review_conversation_quality.py --telegram-user-id <id> --include-pending-notifications`
 - watch until a live condition is reached:
   - `.venv/bin/python scripts/watch_telegram_user.py --telegram-user-id <id> --require-user --expect-candidate-state SUMMARY_REVIEW`
 - wait and print a final checkpoint report in one command:
@@ -62,6 +62,14 @@ Useful tools:
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
+- replay a synthetic Telegram update directly through the live runtime without the webhook endpoint:
+  - `.venv/bin/python scripts/replay_telegram_update.py --telegram-user-id <id> --text "/start" --username <telegram_username>`
+  - useful when `TELEGRAM_WEBHOOK_SECRET` is not available locally but you still need to exercise the same stage-agent/runtime path against live Supabase data
+
+Conversation review artifact:
+
+- write down the strongest wording/UX issues in:
+  - `docs/HELLY_V1_CONVERSATION_REVIEW_FINDINGS.md`
 
 Railway log check:
 

@@ -481,12 +481,12 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "candidate_summary_approved": "Perfect. Next I need your salary expectations, location, and preferred format: remote, hybrid, or office.",
-            "candidate_summary_edit_processing": "Got it. I’m updating the summary now.",
-            "candidate_summary_edit_limit_reached": "You only get one edit pass here. Check the latest version and approve it if it looks good.",
-            "candidate_summary_edit_empty": "Tell me exactly what is off in the summary and I’ll fix it once.",
+            "candidate_summary_approved": "Nice. One quick step left before matching: send your salary expectations, current location, and whether you want remote, hybrid, or office.",
+            "candidate_summary_edit_processing": "Got it. I’m tightening the summary now.",
+            "candidate_summary_edit_limit_reached": "You’ve used the one edit pass here. Check the latest version and approve it if it looks right.",
+            "candidate_summary_edit_empty": "Tell me exactly what looks off in the summary and I’ll fix it once.",
             "candidate_summary_not_available": "I don’t have a summary ready to review yet.",
-            "candidate_summary_review_help": "If it looks right, tap approve. If not, tell me what I should fix.",
+            "candidate_summary_review_help": "If it looks right, approve it. If not, tell me what I should fix.",
         }
         return [
             self._notify_result(
@@ -607,12 +607,12 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "vacancy_summary_approved": "Great. Now send the core hiring details: budget, allowed countries, work format, team size, project context, and main stack.",
+            "vacancy_summary_approved": "Nice. Next send the hiring basics in one message if you want: budget, allowed countries, work format, team size, project context, and main stack.",
             "vacancy_summary_edit_processing": "Got it. I’m updating the vacancy summary now.",
-            "vacancy_summary_edit_limit_reached": "You only get one edit pass here. Check the latest version and approve it if it looks good.",
-            "vacancy_summary_edit_empty": "Tell me exactly what is off in the vacancy summary and I’ll fix it once.",
+            "vacancy_summary_edit_limit_reached": "You’ve used the one edit pass here. Check the latest version and approve it if it looks right.",
+            "vacancy_summary_edit_empty": "Tell me exactly what looks off in the vacancy summary and I’ll fix it once.",
             "vacancy_summary_not_available": "I don’t have a vacancy summary ready to review yet.",
-            "vacancy_summary_review_help": "If it looks right, tap approve. If not, tell me what I should fix.",
+            "vacancy_summary_review_help": "If it looks right, approve it. If not, tell me what I should fix.",
         }
         return [
             self._notify_result(

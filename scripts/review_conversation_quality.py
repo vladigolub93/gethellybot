@@ -64,12 +64,14 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=80)
     parser.add_argument("--top", type=int, default=10)
     parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--include-pending-notifications", action="store_true")
     args = parser.parse_args()
 
     turns = load_conversation(
         telegram_user_id=args.telegram_user_id,
         telegram_chat_id=args.telegram_chat_id,
         limit=args.limit,
+        include_pending_notifications=args.include_pending_notifications,
     )
     findings = find_robotic_turns(turns, limit=args.top)
 

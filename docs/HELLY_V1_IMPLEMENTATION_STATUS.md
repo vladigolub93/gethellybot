@@ -103,6 +103,9 @@ Architectural status note:
 - a reusable Telegram-user watcher now polls live Supabase state until an expected stage, match status, interview state, or notification template appears
 - a reusable Telegram-user checkpoint tool now combines waiting plus final compact reporting for one live smoke milestone
 - live inspection/report tooling now also exposes the latest raw Telegram message and latest state transition for faster smoke-test debugging
+- conversation transcript tooling now supports exporting merged user plus Helly turns from `raw_messages` and pending notifications, so real or live-like Telegram dialogues can be reviewed as readable transcripts
+- a conversation review script now flags likely robotic turns from those transcripts, and a dedicated findings document now tracks the top issues plus the chosen fix area for each one
+- the latest targeted polish pass improved high-signal runtime wording around candidate summary review, vacancy summary review, and the transition into candidate questions / manager clarification after approval
 - graph runtime now emits structured `graph_stage_executed` logs with stage, status, proposed action, acceptance result, and Telegram user context for live Railway smoke verification
 - `graph_stage_executed` now also has explicit test coverage, so the log contract is verified alongside runtime behavior
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks outside the fully thin graph-first runtime

@@ -141,8 +141,8 @@ class VacancyProcessingService:
                 "text": "Does this vacancy summary look correct, or would you like to change anything?",
                 "messages": [
                     "Quick check.",
-                    "I turned the vacancy into a short summary below.",
-                    "If anything is off, tell me what to fix. If it looks right, approve it and we'll continue.",
+                    "I turned the vacancy into a short summary so you can sanity-check it fast.",
+                    "If anything is off, tell me what to fix. If it looks right, approve it and we’ll keep moving.",
                 ],
                 "summary": summary,
                 "inconsistencies": inconsistency_json,
@@ -202,11 +202,11 @@ class VacancyProcessingService:
             entity_id=vacancy.id,
             template_key="vacancy_summary_ready_for_review",
             payload_json={
-                "text": "Here’s the updated vacancy summary. This is the final version for approval.",
+                "text": "Here’s the updated vacancy summary.",
                 "messages": [
                     "Done.",
                     "I updated the vacancy summary based on your note.",
-                    "This is the final version. Give it one last look and approve it if it’s right.",
+                    "One last check: if this version looks right, approve it and we’ll continue.",
                 ],
                 "summary": merged_summary,
                 "reply_markup": summary_review_keyboard(edit_allowed=False),

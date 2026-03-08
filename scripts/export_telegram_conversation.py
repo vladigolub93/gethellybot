@@ -54,6 +54,7 @@ def load_conversation(
     telegram_user_id: int | None,
     telegram_chat_id: int | None,
     limit: int,
+    include_pending_notifications: bool = False,
 ) -> list[ConversationTurn]:
     user_id = _load_user_id(
         telegram_user_id=telegram_user_id,
@@ -76,6 +77,21 @@ def load_conversation(
             {"user_id": user_id, "limit": limit},
         ).mappings().all()
 
+        notification_rows = []
+        if include_pending_notifications:
+            notification_rows = conn.execute(
+                text(
+                    """
+                    select created_at, template_key, payload_json
+                    from notifications
+                    where user_id = cast(:user_id as uuid)
+                    order by created_at desc
+                    limit :limit
+                    """
+                ),
+                {"user_id": user_id, "limit": limit},
+            ).mappings().all()
+
     turns: list[ConversationTurn] = []
     for row in reversed(rows):
         direction = row["direction"]
@@ -88,6 +104,23 @@ def load_conversation(
                 text=row["text_content"],
             )
         )
+    if include_pending_notifications:
+        for row in reversed(notification_rows):
+            payload = row["payload_json"] or {}
+            messages = payload.get("messages")
+            rendered_text = "\n\n".join(
+                str(item).strip() for item in messages if str(item).strip()
+            ) if isinstance(messages, list) and messages else payload.get("text")
+            turns.append(
+                ConversationTurn(
+                    created_at=str(row["created_at"]),
+                    direction="synthetic_outbound",
+                    content_type="text",
+                    speaker="Helly",
+                    text=rendered_text,
+                )
+            )
+        turns.sort(key=lambda item: item.created_at)
     return turns
 
 
@@ -118,12 +151,14 @@ def main() -> None:
     parser.add_argument("--telegram-chat-id", type=int, default=None)
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--format", choices=("text", "markdown", "json"), default="text")
+    parser.add_argument("--include-pending-notifications", action="store_true")
     args = parser.parse_args()
 
     turns = load_conversation(
         telegram_user_id=args.telegram_user_id,
         telegram_chat_id=args.telegram_chat_id,
         limit=args.limit,
+        include_pending_notifications=args.include_pending_notifications,
     )
 
     if args.format == "json":

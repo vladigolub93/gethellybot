@@ -56,16 +56,16 @@ The target is a more natural, more human, more Telegram-native Helly that feels 
 
 ## 7. Phase F. Live Transcript Review
 
-31. Collect real conversation snippets from candidate onboarding.
-32. Collect real conversation snippets from manager onboarding.
-33. Identify top 10 robotic turns.
-34. Map each robotic turn to a prompt or messaging fix.
+31. Collect real conversation snippets from candidate onboarding. Completed.
+32. Collect real conversation snippets from manager onboarding. Completed.
+33. Identify top 10 robotic turns. Completed.
+34. Map each robotic turn to a prompt or messaging fix. Completed.
 35. Re-run live smoke after prompt updates.
 
 ## 8. Phase G. Final Quality Close-Out
 
-36. Update implementation status with conversation-quality progress.
+36. Update implementation status with conversation-quality progress. Completed.
 37. Update prompt catalog with any new prompt families or multi-message rules.
-38. Update live smoke runbook with conversation-quality checkpoints.
-39. Run prompt coverage tests.
-40. Run full regression suite.
+38. Update live smoke runbook with conversation-quality checkpoints. Completed.
+39. Run prompt coverage tests. Completed.
+40. Run full regression suite. Completed.

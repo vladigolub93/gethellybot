@@ -13,22 +13,18 @@ import httpx
 GRAPHQL_URL = "https://backboard.railway.com/graphql/v2"
 
 QUERY = """
-query EnvironmentLogs($environmentId: String!, $after: String, $limit: Int) {
-  environmentLogs(environmentId: $environmentId, after: $after, limit: $limit) {
-    edges {
-      cursor
-      node {
-        message
-        severity
-        timestamp
-        serviceId
-        deploymentId
-        attrs
-      }
+query EnvironmentLogs($environmentId: String!, $afterLimit: Int) {
+  environmentLogs(environmentId: $environmentId, afterLimit: $afterLimit) {
+    message
+    severity
+    timestamp
+    attributes {
+      key
+      value
     }
-    pageInfo {
-      hasNextPage
-      endCursor
+    tags {
+      deploymentId
+      serviceId
     }
   }
 }
@@ -65,7 +61,7 @@ def _matches(
     if contains not in message:
         return False
 
-    attrs = node.get("attrs")
+    attrs = node.get("attributes")
     if expected_stage is not None:
         stage_value = _extract_attr(attrs, "stage")
         if stage_value != expected_stage:
@@ -84,45 +80,30 @@ def _fetch_logs(
     token: str,
     environment_id: str,
     limit: int,
-    pages: int,
 ) -> list[dict[str, Any]]:
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
-    logs: list[dict[str, Any]] = []
-    after: str | None = None
 
     with httpx.Client(timeout=20.0) as client:
-        for _ in range(pages):
-            response = client.post(
-                GRAPHQL_URL,
-                headers=headers,
-                json={
-                    "query": QUERY,
-                    "variables": {
-                        "environmentId": environment_id,
-                        "after": after,
-                        "limit": limit,
-                    },
+        response = client.post(
+            GRAPHQL_URL,
+            headers=headers,
+            json={
+                "query": QUERY,
+                "variables": {
+                    "environmentId": environment_id,
+                    "afterLimit": limit,
                 },
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if payload.get("errors"):
-                _fail("railway_graphql_error", errors=payload["errors"])
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("errors"):
+            _fail("railway_graphql_error", errors=payload["errors"])
 
-            result = (payload.get("data") or {}).get("environmentLogs") or {}
-            edges = result.get("edges") or []
-            logs.extend(edge.get("node") or {} for edge in edges)
-            page_info = result.get("pageInfo") or {}
-            if not page_info.get("hasNextPage"):
-                break
-            after = page_info.get("endCursor")
-            if not after:
-                break
-
-    return logs
+    return (payload.get("data") or {}).get("environmentLogs") or []
 
 
 def main() -> None:
@@ -134,8 +115,7 @@ def main() -> None:
     parser.add_argument("--token", default=os.getenv("RAILWAY_API_TOKEN"))
     parser.add_argument("--expect-stage")
     parser.add_argument("--expect-telegram-user-id")
-    parser.add_argument("--limit", type=int, default=100)
-    parser.add_argument("--pages", type=int, default=2)
+    parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--print-matches", action="store_true")
     args = parser.parse_args()
 
@@ -148,7 +128,6 @@ def main() -> None:
         token=args.token,
         environment_id=args.environment_id,
         limit=args.limit,
-        pages=args.pages,
     )
 
     matches = [
