@@ -1355,6 +1355,75 @@ class TelegramUpdateService:
             latest_user_message=latest_user_message,
         )
 
+    def _build_unsupported_input_templates(
+        self,
+        *,
+        user,
+        latest_user_message: str,
+    ) -> List[str]:
+        return [
+            self._notify(
+                user.id,
+                "unsupported_input",
+                {
+                    "text": self._build_generic_recovery_message(
+                        user=user,
+                        latest_user_message=latest_user_message,
+                    )
+                },
+            )
+        ]
+
+    def _maybe_run_candidate_stage_for_update(
+        self,
+        *,
+        user,
+        normalized_update: NormalizedTelegramUpdate,
+    ):
+        if not getattr(user, "is_candidate", False):
+            return None
+        if normalized_update.content_type not in {"text", "video"}:
+            return None
+        return self._maybe_run_graph_stage(
+            user=user,
+            normalized_update=normalized_update,
+        )
+
+    def _maybe_run_manager_stage_for_update(
+        self,
+        *,
+        user,
+        normalized_update: NormalizedTelegramUpdate,
+    ):
+        if not getattr(user, "is_hiring_manager", False):
+            return None
+        if normalized_update.content_type != "text":
+            return None
+        return self._maybe_run_graph_stage(
+            user=user,
+            normalized_update=normalized_update,
+        )
+
+    def _create_raw_message_for_update(self, *, user_id, normalized_update: NormalizedTelegramUpdate):
+        return self.raw_messages_repo.create(
+            user_id=user_id,
+            telegram_update_id=normalized_update.update_id,
+            telegram_message_id=normalized_update.message_id,
+            telegram_chat_id=normalized_update.telegram_chat_id,
+            direction="inbound",
+            content_type=normalized_update.content_type,
+            payload_json=normalized_update.payload,
+            text_content=normalized_update.text,
+        )
+
+    def _build_processed_update_result(self, *, user_id, notification_templates: List[str]) -> ProcessedTelegramUpdate:
+        return ProcessedTelegramUpdate(
+            status="processed",
+            deduplicated=False,
+            notification_templates=notification_templates,
+            user_id=str(user_id),
+        )
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -1366,15 +1435,9 @@ class TelegramUpdateService:
             )
 
         user = self.identity_service.ensure_user(normalized_update)
-        raw_message = self.raw_messages_repo.create(
+        raw_message = self._create_raw_message_for_update(
             user_id=user.id,
-            telegram_update_id=normalized_update.update_id,
-            telegram_message_id=normalized_update.message_id,
-            telegram_chat_id=normalized_update.telegram_chat_id,
-            direction="inbound",
-            content_type=normalized_update.content_type,
-            payload_json=normalized_update.payload,
-            text_content=normalized_update.text,
+            normalized_update=normalized_update,
         )
         persisted_file = self._persist_file_if_present(user.id, raw_message, normalized_update)
 
@@ -1386,11 +1449,9 @@ class TelegramUpdateService:
         )
         self.session.commit()
 
-        return ProcessedTelegramUpdate(
-            status="processed",
-            deduplicated=False,
+        return self._build_processed_update_result(
+            user_id=user.id,
             notification_templates=notification_templates,
-            user_id=str(user.id),
         )
 
     def _apply_identity_flow(
@@ -1401,10 +1462,7 @@ class TelegramUpdateService:
         *,
         file_id=None,
     ) -> List[str]:
-        templates: List[str] = []
         text_value = normalize_command_text(normalized_update.text)
-        candidate_stage_result = None
-        manager_stage_result = None
 
         if normalized_update.contact_phone_number:
             return self._handle_contact_share(
@@ -1435,17 +1493,14 @@ class TelegramUpdateService:
         if text_value == "/start":
             return self._handle_start_command(user=user)
 
-        if user.is_candidate and normalized_update.content_type in {"text", "video"}:
-            candidate_stage_result = self._maybe_run_graph_stage(
-                user=user,
-                normalized_update=normalized_update,
-            )
-
-        if user.is_hiring_manager and normalized_update.content_type == "text":
-            manager_stage_result = self._maybe_run_graph_stage(
-                user=user,
-                normalized_update=normalized_update,
-            )
+        candidate_stage_result = self._maybe_run_candidate_stage_for_update(
+            user=user,
+            normalized_update=normalized_update,
+        )
+        manager_stage_result = self._maybe_run_manager_stage_for_update(
+            user=user,
+            normalized_update=normalized_update,
+        )
 
         if user.is_candidate:
             candidate_templates = self._apply_candidate_flow(
@@ -1469,20 +1524,10 @@ class TelegramUpdateService:
             if manager_templates is not None:
                 return manager_templates
 
-        templates.append(
-            self._notify(
-                user.id,
-                "unsupported_input",
-                {
-                    "text": self._build_generic_recovery_message(
-                        user=user,
-                        latest_user_message=normalized_update.text
-                        or normalized_update.content_type,
-                    )
-                },
-            )
+        return self._build_unsupported_input_templates(
+            user=user,
+            latest_user_message=normalized_update.text or normalized_update.content_type,
         )
-        return templates
 
     def _persist_file_if_present(self, user_id, raw_message, normalized_update: NormalizedTelegramUpdate):
         if normalized_update.file is None:

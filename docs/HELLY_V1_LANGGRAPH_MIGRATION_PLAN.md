@@ -231,6 +231,7 @@ Status:
   - early entry/onboarding transport handling for contact attach, `/start`, and accepted entry-stage actions is now extracted into dedicated helpers instead of remaining inline inside `_apply_identity_flow`
   - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, further reducing transport branching in `TelegramUpdateService`
   - remaining candidate-side and manager-side routing segments are now also split into dedicated transport helpers for delete, interview/review, summary, verification, questions, clarification, and intake paths, further thinning `TelegramUpdateService`
+  - raw-message creation, candidate/manager graph stage-result precompute, generic unsupported-input recovery, and final processed-update assembly are now also extracted into dedicated Telegram helpers, reducing inline transport orchestration further
 
 ### Step 8. Production Validation
 
