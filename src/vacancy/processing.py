@@ -202,11 +202,11 @@ class VacancyProcessingService:
             entity_id=vacancy.id,
             template_key="vacancy_summary_ready_for_review",
             payload_json={
-                "text": "Here is your updated vacancy summary. This is the final version for approval.",
+                "text": "Here’s the updated vacancy summary. This is the final version for approval.",
                 "messages": [
                     "Done.",
                     "I updated the vacancy summary based on your note.",
-                    "This is the final version for approval.",
+                    "This is the final version. Give it one last look and approve it if it’s right.",
                 ],
                 "summary": merged_summary,
                 "reply_markup": summary_review_keyboard(edit_allowed=False),
@@ -237,7 +237,7 @@ class VacancyProcessingService:
                     entity_type="vacancy",
                     entity_id=vacancy.id,
                     template_key="vacancy_clarification_text_retry",
-                    payload_json={"text": self._copy("Voice/video clarification saved, but transcription failed. Please resend the clarification in text.")},
+                    payload_json={"text": self._copy("I saved the voice/video clarification, but the transcript failed. Resend it in text and I’ll keep moving.")},
                 )
                 raise
             clarification_text = ingestion_result.text

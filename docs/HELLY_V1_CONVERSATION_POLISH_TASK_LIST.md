@@ -48,11 +48,11 @@ The target is a more natural, more human, more Telegram-native Helly that feels 
 
 ## 6. Phase E. Microcopy Cleanup
 
-26. Audit entry-stage user-facing copy for robotic wording.
-27. Audit candidate-stage copy for stiffness and repetition.
-28. Audit manager-stage copy for ATS-like wording.
-29. Audit interview-stage copy for awkward transitions.
-30. Replace generic acknowledgements with more varied natural phrasing.
+26. Audit entry-stage user-facing copy for robotic wording. Completed.
+27. Audit candidate-stage copy for stiffness and repetition. Completed.
+28. Audit manager-stage copy for ATS-like wording. Completed.
+29. Audit interview-stage copy for awkward transitions. Completed.
+30. Replace generic acknowledgements with more varied natural phrasing. Completed.
 
 ## 7. Phase F. Live Transcript Review
 

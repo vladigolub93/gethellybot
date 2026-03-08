@@ -208,12 +208,12 @@ class VacancyService:
             return VacancyClarificationResult(
                 status="queued",
                 notification_template="vacancy_clarification_processing",
-                notification_text=self._copy("Clarification answer received. Processing vacancy details."),
+                notification_text=self._copy("Got it. I’m updating the vacancy details now."),
             )
         return VacancyClarificationResult(
             status="unsupported",
             notification_template="vacancy_clarification_unsupported",
-            notification_text=self._copy("Please answer with text, voice, or video."),
+            notification_text=self._copy("Reply in text, voice, or video."),
         )
 
     def process_clarification_text(

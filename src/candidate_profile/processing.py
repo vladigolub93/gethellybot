@@ -182,11 +182,11 @@ class CandidateProcessingService:
             entity_id=profile.id,
             template_key="candidate_summary_ready_for_review",
             payload_json={
-                "text": "Here is your updated summary. This is the final version for approval.",
+                "text": "Here’s the updated summary. This is the final version for approval.",
                 "messages": [
                     "Done.",
                     "I updated the summary based on your note.",
-                    "This is the final version for approval.",
+                    "This is the final version. Give it one last look and approve it if it’s right.",
                 ],
                 "summary": merged_summary,
                 "reply_markup": summary_review_keyboard(edit_allowed=False),
@@ -223,7 +223,7 @@ class CandidateProcessingService:
                     entity_id=profile.id,
                     template_key="candidate_questions_text_retry",
                     payload_json={
-                        "text": "Voice/video answer saved, but transcription failed. Please send salary, location, and work format in text.",
+                        "text": "I saved the voice/video answer, but the transcript failed. Send salary, location, and work format in text and I’ll keep going.",
                     },
                 )
                 raise

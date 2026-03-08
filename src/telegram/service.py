@@ -107,7 +107,7 @@ class TelegramUpdateService:
                     user_id=user.id,
                     stage="CONTACT_REQUIRED",
                     text=self._copy(
-                        "Please share your contact using the button below to continue if you do not have a Telegram username available."
+                        "Share your contact with the button below and I’ll keep things moving."
                     ),
                 )
             ]
@@ -142,9 +142,9 @@ class TelegramUpdateService:
                 else "manager_onboarding_started"
             )
             message_text = (
-                "Candidate flow started. Please upload your CV or describe your experience."
+                "Nice. Send me your CV, or just describe your experience here."
                 if role == "candidate"
-                else "Hiring manager flow started. Please send the job description."
+                else "Nice. Send me the job description and I’ll turn it into a clean vacancy draft."
             )
             return [
                 self._notify(
@@ -481,12 +481,12 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
-            "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
-            "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
-            "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
-            "candidate_summary_not_available": "No current summary is available to review.",
-            "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+            "candidate_summary_approved": "Perfect. Next I need your salary expectations, location, and preferred format: remote, hybrid, or office.",
+            "candidate_summary_edit_processing": "Got it. I’m updating the summary now.",
+            "candidate_summary_edit_limit_reached": "You only get one edit pass here. Check the latest version and approve it if it looks good.",
+            "candidate_summary_edit_empty": "Tell me exactly what is off in the summary and I’ll fix it once.",
+            "candidate_summary_not_available": "I don’t have a summary ready to review yet.",
+            "candidate_summary_review_help": "If it looks right, tap approve. If not, tell me what I should fix.",
         }
         return [
             self._notify_result(
@@ -607,12 +607,12 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "vacancy_summary_approved": "Summary approved. Now send budget range, countries allowed, work format, team size, project description, and primary tech stack.",
-            "vacancy_summary_edit_processing": "Thanks. Updating the vacancy summary based on your correction.",
-            "vacancy_summary_edit_limit_reached": "You can only change the vacancy summary once. Please approve the latest version to continue.",
-            "vacancy_summary_edit_empty": "Tell me exactly what is incorrect in the vacancy summary, and I will update it once.",
-            "vacancy_summary_not_available": "No current vacancy summary is available to review.",
-            "vacancy_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+            "vacancy_summary_approved": "Great. Now send the core hiring details: budget, allowed countries, work format, team size, project context, and main stack.",
+            "vacancy_summary_edit_processing": "Got it. I’m updating the vacancy summary now.",
+            "vacancy_summary_edit_limit_reached": "You only get one edit pass here. Check the latest version and approve it if it looks good.",
+            "vacancy_summary_edit_empty": "Tell me exactly what is off in the vacancy summary and I’ll fix it once.",
+            "vacancy_summary_not_available": "I don’t have a vacancy summary ready to review yet.",
+            "vacancy_summary_review_help": "If it looks right, tap approve. If not, tell me what I should fix.",
         }
         return [
             self._notify_result(
@@ -662,9 +662,9 @@ class TelegramUpdateService:
             file_id=file_id,
         )
         message_map = {
-            "vacancy_jd_received_processing": "Job description received. Processing started.",
+            "vacancy_jd_received_processing": "Nice, got it. I’m turning that into a vacancy summary now.",
             "manager_input_not_expected": "Manager input is not expected at the current step.",
-            "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
+            "manager_input_unsupported": "Send the JD as text, a file, voice, or video.",
         }
         return [
             self._notify_result(
@@ -698,9 +698,9 @@ class TelegramUpdateService:
             file_id=file_id,
         )
         message_map = {
-            "candidate_cv_received_processing": "CV or experience input received. Processing started.",
+            "candidate_cv_received_processing": "Nice, got it. I’m turning that into a short summary now.",
             "candidate_input_not_expected": "Candidate input is not expected at the current step.",
-            "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
+            "candidate_input_unsupported": "Send your experience as text, a file, or a voice note.",
         }
         return [
             self._notify_result(
@@ -835,9 +835,9 @@ class TelegramUpdateService:
             file_id=file_id,
         )
         message_map = {
-            "vacancy_jd_received_processing": "Job description received. Processing started.",
+            "vacancy_jd_received_processing": "Nice, got it. I’m turning that into a vacancy summary now.",
             "manager_input_not_expected": "Manager input is not expected at the current step.",
-            "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
+            "manager_input_unsupported": "Send the JD as text, a file, voice, or video.",
         }
         return [
             self._notify_result(
@@ -863,9 +863,9 @@ class TelegramUpdateService:
             file_id=file_id,
         )
         message_map = {
-            "candidate_cv_received_processing": "CV or experience input received. Processing started.",
+            "candidate_cv_received_processing": "Nice, got it. I’m turning that into a short summary now.",
             "candidate_input_not_expected": "Candidate input is not expected at the current step.",
-            "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
+            "candidate_input_unsupported": "Send your experience as text, a file, or a voice note.",
         }
         return [
             self._notify_result(

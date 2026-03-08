@@ -496,6 +496,7 @@ Recent stage-ownership progress:
 - stage agents now receive a compact recent-turn memory assembled from persisted `raw_messages`, so entry, candidate, manager, and deletion stages can see the latest local user/bot context instead of responding from the current message alone.
 - the shared Telegram style layer and state-assistance prompt contract now explicitly prohibit repeating the same explanation verbatim and require replies to address the user's latest concern directly.
 - repeated-question handling is now covered by graph-stage tests, including a regression that verifies `READY` help replies receive prior user/bot turns so the stage agent can answer follow-up status questions with local conversational memory.
+- high-visibility runtime microcopy has been rewritten across entry, candidate, manager, interview, clarification, verification, and summary-review paths, replacing more robotic phrases like `processing started` / `please answer with...` with shorter, more Telegram-native recruiter copy.
 
 ## 7. Production Readiness Assessment
 

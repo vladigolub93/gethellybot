@@ -371,7 +371,7 @@ class CandidateProfileService:
         return CandidateQuestionsResult(
             status="unsupported",
             notification_template="candidate_questions_unsupported",
-            notification_text="Please answer with text, voice, or video.",
+            notification_text="Reply in text, voice, or video.",
         )
 
     def process_question_answer_text(
@@ -464,8 +464,8 @@ class CandidateProfileService:
                 status="completed",
                 notification_template="candidate_questions_completed",
                 notification_text=(
-                    "Mandatory profile questions completed. "
-                    f"Please record a short video and say: '{verification.phrase_text}'."
+                    "Nice, that part is done. "
+                    f"Next, send a short video and say: '{verification.phrase_text}'."
                 ),
             )
 
@@ -535,7 +535,7 @@ class CandidateProfileService:
             return CandidateDeletionResult(
                 status="cancelled",
                 notification_template="candidate_deletion_cancelled",
-                notification_text=self._copy("Profile deletion cancelled. Your profile remains active."),
+                notification_text=self._copy("Okay, profile stays active."),
             )
 
         active_matches = self.matching.list_active_for_candidate(profile.id)
@@ -642,7 +642,7 @@ class CandidateProfileService:
         return CandidateDeletionResult(
             status="deleted",
             notification_template="candidate_deleted",
-            notification_text=self._copy(f"Your profile has been deleted and removed from active recruiting flow.{details_text}"),
+            notification_text=self._copy(f"Done. Your profile is deleted and out of the active flow.{details_text}"),
         )
 
     def handle_verification_submission(
@@ -666,7 +666,7 @@ class CandidateProfileService:
                 status="instruction",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
-                    "Please send a short video and clearly say: "
+                    "Send a short video and clearly say: "
                     f"'{verification.phrase_text}'."
                 ),
             )
@@ -699,7 +699,7 @@ class CandidateProfileService:
         return CandidateVerificationResult(
             status="completed",
             notification_template="candidate_ready",
-            notification_text="Video verification received. Your profile is now ready for matching.",
+            notification_text="Nice, verification is in. Your profile is now ready for matching.",
         )
 
     def _issue_verification(self, profile):

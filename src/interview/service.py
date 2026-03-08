@@ -411,13 +411,13 @@ class InterviewService:
             return InterviewUserResult(
                 status="queued",
                 notification_template="candidate_interview_answer_processing",
-                notification_text=self._copy("Answer received. Processing it now."),
+                notification_text=self._copy("Got it. I’m processing your answer now."),
             )
 
         return InterviewUserResult(
             status="unsupported",
             notification_template="candidate_interview_answer_unsupported",
-            notification_text=self._copy("Please answer with text, voice, or video."),
+            notification_text=self._copy("Reply in text, voice, or video."),
         )
 
     def _handle_interview_answer_text(
@@ -436,7 +436,7 @@ class InterviewService:
             return InterviewUserResult(
                 status="missing_question",
                 notification_template="candidate_interview_state_error",
-                notification_text=self._copy("Interview state is inconsistent. Please try again."),
+                notification_text=self._copy("Something got out of sync on my side. Send that again and I’ll retry."),
             )
 
         self.interviews.create_answer(
