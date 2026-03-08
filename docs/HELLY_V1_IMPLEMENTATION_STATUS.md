@@ -84,6 +84,7 @@ Architectural status note:
 - a reusable live DB inspection script now queries Supabase state for a Telegram user and has been validated successfully against the live environment
 - a reusable Telegram-user smoke validator now asserts expected candidate/vacancy/interview/match/notification state from live Supabase snapshots and has been validated in failure mode against the live environment
 - a reusable Telegram-user reset script now supports clean-slate live smoke reruns without manual SQL and defaults to dry-run unless `--execute` is passed
+- a reusable Telegram-user smoke report script now prints compact live progress/status summaries on top of the raw inspection snapshot
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status

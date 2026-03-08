@@ -209,6 +209,15 @@ This prints a JSON snapshot of:
 - latest notification
 - row counts for messages, notifications, files, matches, vacancies
 
+To print a compact current smoke-status report instead of raw JSON:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/report_telegram_user.py --telegram-user-id <telegram-user-id>
+```
+
 To reset one Telegram tester to a clean slate before repeating a live smoke flow:
 
 ```bash
