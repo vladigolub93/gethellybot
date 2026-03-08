@@ -310,6 +310,189 @@ class TelegramUpdateService:
             )
         ]
 
+    def _handle_candidate_summary_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "SUMMARY_REVIEW"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"approve_summary", "request_summary_change"}
+        ):
+            return None
+        summary_input_text = (
+            "Approve summary"
+            if stage_result.proposed_action == "approve_summary"
+            else (stage_result.structured_payload or {}).get("edit_text") or normalized_update.text
+        )
+        summary_review_result = self.candidate_service.handle_summary_review_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=summary_input_text,
+        )
+        if summary_review_result is None:
+            return None
+        message_map = {
+            "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
+            "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
+            "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
+            "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
+            "candidate_summary_not_available": "No current summary is available to review.",
+            "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+        }
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=summary_review_result.notification_template,
+                text=self._copy(message_map[summary_review_result.notification_template]),
+                reply_markup=summary_review_keyboard(edit_allowed=True)
+                if summary_review_result.notification_template in {
+                    "candidate_summary_review_help",
+                    "candidate_summary_edit_empty",
+                }
+                else None,
+            )
+        ]
+
+    def _handle_candidate_verification_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "VERIFICATION_PENDING"
+            and stage_result.action_accepted
+            and stage_result.proposed_action == "send_verification_video"
+            and normalized_update.content_type == "video"
+        ):
+            return None
+        verification_result = self.candidate_service.handle_verification_submission(
+            user=user,
+            raw_message_id=raw_message_id,
+            content_type=normalized_update.content_type,
+            file_id=file_id,
+        )
+        if verification_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=verification_result.notification_template,
+                text=verification_result.notification_text,
+            )
+        ]
+
+    def _handle_manager_clarification_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "CLARIFICATION_QA"
+            and stage_result.action_accepted
+            and stage_result.proposed_action == "send_vacancy_clarifications"
+        ):
+            return None
+        clarification_result = self.vacancy_service.handle_clarification_parsed_payload(
+            user=user,
+            raw_message_id=raw_message_id,
+            parsed_payload=stage_result.structured_payload or {},
+        )
+        if clarification_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=clarification_result.notification_template,
+                text=self._copy(clarification_result.notification_text),
+            )
+        ]
+
+    def _handle_manager_intake_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "INTAKE_PENDING"
+            and stage_result.action_accepted
+            and stage_result.proposed_action == "send_job_description_text"
+        ):
+            return None
+        intake_result = self.vacancy_service.handle_jd_intake(
+            user=user,
+            raw_message_id=raw_message_id,
+            content_type=normalized_update.content_type,
+            text=(stage_result.structured_payload or {}).get("job_description_text") or normalized_update.text,
+            file_id=file_id,
+        )
+        message_map = {
+            "vacancy_jd_received_processing": "Job description received. Processing started.",
+            "manager_input_not_expected": "Manager input is not expected at the current step.",
+            "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
+        }
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=intake_result.notification_template,
+                text=self._copy(message_map[intake_result.notification_template]),
+            )
+        ]
+
+    def _handle_candidate_intake_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "CV_PENDING"
+            and stage_result.action_accepted
+            and stage_result.proposed_action == "send_cv_text"
+        ):
+            return None
+        intake_result = self.candidate_service.handle_cv_intake(
+            user=user,
+            raw_message_id=raw_message_id,
+            content_type="text",
+            text=(stage_result.structured_payload or {}).get("cv_text") or normalized_update.text,
+            file_id=file_id,
+        )
+        message_map = {
+            "candidate_cv_received_processing": "CV or experience input received. Processing started.",
+            "candidate_input_not_expected": "Candidate input is not expected at the current step.",
+            "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
+        }
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=intake_result.notification_template,
+                text=self._copy(message_map[intake_result.notification_template]),
+            )
+        ]
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -688,47 +871,14 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type == "text":
             stage_result = candidate_stage_result
-            if (
-                stage_result is not None
-                and stage_result.stage == "SUMMARY_REVIEW"
-                and stage_result.action_accepted
-                and stage_result.proposed_action in {"approve_summary", "request_summary_change"}
-            ):
-                summary_input_text = (
-                    "Approve summary"
-                    if stage_result.proposed_action == "approve_summary"
-                    else (stage_result.structured_payload or {}).get("edit_text") or normalized_update.text
-                )
-                summary_review_result = self.candidate_service.handle_summary_review_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text=summary_input_text,
-                )
-                if summary_review_result is not None:
-                    message_map = {
-                        "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
-                        "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
-                        "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
-                        "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
-                        "candidate_summary_not_available": "No current summary is available to review.",
-                        "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
-                    }
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            summary_review_result.notification_template,
-                            {
-                                "text": self._copy(message_map[summary_review_result.notification_template]),
-                                "reply_markup": summary_review_keyboard(edit_allowed=True)
-                                if summary_review_result.notification_template in {
-                                    "candidate_summary_review_help",
-                                    "candidate_summary_edit_empty",
-                                }
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
+            summary_templates = self._handle_candidate_summary_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                stage_result=stage_result,
+            )
+            if summary_templates is not None:
+                return summary_templates
 
             assistance_text = self._resolve_graph_help_text(
                 user=user,
@@ -777,28 +927,15 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
             stage_result = candidate_stage_result
-            if (
-                stage_result is not None
-                and stage_result.stage == "VERIFICATION_PENDING"
-                and stage_result.action_accepted
-                and stage_result.proposed_action == "send_verification_video"
-                and normalized_update.content_type == "video"
-            ):
-                verification_result = self.candidate_service.handle_verification_submission(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    content_type=normalized_update.content_type,
-                    file_id=file_id,
-                )
-                if verification_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            verification_result.notification_template,
-                            {"text": verification_result.notification_text},
-                        )
-                    )
-                    return templates
+            verification_templates = self._handle_candidate_verification_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=stage_result,
+            )
+            if verification_templates is not None:
+                return verification_templates
             if normalized_update.content_type == "text":
                 assistance_text = self._resolve_graph_help_text(
                     user=user,
@@ -866,26 +1003,13 @@ class TelegramUpdateService:
         if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
                 stage_result = manager_stage_result
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "CLARIFICATION_QA"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action == "send_vacancy_clarifications"
-                ):
-                    clarification_result = self.vacancy_service.handle_clarification_parsed_payload(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        parsed_payload=stage_result.structured_payload or {},
-                    )
-                    if clarification_result is not None:
-                        templates.append(
-                            self._notify(
-                                user.id,
-                                clarification_result.notification_template,
-                                {"text": self._copy(clarification_result.notification_text)},
-                            )
-                        )
-                        return templates
+                clarification_templates = self._handle_manager_clarification_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    stage_result=stage_result,
+                )
+                if clarification_templates is not None:
+                    return clarification_templates
                 assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",
@@ -936,32 +1060,15 @@ class TelegramUpdateService:
         if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
             if normalized_update.content_type == "text":
                 stage_result = manager_stage_result
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "INTAKE_PENDING"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action == "send_job_description_text"
-                ):
-                    intake_result = self.vacancy_service.handle_jd_intake(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        content_type=normalized_update.content_type,
-                        text=(stage_result.structured_payload or {}).get("job_description_text") or normalized_update.text,
-                        file_id=file_id,
-                    )
-                    message_map = {
-                        "vacancy_jd_received_processing": "Job description received. Processing started.",
-                        "manager_input_not_expected": "Manager input is not expected at the current step.",
-                        "manager_input_unsupported": "Please send the job description as text, document, voice, or video.",
-                    }
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            intake_result.notification_template,
-                            {"text": self._copy(message_map[intake_result.notification_template])},
-                        )
-                    )
-                    return templates
+                manager_intake_templates = self._handle_manager_intake_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if manager_intake_templates is not None:
+                    return manager_intake_templates
             intake_result = self.vacancy_service.handle_jd_intake(
                 user=user,
                 raw_message_id=raw_message_id,
@@ -986,32 +1093,15 @@ class TelegramUpdateService:
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             if normalized_update.content_type == "text":
                 stage_result = candidate_stage_result
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "CV_PENDING"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action == "send_cv_text"
-                ):
-                    intake_result = self.candidate_service.handle_cv_intake(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        content_type="text",
-                        text=(stage_result.structured_payload or {}).get("cv_text") or normalized_update.text,
-                        file_id=file_id,
-                    )
-                    message_map = {
-                        "candidate_cv_received_processing": "CV or experience input received. Processing started.",
-                        "candidate_input_not_expected": "Candidate input is not expected at the current step.",
-                        "candidate_input_unsupported": "Please send text, a document, or a voice message for your experience.",
-                    }
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            intake_result.notification_template,
-                            {"text": self._copy(message_map[intake_result.notification_template])},
-                        )
-                    )
-                    return templates
+                candidate_intake_templates = self._handle_candidate_intake_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if candidate_intake_templates is not None:
+                    return candidate_intake_templates
                 assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",

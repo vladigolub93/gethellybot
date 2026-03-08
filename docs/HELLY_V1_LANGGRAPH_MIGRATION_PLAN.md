@@ -218,6 +218,14 @@ Deliver:
 - keep Telegram layer as transport and normalization glue
 - centralize stage execution entrypoint through LangGraph
 
+Status:
+
+- in progress
+- implemented:
+  - migrated stages now use graph-first execution before legacy compatibility fallback
+  - Telegram transport reuses a single graph result per migrated update path
+  - repeated graph-to-backend handoff branches for candidate delete, manager delete, manager review, candidate interaction, candidate summary review, candidate verification, manager clarification, manager intake, and candidate intake are extracted into reusable helpers instead of duplicated inline routing code
+
 ### Step 8. Regression and Production Hardening
 
 Deliver:
