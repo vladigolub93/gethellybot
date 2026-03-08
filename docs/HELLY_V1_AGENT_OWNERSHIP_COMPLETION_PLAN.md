@@ -298,9 +298,9 @@ Exit:
     - blocker statement
     - explicit completion input
     - explicit correction
-    - explicit approval/rejection where applicable
-50. Add matrix tests that verify free-form questions do not accidentally trigger transitions.
-51. Add matrix tests that verify only explicit correction intent creates correction actions.
+    - explicit approval/rejection where applicable. `Completed`
+50. Add matrix tests that verify free-form questions do not accidentally trigger transitions. `Completed`
+51. Add matrix tests that verify only explicit correction intent creates correction actions. `Completed`
 
 Exit:
 
