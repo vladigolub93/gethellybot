@@ -63,6 +63,7 @@ Architectural status note:
 - manager `CLARIFICATION_QA` is now graph-owned for text-based clarification completion and help handling
 - manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - `INTERVIEW_INVITED` is now graph-owned for invitation guidance and accept/skip execution
+- `INTERVIEW_INVITED` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; help/status questions no longer rely on regex help classification and interview actions are executed through explicit validated invitation actions
 - `INTERVIEW_IN_PROGRESS` is now graph-owned for active text-answer turns and in-stage clarification
 - `INTERVIEW_IN_PROGRESS` text-turn meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification/help questions no longer rely on regex help classification
 - `MANAGER_REVIEW` is now graph-owned for review guidance and approve/reject execution

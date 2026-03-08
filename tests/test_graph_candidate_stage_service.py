@@ -524,6 +524,35 @@ def test_graph_candidate_stage_handles_interview_invited_help() -> None:
     assert "interview" in reply.lower() or "voice" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_interview_invited_question_as_accept() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp9q", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(invited_match=SimpleNamespace(id="m1q"))
+
+    user = SimpleNamespace(
+        id="u12q",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="How long does the interview take?",
+    )
+
+    assert result is not None
+    assert result.stage == "INTERVIEW_INVITED"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_interview_invite_accept() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

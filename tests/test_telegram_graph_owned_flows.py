@@ -194,6 +194,10 @@ class FakeInterviewService:
         self.calls.append(kwargs)
         return self.result
 
+    def execute_invitation_action(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
 
 class FakeEvaluationService:
     def __init__(self):
@@ -516,7 +520,7 @@ def test_graph_owned_interaction_flow_routes_accept_answer_and_manager_approve()
     )
     templates = service._apply_identity_flow(candidate_user, "raw1", build_update(text="Accept interview"))
     assert templates == ["candidate_interview_advanced"]
-    assert service.interview_service.calls[-1]["text"] == "Accept interview"
+    assert service.interview_service.calls[-1]["action"] == "accept_interview"
 
     templates = service._apply_identity_flow(
         candidate_user,

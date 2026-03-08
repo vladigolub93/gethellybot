@@ -1,0 +1,6 @@
+- input: "How long does the interview take and can I answer by voice?"
+  expected_intent: "help"
+- input: "Accept interview"
+  expected_action: "accept_interview"
+- input: "Skip opportunity"
+  expected_action: "skip_opportunity"

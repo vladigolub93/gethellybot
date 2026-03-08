@@ -264,6 +264,37 @@ Latest user message:
 """
 
 
+def interview_invitation_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the interview invitation step.
+
+Valid outcomes:
+- help question or clarification about the interview invitation
+- explicit acceptance of the interview
+- explicit skip or decline of the opportunity
+
+Rules:
+- treat questions like "what is this?", "how long will it take?", "can I answer by voice?", "what happens if I skip?", and "why was I invited?" as help, not as accept/skip
+- only propose `accept_interview` when the candidate is clearly accepting the interview
+- only propose `skip_opportunity` when the candidate is clearly declining or skipping the opportunity
+- do not invent interview details
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def interview_question_plan_prompt(vacancy_context: dict, candidate_summary: dict, cv_text: str | None = None) -> str:
     return f"""Task: generate 5 to 7 short interview questions for this candidate-vacancy pair.
 

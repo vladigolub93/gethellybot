@@ -225,12 +225,46 @@ class InterviewService:
 
         lowered = normalize_command_text(text)
         if content_type == "text" and lowered in {"accept interview", "accept"}:
+            return self.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="accept_interview",
+            )
+        if content_type == "text" and lowered in {"skip opportunity", "skip"}:
+            return self.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="skip_opportunity",
+            )
+
+        return InterviewUserResult(
+            status="invite_pending",
+            notification_template="candidate_interview_invitation_help",
+            notification_text=self._copy("Reply 'Accept interview' or 'Skip opportunity'."),
+        )
+
+    def execute_invitation_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+    ) -> Optional[InterviewUserResult]:
+        candidate = self.candidates.get_active_by_user_id(user.id)
+        if candidate is None:
+            return None
+
+        invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
+        if invited_match is None:
+            return None
+
+        if action == "accept_interview":
             return self._accept_invitation(
                 candidate=candidate,
                 match=invited_match,
                 raw_message_id=raw_message_id,
             )
-        if content_type == "text" and lowered in {"skip opportunity", "skip"}:
+        if action == "skip_opportunity":
             self.matches.mark_candidate_responded(invited_match, status="skipped")
             self.state_service.record_transition(
                 entity_type="match",

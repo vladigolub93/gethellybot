@@ -8,6 +8,7 @@ from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
+    safe_interview_invitation_decision,
     safe_interview_in_progress_decision,
     safe_parse_candidate_questions,
     safe_state_assistance_decision,
@@ -71,19 +72,6 @@ def _candidate_ready_help_patterns() -> tuple[str, ...]:
     )
 
 
-def _candidate_interview_invited_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhat is this\b",
-        r"\bhow long\b",
-        r"\bvoice\b",
-        r"\bvideo\b",
-        r"\btext\b",
-        r"\bwhat happens if i skip\b",
-        r"\bwhat happens after\b",
-        r"\bwhy was i invited\b",
-    )
-
-
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -122,20 +110,6 @@ def _detect_candidate_ready_action(text: str) -> tuple[str | None, dict]:
     command = normalize_command_text(text or "")
     if command in {"delete profile", "delete my profile", "remove profile"}:
         return "delete_profile", {}
-    return None, {}
-
-
-def _is_candidate_interview_invited_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _candidate_interview_invited_help_patterns())
-
-
-def _detect_candidate_interview_invited_action(text: str) -> tuple[str | None, dict]:
-    command = normalize_command_text(text or "")
-    if command in {"accept interview", "accept"}:
-        return "accept_interview", {}
-    if command in {"skip opportunity", "skip"}:
-        return "skip_opportunity", {}
     return None, {}
 
 
@@ -232,18 +206,26 @@ def build_candidate_stage_detect_node(session):
                 return state
             is_help = False
         elif state.active_stage == "INTERVIEW_INVITED":
-            if _is_candidate_interview_invited_help(text):
-                state.intent = "help"
-                state.parsed_input["intent"] = "help"
-                return state
-            proposed_action, payload = _detect_candidate_interview_invited_action(text)
-            if proposed_action is not None:
-                state.intent = "stage_completion_input"
+            decision = safe_interview_invitation_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
-                state.proposed_action = proposed_action
-                state.structured_payload = payload
-                return state
-            is_help = False
+            else:
+                state.parsed_input["intent"] = "help"
+            state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
         elif state.active_stage == "INTERVIEW_IN_PROGRESS":
             current_question_text = None
             try:
@@ -312,7 +294,9 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
         state.parsed_input["intent"] = "help"
         return state
     elif state.active_stage == "QUESTIONS_PENDING":
-        is_help = _is_candidate_questions_help(text)
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
     elif state.active_stage == "VERIFICATION_PENDING":
         if state.latest_message_type == "video":
             state.intent = "stage_completion_input"
@@ -335,27 +319,12 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             return state
         is_help = False
     elif state.active_stage == "INTERVIEW_INVITED":
-        if _is_candidate_interview_invited_help(text):
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-            return state
-        proposed_action, payload = _detect_candidate_interview_invited_action(text)
-        if proposed_action is not None:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = proposed_action
-            state.structured_payload = payload
-            return state
-        is_help = False
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
     elif state.active_stage == "INTERVIEW_IN_PROGRESS":
-        if _is_candidate_interview_in_progress_help(text):
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-        else:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = "answer_current_question"
-            state.structured_payload = {"answer_text": text.strip()}
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
         return state
     else:
         is_help = False

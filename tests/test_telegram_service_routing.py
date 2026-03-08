@@ -249,6 +249,10 @@ class FakeInterviewService:
         self.calls.append(kwargs)
         return self.result
 
+    def execute_invitation_action(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
 
 class FakeIdentityService:
     def __init__(self, *, consent: bool = False):
@@ -2028,7 +2032,7 @@ def test_graph_interview_invited_stage_can_own_accept() -> None:
 
     assert templates == ["candidate_interview_started"]
     assert service.interview_service.calls
-    assert service.interview_service.calls[-1]["text"] == "Accept interview"
+    assert service.interview_service.calls[-1]["action"] == "accept_interview"
 
 
 def test_interview_accept_alias_passthrough_reaches_interview_handler() -> None:
@@ -2191,7 +2195,7 @@ def test_graph_interview_invited_stage_can_own_skip() -> None:
 
     assert templates == ["candidate_interview_skipped"]
     assert service.interview_service.calls
-    assert service.interview_service.calls[-1]["text"] == "Skip opportunity"
+    assert service.interview_service.calls[-1]["action"] == "skip_opportunity"
 
 
 def test_interview_skip_alias_passthrough_reaches_interview_handler() -> None:

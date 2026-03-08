@@ -413,6 +413,24 @@ class TelegramUpdateService:
             "accept_interview",
             "skip_opportunity",
         }:
+            if hasattr(self.interview_service, "execute_invitation_action"):
+                interview_result = self.interview_service.execute_invitation_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    action=stage_result.proposed_action,
+                )
+                if interview_result is None:
+                    return None
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key=interview_result.notification_template,
+                        text=interview_result.notification_text,
+                        reply_markup=remove_keyboard()
+                        if interview_result.status in {"accepted", "skipped"}
+                        else interview_invitation_keyboard(),
+                    )
+                ]
             text = (
                 "Accept interview"
                 if stage_result.proposed_action == "accept_interview"

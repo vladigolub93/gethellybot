@@ -255,7 +255,7 @@ Exit:
 
 ### Phase H. Rebuild Interview and Review Stages to LLM-First Intent
 
-38. Remove deterministic intent classification from `INTERVIEW_INVITED`.
+38. Remove deterministic intent classification from `INTERVIEW_INVITED`. `Completed`
 39. Remove deterministic intent classification from `INTERVIEW_IN_PROGRESS`. `Completed`
 40. Remove deterministic intent classification from `MANAGER_REVIEW`.
 41. Remove deterministic intent classification from `DELETE_CONFIRMATION`. `Completed`
