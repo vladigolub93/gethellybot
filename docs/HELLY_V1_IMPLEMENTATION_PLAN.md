@@ -286,6 +286,7 @@ Enable hiring managers to create and open structured vacancies.
 - manager role flow
 - vacancy entity and state machine
 - JD intake and parsing
+- vacancy summary review flow
 - clarification flow
 - vacancy activation
 
@@ -294,7 +295,8 @@ Enable hiring managers to create and open structured vacancies.
 - vacancy model and transitions
 - manager role selection and access path
 - multimodal JD ingestion
-- extracted vacancy summary
+- persisted raw `vacancy_text`
+- manager-facing 3-4 sentence vacancy summary review
 - inconsistency detection
 - mandatory vacancy clarifications
 - `OPEN` activation logic
@@ -308,6 +310,8 @@ Enable hiring managers to create and open structured vacancies.
 - build JD file intake and storage
 - build voice/video JD transcription path
 - create `vacancy_jd_extract` prompt asset
+- implement `VACANCY_SUMMARY_REVIEW`
+- allow one manager correction round before clarification
 - create `vacancy_inconsistency_detect` prompt asset
 - implement structured vacancy normalized schema
 - implement in-state help and alternative-input guidance for `JD_PENDING`
@@ -321,6 +325,7 @@ Enable hiring managers to create and open structured vacancies.
 ## 6.4 Exit Criteria
 
 - manager can create and open a vacancy inside Telegram
+- manager approves or corrects the generated vacancy summary before clarification starts
 - all mandatory vacancy fields are normalized and stored
 - vacancy opening triggers downstream matching preparation
 

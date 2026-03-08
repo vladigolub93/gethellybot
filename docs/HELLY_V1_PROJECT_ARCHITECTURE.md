@@ -411,9 +411,8 @@ Responsibilities:
 ## 9.1 Candidate Flow
 
 1. User starts bot.
-2. Contact is collected.
-3. Consent is collected.
-4. Role is set to candidate.
+2. Identity is considered sufficient when the user has a Telegram `username` or a shared `contact`.
+3. Role is set to candidate.
 5. CV or equivalent experience input is submitted.
 6. Parsing/transcription runs asynchronously.
 7. Candidate approves or edits summary.
@@ -425,11 +424,11 @@ Responsibilities:
 ## 9.2 Hiring Manager Flow
 
 1. User starts bot.
-2. Contact is collected.
-3. Consent is collected.
-4. Role is set to hiring manager.
-5. JD is submitted.
-6. Parsing/transcription runs asynchronously.
+2. Identity is considered sufficient when the user has a Telegram `username` or a shared `contact`.
+3. Role is set to hiring manager.
+4. JD is submitted.
+5. Parsing/transcription runs asynchronously.
+6. Manager reviews a short vacancy summary and can approve or correct it once.
 7. Clarification questions resolve required fields.
 8. Vacancy becomes `OPEN`.
 9. Matching pipeline is triggered.

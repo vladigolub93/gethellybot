@@ -525,12 +525,14 @@ Suggested progression:
 - `NEW`
 - `INTAKE_PENDING`
 - `JD_PROCESSING`
+- `VACANCY_SUMMARY_REVIEW`
 - `CLARIFICATION_QA`
 - `OPEN`
 
 ### Synchronous work
 
 - manager identity confirmation
+- vacancy summary approval / one correction round
 - clarification answer handling
 - open-state validation
 

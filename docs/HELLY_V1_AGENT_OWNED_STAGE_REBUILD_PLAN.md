@@ -343,6 +343,7 @@ Current execution note:
 - `VERIFICATION_PENDING` is now implemented as a graph-owned verification stage with graph-validated video handoff
 - `READY` is now implemented as a graph-owned candidate status/delete-initiation stage
 - `INTAKE_PENDING` is now implemented as a graph-owned manager text-intake stage
+- `VACANCY_SUMMARY_REVIEW` is now part of the canonical manager stage inventory and remains the next manager-stage runtime migration step
 - `CLARIFICATION_QA` is now implemented as a graph-owned manager clarification stage
 - `OPEN` is now implemented as a graph-owned manager status/delete-initiation stage
 - `INTERVIEW_INVITED` is now implemented as a graph-owned invitation-decision stage
