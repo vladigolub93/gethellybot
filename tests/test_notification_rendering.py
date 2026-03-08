@@ -56,6 +56,22 @@ def test_candidate_summary_review_prefers_candidate_facing_summary_text() -> Non
     assert "Headline:" not in rendered
 
 
+def test_candidate_summary_review_does_not_render_internal_mapping_without_approval_text() -> None:
+    rendered = render_notification_text(
+        template_key="candidate_summary_ready_for_review",
+        payload={
+            "text": "Your profile summary is ready.",
+            "summary": {
+                "headline": "Senior Python backend engineer.",
+                "experience_excerpt": "Worked on APIs and infrastructure.",
+                "skills": ["python", "fastapi"],
+            },
+        },
+    )
+
+    assert rendered == "Your profile summary is ready."
+
+
 def test_render_notification_reply_markup_returns_payload_markup() -> None:
     reply_markup = {
         "keyboard": [["Candidate", "Hiring Manager"]],

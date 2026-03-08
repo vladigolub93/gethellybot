@@ -6,7 +6,7 @@ from typing import Optional, TypeVar
 from pydantic import BaseModel
 
 from src.candidate_profile.question_parser import COUNTRY_CODES, parse_candidate_questions
-from src.candidate_profile.summary_builder import build_candidate_summary
+from src.candidate_profile.summary_builder import build_approval_summary_text, build_candidate_summary
 from src.config.logging import get_logger
 from src.config.settings import get_settings
 from src.evaluation.scoring import evaluate_candidate
@@ -324,6 +324,16 @@ def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LL
             limit=500,
         ),
     }
+    if not summary["approval_summary_text"]:
+        summary["approval_summary_text"] = _clean_text(
+            build_approval_summary_text(
+                headline=summary["headline"] or "software professional",
+                source_text=source_text,
+                years_experience=summary["years_experience"],
+                skills=summary["skills"],
+            ),
+            limit=500,
+        )
     return LLMResult(
         payload={key: value for key, value in summary.items() if value not in (None, [])},
         model_name=result.model_name,
@@ -363,6 +373,16 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
             "candidate_edit_notes": _clean_text(edit_request_text, limit=500),
         }
     )
+    if not merged.get("approval_summary_text"):
+        merged["approval_summary_text"] = _clean_text(
+            build_approval_summary_text(
+                headline=merged.get("headline") or "software professional",
+                source_text=merged.get("experience_excerpt") or "",
+                years_experience=merged.get("years_experience"),
+                skills=merged.get("skills") or [],
+            ),
+            limit=500,
+        )
     return LLMResult(
         payload={key: value for key, value in merged.items() if value not in (None, [])},
         model_name=result.model_name,
@@ -463,12 +483,12 @@ def parse_vacancy_clarifications_with_llm(text: str) -> LLMResult:
     )
 
 
-def build_interview_question_plan_with_llm(vacancy, candidate_summary: dict) -> LLMResult:
+def build_interview_question_plan_with_llm(vacancy, candidate_summary: dict, cv_text: str | None = None) -> LLMResult:
     vacancy_context = _vacancy_context(vacancy)
     result = _client.parse(
         schema=InterviewQuestionPlanSchema,
         system_prompt=load_system_prompt("interview", "question_plan"),
-        user_prompt=interview_question_plan_prompt(vacancy_context, candidate_summary),
+        user_prompt=interview_question_plan_prompt(vacancy_context, candidate_summary, cv_text),
         primary_model=get_settings().openai_model_reasoning,
         prompt_version="interview_question_plan_llm_v2",
     )
@@ -1011,10 +1031,10 @@ def safe_parse_vacancy_clarifications(session, text: str) -> LLMResult:
     )
 
 
-def safe_build_interview_question_plan(session, vacancy, candidate_summary: dict) -> LLMResult:
+def safe_build_interview_question_plan(session, vacancy, candidate_summary: dict, cv_text: str | None = None) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
-            result = build_interview_question_plan_with_llm(vacancy, candidate_summary)
+            result = build_interview_question_plan_with_llm(vacancy, candidate_summary, cv_text)
             questions = result.payload.get("questions") or []
             if len(questions) >= 4:
                 return result

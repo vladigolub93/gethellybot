@@ -172,8 +172,10 @@ Status vs SRS:
 
 - `Implemented`: candidate role entry
 - `Implemented`: CV intake via text, document, and voice submission path
+- `Implemented`: canonical parsed `cv_text` is persisted on the candidate version as `extracted_text` or `transcript_text` before downstream LLM analysis
 - `Implemented`: candidate profile versioning
 - `Implemented`: summary review step
+- `Implemented`: candidate-facing summary is generated from persisted `cv_text`, while the raw parsed CV text stays internal and is not rendered back to the candidate in review notifications
 - `Implemented`: summary approve action
 - `Implemented`: summary edit loop with max edit count
 - `Implemented`: mandatory questions for salary, location, work format
@@ -181,6 +183,7 @@ Status vs SRS:
 - `Implemented`: verification phrase generation
 - `Implemented`: verification video submission step
 - `Implemented`: transition to `READY`
+- `Implemented`: interview question generation now also uses persisted candidate `cv_text` in addition to structured summary data
 - `Implemented`: state-aware in-step AI help for `CV_PENDING`, `SUMMARY_REVIEW`, `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, and `READY`
 - `Implemented`: `CV_PENDING` text-based stage completion and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent

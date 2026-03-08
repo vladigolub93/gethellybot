@@ -132,11 +132,12 @@ Text:
 """
 
 
-def interview_question_plan_prompt(vacancy_context: dict, candidate_summary: dict) -> str:
+def interview_question_plan_prompt(vacancy_context: dict, candidate_summary: dict, cv_text: str | None = None) -> str:
     return f"""Task: generate 5 to 7 short interview questions for this candidate-vacancy pair.
 
 Requirements:
 - questions must be specific to the vacancy
+- questions must be grounded in the candidate's actual CV text and not invent projects or technologies
 - questions must probe relevant experience, technical depth, delivery tradeoffs, and fit
 - no greetings or meta commentary
 - each question must be standalone and concise
@@ -146,6 +147,9 @@ Vacancy context:
 
 Candidate summary:
 {candidate_summary}
+
+Candidate CV text:
+{cv_text or ""}
 """
 
 

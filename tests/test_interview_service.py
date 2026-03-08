@@ -284,6 +284,42 @@ def test_accept_invitation_starts_interview() -> None:
     assert len(service.interviews.questions) == 4
 
 
+def test_accept_invitation_builds_questions_from_persisted_cv_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    service, candidate, match, _vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    service.candidates.candidate_version.extracted_text = "Senior backend engineer with 7 years using Python, PostgreSQL, and AWS on fintech APIs."
+    user = SimpleNamespace(id=candidate.user_id)
+    captured = {}
+
+    def _fake_build_plan(_session, vacancy, candidate_summary, cv_text=None):
+        captured["vacancy"] = vacancy
+        captured["candidate_summary"] = candidate_summary
+        captured["cv_text"] = cv_text
+        return SimpleNamespace(
+            payload={
+                "questions": [
+                    {"id": 1, "type": "behavioral", "question": "Q1"},
+                    {"id": 2, "type": "situational", "question": "Q2"},
+                    {"id": 3, "type": "role_specific", "question": "Q3"},
+                    {"id": 4, "type": "motivation", "question": "Q4"},
+                ]
+            }
+        )
+
+    monkeypatch.setattr("src.interview.service.safe_build_interview_question_plan", _fake_build_plan)
+
+    result = service.handle_candidate_message(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="Accept interview",
+    )
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert captured["cv_text"] == "Senior backend engineer with 7 years using Python, PostgreSQL, and AWS on fintech APIs."
+
+
 def test_interview_answers_complete_session() -> None:
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)

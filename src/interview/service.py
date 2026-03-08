@@ -269,10 +269,16 @@ class InterviewService:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
         if session is None:
+            cv_text = (
+                getattr(candidate_version, "extracted_text", None)
+                or getattr(candidate_version, "transcript_text", None)
+                or None
+            )
             llm_result = safe_build_interview_question_plan(
                 self.session,
                 vacancy=vacancy,
                 candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+                cv_text=cv_text,
             )
             plan = llm_result.payload["questions"] or build_question_plan(
                 vacancy=vacancy,

@@ -116,13 +116,25 @@ def test_candidate_processing_extracts_document_text_before_summary(monkeypatch)
         )
     )
 
-    monkeypatch.setattr(
-        "src.candidate_profile.processing.safe_extract_candidate_summary",
-        lambda _session, source_text, source_type: LLMResult(
-            payload={"headline": "Python engineer", "experience_excerpt": source_text, "skills": ["python"]},
+    captured = {}
+
+    def _fake_extract(_session, source_text, source_type):
+        captured["source_text"] = source_text
+        captured["source_type"] = source_type
+        return LLMResult(
+            payload={
+                "headline": "Python engineer",
+                "experience_excerpt": source_text,
+                "skills": ["python"],
+                "approval_summary_text": "You are a Python engineer with relevant professional experience. Your main technical strengths include python. You have worked on software systems and products described in your background.",
+            },
             model_name="gpt-5.4",
             prompt_version="candidate_cv_extract_llm_v1",
-        ),
+        )
+
+    monkeypatch.setattr(
+        "src.candidate_profile.processing.safe_extract_candidate_summary",
+        _fake_extract,
     )
 
     result = service.process_job(
@@ -137,8 +149,11 @@ def test_candidate_processing_extracts_document_text_before_summary(monkeypatch)
     )
 
     assert result["status"] == "summary_ready"
+    assert captured["source_text"] == "Python engineer with FastAPI and PostgreSQL."
+    assert captured["source_type"] == "document_upload"
     assert version.extracted_text == "Python engineer with FastAPI and PostgreSQL."
     assert version.summary_json["headline"] == "Python engineer"
+    assert version.summary_json["approval_summary_text"].startswith("You are a Python engineer")
     assert service.notifications.rows
 
 
