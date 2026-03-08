@@ -268,6 +268,36 @@ Latest user message:
 """
 
 
+def vacancy_clarification_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the vacancy clarification step.
+
+Valid outcomes:
+- help question or clarification
+- real clarification answer that should be parsed for vacancy details
+
+Rules:
+- treat questions like "what exactly do you still need?", "gross or net?", "which currency?", "what countries?", "what should I include?", "how should I answer?", and "what happens next?" as help, not as final clarification answers
+- only propose `send_vacancy_clarifications` when the manager is actually providing vacancy details
+- if the manager is clearly answering, include the original answer in `answer_text`
+- do not invent vacancy details
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_clarifications_prompt(text: str) -> str:
     return f"""Task: parse vacancy clarification answers from the text below.
 

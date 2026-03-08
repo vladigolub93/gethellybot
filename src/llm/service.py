@@ -36,6 +36,7 @@ from src.llm.prompts import (
     response_copywriter_prompt,
     role_selection_prompt,
     small_talk_prompt,
+    vacancy_clarification_decision_prompt,
     vacancy_intake_decision_prompt,
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
@@ -63,6 +64,7 @@ from src.llm.schemas import (
     InterviewSessionConductorTurnSchema,
     ResponseCopywriterSchema,
     StateAssistanceDecisionSchema,
+    VacancyClarificationDecisionSchema,
     VacancyInconsistencySchema,
     VacancyIntakeDecisionSchema,
     VacancyClarificationSchema,
@@ -725,6 +727,44 @@ def vacancy_intake_decision_with_llm(
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
             "job_description_text": job_description_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def vacancy_clarification_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=VacancyClarificationDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("vacancy", "clarification_decision"),
+        user_prompt=vacancy_clarification_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="vacancy_clarification_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "send_vacancy_clarifications"}:
+        proposed_action = None
+    answer_text = _clean_text(result.payload.get("answer_text"), limit=5000)
+    if proposed_action == "send_vacancy_clarifications" and not answer_text:
+        answer_text = _clean_text(latest_user_message, limit=5000)
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
+            "answer_text": answer_text,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -1987,6 +2027,83 @@ def safe_vacancy_intake_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_vacancy_intake_decision_v1",
+    )
+
+
+def safe_vacancy_clarification_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return vacancy_clarification_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_clarification_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Share the missing vacancy details like budget, hiring countries, work format, team size, project context, and primary stack.",
+        "proposed_action": None,
+        "answer_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "vacancy_clarification_help_fallback",
+    }
+    if any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "what exactly",
+            "what else",
+            "what do you need",
+            "what should i include",
+            "gross or net",
+            "net or gross",
+            "which currency",
+            "what currency",
+            "what period",
+            "what countries",
+            "what happens next",
+            "?",
+        ]
+    ):
+        return LLMResult(
+            payload=payload,
+            model_name="baseline-deterministic",
+            prompt_version="baseline_vacancy_clarification_decision_v1",
+        )
+
+    if normalized_text:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "clarification_answer",
+                "response_text": None,
+                "proposed_action": "send_vacancy_clarifications",
+                "answer_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "vacancy_clarification_answer_submission",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_vacancy_clarification_decision_v1",
+        )
+
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_clarification_decision_v1",
     )
 
 

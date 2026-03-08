@@ -1,0 +1,6 @@
+- input: "What exactly do you still need from me?"
+  expected_intent: "help"
+- input: "Gross or net budget?"
+  expected_intent: "help"
+- input: "Budget 7000-9000 USD per month. Remote. Poland and Germany. Team size 6. Stack Python and PostgreSQL."
+  expected_action: "send_vacancy_clarifications"

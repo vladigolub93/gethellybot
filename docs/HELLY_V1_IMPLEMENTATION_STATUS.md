@@ -238,6 +238,7 @@ Status vs SRS:
 - `Implemented`: `VACANCY_SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `VACANCY_SUMMARY_REVIEW` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; timing/help questions no longer rely on raw-text fallback classification
 - `Implemented`: `CLARIFICATION_QA` text-based clarification completion and in-stage guidance now run through a graph-owned stage agent
+- `Implemented`: `CLARIFICATION_QA` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification questions like `gross or net budget?` no longer rely on backend help regexes
 - `Implemented`: `OPEN` status guidance and delete-vacancy initiation now run through a graph-owned stage agent
 
 ### What is only partial

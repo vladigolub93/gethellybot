@@ -137,6 +137,34 @@ def test_graph_manager_stage_handles_clarification_help() -> None:
     assert "budget" in reply.lower() or "vacancy" in reply.lower()
 
 
+def test_graph_manager_stage_does_not_treat_clarification_question_as_final_answer() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v3q", state="CLARIFICATION_QA")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m3q",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Gross or net budget?",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_manager_stage_handles_vacancy_summary_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.vacancies = FakeVacanciesRepository(
