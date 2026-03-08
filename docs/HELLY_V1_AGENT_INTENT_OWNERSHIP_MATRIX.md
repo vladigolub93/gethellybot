@@ -39,7 +39,7 @@ This field identifies the concrete deterministic logic that still needs to be re
 
 | Stage | Current intent owner | Target intent owner | Remaining backend logic to remove | Primary files |
 | --- | --- | --- | --- | --- |
-| `CONTACT_REQUIRED` | `mixed` | `agent-first` | regex help patterns, deterministic role/contact completion detection, `unknown` fallback | [entry.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/entry.py) |
+| `CONTACT_REQUIRED` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; actual contact attachment remains a transport-level Telegram event by design | [entry.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/entry.py) |
 | `ROLE_SELECTION` | `mixed` | `agent-first` | hard-coded `candidate` / `hiring manager` completion mapping, regex help patterns | [entry.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/entry.py) |
 | `CV_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now only executes validated `send_cv_text` handoff for text submissions | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
 | `SUMMARY_REVIEW` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; vacancy-side mirror stage still pending for symmetry | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
@@ -145,9 +145,8 @@ Strict order:
 3. `INTERVIEW_IN_PROGRESS`
 4. `QUESTIONS_PENDING`
 5. `DELETE_CONFIRMATION`
-6. `CONTACT_REQUIRED`
-7. `ROLE_SELECTION`
-8. `MANAGER_REVIEW`
+6. `ROLE_SELECTION`
+7. `MANAGER_REVIEW`
 
 ## 8. Definition of Done
 

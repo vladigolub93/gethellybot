@@ -22,7 +22,7 @@ from src.graph.stages.candidate import (
 )
 from src.graph.stages.entry import (
     build_entry_reply_node,
-    detect_entry_intent_node,
+    build_entry_detect_node,
     load_entry_context_node,
     load_entry_knowledge_node,
 )
@@ -282,7 +282,7 @@ class LangGraphStageAgentService:
                 nodes={
                     "load_context": load_entry_context_node,
                     "load_knowledge": load_entry_knowledge_node,
-                    "detect_intent": detect_entry_intent_node,
+                    "detect_intent": build_entry_detect_node(self.session),
                     "propose_action": build_entry_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),

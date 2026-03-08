@@ -24,6 +24,30 @@ def test_graph_entry_service_handles_contact_required() -> None:
     assert "contact" in reply.lower() or "username" in reply.lower()
 
 
+def test_graph_entry_service_does_not_treat_contact_question_as_completion() -> None:
+    service = LangGraphStageAgentService(session=object())
+
+    user = SimpleNamespace(
+        id="u1q",
+        phone_number=None,
+        username=None,
+        is_candidate=False,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_entry_stage(
+        user=user,
+        latest_user_message="Can I skip for now?",
+    )
+
+    assert result is not None
+    assert result.stage == "CONTACT_REQUIRED"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_entry_service_handles_role_selection_when_username_exists() -> None:
     service = LangGraphStageAgentService(session=object())
 

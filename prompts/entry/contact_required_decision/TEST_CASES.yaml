@@ -1,0 +1,6 @@
+- input: "Why do you need my contact?"
+  expected_intent: "help"
+- input: "Can I skip for now?"
+  expected_intent: "help"
+- input: "ok"
+  expected_intent: "redirect"

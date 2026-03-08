@@ -21,6 +21,35 @@ Rules:
 """
 
 
+def contact_required_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the user means in the contact-required step.
+
+Valid outcomes:
+- help question or clarification
+- unsupported free text that should be redirected back to sharing contact
+
+Rules:
+- treat questions like "why do you need my contact?", "can I skip?", "what if I do not want to share it?", and "what happens next?" as help
+- do not pretend the user has already shared contact when they have not
+- do not invent alternative completion methods if the product still requires contact at this step
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 STATE_ASSISTANCE_SYSTEM_PROMPT = """You are the state-aware assistance layer for Helly.
 
 Purpose:
