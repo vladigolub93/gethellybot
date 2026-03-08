@@ -202,6 +202,7 @@ Status vs SRS:
 - `Implemented`: `QUESTIONS_PENDING` text-based structured answer handoff and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `VERIFICATION_PENDING` verification guidance and video-submission handoff now run through a graph-owned stage agent
 - `Implemented`: `READY` status guidance and delete-profile initiation now run through a graph-owned stage agent
+- `Implemented`: `READY` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; status questions no longer rely on regex help patterns or delete aliases
 
 ### What is only partial
 

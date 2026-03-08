@@ -44,6 +44,7 @@ def test_core_prompt_families_exist() -> None:
         ("orchestrator", "bot_controller"),
         ("candidate", "cv_extract"),
         ("candidate", "cv_pending_decision"),
+        ("candidate", "ready_decision"),
         ("candidate", "summary_review_decision"),
         ("candidate", "questions_decision"),
         ("candidate", "summary_merge"),

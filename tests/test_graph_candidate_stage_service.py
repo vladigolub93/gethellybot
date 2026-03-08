@@ -498,6 +498,35 @@ def test_graph_candidate_stage_handles_ready_help() -> None:
     assert "ready" in reply.lower() or "match" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_ready_status_question_as_delete() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8q", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u11q",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="When will I hear back?",
+    )
+
+    assert result is not None
+    assert result.stage == "READY"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_ready_delete_intent() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

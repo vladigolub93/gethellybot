@@ -19,6 +19,7 @@ from src.llm.prompts import (
     candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_decision_prompt,
+    candidate_ready_decision_prompt,
     candidate_questions_prompt,
     delete_confirmation_decision_prompt,
     interview_invitation_decision_prompt,
@@ -51,6 +52,7 @@ from src.llm.schemas import (
     CandidateRerankSchema,
     CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
+    CandidateReadyDecisionSchema,
     DeleteConfirmationDecisionSchema,
     CandidateSummaryReviewDecisionSchema,
     CandidateSummarySchema,
@@ -553,6 +555,40 @@ def candidate_questions_decision_with_llm(
             "response_text": response_text,
             "proposed_action": proposed_action,
             "answer_text": answer_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def candidate_ready_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateReadyDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("candidate", "ready_decision"),
+        user_prompt=candidate_ready_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_ready_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "delete_profile"}:
+        proposed_action = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -2104,6 +2140,78 @@ def safe_vacancy_clarification_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_vacancy_clarification_decision_v1",
+    )
+
+
+def safe_candidate_ready_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_ready_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_ready_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Your profile is ready for matching. I will message you when there is a strong opportunity and you do not need to do anything else right now.",
+        "proposed_action": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "candidate_ready_help_fallback",
+    }
+    if command in {"delete profile", "delete my profile", "remove profile"}:
+        payload.update(
+            {
+                "intent": "delete_request",
+                "response_text": "Understood. I can help you delete your profile.",
+                "proposed_action": "delete_profile",
+                "needs_follow_up": False,
+                "reason_code": "candidate_ready_delete_profile",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "what happens now",
+            "what do i do next",
+            "what should i do next",
+            "when will i hear",
+            "when will i get",
+            "when will i hear back",
+            "when will i get opportunities",
+            "when will i get a match",
+            "how does matching work",
+            "do i need to do anything",
+            "do i need anything else",
+            "?",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance
+                or "Your profile is ready for matching. I will message you when there is a strong opportunity and you do not need to do anything else right now.",
+                "needs_follow_up": True,
+                "reason_code": "candidate_ready_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_ready_decision_v1",
     )
 
 

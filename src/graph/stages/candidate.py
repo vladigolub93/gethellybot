@@ -7,6 +7,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_candidate_cv_decision,
+    safe_candidate_ready_decision,
     safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
     safe_interview_invitation_decision,
@@ -15,7 +16,6 @@ from src.llm.service import (
     safe_state_assistance_decision,
 )
 from src.orchestrator.policy import resolve_state_context
-from src.shared.text import normalize_command_text
 
 def _candidate_verification_help_patterns() -> tuple[str, ...]:
     return (
@@ -32,22 +32,6 @@ def _candidate_verification_help_patterns() -> tuple[str, ...]:
         r"\bphrase\b",
         r"\bwhat happens after\b",
         r"\bwhat next\b",
-    )
-
-
-def _candidate_ready_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhat happens now\b",
-        r"\bwhat do i do next\b",
-        r"\bwhat should i do next\b",
-        r"\bwhen .*job\b",
-        r"\bwhen .*opportunit",
-        r"\bwhen .*match\b",
-        r"\bhow .*matching\b",
-        r"\bdo i need to do anything\b",
-        r"\bdo i need anything else\b",
-        r"\bwhen .*manager see\b",
-        r"\bwhen will i hear\b",
     )
 
 
@@ -70,19 +54,6 @@ def load_candidate_stage_knowledge_node(state: HellyGraphState) -> HellyGraphSta
 def _is_candidate_verification_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _candidate_verification_help_patterns())
-
-
-def _is_candidate_ready_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _candidate_ready_help_patterns())
-
-
-def _detect_candidate_ready_action(text: str) -> tuple[str | None, dict]:
-    command = normalize_command_text(text or "")
-    if command in {"delete profile", "delete my profile", "remove profile"}:
-        return "delete_profile", {}
-    return None, {}
-
 
 def build_candidate_stage_detect_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
@@ -177,18 +148,26 @@ def build_candidate_stage_detect_node(session):
                 return state
             is_help = _is_candidate_verification_help(text)
         elif state.active_stage == "READY":
-            if _is_candidate_ready_help(text):
-                state.intent = "help"
-                state.parsed_input["intent"] = "help"
-                return state
-            proposed_action, payload = _detect_candidate_ready_action(text)
-            if proposed_action is not None:
-                state.intent = "stage_completion_input"
+            decision = safe_candidate_ready_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
-                state.proposed_action = proposed_action
-                state.structured_payload = payload
-                return state
-            is_help = False
+                state.structured_payload = {}
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
         elif state.active_stage == "INTERVIEW_INVITED":
             decision = safe_interview_invitation_decision(
                 session,
@@ -283,18 +262,9 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             return state
         is_help = _is_candidate_verification_help(text)
     elif state.active_stage == "READY":
-        if _is_candidate_ready_help(text):
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-            return state
-        proposed_action, payload = _detect_candidate_ready_action(text)
-        if proposed_action is not None:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = proposed_action
-            state.structured_payload = payload
-            return state
-        is_help = False
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
     elif state.active_stage == "INTERVIEW_INVITED":
         state.intent = "help"
         state.parsed_input["intent"] = "help"

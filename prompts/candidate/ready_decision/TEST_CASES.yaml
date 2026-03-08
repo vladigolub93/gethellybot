@@ -1,0 +1,6 @@
+- input: "What should I do next?"
+  expected_intent: "help"
+- input: "When will I hear back?"
+  expected_intent: "help"
+- input: "Delete profile"
+  expected_action: "delete_profile"

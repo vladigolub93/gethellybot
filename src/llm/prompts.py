@@ -177,6 +177,35 @@ Latest user message:
 """
 
 
+def candidate_ready_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the ready-for-matching step.
+
+Valid outcomes:
+- help question or status question
+- explicit delete-profile intent
+
+Rules:
+- treat questions like "what happens now?", "what should I do next?", "when will I hear back?", "when will I get opportunities?", and "do I need to do anything else?" as help, not as delete intent
+- only propose `delete_profile` when the candidate is clearly asking to remove their profile
+- do not invent matching outcomes or timelines
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_jd_prompt(source_text: str, source_type: str) -> str:
     return f"""Task: extract a structured vacancy summary from the job description below.
 
