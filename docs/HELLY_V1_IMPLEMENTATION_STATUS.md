@@ -120,7 +120,7 @@ Architectural status note:
 
 ## 4.1 Identity, Consent, and Role Entry
 
-- `Implemented`: contact is required before onboarding starts
+- `Implemented`: a usable Telegram contact channel is required before onboarding starts; a Telegram username is enough, otherwise shared contact is requested
 - `Implemented`: consent capture exists
 - `Implemented`: role selection exists
 - `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection

@@ -31,15 +31,15 @@ class ResolvedStateContext:
 STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "CONTACT_REQUIRED": StatePolicyDefinition(
         state="CONTACT_REQUIRED",
-        goal="Collect a valid Telegram contact before onboarding begins.",
+        goal="Collect a usable Telegram contact channel before onboarding begins.",
         allowed_actions=["share_contact"],
         assistance_prompt_slug="contact_required",
-        guidance_text="Please share your contact using the button below to continue.",
+        guidance_text="Please share your contact using the button below to continue if you do not have a Telegram username available.",
         help_text=(
-            "Helly needs your contact so it can link your Telegram account to one profile and continue onboarding. "
-            "Please share your contact using the button below to continue."
+            "Helly needs either your Telegram username or a shared contact so it can link your account to one profile and continue onboarding safely. "
+            "If your account does not have a Telegram username available, please share your contact using the button below to continue."
         ),
-        missing_requirements=["contact"],
+        missing_requirements=["telegram_contact_channel"],
     ),
     "CONSENT_REQUIRED": StatePolicyDefinition(
         state="CONSENT_REQUIRED",

@@ -19,6 +19,7 @@ def test_graph_entry_service_handles_contact_required() -> None:
     user = SimpleNamespace(
         id="u1",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -40,6 +41,7 @@ def test_graph_entry_service_handles_consent_required() -> None:
     user = SimpleNamespace(
         id="u2",
         phone_number="+123",
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -61,6 +63,7 @@ def test_graph_entry_service_handles_role_selection() -> None:
     user = SimpleNamespace(
         id="u3",
         phone_number="+123",
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -82,6 +85,7 @@ def test_graph_entry_service_accepts_consent_transition() -> None:
     user = SimpleNamespace(
         id="u4",
         phone_number="+123",
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -106,6 +110,7 @@ def test_graph_entry_service_accepts_role_selection_transition() -> None:
     user = SimpleNamespace(
         id="u5",
         phone_number="+123",
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -121,3 +126,25 @@ def test_graph_entry_service_accepts_role_selection_transition() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "candidate"
     assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_entry_service_skips_contact_stage_when_username_exists() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=False)
+
+    user = SimpleNamespace(
+        id="u6",
+        phone_number=None,
+        username="hellyuser",
+        is_candidate=False,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_entry_stage(
+        user=user,
+        latest_user_message="Why do you need consent?",
+    )
+
+    assert result is not None
+    assert result.stage == "CONSENT_REQUIRED"

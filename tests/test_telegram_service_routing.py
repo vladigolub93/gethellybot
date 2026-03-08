@@ -108,7 +108,7 @@ class FakeStageAgentService:
         return self.stage_result
 
     def resolve_current_stage_context(self, *, user):
-        if not getattr(user, "phone_number", None):
+        if not getattr(user, "phone_number", None) and not getattr(user, "username", None):
             return resolve_state_context(role=None, state="CONTACT_REQUIRED")
         if not getattr(user, "is_candidate", False) and not getattr(user, "is_hiring_manager", False):
             return resolve_state_context(role=None, state="ROLE_SELECTION")
@@ -293,6 +293,7 @@ def test_start_without_contact_requests_contact() -> None:
     user = SimpleNamespace(
         id="g1",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
@@ -313,6 +314,7 @@ def test_contact_required_help_intercepts_before_identity_gating() -> None:
     user = SimpleNamespace(
         id="g1h",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
@@ -333,6 +335,7 @@ def test_contact_required_without_graph_reply_falls_back_to_generic_recovery() -
     user = SimpleNamespace(
         id="g1hf",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
@@ -343,8 +346,26 @@ def test_contact_required_without_graph_reply_falls_back_to_generic_recovery() -
     assert service.stage_agents.calls
     assert (
         service.notifications_repo.calls[-1]["payload_json"]["text"]
-        == "Please share your contact using the button below to continue."
+        == "Please share your contact using the button below to continue if you do not have a Telegram username available."
     )
+
+
+def test_start_with_username_but_without_contact_requests_consent() -> None:
+    service = build_service()
+    service.identity_service = FakeIdentityService(consent=False)
+
+    user = SimpleNamespace(
+        id="g1u",
+        phone_number=None,
+        username="testuser",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(user, "raw-g1u", build_update(text="/start"))
+
+    assert templates == ["request_consent"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_consent"
 
 
 def test_start_with_contact_but_without_consent_requests_consent() -> None:

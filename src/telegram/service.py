@@ -13,6 +13,7 @@ from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
 from src.evaluation.service import EvaluationService
 from src.graph.service import LangGraphStageAgentService
+from src.identity.rules import has_primary_contact_channel
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
@@ -110,12 +111,14 @@ class TelegramUpdateService:
         return [self._notify_entry_stage(user_id=user.id, stage=next_stage, text=next_text)]
 
     def _handle_start_command(self, *, user) -> List[str]:
-        if not user.phone_number:
+        if not has_primary_contact_channel(user):
             return [
                 self._notify_entry_stage(
                     user_id=user.id,
                     stage="CONTACT_REQUIRED",
-                    text=self._copy("Please share your contact using the button below to continue."),
+                    text=self._copy(
+                        "Please share your contact using the button below to continue if you do not have a Telegram username available."
+                    ),
                 )
             ]
         if not self.identity_service.has_data_processing_consent(user):
@@ -1380,7 +1383,7 @@ class TelegramUpdateService:
         elif getattr(user, "is_hiring_manager", False):
             role = "hiring_manager"
 
-        if not getattr(user, "phone_number", None):
+        if not has_primary_contact_channel(user):
             return resolve_state_context(role=role, state="CONTACT_REQUIRED")
         if not self.identity_service.has_data_processing_consent(user):
             return resolve_state_context(role=role, state="CONSENT_REQUIRED")
@@ -1437,7 +1440,7 @@ class TelegramUpdateService:
             )
 
         should_offer_entry_assistance = (
-            not user.phone_number
+            not has_primary_contact_channel(user)
             or (not user.is_candidate and not user.is_hiring_manager)
         )
 

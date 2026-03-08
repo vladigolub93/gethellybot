@@ -7,6 +7,7 @@ from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.identity.rules import has_primary_contact_channel
 from src.llm.service import safe_bot_controller_decision, safe_state_assistance_decision
 from src.messaging.service import MessagingService
 from src.orchestrator.policy import ResolvedStateContext, resolve_state_context
@@ -103,7 +104,7 @@ class BotControllerService:
         elif user.is_hiring_manager:
             role = "hiring_manager"
 
-        if not user.phone_number:
+        if not has_primary_contact_channel(user):
             return resolve_state_context(role=role, state="CONTACT_REQUIRED")
         if not self.consents.has_granted(user.id, "data_processing"):
             return resolve_state_context(role=role, state="CONSENT_REQUIRED")

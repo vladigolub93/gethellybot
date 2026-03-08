@@ -90,11 +90,12 @@ Helly sounds conversational, but the flow is not free-form.
 
 Canonical answer:
 
-Helly asks for your contact so it can link your Telegram account to one onboarding profile and continue the flow safely. This also supports the final introduction stage if there is a successful match and approval. Your contact is not used to expose you to other users during onboarding or matching.
+Helly needs a usable Telegram contact channel so it can link your account to one onboarding profile and continue the flow safely. If your Telegram account already has a username, Helly can use that for onboarding. If there is no username available, Helly asks you to share your contact. This also supports the final introduction stage if there is a successful match and approval. Your contact is not used to expose you to other users during onboarding or matching.
 
 Agent guidance:
 
 - explain both identity and future handoff value
+- explain that a Telegram username is enough for onboarding when it is available
 - do not imply that the contact is broadcast immediately
 - do not imply that manual phone-number text replaces Telegram contact sharing
 

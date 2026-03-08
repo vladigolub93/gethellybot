@@ -165,7 +165,7 @@ def test_maybe_build_in_state_assistance_for_summary_review_help_request() -> No
 
 
 def test_build_recovery_message_for_missing_contact() -> None:
-    user = SimpleNamespace(id="u1", phone_number=None, is_candidate=False, is_hiring_manager=False)
+    user = SimpleNamespace(id="u1", phone_number=None, username=None, is_candidate=False, is_hiring_manager=False)
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=False)
     service.candidates = FakeCandidateRepository()
@@ -175,7 +175,30 @@ def test_build_recovery_message_for_missing_contact() -> None:
 
     message = service.build_recovery_message(user=user, latest_user_message="hello")
 
-    assert message == "Please share your contact using the button below to continue."
+    assert (
+        message
+        == "Please share your contact using the button below to continue if you do not have a Telegram username available."
+    )
+
+
+def test_build_recovery_message_with_username_but_without_contact_requests_consent() -> None:
+    user = SimpleNamespace(
+        id="u1",
+        phone_number=None,
+        username="testuser",
+        is_candidate=False,
+        is_hiring_manager=False,
+    )
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=False)
+    service.candidates = FakeCandidateRepository()
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.build_recovery_message(user=user, latest_user_message="hello")
+
+    assert message == "Please confirm data processing consent to continue."
 
 
 def test_maybe_build_in_state_assistance_for_missing_contact_question() -> None:

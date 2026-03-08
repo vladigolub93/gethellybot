@@ -10,6 +10,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.graph.bootstrap import register_foundation_stage_graphs
+from src.identity.rules import has_primary_contact_channel
 from src.graph.registry import registry
 from src.graph.router import StageGraphRouter
 from src.graph.runtime import compile_stage_graph
@@ -201,7 +202,7 @@ class LangGraphStageAgentService:
         return None
 
     def _resolve_entry_stage(self, user) -> str | None:
-        if not getattr(user, "phone_number", None):
+        if not has_primary_contact_channel(user):
             return "CONTACT_REQUIRED"
         if not self.consents.has_granted(user.id, "data_processing"):
             return "CONSENT_REQUIRED"
