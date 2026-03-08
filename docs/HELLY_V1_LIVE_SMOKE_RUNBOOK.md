@@ -31,6 +31,8 @@ Useful tools:
   - `.venv/bin/python scripts/report_telegram_user.py --telegram-user-id <id>`
 - watch until a live condition is reached:
   - `.venv/bin/python scripts/watch_telegram_user.py --telegram-user-id <id> --require-user --expect-candidate-state SUMMARY_REVIEW`
+- wait and print a final checkpoint report in one command:
+  - `.venv/bin/python scripts/check_telegram_user_checkpoint.py --telegram-user-id <id> --require-user --expect-candidate-state READY`
 - validate expected state:
   - `.venv/bin/python scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
 - reset a tester to a clean slate:

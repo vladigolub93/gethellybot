@@ -259,6 +259,8 @@ Status:
   - live smoke tooling now also supports compact status reports on top of raw inspection snapshots
   - `scripts/watch_telegram_user.py`
   - live smoke tooling now also supports polling until expected user-stage conditions appear in Supabase
+  - `scripts/check_telegram_user_checkpoint.py`
+  - live smoke tooling now also supports one-command wait-plus-report checkpoints
   - graph runtime now emits structured `graph_stage_executed` log events for live Railway verification of stage execution
 
 ### Step 8. Regression and Production Hardening

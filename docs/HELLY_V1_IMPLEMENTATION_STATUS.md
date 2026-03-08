@@ -86,6 +86,7 @@ Architectural status note:
 - a reusable Telegram-user reset script now supports clean-slate live smoke reruns without manual SQL and defaults to dry-run unless `--execute` is passed
 - a reusable Telegram-user smoke report script now prints compact live progress/status summaries on top of the raw inspection snapshot
 - a reusable Telegram-user watcher now polls live Supabase state until an expected stage, match status, interview state, or notification template appears
+- a reusable Telegram-user checkpoint tool now combines waiting plus final compact reporting for one live smoke milestone
 - graph runtime now emits structured `graph_stage_executed` logs with stage, status, proposed action, acceptance result, and Telegram user context for live Railway smoke verification
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 

@@ -230,6 +230,18 @@ set +a
   --expect-candidate-state SUMMARY_REVIEW
 ```
 
+To wait for a checkpoint and print the final compact report in one command:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/check_telegram_user_checkpoint.py \
+  --telegram-user-id <telegram-user-id> \
+  --require-user \
+  --expect-candidate-state READY
+```
+
 To reset one Telegram tester to a clean slate before repeating a live smoke flow:
 
 ```bash

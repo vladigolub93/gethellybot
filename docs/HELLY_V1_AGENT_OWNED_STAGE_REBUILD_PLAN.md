@@ -373,6 +373,7 @@ Current execution note:
 - Phase 11 now also includes a safe-by-default Telegram-user reset tool for clean live smoke reruns without manual SQL
 - Phase 11 now also includes a compact Telegram-user smoke report tool for quick stage/status checks after a manual bot run
 - Phase 11 now also includes a Telegram-user watcher for polling live Supabase state until an expected stage/status/template appears during a smoke run
+- Phase 11 now also includes a Telegram-user checkpoint tool for one-command wait-plus-report validation of a smoke milestone
 - Phase 11 now also includes structured `graph_stage_executed` runtime logs for Railway-side verification that LangGraph stage execution actually ran during live smoke flows
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage
 
