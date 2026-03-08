@@ -82,6 +82,7 @@ Architectural status note:
 - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, reducing branching in `TelegramUpdateService`
 - remaining candidate-side and manager-side routing segments are now also split into dedicated transport helpers for delete, interview/review, summary, verification, questions, clarification, and intake paths, reducing inline branch depth further
 - raw-message creation, graph stage-result precompute for candidate/manager paths, generic unsupported-input recovery, and processed-update result assembly are now also extracted into dedicated Telegram transport helpers, further reducing inline transport orchestration
+- entry-stage routing and role-flow dispatch are now also extracted behind dedicated `_apply_entry_flow(...)`, `_precompute_role_stage_results(...)`, and `_apply_role_flows(...)` helpers, reducing inline orchestration inside `_apply_identity_flow`
 - reply keyboards for role selection, summary review, interview invitation, manager review, and delete confirmation are now explicitly removed on transition/result messages instead of relying on Telegram client behavior, reducing stale keyboard bleed between stages
 - a reusable production validation script now checks Railway API health and Telegram webhook registration against the configured `APP_BASE_URL`
 - the production validation script now also supports `VALIDATION_APP_BASE_URL` so live Railway validation can be run even when local `.env` keeps `APP_BASE_URL` on localhost

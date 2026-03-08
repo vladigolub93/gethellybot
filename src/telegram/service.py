@@ -1404,6 +1404,45 @@ class TelegramUpdateService:
             )
         ]
 
+    def _apply_entry_flow(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        text_value: str,
+    ) -> List[str] | None:
+        if normalized_update.contact_phone_number:
+            return self._handle_contact_share(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+            )
+
+        should_offer_entry_assistance = (
+            not user.phone_number
+            or (not user.is_candidate and not user.is_hiring_manager)
+        )
+
+        if should_offer_entry_assistance and normalized_update.content_type == "text":
+            entry_result = self.stage_agents.maybe_run_entry_stage(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                latest_message_type=normalized_update.content_type,
+            )
+            entry_templates = self._handle_entry_stage_result(
+                user=user,
+                raw_message_id=raw_message_id,
+                entry_result=entry_result,
+            )
+            if entry_templates is not None:
+                return entry_templates
+
+        if text_value == "/start":
+            return self._handle_start_command(user=user)
+
+        return None
+
     def _maybe_run_candidate_stage_for_update(
         self,
         *,
@@ -1433,6 +1472,57 @@ class TelegramUpdateService:
             user=user,
             normalized_update=normalized_update,
         )
+
+    def _precompute_role_stage_results(
+        self,
+        *,
+        user,
+        normalized_update: NormalizedTelegramUpdate,
+    ):
+        return (
+            self._maybe_run_candidate_stage_for_update(
+                user=user,
+                normalized_update=normalized_update,
+            ),
+            self._maybe_run_manager_stage_for_update(
+                user=user,
+                normalized_update=normalized_update,
+            ),
+        )
+
+    def _apply_role_flows(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        candidate_stage_result,
+        manager_stage_result,
+    ) -> List[str] | None:
+        if user.is_candidate:
+            candidate_templates = self._apply_candidate_flow(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=candidate_stage_result,
+            )
+            if candidate_templates is not None:
+                return candidate_templates
+
+        if user.is_hiring_manager:
+            manager_templates = self._apply_manager_flow(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=manager_stage_result,
+            )
+            if manager_templates is not None:
+                return manager_templates
+
+        return None
 
     def _create_raw_message_for_update(self, *, user_id, normalized_update: NormalizedTelegramUpdate):
         return self.raw_messages_repo.create(
@@ -1494,65 +1584,30 @@ class TelegramUpdateService:
     ) -> List[str]:
         text_value = normalize_command_text(normalized_update.text)
 
-        if normalized_update.contact_phone_number:
-            return self._handle_contact_share(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-            )
-
-        should_offer_identity_assistance = (
-            not user.phone_number
-            or (not user.is_candidate and not user.is_hiring_manager)
-        )
-
-        if should_offer_identity_assistance and normalized_update.content_type == "text":
-            entry_result = self.stage_agents.maybe_run_entry_stage(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            )
-            entry_templates = self._handle_entry_stage_result(
-                user=user,
-                raw_message_id=raw_message_id,
-                entry_result=entry_result,
-            )
-            if entry_templates is not None:
-                return entry_templates
-
-        if text_value == "/start":
-            return self._handle_start_command(user=user)
-
-        candidate_stage_result = self._maybe_run_candidate_stage_for_update(
+        entry_templates = self._apply_entry_flow(
             user=user,
+            raw_message_id=raw_message_id,
             normalized_update=normalized_update,
+            text_value=text_value,
         )
-        manager_stage_result = self._maybe_run_manager_stage_for_update(
+        if entry_templates is not None:
+            return entry_templates
+
+        candidate_stage_result, manager_stage_result = self._precompute_role_stage_results(
             user=user,
             normalized_update=normalized_update,
         )
 
-        if user.is_candidate:
-            candidate_templates = self._apply_candidate_flow(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=candidate_stage_result,
-            )
-            if candidate_templates is not None:
-                return candidate_templates
-
-        if user.is_hiring_manager:
-            manager_templates = self._apply_manager_flow(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=manager_stage_result,
-            )
-            if manager_templates is not None:
-                return manager_templates
+        role_templates = self._apply_role_flows(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+            candidate_stage_result=candidate_stage_result,
+            manager_stage_result=manager_stage_result,
+        )
+        if role_templates is not None:
+            return role_templates
 
         return self._build_unsupported_input_templates(
             user=user,

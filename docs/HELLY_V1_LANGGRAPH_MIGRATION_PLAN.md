@@ -232,6 +232,7 @@ Status:
   - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, further reducing transport branching in `TelegramUpdateService`
   - remaining candidate-side and manager-side routing segments are now also split into dedicated transport helpers for delete, interview/review, summary, verification, questions, clarification, and intake paths, further thinning `TelegramUpdateService`
   - raw-message creation, candidate/manager graph stage-result precompute, generic unsupported-input recovery, and final processed-update assembly are now also extracted into dedicated Telegram helpers, reducing inline transport orchestration further
+  - entry-stage routing and role-flow dispatch are now also extracted into `_apply_entry_flow(...)`, `_precompute_role_stage_results(...)`, and `_apply_role_flows(...)`, further reducing orchestration depth inside `_apply_identity_flow`
 
 ### Step 8. Production Validation
 
