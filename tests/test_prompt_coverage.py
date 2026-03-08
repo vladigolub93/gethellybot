@@ -43,6 +43,7 @@ def test_core_prompt_families_exist() -> None:
     required_prompt_paths = [
         ("orchestrator", "bot_controller"),
         ("entry", "contact_required_decision"),
+        ("entry", "role_selection_decision"),
         ("candidate", "cv_extract"),
         ("candidate", "cv_pending_decision"),
         ("candidate", "ready_decision"),

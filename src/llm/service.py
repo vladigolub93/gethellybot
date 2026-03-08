@@ -17,6 +17,7 @@ from src.llm.prompts import (
     bot_controller_prompt,
     candidate_cv_decision_prompt,
     contact_required_decision_prompt,
+    role_selection_decision_prompt,
     candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_decision_prompt,
@@ -56,6 +57,7 @@ from src.llm.schemas import (
     CandidateQuestionParseSchema,
     CandidateReadyDecisionSchema,
     ContactRequiredDecisionSchema,
+    RoleSelectionDecisionSchema,
     DeleteConfirmationDecisionSchema,
     CandidateSummaryReviewDecisionSchema,
     CandidateSummarySchema,
@@ -590,6 +592,40 @@ def contact_required_decision_with_llm(
             "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": None,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def role_selection_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=RoleSelectionDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("entry", "role_selection_decision"),
+        user_prompt=role_selection_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="role_selection_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "candidate", "hiring_manager"}:
+        proposed_action = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -2342,6 +2378,83 @@ def safe_contact_required_decision(
         },
         model_name="baseline-deterministic",
         prompt_version="baseline_contact_required_decision_v1",
+    )
+
+
+def safe_role_selection_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return role_selection_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("role_selection_decision_fallback", error=str(exc))
+
+    normalized_text = normalize_command_text(latest_user_message or "")
+    lowered = (latest_user_message or "").strip().lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Choose Candidate if you are looking for a job, or Hiring Manager if you want to hire for a role.",
+        "proposed_action": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "role_selection_help_fallback",
+    }
+    if normalized_text == "candidate":
+        payload.update(
+            {
+                "intent": "role_selection",
+                "response_text": "Understood. I will start the candidate flow.",
+                "proposed_action": "candidate",
+                "needs_follow_up": False,
+                "reason_code": "role_selection_candidate",
+            }
+        )
+    elif normalized_text == "hiring manager":
+        payload.update(
+            {
+                "intent": "role_selection",
+                "response_text": "Understood. I will start the hiring manager flow.",
+                "proposed_action": "hiring_manager",
+                "needs_follow_up": False,
+                "reason_code": "role_selection_hiring_manager",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "role",
+            "difference",
+            "which",
+            "what happens next",
+            "?",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance
+                or "Choose Candidate if you are looking for a job, or Hiring Manager if you want to hire for a role.",
+                "needs_follow_up": True,
+                "reason_code": "role_selection_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_role_selection_decision_v1",
     )
 
 

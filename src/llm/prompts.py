@@ -50,6 +50,37 @@ Latest user message:
 """
 
 
+def role_selection_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the user means in the role-selection step.
+
+Valid outcomes:
+- help question or clarification
+- explicit candidate role selection
+- explicit hiring-manager role selection
+
+Rules:
+- treat questions like "what is the difference?", "which one should I choose?", and "what happens next?" as help
+- only propose `candidate` when the user is clearly selecting the candidate role
+- only propose `hiring_manager` when the user is clearly selecting the hiring manager role
+- do not invent a role choice if the user is still undecided
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 STATE_ASSISTANCE_SYSTEM_PROMPT = """You are the state-aware assistance layer for Helly.
 
 Purpose:

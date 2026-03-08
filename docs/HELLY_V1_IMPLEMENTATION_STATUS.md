@@ -135,6 +135,7 @@ Architectural status note:
 - `Implemented`: state-aware in-step AI help now covers contact collection and role selection
 - `Implemented`: entry onboarding is now executed through graph-owned stage agents for `CONTACT_REQUIRED` and `ROLE_SELECTION`
 - `Implemented`: `CONTACT_REQUIRED` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; text questions no longer rely on regex help classification in entry routing
+- `Implemented`: `ROLE_SELECTION` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; role questions no longer rely on hard-coded text mapping
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
   - the `User` table can technically support multiple role flags

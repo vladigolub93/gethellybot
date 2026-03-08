@@ -200,7 +200,7 @@ Exit:
 ### Phase E. Rebuild Entry Stages to LLM-First Intent
 
 16. Remove deterministic entry help classification from `CONTACT_REQUIRED`. `Completed`
-17. Remove deterministic entry help classification from `ROLE_SELECTION`.
+17. Remove deterministic entry help classification from `ROLE_SELECTION`. `Completed`
 18. Let the entry stage agent decide:
     - user is asking why contact is needed
     - user is asking whether they can skip

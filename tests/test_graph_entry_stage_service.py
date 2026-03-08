@@ -69,6 +69,30 @@ def test_graph_entry_service_handles_role_selection_when_username_exists() -> No
     assert "candidate" in reply.lower() or "hiring manager" in reply.lower()
 
 
+def test_graph_entry_service_does_not_treat_role_question_as_selection() -> None:
+    service = LangGraphStageAgentService(session=object())
+
+    user = SimpleNamespace(
+        id="u2q",
+        phone_number=None,
+        username="hellyuser",
+        is_candidate=False,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_entry_stage(
+        user=user,
+        latest_user_message="Which one should I choose?",
+    )
+
+    assert result is not None
+    assert result.stage == "ROLE_SELECTION"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_entry_service_accepts_role_selection_transition() -> None:
     service = LangGraphStageAgentService(session=object())
 

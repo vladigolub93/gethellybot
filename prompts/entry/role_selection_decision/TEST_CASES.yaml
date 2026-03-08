@@ -1,0 +1,8 @@
+- input: "What is the difference?"
+  expected_intent: "help"
+- input: "Which one should I choose?"
+  expected_intent: "help"
+- input: "Candidate"
+  expected_action: "candidate"
+- input: "Hiring Manager"
+  expected_action: "hiring_manager"
