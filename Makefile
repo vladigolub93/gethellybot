@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production
+.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user
 
 run-api:
 	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -21,6 +21,9 @@ docker-test:
 
 validate-production:
 	bash scripts/validate-production.sh
+
+inspect-telegram-user:
+	python3 scripts/inspect_telegram_user.py --telegram-user-id $(TELEGRAM_USER_ID)
 
 db-upgrade:
 	alembic upgrade head

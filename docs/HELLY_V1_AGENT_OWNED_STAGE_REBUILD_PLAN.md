@@ -365,6 +365,7 @@ Current execution note:
 - `TelegramUpdateService` no longer depends directly on `BotControllerService`; generic unsupported-input recovery now resolves current stage context through graph/messaging-native transport logic
 - Phase 11 has started with reusable production validation automation for Railway health and Telegram webhook checks
 - live production validation baseline has passed against the current Railway deployment: API `/health` returns `ok`, webhook URL matches `APP_BASE_URL/telegram/webhook`, and pending updates are `0`
+- Phase 11 now also includes a live DB inspection tool for Telegram-user smoke tests, and the script has been validated against the live Supabase environment
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage
 
 ## 9. Definition of Done

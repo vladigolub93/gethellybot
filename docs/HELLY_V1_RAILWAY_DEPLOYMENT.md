@@ -190,6 +190,24 @@ This checks:
 - Telegram webhook registration against `APP_BASE_URL/telegram/webhook`
 - pending webhook update count
 
+To inspect live DB state for a Telegram user after a smoke test:
+
+```bash
+set -a
+source .env
+set +a
+python3 scripts/inspect_telegram_user.py --telegram-user-id <telegram-user-id>
+```
+
+This prints a JSON snapshot of:
+
+- user record
+- latest candidate profile and version
+- latest vacancy and version
+- latest match / interview / evaluation
+- latest notification
+- row counts for messages, notifications, files, matches, vacancies
+
 ## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker

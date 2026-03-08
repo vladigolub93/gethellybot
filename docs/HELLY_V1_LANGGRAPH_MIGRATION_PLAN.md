@@ -246,6 +246,8 @@ Status:
     - API `/health` returned `ok`
     - Telegram webhook URL matched `APP_BASE_URL/telegram/webhook`
     - `pending_update_count` was `0`
+  - `scripts/inspect_telegram_user.py`
+  - live DB inspection run against Supabase completed successfully for a non-existent Telegram user id and returned a valid empty snapshot
 
 ### Step 8. Regression and Production Hardening
 
