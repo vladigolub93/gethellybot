@@ -263,6 +263,7 @@ Status:
     - entry -> candidate -> CV/questions handoff
     - entry -> hiring manager -> JD/clarification handoff
     - candidate interview accept/answer and manager approve review handoff
+  - graph-native Telegram routing tests now assert the full `graph decision -> backend service handoff -> notification template` path rather than only stage-agent outputs
   - full test suite currently passes with graph-owned routing and stage-resolution coverage
 
 ## 5. Definition of Done
