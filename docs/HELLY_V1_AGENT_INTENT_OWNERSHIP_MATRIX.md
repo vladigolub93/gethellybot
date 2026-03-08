@@ -46,7 +46,7 @@ This field identifies the concrete deterministic logic that still needs to be re
 | `QUESTIONS_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend still executes parsed payload and voice path by design | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
 | `VERIFICATION_PENDING` | `mixed` | `agent-first` | deterministic `latest_message_type == video` completion rule, regex help patterns | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py) |
 | `READY` | `mixed` | `agent-first` | regex help patterns, deterministic delete intent aliases | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
-| `INTAKE_PENDING` | `mixed` | `agent-first` | regex help patterns, `len<=40 && ?`-style style heuristics via intake helper, default text -> `send_job_description_text` | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py) |
+| `INTAKE_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now only executes validated `send_job_description_text` handoff for text submissions | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `VACANCY_SUMMARY_REVIEW` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; adjacent clarification stage still pending for same depth of intent ownership | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `CLARIFICATION_QA` | `mixed` | `agent-first` | regex help patterns, backend parsing fallback after generic `stage_completion_input` | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `OPEN` | `mixed` | `agent-first` | regex help patterns, deterministic delete intent aliases | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
@@ -145,13 +145,12 @@ Strict order:
 3. `INTERVIEW_IN_PROGRESS`
 4. `QUESTIONS_PENDING`
 5. `DELETE_CONFIRMATION`
-6. `INTAKE_PENDING`
-7. `CLARIFICATION_QA`
-8. `READY`
-9. `OPEN`
-10. `CONTACT_REQUIRED`
-11. `ROLE_SELECTION`
-12. `MANAGER_REVIEW`
+6. `CLARIFICATION_QA`
+7. `READY`
+8. `OPEN`
+9. `CONTACT_REQUIRED`
+10. `ROLE_SELECTION`
+11. `MANAGER_REVIEW`
 
 ## 8. Definition of Done
 

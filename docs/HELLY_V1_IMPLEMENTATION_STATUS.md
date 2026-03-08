@@ -61,6 +61,7 @@ Architectural status note:
 - candidate `VERIFICATION_PENDING` is now graph-owned for verification guidance and graph-validated video submission handoff
 - candidate `READY` is now graph-owned for status guidance and delete-profile initiation
 - manager `INTAKE_PENDING` is now graph-owned for text-based vacancy intake and help handling
+- manager `INTAKE_PENDING` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; JD-help questions like whether the manager can paste details or proceed without a formal JD no longer rely on regex heuristics
 - manager `CLARIFICATION_QA` is now graph-owned for text-based clarification completion and help handling
 - manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - `INTERVIEW_INVITED` is now graph-owned for invitation guidance and accept/skip execution

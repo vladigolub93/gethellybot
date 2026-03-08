@@ -6,28 +6,11 @@ from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_parse_vacancy_clarifications,
     safe_state_assistance_decision,
+    safe_vacancy_intake_decision,
     safe_vacancy_summary_review_decision,
 )
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
-
-
-def _manager_intake_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhy\b",
-        r"\bhow\b",
-        r"\bhelp\b",
-        r"\bno formal jd\b",
-        r"\bno jd\b",
-        r"\bjust paste\b",
-        r"\bpaste the job\b",
-        r"\bwhat should i send\b",
-        r"\bwhat do i include\b",
-        r"\bwhat to include\b",
-        r"\bwhat next\b",
-        r"\bvoice\b",
-        r"\btext\b",
-    )
 
 
 def _manager_clarification_help_patterns() -> tuple[str, ...]:
@@ -91,14 +74,6 @@ def load_manager_stage_knowledge_node(state: HellyGraphState) -> HellyGraphState
     state.knowledge_snippets = [item for item in snippets if item]
     return state
 
-
-def _is_manager_intake_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    if any(re.search(pattern, normalized) for pattern in _manager_intake_help_patterns()):
-        return True
-    return len(normalized) <= 40 and "?" in normalized
-
-
 def _is_manager_clarification_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _manager_clarification_help_patterns())
@@ -134,15 +109,28 @@ def build_manager_stage_detect_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
         text = state.latest_user_message or ""
         if state.active_stage == "INTAKE_PENDING":
-            is_help = _is_manager_intake_help(text)
-            if is_help:
-                state.intent = "help"
-                state.parsed_input["intent"] = "help"
-            else:
-                state.intent = "stage_completion_input"
+            decision = safe_vacancy_intake_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
-                state.proposed_action = "send_job_description_text"
-                state.structured_payload = {"job_description_text": text.strip()}
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("job_description_text"):
+                state.structured_payload = {"job_description_text": payload.get("job_description_text")}
+            else:
+                state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
             return state
         if state.active_stage == "CLARIFICATION_QA":
             if _is_manager_clarification_help(text):
@@ -215,15 +203,8 @@ def build_manager_stage_detect_node(session):
 def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
-        is_help = _is_manager_intake_help(text)
-        if is_help:
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-        else:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = "send_job_description_text"
-            state.structured_payload = {"job_description_text": text.strip()}
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
         return state
     if state.active_stage == "CLARIFICATION_QA":
         if _is_manager_clarification_help(text):

@@ -238,7 +238,7 @@ Exit:
 
 ### Phase G. Rebuild Manager Stages to LLM-First Intent
 
-31. Remove deterministic intent classification from `INTAKE_PENDING`.
+31. Remove deterministic intent classification from `INTAKE_PENDING`. `Completed`
 32. Remove deterministic intent classification from `VACANCY_SUMMARY_REVIEW`. `Completed`
 33. Remove deterministic intent classification from `CLARIFICATION_QA`.
 34. Remove deterministic intent classification from `OPEN`.

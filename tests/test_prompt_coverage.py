@@ -49,6 +49,7 @@ def test_core_prompt_families_exist() -> None:
         ("candidate", "summary_merge"),
         ("candidate", "mandatory_field_parse"),
         ("vacancy", "jd_extract"),
+        ("vacancy", "intake_pending_decision"),
         ("vacancy", "summary_review_decision"),
         ("vacancy", "summary_merge"),
         ("vacancy", "clarification_parse"),

@@ -238,6 +238,36 @@ Latest user message:
 """
 
 
+def vacancy_intake_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the job description intake step.
+
+Valid outcomes:
+- help question or clarification about what can be sent
+- real job description or role context that should be stored and processed
+
+Rules:
+- treat questions like "can I just paste the job details here?", "I don't have a formal JD", "what should I include?", "can I send voice?", "why do you need this?", and "what happens next?" as help, not as job description input
+- only propose `send_job_description_text` when the manager is clearly providing the role description, requirements, stack, product context, or hiring details
+- if the manager is clearly providing job-description input, include the original text in `job_description_text`
+- do not invent vacancy details
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_clarifications_prompt(text: str) -> str:
     return f"""Task: parse vacancy clarification answers from the text below.
 

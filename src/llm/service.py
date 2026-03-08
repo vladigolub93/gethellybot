@@ -36,6 +36,7 @@ from src.llm.prompts import (
     response_copywriter_prompt,
     role_selection_prompt,
     small_talk_prompt,
+    vacancy_intake_decision_prompt,
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
@@ -63,6 +64,7 @@ from src.llm.schemas import (
     ResponseCopywriterSchema,
     StateAssistanceDecisionSchema,
     VacancyInconsistencySchema,
+    VacancyIntakeDecisionSchema,
     VacancyClarificationSchema,
     VacancySummaryReviewDecisionSchema,
     VacancySummarySchema,
@@ -685,6 +687,44 @@ def vacancy_summary_review_decision_with_llm(
             "response_text": response_text,
             "proposed_action": proposed_action,
             "edit_text": edit_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def vacancy_intake_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=VacancyIntakeDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("vacancy", "intake_pending_decision"),
+        user_prompt=vacancy_intake_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="vacancy_intake_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "send_job_description_text"}:
+        proposed_action = None
+    job_description_text = _clean_text(result.payload.get("job_description_text"), limit=5000)
+    if proposed_action == "send_job_description_text" and not job_description_text:
+        job_description_text = _clean_text(latest_user_message, limit=5000)
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
+            "job_description_text": job_description_text,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -1871,6 +1911,82 @@ def safe_candidate_cv_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_candidate_cv_decision_v1",
+    )
+
+
+def safe_vacancy_intake_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return vacancy_intake_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_intake_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "You can paste the job details here, upload a JD, or send the role context by voice.",
+        "proposed_action": None,
+        "job_description_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "vacancy_intake_help_fallback",
+    }
+    if any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "no formal jd",
+            "no jd",
+            "just paste",
+            "paste the job",
+            "what should i send",
+            "what do i include",
+            "what to include",
+            "what next",
+            "voice",
+            "text",
+            "?",
+        ]
+    ):
+        return LLMResult(
+            payload=payload,
+            model_name="baseline-deterministic",
+            prompt_version="baseline_vacancy_intake_decision_v1",
+        )
+
+    if normalized_text:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "jd_input",
+                "response_text": None,
+                "proposed_action": "send_job_description_text",
+                "job_description_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "vacancy_intake_text_submission",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_vacancy_intake_decision_v1",
+        )
+
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_intake_decision_v1",
     )
 
 

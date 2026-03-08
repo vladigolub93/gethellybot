@@ -56,6 +56,34 @@ def test_graph_manager_stage_handles_intake_pending_help() -> None:
     assert "text" in reply.lower() or "job" in reply.lower()
 
 
+def test_graph_manager_stage_does_not_treat_intake_question_as_jd_submission() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v1q", state="INTAKE_PENDING")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m1q",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Can I just paste the job details here?",
+    )
+
+    assert result is not None
+    assert result.stage == "INTAKE_PENDING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_manager_stage_allows_passthrough_for_real_jd_text() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
