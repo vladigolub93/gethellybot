@@ -1,0 +1,6 @@
+- input: "Approve summary"
+  expected_action: "approve_summary"
+- input: "Why do I need to approve this first?"
+  expected_intent: "help"
+- input: "The role should be Senior Data Engineer, not Backend Engineer."
+  expected_action: "request_summary_change"

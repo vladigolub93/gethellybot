@@ -239,15 +239,15 @@ Exit:
 ### Phase G. Rebuild Manager Stages to LLM-First Intent
 
 31. Remove deterministic intent classification from `INTAKE_PENDING`.
-32. Remove deterministic intent classification from `VACANCY_SUMMARY_REVIEW`.
+32. Remove deterministic intent classification from `VACANCY_SUMMARY_REVIEW`. `Completed`
 33. Remove deterministic intent classification from `CLARIFICATION_QA`.
 34. Remove deterministic intent classification from `OPEN`.
 
 For `VACANCY_SUMMARY_REVIEW` specifically:
 
-35. Ensure timing/help questions are treated as help.
-36. Ensure only explicit correction intent becomes `request_summary_change`.
-37. Ensure only explicit approval intent becomes `approve_summary`.
+35. Ensure timing/help questions are treated as help. `Completed`
+36. Ensure only explicit correction intent becomes `request_summary_change`. `Completed`
+37. Ensure only explicit approval intent becomes `approve_summary`. `Completed`
 
 Exit:
 

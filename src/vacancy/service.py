@@ -259,18 +259,46 @@ class VacancyService:
         raw_message_id,
         text: Optional[str],
     ) -> Optional[VacancySummaryReviewResult]:
+        normalized_text = (text or "").strip()
+        lowered = normalize_command_text(normalized_text)
+        action = None
+        payload: dict = {}
+        if lowered in {"approve summary", "approve", "approve vacancy summary"}:
+            action = "approve_summary"
+        else:
+            if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
+                normalized_text = normalized_text.split(":", 1)[1].strip()
+            if lowered in {"change summary", "edit summary", "change", "edit"}:
+                payload["needs_edit_details"] = True
+            elif normalized_text:
+                action = "request_summary_change"
+                payload["edit_text"] = normalized_text
+        return self.execute_summary_review_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=action,
+            structured_payload=payload,
+        )
+
+    def execute_summary_review_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+        structured_payload: dict | None = None,
+    ) -> Optional[VacancySummaryReviewResult]:
         vacancy = self.ensure_active_intake_vacancy_for_manager(user)
         if vacancy.state != VACANCY_STATE_SUMMARY_REVIEW:
             return None
 
-        normalized_text = (text or "").strip()
-        if not normalized_text:
+        payload = dict(structured_payload or {})
+        if action is None and not payload:
             return VacancySummaryReviewResult(
                 status="empty",
                 notification_template="vacancy_summary_review_help",
             )
 
-        lowered = normalize_command_text(normalized_text)
         current_version = self.repo.get_current_version(vacancy)
         if current_version is None:
             return VacancySummaryReviewResult(
@@ -278,7 +306,7 @@ class VacancyService:
                 notification_template="vacancy_summary_not_available",
             )
 
-        if lowered in {"approve summary", "approve", "approve vacancy summary"}:
+        if action == "approve_summary":
             self.repo.mark_version_approved(current_version)
             self.state_service.transition(
                 entity_type="vacancy",
@@ -301,16 +329,13 @@ class VacancyService:
                 notification_template="vacancy_summary_edit_limit_reached",
             )
 
-        if lowered in {"change summary", "edit summary", "change", "edit"}:
+        if payload.get("needs_edit_details"):
             return VacancySummaryReviewResult(
                 status="awaiting_edit_details",
                 notification_template="vacancy_summary_edit_empty",
             )
 
-        edit_text = normalized_text
-        if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
-            edit_text = normalized_text.split(":", 1)[1].strip()
-
+        edit_text = (payload.get("edit_text") or "").strip()
         if not edit_text:
             return VacancySummaryReviewResult(
                 status="empty_edit",

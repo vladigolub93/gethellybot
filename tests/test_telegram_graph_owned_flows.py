@@ -146,6 +146,32 @@ class FakeVacancyService:
             )
         return None
 
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        action = kwargs.get("action")
+        payload = kwargs.get("structured_payload") or {}
+        if action == "approve_summary":
+            return self.summary_result
+        if action == "request_summary_change" and payload.get("edit_text"):
+            return SimpleNamespace(
+                notification_template="vacancy_summary_edit_processing",
+                status="edit_processing",
+            )
+        return None
+
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        action = kwargs.get("action")
+        payload = kwargs.get("structured_payload") or {}
+        if action == "approve_summary":
+            return self.summary_result
+        if action == "request_summary_change" and payload.get("edit_text"):
+            return SimpleNamespace(
+                notification_template="vacancy_summary_edit_processing",
+                status="edit_processing",
+            )
+        return None
+
     def handle_clarification_parsed_payload(self, **kwargs):
         self.clarification_calls.append(kwargs)
         return self.clarification_result

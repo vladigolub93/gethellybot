@@ -133,6 +133,33 @@ def test_graph_manager_stage_handles_vacancy_summary_review_help() -> None:
     assert "approve" in reply.lower() or "summary" in reply.lower()
 
 
+def test_graph_manager_stage_does_not_treat_approval_question_as_summary_edit() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v3aa", state="VACANCY_SUMMARY_REVIEW")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m3aa",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="How long will this take before I can continue?",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_SUMMARY_REVIEW"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_manager_stage_accepts_vacancy_summary_approve() -> None:
     service = LangGraphStageAgentService(session=object())
     service.vacancies = FakeVacanciesRepository(

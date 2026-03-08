@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 
 from src.graph.state import HellyGraphState
-from src.llm.service import safe_parse_vacancy_clarifications, safe_state_assistance_decision
+from src.llm.service import (
+    safe_parse_vacancy_clarifications,
+    safe_state_assistance_decision,
+    safe_vacancy_summary_review_decision,
+)
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 
@@ -42,19 +46,6 @@ def _manager_clarification_help_patterns() -> tuple[str, ...]:
         r"\bwhat currency\b",
         r"\bwhat period\b",
         r"\bwhat countries\b",
-    )
-
-
-def _manager_summary_review_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhy\b",
-        r"\bhow\b",
-        r"\bhelp\b",
-        r"\bwhat should i change\b",
-        r"\bwhat can i change\b",
-        r"\bwhere did this summary come from\b",
-        r"\bwhat happens after approval\b",
-        r"\bwhy do i need to approve\b",
     )
 
 
@@ -113,25 +104,6 @@ def _is_manager_clarification_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _manager_clarification_help_patterns())
 
 
-def _is_manager_summary_review_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _manager_summary_review_help_patterns())
-
-
-def _detect_manager_summary_review_action(text: str) -> tuple[str | None, dict]:
-    command = normalize_command_text(text or "")
-    if command in {"approve summary", "approve", "approve vacancy summary"}:
-        return "approve_summary", {}
-    if command in {"change summary", "edit summary", "change", "edit"}:
-        return None, {}
-    edit_text = (text or "").strip()
-    if command.startswith("edit summary:") or command.startswith("edit:"):
-        edit_text = edit_text.split(":", 1)[1].strip()
-    if edit_text:
-        return "request_summary_change", {"edit_text": edit_text}
-    return None, {}
-
-
 def _is_manager_open_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _manager_open_help_patterns())
@@ -158,6 +130,88 @@ def _detect_manager_review_action(text: str) -> tuple[str | None, dict]:
     return None, {}
 
 
+def build_manager_stage_detect_node(session):
+    def _node(state: HellyGraphState) -> HellyGraphState:
+        text = state.latest_user_message or ""
+        if state.active_stage == "INTAKE_PENDING":
+            is_help = _is_manager_intake_help(text)
+            if is_help:
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+            else:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = "send_job_description_text"
+                state.structured_payload = {"job_description_text": text.strip()}
+            return state
+        if state.active_stage == "CLARIFICATION_QA":
+            if _is_manager_clarification_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+            else:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+            return state
+        if state.active_stage == "VACANCY_SUMMARY_REVIEW":
+            decision = safe_vacancy_summary_review_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
+                state.parsed_input["intent"] = "stage_completion_input"
+            elif state.intent == "needs_clarification":
+                state.parsed_input["intent"] = "needs_clarification"
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("edit_text"):
+                state.structured_payload = {"edit_text": payload.get("edit_text")}
+            else:
+                state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
+        if state.active_stage == "OPEN":
+            if _is_manager_open_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+                return state
+            proposed_action, payload = _detect_manager_open_action(text)
+            if proposed_action is not None:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = proposed_action
+                state.structured_payload = payload
+                return state
+            is_help = False
+        if state.active_stage == "MANAGER_REVIEW":
+            if _is_manager_review_help(text):
+                state.intent = "help"
+                state.parsed_input["intent"] = "help"
+                return state
+            proposed_action, payload = _detect_manager_review_action(text)
+            if proposed_action is not None:
+                state.intent = "stage_completion_input"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.proposed_action = proposed_action
+                state.structured_payload = payload
+                return state
+            is_help = False
+        else:
+            is_help = False
+        state.parsed_input["intent"] = "help" if is_help else "manager_input"
+        return state
+
+    return _node
+
+
 def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
@@ -180,25 +234,8 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
             state.parsed_input["intent"] = "stage_completion_input"
         return state
     if state.active_stage == "VACANCY_SUMMARY_REVIEW":
-        if _is_manager_summary_review_help(text):
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-            return state
-        proposed_action, payload = _detect_manager_summary_review_action(text)
-        if proposed_action is not None:
-            state.intent = "stage_completion_input"
-            state.parsed_input["intent"] = "stage_completion_input"
-            state.proposed_action = proposed_action
-            state.structured_payload = payload
-            return state
-        if normalize_command_text(text or "") in {"change summary", "edit summary", "change", "edit"}:
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-            return state
-        state.intent = "stage_completion_input"
-        state.parsed_input["intent"] = "stage_completion_input"
-        state.proposed_action = "request_summary_change"
-        state.structured_payload = {"edit_text": text.strip()}
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
         return state
     if state.active_stage == "OPEN":
         if _is_manager_open_help(text):
@@ -259,10 +296,16 @@ def build_manager_stage_reply_node(session):
         if state.active_stage == "VACANCY_SUMMARY_REVIEW" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
             if state.proposed_action == "approve_summary":
-                state.reply_text = "Understood. I will lock the summary and move to the required vacancy details."
+                state.reply_text = state.reply_text or "Understood. I will lock the summary and move to the required vacancy details."
             else:
-                state.reply_text = "Understood. I will update the vacancy summary based on your correction."
+                state.reply_text = state.reply_text or "Understood. I will update the vacancy summary based on your correction."
             state.confidence = 0.9
+            return state
+
+        if state.active_stage == "VACANCY_SUMMARY_REVIEW" and state.parsed_input.get("intent") == "needs_clarification":
+            state.reply_text = "Tell me exactly what is incorrect in the vacancy summary, and I will update it once."
+            state.follow_up_needed = True
+            state.follow_up_question = state.reply_text
             return state
 
         if state.active_stage == "CLARIFICATION_QA" and state.parsed_input.get("intent") == "stage_completion_input":

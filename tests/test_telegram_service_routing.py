@@ -198,6 +198,14 @@ class FakeVacancyService:
         self.summary_calls.append(kwargs)
         return self.summary_result
 
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        return self.summary_result
+
+    def execute_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        return self.summary_result
+
     def handle_clarification_answer(self, **kwargs):
         self.clarification_calls.append(kwargs)
         return self.clarification_result
@@ -1670,6 +1678,42 @@ def test_vacancy_delete_confirmation_help_is_intercepted_after_delete_prompt() -
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
     assert not service.vacancy_service.deletion_calls
     assert not service.bot_controller.calls
+
+
+def test_vacancy_summary_review_help_question_does_not_reach_summary_handler() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VACANCY_SUMMARY_REVIEW",
+            reply_text="I can answer questions about the vacancy summary. If it looks correct, approve it. If something is wrong, tell me exactly what to change.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.bot_controller = FakeBotController("Legacy vacancy summary fallback should not be used.")
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u6va",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw6va",
+        build_update(text="How long will this take before I can continue?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert not service.vacancy_service.summary_calls
 
 
 def test_manager_review_help_is_intercepted_before_manager_handler() -> None:

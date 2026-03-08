@@ -230,6 +230,7 @@ Status vs SRS:
 - `Implemented`: state-aware in-step AI help for `INTAKE_PENDING`, `VACANCY_SUMMARY_REVIEW`, `CLARIFICATION_QA`, and `OPEN`
 - `Implemented`: `INTAKE_PENDING` text-based vacancy intake and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `VACANCY_SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent
+- `Implemented`: `VACANCY_SUMMARY_REVIEW` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; timing/help questions no longer rely on raw-text fallback classification
 - `Implemented`: `CLARIFICATION_QA` text-based clarification completion and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `OPEN` status guidance and delete-vacancy initiation now run through a graph-owned stage agent
 

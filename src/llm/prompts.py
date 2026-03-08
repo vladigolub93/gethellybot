@@ -156,6 +156,28 @@ Manager corrections:
 """
 
 
+def vacancy_summary_review_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the vacancy summary review step.
+
+Valid outcomes:
+- help question or clarification
+- explicit summary approval
+- explicit summary correction request
+- request for clarification because the manager said they want to edit but gave no details
+
+Current step guidance: {current_step_guidance or ""}
+Recent context: {recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_clarifications_prompt(text: str) -> str:
     return f"""Task: parse vacancy clarification answers from the text below.
 

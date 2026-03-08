@@ -33,6 +33,7 @@ from src.graph.stages.deletion import (
     load_delete_stage_knowledge_node,
 )
 from src.graph.stages.manager import (
+    build_manager_stage_detect_node,
     build_manager_stage_reply_node,
     detect_manager_stage_intent_node,
     load_manager_stage_context_node,
@@ -338,7 +339,7 @@ class LangGraphStageAgentService:
                 nodes={
                     "load_context": load_manager_stage_context_node,
                     "load_knowledge": load_manager_stage_knowledge_node,
-                    "detect_intent": detect_manager_stage_intent_node,
+                    "detect_intent": build_manager_stage_detect_node(self.session),
                     "propose_action": build_manager_stage_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),
