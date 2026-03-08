@@ -6,6 +6,7 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
 from src.llm.service import (
+    safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
     safe_interview_in_progress_decision,
     safe_parse_candidate_questions,
@@ -33,24 +34,6 @@ def _candidate_cv_help_patterns() -> tuple[str, ...]:
         r"\bwhat do i send\b",
         r"\bwhat can i send\b",
         r"\bwhat next\b",
-    )
-
-
-def _candidate_questions_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhy\b",
-        r"\bhow\b",
-        r"\bhelp\b",
-        r"\bwhat happens after\b",
-        r"\bwhat next\b",
-        r"\bexample\b",
-        r"\bgross or net\b",
-        r"\bnet or gross\b",
-        r"\bwhich currency\b",
-        r"\bwhat currency\b",
-        r"\bwhat period\b",
-        r"\bper month or year\b",
-        r"\bhow should i answer\b",
     )
 
 
@@ -125,11 +108,6 @@ def _is_candidate_cv_help(text: str) -> bool:
     return len(normalized) <= 40 and "?" in normalized
 
 
-def _is_candidate_questions_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _candidate_questions_help_patterns())
-
-
 def _is_candidate_verification_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _candidate_verification_help_patterns())
@@ -202,7 +180,36 @@ def build_candidate_stage_detect_node(session):
                 state.follow_up_question = payload.get("response_text")
             return state
         elif state.active_stage == "QUESTIONS_PENDING":
-            is_help = _is_candidate_questions_help(text)
+            decision = safe_candidate_questions_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") == "send_salary_location_work_format":
+                answer_text = payload.get("answer_text") or text
+                parsed_payload = safe_parse_candidate_questions(session, answer_text).payload
+                if parsed_payload:
+                    state.proposed_action = "send_salary_location_work_format"
+                    state.structured_payload = parsed_payload
+                    state.parsed_input["intent"] = "stage_completion_input"
+                else:
+                    state.parsed_input["intent"] = "help"
+                    state.follow_up_needed = True
+                    state.follow_up_question = (
+                        payload.get("response_text")
+                        or "Please include your salary expectations, current location, and preferred work format."
+                    )
+            else:
+                state.parsed_input["intent"] = "help"
+                if payload.get("needs_follow_up"):
+                    state.follow_up_needed = True
+                    state.follow_up_question = payload.get("response_text")
+            return state
         elif state.active_stage == "VERIFICATION_PENDING":
             if state.latest_message_type == "video":
                 state.intent = "stage_completion_input"
@@ -400,18 +407,15 @@ def build_candidate_stage_reply_node(session):
                 state.confidence = 0.9
                 return state
 
-        if state.active_stage == "QUESTIONS_PENDING" and state.parsed_input.get("intent") == "candidate_input":
-            parsed = dict(safe_parse_candidate_questions(session, state.latest_user_message).payload or {})
-            if parsed:
+        if state.active_stage == "QUESTIONS_PENDING":
+            if state.parsed_input.get("intent") == "stage_completion_input" and state.proposed_action == "send_salary_location_work_format":
                 state.stage_status = "ready_for_transition"
-                state.proposed_action = "send_salary_location_work_format"
-                state.structured_payload = parsed
                 state.reply_text = "Thanks. I will update your profile details from this answer."
                 state.confidence = 0.9
             else:
-                state.reply_text = context.guidance_text
+                state.reply_text = state.reply_text or context.guidance_text
                 state.follow_up_needed = True
-                state.follow_up_question = context.guidance_text
+                state.follow_up_question = state.reply_text
             return state
 
         if (

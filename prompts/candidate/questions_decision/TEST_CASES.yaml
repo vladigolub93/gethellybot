@@ -1,0 +1,6 @@
+- input: "Gross or net?"
+  expected_intent: "help"
+- input: "3000 USD net per month. Warsaw. Remote."
+  expected_action: "send_salary_location_work_format"
+- input: "Why do you need my salary and location?"
+  expected_intent: "help"

@@ -37,6 +37,16 @@ class CandidateQuestionParseSchema(BaseModel):
     work_format: Optional[str] = None
 
 
+class CandidateQuestionsDecisionSchema(BaseModel):
+    intent: str
+    response_text: Optional[str] = None
+    proposed_action: Optional[str] = None
+    answer_text: Optional[str] = None
+    keep_current_state: bool = True
+    needs_follow_up: bool = False
+    reason_code: Optional[str] = None
+
+
 class VacancySummarySchema(BaseModel):
     status: str = "draft"
     source_type: Optional[str] = None

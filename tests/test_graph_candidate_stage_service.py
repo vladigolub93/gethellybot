@@ -293,6 +293,35 @@ def test_graph_candidate_stage_handles_questions_pending_help() -> None:
     assert "salary" in reply.lower() or "matching" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_questions_clarification_as_answer() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp5a", state="QUESTIONS_PENDING")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u8a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Gross or net?",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_real_questions_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

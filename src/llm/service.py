@@ -17,6 +17,7 @@ from src.llm.prompts import (
     bot_controller_prompt,
     candidate_rerank_prompt,
     candidate_cv_prompt,
+    candidate_questions_decision_prompt,
     candidate_questions_prompt,
     interview_in_progress_decision_prompt,
     candidate_summary_review_decision_prompt,
@@ -42,6 +43,7 @@ from src.llm.state_assistance import state_assistance_prompt
 from src.llm.schemas import (
     BotControllerDecisionSchema,
     CandidateRerankSchema,
+    CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
     CandidateSummaryReviewDecisionSchema,
     CandidateSummarySchema,
@@ -467,6 +469,46 @@ def parse_candidate_questions_with_llm(text: str) -> LLMResult:
         payload["country_code"] = None
     return LLMResult(
         payload={key: value for key, value in payload.items() if value is not None},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def candidate_questions_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateQuestionsDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("candidate", "questions_decision"),
+        user_prompt=candidate_questions_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_questions_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "send_salary_location_work_format"}:
+        proposed_action = None
+    intent = _clean_text(result.payload.get("intent"), limit=80) or "help"
+    response_text = _clean_text(result.payload.get("response_text"), limit=400)
+    answer_text = _clean_text(result.payload.get("answer_text"), limit=1000)
+    if proposed_action == "send_salary_location_work_format" and not answer_text:
+        answer_text = _clean_text(latest_user_message, limit=1000)
+    return LLMResult(
+        payload={
+            "intent": intent,
+            "response_text": response_text,
+            "proposed_action": proposed_action,
+            "answer_text": answer_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -1204,6 +1246,81 @@ def safe_parse_candidate_questions(session, text: str) -> LLMResult:
         payload=parse_candidate_questions(text),
         model_name="baseline-deterministic",
         prompt_version="baseline_candidate_questions_parse_v1",
+    )
+
+
+def safe_candidate_questions_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_questions_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_questions_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Share your salary expectations, current location, and preferred work format. If anything is unclear, ask me and I will clarify.",
+        "proposed_action": None,
+        "answer_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "candidate_questions_help_fallback",
+    }
+    if any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "what happens after",
+            "what next",
+            "example",
+            "gross or net",
+            "net or gross",
+            "which currency",
+            "what currency",
+            "what period",
+            "per month or year",
+            "how should i answer",
+        ]
+    ) or (normalized_text.endswith("?") and len(normalized_text) <= 200):
+        return LLMResult(
+            payload=payload,
+            model_name="baseline-deterministic",
+            prompt_version="baseline_candidate_questions_decision_v1",
+        )
+
+    if normalized_text:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "answer",
+                "response_text": None,
+                "proposed_action": "send_salary_location_work_format",
+                "answer_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "candidate_questions_answer_fallback",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_candidate_questions_decision_v1",
+        )
+
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_questions_decision_v1",
     )
 
 

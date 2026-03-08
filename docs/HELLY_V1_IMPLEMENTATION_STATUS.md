@@ -56,6 +56,7 @@ Architectural status note:
 - candidate `SUMMARY_REVIEW` is now graph-owned for approve/correction execution and help handling
 - candidate `SUMMARY_REVIEW` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; timing/help questions no longer rely on raw-text fallback classification
 - candidate `QUESTIONS_PENDING` is now graph-owned for text-based structured question-answer handoff and help handling
+- candidate `QUESTIONS_PENDING` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification questions like compensation format no longer rely on regex help classification
 - candidate `VERIFICATION_PENDING` is now graph-owned for verification guidance and graph-validated video submission handoff
 - candidate `READY` is now graph-owned for status guidance and delete-profile initiation
 - manager `INTAKE_PENDING` is now graph-owned for text-based vacancy intake and help handling

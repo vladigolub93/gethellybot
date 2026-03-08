@@ -117,6 +117,36 @@ Text:
 """
 
 
+def candidate_questions_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the mandatory questions step.
+
+Valid outcomes:
+- help question or clarification
+- real profile answer that should be parsed for salary, location, and work format
+
+Rules:
+- treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", and "how should I answer?" as help, not as final profile answers
+- only propose `send_salary_location_work_format` when the candidate is actually providing their profile details
+- if the candidate is clearly answering, include the original answer in `answer_text`
+- do not invent salary, location, or work format values here
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_jd_prompt(source_text: str, source_type: str) -> str:
     return f"""Task: extract a structured vacancy summary from the job description below.
 
