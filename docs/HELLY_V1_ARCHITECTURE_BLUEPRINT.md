@@ -192,7 +192,6 @@ Responsibilities:
 
 - user lookup by Telegram identity
 - contact capture and normalization
-- consent capture
 - role linkage
 
 ## 6.3 `conversation`

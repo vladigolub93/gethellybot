@@ -332,7 +332,6 @@ The full v1 stage-agent inventory should include:
 ### Entry
 
 - `contact_required_agent`
-- `consent_required_agent`
 - `role_selection_agent`
 
 ### Candidate

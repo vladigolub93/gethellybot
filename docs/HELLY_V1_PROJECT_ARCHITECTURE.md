@@ -289,7 +289,6 @@ Responsibilities:
 
 - Telegram user mapping
 - contact storage
-- consent storage
 - role flags
 
 ## 8.3 `conversation`

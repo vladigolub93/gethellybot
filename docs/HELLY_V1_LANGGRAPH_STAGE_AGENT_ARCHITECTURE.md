@@ -386,7 +386,6 @@ Recommended order:
 
 1. Entry agents:
    - contact
-   - consent
    - role selection
 2. Candidate onboarding:
    - CV
