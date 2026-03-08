@@ -52,6 +52,7 @@ def test_core_prompt_families_exist() -> None:
         ("vacancy", "clarification_parse"),
         ("vacancy", "inconsistency_detect"),
         ("interview", "question_plan"),
+        ("interview", "in_progress_decision"),
         ("interview", "followup_decision"),
         ("interview", "answer_parse"),
         ("interview", "session_conductor"),

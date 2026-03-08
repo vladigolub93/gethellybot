@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import re
 
+from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_candidate_summary_review_decision,
+    safe_interview_in_progress_decision,
     safe_parse_candidate_questions,
     safe_state_assistance_decision,
 )
@@ -98,19 +101,6 @@ def _candidate_interview_invited_help_patterns() -> tuple[str, ...]:
     )
 
 
-def _candidate_interview_in_progress_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhat do you mean\b",
-        r"\bcan you repeat\b",
-        r"\bcan you clarify\b",
-        r"\bi do not understand\b",
-        r"\bwhat exactly are you asking\b",
-        r"\bhow should i answer\b",
-        r"\bcan i answer by voice\b",
-        r"\bcan i send video\b",
-    )
-
-
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -169,11 +159,6 @@ def _detect_candidate_interview_invited_action(text: str) -> tuple[str | None, d
     if command in {"skip opportunity", "skip"}:
         return "skip_opportunity", {}
     return None, {}
-
-
-def _is_candidate_interview_in_progress_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _candidate_interview_in_progress_help_patterns())
 
 
 def build_candidate_stage_detect_node(session):
@@ -253,14 +238,46 @@ def build_candidate_stage_detect_node(session):
                 return state
             is_help = False
         elif state.active_stage == "INTERVIEW_IN_PROGRESS":
-            if _is_candidate_interview_in_progress_help(text):
-                state.intent = "help"
-                state.parsed_input["intent"] = "help"
-            else:
-                state.intent = "stage_completion_input"
+            current_question_text = None
+            try:
+                candidates = CandidateProfilesRepository(session)
+                interviews = InterviewsRepository(session)
+                candidate = candidates.get_active_by_user_id(state.user_id)
+                if candidate is not None:
+                    active_session = interviews.get_active_session_for_candidate(candidate.id)
+                    if active_session is not None:
+                        question = interviews.get_question_by_order(
+                            active_session.id,
+                            active_session.current_question_order,
+                        )
+                        if question is not None:
+                            current_question_text = question.question_text
+            except Exception:
+                current_question_text = None
+
+            decision = safe_interview_in_progress_decision(
+                session,
+                latest_user_message=text,
+                current_question_text=current_question_text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
-                state.proposed_action = "answer_current_question"
-                state.structured_payload = {"answer_text": text.strip()}
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("answer_text"):
+                state.structured_payload = {"answer_text": payload.get("answer_text")}
+            else:
+                state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
             return state
         else:
             is_help = False

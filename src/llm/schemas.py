@@ -107,6 +107,16 @@ class InterviewAnswerParseSchema(BaseModel):
     possible_profile_conflict: bool
 
 
+class InterviewInProgressDecisionSchema(BaseModel):
+    intent: str
+    response_text: Optional[str] = None
+    proposed_action: Optional[str] = None
+    answer_text: Optional[str] = None
+    keep_current_state: bool = True
+    needs_follow_up: bool = False
+    reason_code: Optional[str] = None
+
+
 class BotControllerDecisionSchema(BaseModel):
     intent: str
     tone: str

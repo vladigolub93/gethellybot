@@ -18,6 +18,7 @@ from src.llm.prompts import (
     candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_prompt,
+    interview_in_progress_decision_prompt,
     candidate_summary_review_decision_prompt,
     candidate_summary_edit_prompt,
     deletion_confirmation_prompt,
@@ -48,6 +49,7 @@ from src.llm.schemas import (
     InterviewAnswerParseSchema,
     InterviewEvaluationSchema,
     InterviewFollowupDecisionSchema,
+    InterviewInProgressDecisionSchema,
     InterviewQuestionPlanSchema,
     InterviewSessionConductorTurnSchema,
     ResponseCopywriterSchema,
@@ -747,6 +749,48 @@ def parse_interview_answer_with_llm(
     )
 
 
+def interview_in_progress_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_question_text: str | None = None,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=InterviewInProgressDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("interview", "in_progress_decision"),
+        user_prompt=interview_in_progress_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_question_text=current_question_text,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="interview_in_progress_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "answer_current_question"}:
+        proposed_action = None
+    intent = _clean_text(result.payload.get("intent"), limit=80) or "help"
+    response_text = _clean_text(result.payload.get("response_text"), limit=400)
+    answer_text = _clean_text(result.payload.get("answer_text"), limit=4000)
+    if proposed_action == "answer_current_question" and not answer_text:
+        answer_text = _clean_text(latest_user_message, limit=4000)
+    return LLMResult(
+        payload={
+            "intent": intent,
+            "response_text": response_text,
+            "proposed_action": proposed_action,
+            "answer_text": answer_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def decide_interview_followup_with_llm(
     *,
     question_text: str,
@@ -1364,6 +1408,79 @@ def safe_decide_interview_followup(
         },
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_followup_v1",
+    )
+
+
+def safe_interview_in_progress_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_question_text: str | None = None,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return interview_in_progress_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_question_text=current_question_text,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("interview_in_progress_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Answer the current interview question in your own words. If something is unclear, ask me to clarify one specific part.",
+        "proposed_action": None,
+        "answer_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "interview_in_progress_help_fallback",
+    }
+    if any(
+        token in lowered
+        for token in [
+            "what do you mean",
+            "can you repeat",
+            "can you clarify",
+            "i do not understand",
+            "what exactly are you asking",
+            "how should i answer",
+            "can i answer by voice",
+            "can i send video",
+            "how long",
+        ]
+    ) or (normalized_text.endswith("?") and len(normalized_text) <= 200):
+        return LLMResult(
+            payload=payload,
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
+
+    if normalized_text:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "answer",
+                "response_text": None,
+                "proposed_action": "answer_current_question",
+                "answer_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_answer_fallback",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
+
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_interview_in_progress_decision_v1",
     )
 
 

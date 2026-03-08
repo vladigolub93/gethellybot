@@ -245,6 +245,40 @@ Interview answers:
 """
 
 
+def interview_in_progress_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_question_text: str | None = None,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means during an active interview question.
+
+Valid outcomes:
+- help question or clarification about the current interview question
+- real answer to the current interview question
+
+Rules:
+- treat clarification requests, repeat requests, timing questions, and "how should I answer" questions as help, not as interview answers
+- treat "can I answer by voice/video" questions as help, not as interview answers
+- only propose `answer_current_question` when the message is actually answering the current interview question
+- if the candidate is clearly answering, include the answer in `answer_text`
+- do not invent interview content or rewrite the answer
+
+Current interview question:
+{current_question_text or ""}
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def bot_controller_prompt(
     *,
     role: str | None,

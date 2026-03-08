@@ -1,0 +1,6 @@
+- input: "Can you clarify what exactly you mean?"
+  expected_intent: "help"
+- input: "I designed the API boundary and implemented the background processing myself."
+  expected_action: "answer_current_question"
+- input: "Can I answer by voice?"
+  expected_intent: "help"

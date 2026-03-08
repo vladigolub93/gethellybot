@@ -517,6 +517,35 @@ def test_graph_candidate_stage_handles_interview_in_progress_help() -> None:
     assert "answer" in reply.lower() or "question" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_interview_clarification_as_answer() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp11a", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s1a"))
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u14a",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Can you clarify what exactly you are asking?",
+    )
+
+    assert result is not None
+    assert result.stage == "INTERVIEW_IN_PROGRESS"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_interview_in_progress_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

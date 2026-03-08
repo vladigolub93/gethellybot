@@ -63,6 +63,7 @@ Architectural status note:
 - manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - `INTERVIEW_INVITED` is now graph-owned for invitation guidance and accept/skip execution
 - `INTERVIEW_IN_PROGRESS` is now graph-owned for active text-answer turns and in-stage clarification
+- `INTERVIEW_IN_PROGRESS` text-turn meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification/help questions no longer rely on regex help classification
 - `MANAGER_REVIEW` is now graph-owned for review guidance and approve/reject execution
 - `DELETE_CONFIRMATION` is now graph-owned for confirm/cancel execution and deletion-consequence guidance
 - Telegram now uses graph-first execution as the primary path for all migrated stages and only falls back to the old controller/routing layer as a compatibility path when graph does not return a stage-owned answer
