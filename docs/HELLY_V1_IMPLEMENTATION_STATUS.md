@@ -89,6 +89,7 @@ Architectural status note:
 - a reusable Telegram-user checkpoint tool now combines waiting plus final compact reporting for one live smoke milestone
 - live inspection/report tooling now also exposes the latest raw Telegram message and latest state transition for faster smoke-test debugging
 - graph runtime now emits structured `graph_stage_executed` logs with stage, status, proposed action, acceptance result, and Telegram user context for live Railway smoke verification
+- `graph_stage_executed` now also has explicit test coverage, so the log contract is verified alongside runtime behavior
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status

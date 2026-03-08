@@ -263,6 +263,7 @@ Status:
   - live smoke tooling now also supports one-command wait-plus-report checkpoints
   - inspection/report tooling now also exposes the latest raw Telegram message and latest state transition
   - graph runtime now emits structured `graph_stage_executed` log events for live Railway verification of stage execution
+  - `graph_stage_executed` logging is now covered by explicit unit tests for both entry-stage and candidate-stage execution paths
 
 ### Step 8. Regression and Production Hardening
 
