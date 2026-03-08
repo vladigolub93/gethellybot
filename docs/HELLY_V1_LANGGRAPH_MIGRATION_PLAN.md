@@ -228,6 +228,24 @@ Status:
   - repeated graph-help reply dispatch for migrated stages is also centralized into a shared helper instead of repeated inline `graph reply -> notification` branches
   - repeated compatibility fallback service-to-notification dispatch for summary review, verification, questions, clarification, intake, manager review, and candidate interview paths is also centralized into reusable Telegram helpers
 
+### Step 8. Production Validation
+
+Deliver:
+
+- reusable validation command for Railway API health and Telegram webhook correctness
+- validated live baseline against the deployed production bot
+
+Status:
+
+- in progress
+- implemented:
+  - `scripts/validate-production.sh`
+  - `make validate-production`
+  - live validation run against Railway production:
+    - API `/health` returned `ok`
+    - Telegram webhook URL matched `APP_BASE_URL/telegram/webhook`
+    - `pending_update_count` was `0`
+
 ### Step 8. Regression and Production Hardening
 
 Deliver:

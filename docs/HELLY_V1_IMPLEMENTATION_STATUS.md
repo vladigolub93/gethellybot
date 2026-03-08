@@ -75,6 +75,8 @@ Architectural status note:
 - repeated Telegram transport dispatch for graph-owned candidate summary review, candidate verification, manager clarification, manager intake, and candidate intake actions has also been consolidated into reusable helpers
 - repeated Telegram transport dispatch for graph-owned help replies is now also centralized through a shared helper instead of repeated inline branches
 - repeated Telegram transport dispatch for compatibility fallback service results is now also centralized through reusable helpers across summary review, verification, questions, clarification, intake, manager review, and candidate interview paths
+- a reusable production validation script now checks Railway API health and Telegram webhook registration against the configured `APP_BASE_URL`
+- the reusable production validation script has already been run successfully against the live Railway deployment, confirming `health: ok`, webhook correctness, and zero pending Telegram updates at validation time
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status

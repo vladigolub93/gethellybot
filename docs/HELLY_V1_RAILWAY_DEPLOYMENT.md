@@ -175,6 +175,21 @@ After deploy:
 6. Confirm a notification is returned from the live bot
 7. Confirm `raw_messages`, `notifications`, and `job_execution_logs` are populated in Supabase
 
+Automated baseline validation:
+
+```bash
+set -a
+source .env
+set +a
+make validate-production
+```
+
+This checks:
+
+- API `/health`
+- Telegram webhook registration against `APP_BASE_URL/telegram/webhook`
+- pending webhook update count
+
 ## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker

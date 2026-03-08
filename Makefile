@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test
+.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production
 
 run-api:
 	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -18,6 +18,9 @@ docker-build:
 docker-test:
 	docker build --build-arg INSTALL_DEV=1 -t helly:test .
 	docker run --rm helly:test pytest -q
+
+validate-production:
+	bash scripts/validate-production.sh
 
 db-upgrade:
 	alembic upgrade head
