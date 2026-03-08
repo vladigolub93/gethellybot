@@ -249,6 +249,7 @@ Invalid transition handling:
 - `NEW`
 - `INTAKE_PENDING`
 - `JD_PROCESSING`
+- `VACANCY_SUMMARY_REVIEW`
 - `CLARIFICATION_QA`
 - `OPEN`
 - `MATCHING`
@@ -265,7 +266,8 @@ stateDiagram-v2
     [*] --> NEW
     NEW --> INTAKE_PENDING
     INTAKE_PENDING --> JD_PROCESSING
-    JD_PROCESSING --> CLARIFICATION_QA
+    JD_PROCESSING --> VACANCY_SUMMARY_REVIEW
+    VACANCY_SUMMARY_REVIEW --> CLARIFICATION_QA
     CLARIFICATION_QA --> OPEN
     OPEN --> MATCHING
     MATCHING --> INTERVIEWING
@@ -279,6 +281,7 @@ stateDiagram-v2
     NEW --> DELETED
     INTAKE_PENDING --> DELETED
     JD_PROCESSING --> DELETED
+    VACANCY_SUMMARY_REVIEW --> DELETED
     CLARIFICATION_QA --> DELETED
     OPEN --> DELETED
 ```
@@ -289,7 +292,8 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- |
 | `NEW` | `INTAKE_PENDING` | manager creates vacancy flow | manager identity resolved | send JD request |
 | `INTAKE_PENDING` | `JD_PROCESSING` | manager submits JD artifact | artifact registered | enqueue extraction job |
-| `JD_PROCESSING` | `CLARIFICATION_QA` | extraction succeeds | draft vacancy version created | send clarification prompts |
+| `JD_PROCESSING` | `VACANCY_SUMMARY_REVIEW` | extraction succeeds | persisted `vacancy_text` and draft vacancy version created | send manager-facing vacancy summary |
+| `VACANCY_SUMMARY_REVIEW` | `CLARIFICATION_QA` | manager approves vacancy summary or final corrected version | one correction round max, approval present | send clarification prompts |
 | `CLARIFICATION_QA` | `OPEN` | all required vacancy fields resolved | validation passed | set current version, enqueue matching |
 | `OPEN` | `MATCHING` | matching run starts | vacancy not deleted/closed | create matching run |
 | `MATCHING` | `INTERVIEWING` | at least one invite wave activated | shortlisted candidates exist | create wave, send invites |
@@ -303,11 +307,29 @@ stateDiagram-v2
 
 ## 4.4 Vacancy State Semantics
 
+### `VACANCY_SUMMARY_REVIEW`
+
+Meaning:
+
+- extraction produced a usable draft from persisted `vacancy_text`
+- the hiring manager must approve or correct the manager-facing vacancy summary before clarification begins
+
+Completion criteria:
+
+- manager approves the generated vacancy summary
+- or manager provides exactly one correction round and then approves the final version
+
+Required persisted data:
+
+- raw `vacancy_text`
+- manager-facing `approval_summary_text`
+- structured vacancy summary JSON
+
 ### `CLARIFICATION_QA`
 
 Meaning:
 
-- extraction produced a usable draft
+- vacancy summary review is complete
 - mandatory business filters still require explicit manager answers
 
 Required fields:
@@ -351,6 +373,8 @@ Meaning:
 Examples:
 
 - `INTAKE_PENDING -> OPEN` without parsed/clarified normalized fields
+- `JD_PROCESSING -> CLARIFICATION_QA` without passing through `VACANCY_SUMMARY_REVIEW`
+- `VACANCY_SUMMARY_REVIEW -> CLARIFICATION_QA` without approval or final corrected approval
 - `OPEN -> FILLED` without manager approval
 - `DELETED -> OPEN` unless explicitly supported through restore logic, which v1 does not require
 

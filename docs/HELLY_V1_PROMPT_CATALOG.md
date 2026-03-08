@@ -583,6 +583,41 @@ Recommended model policy:
 
 ## 5.12 `response_copywriter`
 
+## 5.12 `vacancy_summary_review`
+
+Purpose:
+
+- generate the manager-facing review summary that sits between raw vacancy intake and clarification
+
+Primary inputs:
+
+- persisted canonical `vacancy_text`
+- extracted structured vacancy summary JSON
+- detected inconsistency hints if available
+
+Output contract:
+
+- `approval_summary_text`
+- 3-4 concise sentences
+- manager-facing wording
+- no raw internal extraction dump
+- no parser trace
+- no hidden normalization metadata
+
+Validation rules:
+
+- the text shown to the hiring manager must be built from persisted `vacancy_text`, not from unsaved transient input
+- the review text must be concise enough for Telegram delivery
+- the review text must summarize the role, stack, context, and hiring intent without inventing unsupported facts
+- raw parsed vacancy text must not be echoed back as the review artifact
+
+Recommended model policy:
+
+- structured extraction plus separate manager-facing summary field
+- low temperature
+
+## 5.13 `response_copywriter`
+
 Purpose:
 
 - generate concise user-facing natural language while preserving deterministic business outcome

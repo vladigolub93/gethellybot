@@ -427,7 +427,7 @@ Indexes:
 
 Purpose:
 
-- immutable snapshots of AI-derived and clarified vacancy profile data
+- immutable snapshots of AI-derived and clarified vacancy profile data, including manager-facing review summary
 
 Recommended columns:
 
@@ -438,12 +438,14 @@ Recommended columns:
 | `version_no` | `integer` | no | monotonically increasing |
 | `source_type` | `text` | no | `jd_upload`, `voice_submission`, `manual_clarification`, `merge` |
 | `source_file_id` | `uuid` | yes | FK to `files.id` |
-| `extracted_text` | `text` | yes | parsed JD text |
+| `extracted_text` | `text` | yes | canonical parsed raw `vacancy_text` |
 | `transcript_text` | `text` | yes | if source was voice/video |
-| `summary_json` | `jsonb` | no | structured vacancy summary |
+| `approval_summary_text` | `text` | yes | manager-facing 3-4 sentence vacancy summary for review |
+| `summary_json` | `jsonb` | no | structured vacancy summary JSON |
 | `normalization_json` | `jsonb` | yes | normalized filters and matching fields |
 | `inconsistency_json` | `jsonb` | yes | detected risks/conflicts |
-| `approval_status` | `text` | no | `draft`, `active`, `superseded` |
+| `approval_status` | `text` | no | `draft`, `approved`, `active`, `superseded` |
+| `approved_by_manager` | `boolean` | no | explicit manager approval flag |
 | `prompt_version` | `text` | yes | extraction prompt version |
 | `model_name` | `text` | yes | AI model used |
 | `created_at` | `timestamptz` | no | default now |
@@ -453,6 +455,11 @@ Constraints and indexes:
 - unique index on `(vacancy_id, version_no)`
 - index on `(vacancy_id, created_at desc)`
 - partial index on active versions
+
+Design notes:
+
+- `approval_summary_text` is the only summary text that should be shown back to the hiring manager during vacancy summary review
+- raw parsed `vacancy_text` must be persisted for LLM analysis, auditability, and later question generation, but it should not be rendered back to the manager as the review artifact
 
 ## 5.10 `matching_runs`
 
