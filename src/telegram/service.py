@@ -101,6 +101,215 @@ class TelegramUpdateService:
             latest_message_type=normalized_update.content_type,
         )
 
+    def _notify_result(
+        self,
+        *,
+        user_id,
+        template_key: str,
+        text: str,
+        reply_markup=None,
+    ) -> str:
+        return self._notify(
+            user_id,
+            template_key,
+            {
+                "text": text,
+                "reply_markup": reply_markup,
+            },
+        )
+
+    def _handle_candidate_delete_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if stage_result is None or stage_result.stage not in {"READY", "DELETE_CONFIRMATION"}:
+            return None
+        if stage_result.stage == "READY":
+            if not (
+                stage_result.action_accepted
+                and stage_result.proposed_action == "delete_profile"
+            ):
+                return None
+            deletion_text = "delete profile"
+        else:
+            if not (
+                stage_result.action_accepted
+                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
+            ):
+                return None
+            deletion_text = (
+                "Confirm delete profile"
+                if stage_result.proposed_action == "confirm_delete"
+                else "Cancel delete"
+            )
+
+        deletion_result = self.candidate_service.handle_deletion_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=deletion_text,
+        )
+        if deletion_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=deletion_result.notification_template,
+                text=deletion_result.notification_text,
+                reply_markup=deletion_confirmation_keyboard("candidate")
+                if deletion_result.status == "confirmation_required"
+                else None,
+            )
+        ]
+
+    def _handle_manager_delete_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if stage_result is None or stage_result.stage not in {"OPEN", "DELETE_CONFIRMATION"}:
+            return None
+        if stage_result.stage == "OPEN":
+            if not (
+                stage_result.action_accepted
+                and stage_result.proposed_action == "delete_vacancy"
+            ):
+                return None
+            deletion_text = "delete vacancy"
+        else:
+            if not (
+                stage_result.action_accepted
+                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
+            ):
+                return None
+            deletion_text = (
+                "Confirm delete vacancy"
+                if stage_result.proposed_action == "confirm_delete"
+                else "Cancel delete"
+            )
+
+        deletion_result = self.vacancy_service.handle_deletion_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=deletion_text,
+        )
+        if deletion_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=deletion_result.notification_template,
+                text=deletion_result.notification_text,
+                reply_markup=deletion_confirmation_keyboard("vacancy")
+                if deletion_result.status == "confirmation_required"
+                else None,
+            )
+        ]
+
+    def _handle_manager_review_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "MANAGER_REVIEW"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"approve_candidate", "reject_candidate"}
+        ):
+            return None
+        manager_input_text = (
+            "Approve candidate"
+            if stage_result.proposed_action == "approve_candidate"
+            else "Reject candidate"
+        )
+        manager_result = self.evaluation_service.handle_manager_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=manager_input_text,
+        )
+        if manager_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=manager_result.notification_template,
+                text=manager_result.notification_text,
+                reply_markup=manager_review_keyboard()
+                if manager_result.status == "help"
+                else None,
+            )
+        ]
+
+    def _handle_candidate_interaction_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if stage_result is None or not stage_result.action_accepted:
+            return None
+        if stage_result.stage == "INTERVIEW_INVITED" and stage_result.proposed_action in {
+            "accept_interview",
+            "skip_opportunity",
+        }:
+            text = (
+                "Accept interview"
+                if stage_result.proposed_action == "accept_interview"
+                else "Skip opportunity"
+            )
+        elif (
+            stage_result.stage == "INTERVIEW_IN_PROGRESS"
+            and stage_result.proposed_action == "answer_current_question"
+        ):
+            text = (stage_result.structured_payload or {}).get("answer_text") or normalized_update.text
+        elif (
+            stage_result.stage == "QUESTIONS_PENDING"
+            and stage_result.proposed_action == "send_salary_location_work_format"
+        ):
+            questions_result = self.candidate_service.handle_questions_parsed_payload(
+                user=user,
+                raw_message_id=raw_message_id,
+                parsed_payload=stage_result.structured_payload or {},
+            )
+            if questions_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=questions_result.notification_template,
+                    text=questions_result.notification_text,
+                )
+            ]
+        else:
+            return None
+
+        interview_result = self.interview_service.handle_candidate_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            content_type=normalized_update.content_type,
+            text=text,
+            file_id=file_id,
+        )
+        if interview_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=interview_result.notification_template,
+                text=interview_result.notification_text,
+            )
+        ]
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -307,67 +516,14 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type == "text":
             stage_result = candidate_stage_result
-            if (
-                stage_result is not None
-                and stage_result.stage == "READY"
-                and stage_result.action_accepted
-                and stage_result.proposed_action == "delete_profile"
-            ):
-                deletion_result = self.candidate_service.handle_deletion_message(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text="delete profile",
-                )
-                if deletion_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            deletion_result.notification_template,
-                            {
-                                "text": deletion_result.notification_text,
-                                "reply_markup": deletion_confirmation_keyboard("candidate")
-                                if deletion_result.status == "confirmation_required"
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
-            if (
-                stage_result is not None
-                and stage_result.stage == "DELETE_CONFIRMATION"
-                and stage_result.action_accepted
-                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
-            ):
-                deletion_input_text = (
-                    "Confirm delete profile"
-                    if stage_result.proposed_action == "confirm_delete"
-                    else "Cancel delete"
-                )
-                deletion_result = self.candidate_service.handle_deletion_message(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text=deletion_input_text,
-                )
-                if deletion_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            deletion_result.notification_template,
-                            {
-                                "text": deletion_result.notification_text,
-                                "reply_markup": deletion_confirmation_keyboard("candidate")
-                                if deletion_result.status == "confirmation_required"
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
-            if (
-                stage_result is not None
-                and stage_result.stage == "DELETE_CONFIRMATION"
-                and not stage_result.action_accepted
-                and stage_result.reply_text
-            ):
+            deletion_templates = self._handle_candidate_delete_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if deletion_templates is not None:
+                return deletion_templates
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION" and not stage_result.action_accepted and stage_result.reply_text:
                 templates.append(
                     self._notify(
                         user.id,
@@ -403,67 +559,14 @@ class TelegramUpdateService:
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
             stage_result = manager_stage_result
-            if (
-                stage_result is not None
-                and stage_result.stage == "OPEN"
-                and stage_result.action_accepted
-                and stage_result.proposed_action == "delete_vacancy"
-            ):
-                deletion_result = self.vacancy_service.handle_deletion_message(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text="delete vacancy",
-                )
-                if deletion_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            deletion_result.notification_template,
-                            {
-                                "text": deletion_result.notification_text,
-                                "reply_markup": deletion_confirmation_keyboard("vacancy")
-                                if deletion_result.status == "confirmation_required"
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
-            if (
-                stage_result is not None
-                and stage_result.stage == "DELETE_CONFIRMATION"
-                and stage_result.action_accepted
-                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
-            ):
-                deletion_input_text = (
-                    "Confirm delete vacancy"
-                    if stage_result.proposed_action == "confirm_delete"
-                    else "Cancel delete"
-                )
-                deletion_result = self.vacancy_service.handle_deletion_message(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text=deletion_input_text,
-                )
-                if deletion_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            deletion_result.notification_template,
-                            {
-                                "text": deletion_result.notification_text,
-                                "reply_markup": deletion_confirmation_keyboard("vacancy")
-                                if deletion_result.status == "confirmation_required"
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
-            if (
-                stage_result is not None
-                and stage_result.stage == "DELETE_CONFIRMATION"
-                and not stage_result.action_accepted
-                and stage_result.reply_text
-            ):
+            deletion_templates = self._handle_manager_delete_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if deletion_templates is not None:
+                return deletion_templates
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION" and not stage_result.action_accepted and stage_result.reply_text:
                 templates.append(
                     self._notify(
                         user.id,
@@ -499,36 +602,13 @@ class TelegramUpdateService:
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
             stage_result = manager_stage_result
-            if (
-                stage_result is not None
-                and stage_result.stage == "MANAGER_REVIEW"
-                and stage_result.action_accepted
-                and stage_result.proposed_action in {"approve_candidate", "reject_candidate"}
-            ):
-                manager_input_text = (
-                    "Approve candidate"
-                    if stage_result.proposed_action == "approve_candidate"
-                    else "Reject candidate"
-                )
-                manager_result = self.evaluation_service.handle_manager_message(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    text=manager_input_text,
-                )
-                if manager_result is not None:
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            manager_result.notification_template,
-                            {
-                                "text": manager_result.notification_text,
-                                "reply_markup": manager_review_keyboard()
-                                if manager_result.status == "help"
-                                else None,
-                            },
-                        )
-                    )
-                    return templates
+            manager_templates = self._handle_manager_review_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if manager_templates is not None:
+                return manager_templates
             assistance_text = self._resolve_graph_help_text(
                 user=user,
                 latest_user_message=normalized_update.text or "",
@@ -566,75 +646,15 @@ class TelegramUpdateService:
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
                 stage_result = candidate_stage_result
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "INTERVIEW_INVITED"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action in {"accept_interview", "skip_opportunity"}
-                ):
-                    interview_input_text = (
-                        "Accept interview"
-                        if stage_result.proposed_action == "accept_interview"
-                        else "Skip opportunity"
-                    )
-                    interview_result = self.interview_service.handle_candidate_message(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        content_type=normalized_update.content_type,
-                        text=interview_input_text,
-                        file_id=file_id,
-                    )
-                    if interview_result is not None:
-                        templates.append(
-                            self._notify(
-                                user.id,
-                                interview_result.notification_template,
-                                {"text": interview_result.notification_text},
-                            )
-                        )
-                        return templates
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "INTERVIEW_IN_PROGRESS"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action == "answer_current_question"
-                ):
-                    interview_result = self.interview_service.handle_candidate_message(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        content_type=normalized_update.content_type,
-                        text=(stage_result.structured_payload or {}).get("answer_text") or normalized_update.text,
-                        file_id=file_id,
-                    )
-                    if interview_result is not None:
-                        templates.append(
-                            self._notify(
-                                user.id,
-                                interview_result.notification_template,
-                                {"text": interview_result.notification_text},
-                            )
-                        )
-                        return templates
-                if (
-                    stage_result is not None
-                    and stage_result.stage == "QUESTIONS_PENDING"
-                    and stage_result.action_accepted
-                    and stage_result.proposed_action == "send_salary_location_work_format"
-                ):
-                    questions_result = self.candidate_service.handle_questions_parsed_payload(
-                        user=user,
-                        raw_message_id=raw_message_id,
-                        parsed_payload=stage_result.structured_payload or {},
-                    )
-                    if questions_result is not None:
-                        templates.append(
-                            self._notify(
-                                user.id,
-                                questions_result.notification_template,
-                                {"text": questions_result.notification_text},
-                            )
-                        )
-                        return templates
+                candidate_interaction_templates = self._handle_candidate_interaction_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if candidate_interaction_templates is not None:
+                    return candidate_interaction_templates
                 assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",

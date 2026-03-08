@@ -358,6 +358,7 @@ Current execution note:
   - entry -> candidate onboarding -> CV/questions handoff
   - entry -> manager onboarding -> JD/clarification handoff
   - interview accept/answer and manager review approval handoff
+- candidate delete dispatch, manager delete dispatch, manager review dispatch, and candidate interaction dispatch are now extracted into reusable Telegram transport helpers instead of duplicated inline routing branches
 - the next rebuild target is Phase 9 and Phase 10 cleanup work: removing remaining legacy controller ownership, simplifying Telegram routing around graph-first execution, and expanding graph-native end-to-end coverage
 
 ## 9. Definition of Done
