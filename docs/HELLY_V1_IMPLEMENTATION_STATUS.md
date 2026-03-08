@@ -492,6 +492,7 @@ Recent stage-ownership progress:
 - the second high-impact prompt rewrite pass is now applied to `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, `READY`, `INTAKE_PENDING`, and `CLARIFICATION_QA`, improving answer-first behavior and reducing ATS-like or support-bot phrasing in those stages.
 - the third high-impact prompt rewrite pass is now applied to `OPEN`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`, improving conversational warmth and decision-stage clarity without changing their action contracts.
 - notification delivery now has a first multi-message pacing foundation: long user-facing notifications can be split into multiple shorter Telegram messages while keeping reply keyboards on the final message, which creates a cleaner explanation-plus-CTA rhythm.
+- explicit multi-message choreography is now applied to the most visible review/invitation notifications, including candidate summary review, vacancy summary review, interview invitation, and manager review handoff.
 
 ## 7. Production Readiness Assessment
 

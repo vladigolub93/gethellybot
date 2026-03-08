@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 
 MAX_TELEGRAM_MESSAGE_CHARS = 900
 SOFT_SPLIT_CHARS = 420
@@ -154,6 +156,21 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
 
 
 def render_notification_messages(*, template_key: str, payload: dict) -> list[str]:
+    payload = payload or {}
+    explicit_messages = [
+        str(item).strip()
+        for item in (payload.get("messages") or [])
+        if str(item).strip()
+    ]
+    if explicit_messages:
+        remaining_payload = deepcopy(payload)
+        remaining_payload.pop("messages", None)
+        remaining_payload.pop("text", None)
+        remainder = render_notification_text(template_key=template_key, payload=remaining_payload)
+        if remainder and remainder != f"Helly notification: {template_key}":
+            explicit_messages.append(remainder)
+        return explicit_messages
+
     rendered = render_notification_text(template_key=template_key, payload=payload)
     paragraphs = [part.strip() for part in rendered.split("\n\n") if part.strip()]
     if not paragraphs:

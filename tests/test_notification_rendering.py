@@ -125,6 +125,26 @@ def test_render_notification_reply_markup_returns_payload_markup() -> None:
     assert rendered == reply_markup
 
 
+def test_render_notification_messages_prefers_explicit_payload_messages() -> None:
+    rendered = render_notification_messages(
+        template_key="candidate_summary_ready_for_review",
+        payload={
+            "text": "Should not be rendered as the first block.",
+            "messages": [
+                "Quick check.",
+                "I turned your CV into a short summary below.",
+            ],
+            "summary": {
+                "approval_summary_text": "You are Ivan, a backend engineer with 6 years of experience.",
+            },
+        },
+    )
+
+    assert rendered[0] == "Quick check."
+    assert rendered[1] == "I turned your CV into a short summary below."
+    assert rendered[-1] == "You are Ivan, a backend engineer with 6 years of experience."
+
+
 def test_render_notification_messages_splits_long_paragraph_groups() -> None:
     long_summary = (
         "You are Ivan, a Senior Backend Engineer with 6 years of experience building backend APIs and platform systems. "

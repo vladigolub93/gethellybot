@@ -126,6 +126,10 @@ class EvaluationService:
                 template_key="manager_candidate_review_ready",
                 payload_json={
                     "text": self._copy("A qualified candidate is ready for review. Use the buttons below to approve or reject."),
+                    "messages": [
+                        self._copy("A qualified candidate is ready for review."),
+                        self._copy("I put the candidate package below. When you're ready, use the buttons to approve or reject."),
+                    ],
                     "candidate_package": build_candidate_package(
                         candidate_user=candidate_user,
                         candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},

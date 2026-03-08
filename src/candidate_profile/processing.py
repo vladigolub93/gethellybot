@@ -118,6 +118,11 @@ class CandidateProcessingService:
             template_key="candidate_summary_ready_for_review",
             payload_json={
                 "text": "Does this summary look correct, or would you like to change anything?",
+                "messages": [
+                    "Quick check.",
+                    "I turned your CV into a short summary below.",
+                    "If anything is off, tell me what to fix. If it looks good, approve it.",
+                ],
                 "summary": summary,
                 "reply_markup": summary_review_keyboard(edit_allowed=True),
             },
@@ -178,6 +183,11 @@ class CandidateProcessingService:
             template_key="candidate_summary_ready_for_review",
             payload_json={
                 "text": "Here is your updated summary. This is the final version for approval.",
+                "messages": [
+                    "Done.",
+                    "I updated the summary based on your note.",
+                    "This is the final version for approval.",
+                ],
                 "summary": merged_summary,
                 "reply_markup": summary_review_keyboard(edit_allowed=False),
             },

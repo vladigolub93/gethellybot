@@ -166,6 +166,12 @@ class InterviewService:
                     "text": self.messaging.compose_interview_invitation(
                         role_title=getattr(vacancy, "role_title", None)
                     ),
+                    "messages": [
+                        self.messaging.compose_interview_invitation(
+                            role_title=getattr(vacancy, "role_title", None)
+                        ),
+                        "If you want, we can do it right here in chat.",
+                    ],
                     "reply_markup": interview_invitation_keyboard(),
                 },
             )
