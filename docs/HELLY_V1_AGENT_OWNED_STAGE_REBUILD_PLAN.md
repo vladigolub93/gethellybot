@@ -55,7 +55,6 @@ Rules for the rebuild:
 ## 4.1 Entry
 
 - `CONTACT_REQUIRED`
-- `CONSENT_REQUIRED`
 - `ROLE_SELECTION`
 
 ## 4.2 Candidate
@@ -69,6 +68,7 @@ Rules for the rebuild:
 ## 4.3 Hiring Manager
 
 - `INTAKE_PENDING`
+- `VACANCY_SUMMARY_REVIEW`
 - `CLARIFICATION_QA`
 - `OPEN`
 
@@ -164,13 +164,11 @@ Exit:
 Tasks:
 
 1. Implement `contact_required_agent` as full stage owner.
-2. Implement `consent_required_agent` as full stage owner.
-3. Implement `role_selection_agent` as full stage owner.
-4. Replace legacy entry routing decisions with graph-first execution.
-5. Add tests for:
+2. Implement `role_selection_agent` as full stage owner.
+3. Replace legacy entry routing decisions with graph-first execution.
+4. Add tests for:
    - why contact is needed
    - can I skip
-   - why consent is needed
    - candidate vs hiring manager explanation
 
 Exit:
@@ -207,10 +205,15 @@ Exit:
 Tasks:
 
 1. Implement `vacancy_intake_agent`.
-2. Implement `vacancy_clarification_agent`.
-3. Implement `vacancy_open_agent`.
-4. Ensure manager can provide job details through multiple allowed formats.
-5. Ensure the clarification agent can collect missing fields through natural conversation.
+2. Implement `vacancy_summary_review_agent`.
+3. Implement `vacancy_clarification_agent`.
+4. Implement `vacancy_open_agent`.
+5. Ensure manager can provide job details through multiple allowed formats.
+6. Persist canonical `vacancy_text` before downstream analysis.
+7. Generate and persist a manager-facing 3-4 sentence vacancy summary from persisted `vacancy_text`.
+8. Ask exactly one manager review question for that summary.
+9. Allow exactly one vacancy-summary correction round.
+10. Ensure the clarification agent starts only after vacancy summary approval.
 
 Exit:
 

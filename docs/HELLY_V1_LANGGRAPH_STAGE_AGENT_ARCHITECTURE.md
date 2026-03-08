@@ -183,7 +183,6 @@ For each incoming user message:
 ## 6.1 Entry
 
 - `contact_required_agent`
-- `consent_required_agent`
 - `role_selection_agent`
 
 ## 6.2 Candidate
@@ -197,6 +196,7 @@ For each incoming user message:
 ## 6.3 Hiring Manager
 
 - `vacancy_intake_agent`
+- `vacancy_summary_review_agent`
 - `vacancy_clarification_agent`
 - `vacancy_open_agent`
 

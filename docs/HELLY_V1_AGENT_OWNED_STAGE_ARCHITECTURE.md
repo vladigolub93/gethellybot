@@ -88,7 +88,6 @@ The intended mapping is:
 Examples:
 
 - `CONTACT_REQUIRED` -> `contact_required_agent`
-- `CONSENT_REQUIRED` -> `consent_required_agent`
 - `ROLE_SELECTION` -> `role_selection_agent`
 - `CV_PENDING` -> `candidate_cv_agent`
 - `SUMMARY_REVIEW` -> `candidate_summary_review_agent`
@@ -96,6 +95,7 @@ Examples:
 - `VERIFICATION_PENDING` -> `candidate_verification_agent`
 - `READY` -> `candidate_ready_agent`
 - `INTAKE_PENDING` -> `vacancy_intake_agent`
+- `VACANCY_SUMMARY_REVIEW` -> `vacancy_summary_review_agent`
 - `CLARIFICATION_QA` -> `vacancy_clarification_agent`
 - `OPEN` -> `vacancy_open_agent`
 - `INTERVIEW_INVITED` -> `interview_invite_agent`
@@ -160,8 +160,8 @@ All stage agents must use a common Helly knowledge base as grounding.
 This knowledge base should answer questions like:
 
 - why Helly needs contact
+- when username is enough and when shared contact is still needed
 - when contact details are shared
-- why consent is required
 - how candidate visibility works
 - how manager visibility works
 - when interviews happen
@@ -190,7 +190,7 @@ Examples:
 
 Goal:
 
-- collect Telegram contact share
+- collect a usable Telegram contact channel only when the user has no Telegram username available
 
 Allowed alternatives:
 
@@ -200,7 +200,7 @@ Allowed alternatives:
 
 Completion:
 
-- valid Telegram contact object received
+- valid Telegram contact object received when no username is available
 
 ### 9.2 `CV_PENDING`
 
@@ -220,7 +220,23 @@ Completion:
 
 - canonical `cv_text` can be produced and persisted
 
-### 9.3 `CLARIFICATION_QA`
+### 9.3 `VACANCY_SUMMARY_REVIEW`
+
+Goal:
+
+- show the manager a concise vacancy summary built from persisted `vacancy_text`
+
+Allowed alternatives:
+
+- approve the summary
+- request one correction round
+- ask what will happen after approval
+
+Completion:
+
+- approved vacancy summary ready for clarification collection
+
+### 9.4 `CLARIFICATION_QA`
 
 Goal:
 
@@ -258,6 +274,24 @@ Each stage graph should usually contain bounded nodes such as:
 - context load
 - knowledge grounding
 - intent analysis
+
+## 11. Supervisor/Router Rule
+
+Helly does need one graph-level coordinator, but it should be a thin supervisor/router, not a global free-form conversational agent.
+
+The supervisor/router should:
+
+- resolve the active persisted stage
+- select the correct bounded stage agent
+- pass graph state and context into that agent
+- accept structured stage output
+- route validated actions into backend services
+
+The supervisor/router should not:
+
+- improvise product policy on its own
+- behave like an always-on chat agent above all stages
+- replace stage agents as the main conversational brain
 - reply generation
 - structured payload extraction
 - completion check
