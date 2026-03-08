@@ -479,6 +479,7 @@ Recent stage-ownership progress:
 - candidate and vacancy services now use explicit `execute_*` action methods as the primary graph-owned handoff path for summary review and deletion; raw-text handlers remain compatibility wrappers only.
 - a dedicated intent-ownership regression matrix now verifies that free-form help questions do not accidentally trigger transitions and that summary-change actions only arise from explicit correction intent.
 - live-validation tooling now includes `validate_stage_help_safety.py`, which can assert from Supabase snapshots that a help question did not incorrectly create a summary-edit or other stage-completion side effect.
+- live-validation tooling now also includes `validate_no_post_message_transition.py`, which can assert that the latest inbound Telegram message did not produce a newer state transition unless one was explicitly expected.
 - `TelegramUpdateService` no longer uses raw-text compatibility fallback in candidate summary review, manager summary review, or manager review paths after a graph-owned stage decision; those segments now wait for explicit stage-agent output.
 
 ## 7. Production Readiness Assessment

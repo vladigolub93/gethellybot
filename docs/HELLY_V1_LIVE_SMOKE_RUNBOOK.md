@@ -37,6 +37,8 @@ Useful tools:
   - `.venv/bin/python scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
 - validate that a help question did not trigger an incorrect transition:
   - `.venv/bin/python scripts/validate_stage_help_safety.py --telegram-user-id <id> ...`
+- validate that the latest inbound message did not produce a newer state transition:
+  - `.venv/bin/python scripts/validate_no_post_message_transition.py --telegram-user-id <id> ...`
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -216,6 +218,17 @@ set +a
   --expect-candidate-state SUMMARY_REVIEW \
   --expect-latest-inbound-contains "How long" \
   --forbid-candidate-version-source-type summary_user_edit
+```
+
+Optional stricter check:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_no_post_message_transition.py \
+  --telegram-user-id <candidate-id> \
+  --expect-inbound-contains "How long"
 ```
 
 Manager vacancy summary review:
