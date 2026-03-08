@@ -20,12 +20,30 @@ class FakeCandidateProfilesRepository:
         return self.candidate
 
 
+class FakeInterviewsRepository:
+    def __init__(self, active_session=None):
+        self.active_session = active_session
+
+    def get_active_session_for_candidate(self, candidate_profile_id):
+        return self.active_session
+
+
+class FakeMatchesRepository:
+    def __init__(self, invited_match=None):
+        self.invited_match = invited_match
+
+    def get_latest_invited_for_candidate(self, candidate_profile_id):
+        return self.invited_match
+
+
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp1", state="CV_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u4",
@@ -50,6 +68,8 @@ def test_graph_candidate_stage_accepts_real_cv_text_transition() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp2", state="CV_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u5",
@@ -78,6 +98,8 @@ def test_graph_candidate_stage_handles_summary_review_help() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp3", state="SUMMARY_REVIEW")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u6",
@@ -102,6 +124,8 @@ def test_graph_candidate_stage_accepts_summary_review_correction() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp4", state="SUMMARY_REVIEW")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u7",
@@ -129,6 +153,8 @@ def test_graph_candidate_stage_accepts_summary_approve() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp4a", state="SUMMARY_REVIEW")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u7a",
@@ -155,6 +181,8 @@ def test_graph_candidate_stage_handles_questions_pending_help() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp5", state="QUESTIONS_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u8",
@@ -179,6 +207,8 @@ def test_graph_candidate_stage_accepts_real_questions_answer() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp6", state="QUESTIONS_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u9",
@@ -208,6 +238,8 @@ def test_graph_candidate_stage_handles_verification_pending_help() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp7", state="VERIFICATION_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u10",
@@ -232,6 +264,8 @@ def test_graph_candidate_stage_accepts_verification_video_submission() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp7a", state="VERIFICATION_PENDING")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u10a",
@@ -261,6 +295,8 @@ def test_graph_candidate_stage_handles_ready_help() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp8", state="READY")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u11",
@@ -285,6 +321,8 @@ def test_graph_candidate_stage_accepts_ready_delete_intent() -> None:
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp8a", state="READY")
     )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
         id="u11a",
@@ -303,4 +341,59 @@ def test_graph_candidate_stage_accepts_ready_delete_intent() -> None:
     assert result.stage == "READY"
     assert result.action_accepted is True
     assert result.proposed_action == "delete_profile"
+    assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_candidate_stage_handles_interview_invited_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp9", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(invited_match=SimpleNamespace(id="m1"))
+
+    user = SimpleNamespace(
+        id="u12",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="How long does the interview take and can I answer by voice?",
+    )
+
+    assert reply is not None
+    assert "interview" in reply.lower() or "voice" in reply.lower()
+
+
+def test_graph_candidate_stage_accepts_interview_invite_accept() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp10", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(invited_match=SimpleNamespace(id="m2"))
+
+    user = SimpleNamespace(
+        id="u13",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Accept interview",
+    )
+
+    assert result is not None
+    assert result.stage == "INTERVIEW_INVITED"
+    assert result.action_accepted is True
+    assert result.proposed_action == "accept_interview"
     assert result.stage_status == "ready_for_transition"

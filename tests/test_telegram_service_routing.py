@@ -1808,6 +1808,49 @@ def test_interview_accept_passthrough_reaches_interview_handler() -> None:
     assert service.interview_service.calls
 
 
+def test_graph_interview_invited_stage_can_own_accept() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTERVIEW_INVITED",
+            reply_text="Thanks. I will start the interview.",
+            stage_status="ready_for_transition",
+            proposed_action="accept_interview",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "accept_interview"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="accepted",
+        notification_template="candidate_interview_started",
+        notification_text="Interview started.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u9x",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw9x",
+        build_update(text="Accept interview"),
+    )
+
+    assert templates == ["candidate_interview_started"]
+    assert service.interview_service.calls
+    assert service.interview_service.calls[-1]["text"] == "Accept interview"
+
+
 def test_interview_accept_alias_passthrough_reaches_interview_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1926,6 +1969,49 @@ def test_interview_skip_passthrough_reaches_interview_handler() -> None:
 
     assert templates == ["candidate_interview_skipped"]
     assert service.interview_service.calls
+
+
+def test_graph_interview_invited_stage_can_own_skip() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTERVIEW_INVITED",
+            reply_text="Understood. I will skip this opportunity.",
+            stage_status="ready_for_transition",
+            proposed_action="skip_opportunity",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "skip_opportunity"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="skipped",
+        notification_template="candidate_interview_skipped",
+        notification_text="Opportunity skipped.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10x",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10x",
+        build_update(text="Skip opportunity"),
+    )
+
+    assert templates == ["candidate_interview_skipped"]
+    assert service.interview_service.calls
+    assert service.interview_service.calls[-1]["text"] == "Skip opportunity"
 
 
 def test_interview_skip_alias_passthrough_reaches_interview_handler() -> None:

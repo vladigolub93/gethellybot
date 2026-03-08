@@ -521,6 +521,33 @@ class TelegramUpdateService:
                 )
                 if (
                     stage_result is not None
+                    and stage_result.stage == "INTERVIEW_INVITED"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action in {"accept_interview", "skip_opportunity"}
+                ):
+                    interview_input_text = (
+                        "Accept interview"
+                        if stage_result.proposed_action == "accept_interview"
+                        else "Skip opportunity"
+                    )
+                    interview_result = self.interview_service.handle_candidate_message(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        content_type=normalized_update.content_type,
+                        text=interview_input_text,
+                        file_id=file_id,
+                    )
+                    if interview_result is not None:
+                        templates.append(
+                            self._notify(
+                                user.id,
+                                interview_result.notification_template,
+                                {"text": interview_result.notification_text},
+                            )
+                        )
+                        return templates
+                if (
+                    stage_result is not None
                     and stage_result.stage == "QUESTIONS_PENDING"
                     and stage_result.action_accepted
                     and stage_result.proposed_action == "send_salary_location_work_format"

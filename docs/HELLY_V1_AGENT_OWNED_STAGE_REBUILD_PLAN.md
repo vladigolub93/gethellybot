@@ -339,7 +339,8 @@ Current execution note:
 - `INTAKE_PENDING` is now implemented as a graph-owned manager text-intake stage
 - `CLARIFICATION_QA` is now implemented as a graph-owned manager clarification stage
 - `OPEN` is now implemented as a graph-owned manager status/delete-initiation stage
-- the next rebuild target is the interaction flow, starting with `INTERVIEW_INVITED`
+- `INTERVIEW_INVITED` is now implemented as a graph-owned invitation-decision stage
+- the next rebuild target is the rest of interaction flow, starting with `INTERVIEW_IN_PROGRESS`
 
 ## 9. Definition of Done
 

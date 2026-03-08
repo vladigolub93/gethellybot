@@ -95,6 +95,19 @@ def _candidate_ready_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _candidate_interview_invited_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat is this\b",
+        r"\bhow long\b",
+        r"\bvoice\b",
+        r"\bvideo\b",
+        r"\btext\b",
+        r"\bwhat happens if i skip\b",
+        r"\bwhat happens after\b",
+        r"\bwhy was i invited\b",
+    )
+
+
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -178,6 +191,20 @@ def _detect_candidate_ready_action(text: str) -> tuple[str | None, dict]:
     return None, {}
 
 
+def _is_candidate_interview_invited_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _candidate_interview_invited_help_patterns())
+
+
+def _detect_candidate_interview_invited_action(text: str) -> tuple[str | None, dict]:
+    command = normalize_command_text(text or "")
+    if command in {"accept interview", "accept"}:
+        return "accept_interview", {}
+    if command in {"skip opportunity", "skip"}:
+        return "skip_opportunity", {}
+    return None, {}
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
@@ -223,6 +250,19 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             state.parsed_input["intent"] = "help"
             return state
         proposed_action, payload = _detect_candidate_ready_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+            return state
+        is_help = False
+    elif state.active_stage == "INTERVIEW_INVITED":
+        if _is_candidate_interview_invited_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_candidate_interview_invited_action(text)
         if proposed_action is not None:
             state.intent = "stage_completion_input"
             state.parsed_input["intent"] = "stage_completion_input"
@@ -302,6 +342,15 @@ def build_candidate_stage_reply_node(session):
         if state.active_stage == "READY" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
             state.reply_text = "I can help you remove the profile if you want to stop using Helly."
+            state.confidence = 0.9
+            return state
+
+        if state.active_stage == "INTERVIEW_INVITED" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            if state.proposed_action == "accept_interview":
+                state.reply_text = "Thanks. I will start the interview."
+            else:
+                state.reply_text = "Understood. I will skip this opportunity."
             state.confidence = 0.9
             return state
 

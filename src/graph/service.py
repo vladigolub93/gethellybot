@@ -5,6 +5,8 @@ from typing import Any
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
+from src.db.repositories.interviews import InterviewsRepository
+from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.graph.bootstrap import register_foundation_stage_graphs
 from src.graph.registry import registry
@@ -44,13 +46,23 @@ class StageAgentExecutionResult:
 
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
-    CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING", "VERIFICATION_PENDING", "READY"}
+    CANDIDATE_STAGES = {
+        "CV_PENDING",
+        "SUMMARY_REVIEW",
+        "QUESTIONS_PENDING",
+        "VERIFICATION_PENDING",
+        "READY",
+        "INTERVIEW_INVITED",
+        "INTERVIEW_IN_PROGRESS",
+    }
     MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA", "OPEN"}
 
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
         self.consents = UserConsentsRepository(session)
+        self.interviews = InterviewsRepository(session)
+        self.matches = MatchingRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.router = StageGraphRouter()
         register_foundation_stage_graphs()
@@ -174,6 +186,12 @@ class LangGraphStageAgentService:
         candidate = self.candidates.get_active_by_user_id(user.id)
         if candidate is None:
             return None
+        active_session = self.interviews.get_active_session_for_candidate(candidate.id)
+        if active_session is not None:
+            return "INTERVIEW_IN_PROGRESS"
+        invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
+        if invited_match is not None:
+            return "INTERVIEW_INVITED"
         if candidate.state in self.CANDIDATE_STAGES:
             return candidate.state
         return None

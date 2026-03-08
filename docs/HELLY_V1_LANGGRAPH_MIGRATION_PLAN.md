@@ -193,6 +193,14 @@ Exit:
 
 - invitation, interview, review, and deletion confirmation are stage-agent owned
 
+Status:
+
+- in progress
+- implemented:
+  - graph-owned execution for `INTERVIEW_INVITED`
+  - graph-driven validation and backend handoff for `accept_interview`
+  - graph-driven validation and backend handoff for `skip_opportunity`
+
 ### Step 7. Routing Simplification
 
 Deliver:
