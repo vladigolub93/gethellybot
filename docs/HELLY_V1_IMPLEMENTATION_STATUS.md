@@ -65,6 +65,7 @@ Architectural status note:
 - graph-native integration coverage now includes stage-resolution priority tests for candidate and manager families, verifying that higher-priority interaction stages override lower-priority status stages in the expected order
 - Telegram transport now reuses a single graph stage result per migrated candidate/manager update instead of re-running graph execution in each downstream branch
 - migrated candidate, manager, interview, review, and delete help paths no longer use `bot_controller` as a conversational fallback; these in-stage replies are now graph-owned
+- entry-stage consent and role-selection execution no longer use legacy raw-text command branches as the primary execution path
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status

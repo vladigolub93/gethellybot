@@ -471,6 +471,16 @@ def test_contact_share_with_existing_consent_requests_role() -> None:
 def test_consent_message_grants_consent_and_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONSENT_REQUIRED",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="reply_i_agree",
+            action_accepted=True,
+        ),
+    )
 
     user = SimpleNamespace(
         id="g4b",
@@ -489,6 +499,16 @@ def test_consent_message_grants_consent_and_requests_role() -> None:
 def test_agree_alias_grants_consent_and_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONSENT_REQUIRED",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="reply_i_agree",
+            action_accepted=True,
+        ),
+    )
 
     user = SimpleNamespace(
         id="g4d",
@@ -507,6 +527,16 @@ def test_agree_alias_grants_consent_and_requests_role() -> None:
 def test_consent_alias_grants_consent_and_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONSENT_REQUIRED",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="reply_i_agree",
+            action_accepted=True,
+        ),
+    )
 
     user = SimpleNamespace(
         id="g4e",
@@ -525,6 +555,16 @@ def test_consent_alias_grants_consent_and_requests_role() -> None:
 def test_consent_with_punctuation_grants_consent_and_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONSENT_REQUIRED",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="reply_i_agree",
+            action_accepted=True,
+        ),
+    )
 
     user = SimpleNamespace(
         id="g4f",
@@ -543,6 +583,16 @@ def test_consent_with_punctuation_grants_consent_and_requests_role() -> None:
 def test_consent_before_contact_requests_contact() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONTACT_REQUIRED",
+            reply_text="Please share your contact using the button below before confirming consent.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
+    )
 
     user = SimpleNamespace(
         id="g4c",
@@ -561,6 +611,16 @@ def test_consent_before_contact_requests_contact() -> None:
 def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONTACT_REQUIRED",
+            reply_text="Please share your contact using the button below before choosing a role.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 
@@ -581,6 +641,16 @@ def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() 
 def test_role_selection_without_consent_requests_consent_and_blocks_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="CONSENT_REQUIRED",
+            reply_text="Please confirm consent using the button below before choosing a role.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 
@@ -601,6 +671,16 @@ def test_role_selection_without_consent_requests_consent_and_blocks_onboarding()
 def test_candidate_role_selection_starts_candidate_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="ROLE_SELECTION",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="candidate",
+            action_accepted=True,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 
@@ -682,6 +762,16 @@ def test_graph_entry_stage_can_start_candidate_onboarding() -> None:
 def test_uppercase_candidate_role_selection_starts_candidate_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="ROLE_SELECTION",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="candidate",
+            action_accepted=True,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 
@@ -702,6 +792,16 @@ def test_uppercase_candidate_role_selection_starts_candidate_onboarding() -> Non
 def test_manager_role_selection_starts_manager_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="ROLE_SELECTION",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="hiring_manager",
+            action_accepted=True,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 
@@ -723,6 +823,16 @@ def test_manager_role_selection_starts_manager_onboarding() -> None:
 def test_uppercase_manager_role_selection_starts_manager_onboarding() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
+    service.stage_agents = FakeStageAgentService(
+        None,
+        entry_result=StageAgentExecutionResult(
+            stage="ROLE_SELECTION",
+            reply_text=None,
+            stage_status="completed",
+            proposed_action="hiring_manager",
+            action_accepted=True,
+        ),
+    )
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
 

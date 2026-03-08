@@ -331,6 +331,7 @@ Current execution note:
 - Phase 1 is complete
 - Phase 8 is materially complete for all major user-facing stages
 - Phase 9 is in progress, with graph-first execution now primary in migrated Telegram paths
+- entry consent and role-selection execution no longer depends on legacy raw-text routing branches
 - entry flow in Phase 4 is now implemented as graph-owned execution for text-based onboarding interactions
 - `CV_PENDING` is now implemented as a graph-owned text stage
 - `SUMMARY_REVIEW` is now implemented as a graph-owned approval/correction stage
