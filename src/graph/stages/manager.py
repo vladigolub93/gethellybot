@@ -5,6 +5,7 @@ import re
 from src.graph.state import HellyGraphState
 from src.llm.service import safe_parse_vacancy_clarifications, safe_state_assistance_decision
 from src.orchestrator.policy import resolve_state_context
+from src.shared.text import normalize_command_text
 
 
 def _manager_intake_help_patterns() -> tuple[str, ...]:
@@ -44,6 +45,19 @@ def _manager_clarification_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _manager_open_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat happens now\b",
+        r"\bwhat next\b",
+        r"\bwhen .*candidate\b",
+        r"\bwhen .*match\b",
+        r"\bhow .*matching\b",
+        r"\bdo i need to do anything\b",
+        r"\bwhen will i see\b",
+        r"\bwhy .*not seeing\b",
+    )
+
+
 def load_manager_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -73,6 +87,18 @@ def _is_manager_clarification_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _manager_clarification_help_patterns())
 
 
+def _is_manager_open_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _manager_open_help_patterns())
+
+
+def _detect_manager_open_action(text: str) -> tuple[str | None, dict]:
+    command = normalize_command_text(text or "")
+    if command in {"delete vacancy", "delete job", "remove vacancy"}:
+        return "delete_vacancy", {}
+    return None, {}
+
+
 def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
@@ -94,6 +120,19 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
             state.intent = "stage_completion_input"
             state.parsed_input["intent"] = "stage_completion_input"
         return state
+    if state.active_stage == "OPEN":
+        if _is_manager_open_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_manager_open_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+            return state
+        is_help = False
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "manager_input"
@@ -136,6 +175,12 @@ def build_manager_stage_reply_node(session):
                 state.reply_text = context.guidance_text
                 state.follow_up_needed = True
                 state.follow_up_question = context.guidance_text
+            return state
+
+        if state.active_stage == "OPEN" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "I can help you remove this vacancy if you want to stop matching for it."
+            state.confidence = 0.9
             return state
 
         state.reply_text = None

@@ -338,7 +338,8 @@ Current execution note:
 - `READY` is now implemented as a graph-owned candidate status/delete-initiation stage
 - `INTAKE_PENDING` is now implemented as a graph-owned manager text-intake stage
 - `CLARIFICATION_QA` is now implemented as a graph-owned manager clarification stage
-- the next rebuild target is the rest of manager and interaction flow, starting with `OPEN`
+- `OPEN` is now implemented as a graph-owned manager status/delete-initiation stage
+- the next rebuild target is the interaction flow, starting with `INTERVIEW_INVITED`
 
 ## 9. Definition of Done
 

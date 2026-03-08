@@ -175,6 +175,8 @@ Status:
   - graph-owned execution for `CLARIFICATION_QA`
   - graph-driven structured parsing for text clarification answers
   - graph-driven `send_vacancy_clarifications` validation and backend handoff
+  - graph-owned execution for `OPEN` status guidance and delete-vacancy initiation
+  - graph-driven `delete_vacancy` validation and backend handoff into deletion confirmation flow
   - non-text vacancy JD input still falls through to the existing backend intake path
   - voice/video clarification answers still fall through to the existing backend clarification parser path
 

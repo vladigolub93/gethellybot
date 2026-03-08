@@ -124,3 +124,54 @@ def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     assert result.proposed_action == "send_vacancy_clarifications"
     assert result.structured_payload["budget_min"] == 7000
     assert result.structured_payload["work_format"] == "remote"
+
+
+def test_graph_manager_stage_handles_open_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v5", state="OPEN")
+    )
+
+    user = SimpleNamespace(
+        id="m5",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="What happens now and when will I see candidates?",
+    )
+
+    assert reply is not None
+    assert "candidate" in reply.lower() or "match" in reply.lower()
+
+
+def test_graph_manager_stage_accepts_open_delete_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6", state="OPEN")
+    )
+
+    user = SimpleNamespace(
+        id="m6",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Delete vacancy",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "delete_vacancy"
+    assert result.stage_status == "ready_for_transition"

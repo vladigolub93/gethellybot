@@ -2799,6 +2799,81 @@ def test_graph_manager_clarification_stage_can_own_text_completion() -> None:
     assert service.vacancy_service.clarification_calls[-1]["parsed_payload"]["budget_min"] == 5000
 
 
+def test_manager_open_help_is_intercepted_before_fallback() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        "Your vacancy is open. Helly is matching candidates and will send qualified profiles."
+    )
+    service.bot_controller = FakeBotController("Old open fallback should not be used.")
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12open",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12open",
+        build_update(text="What happens now and when will I see candidates?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert service.stage_agents.calls
+    assert not service.bot_controller.calls
+
+
+def test_graph_open_stage_can_own_delete_vacancy_intent() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="I can help you remove this vacancy if you want to stop matching for it.",
+            stage_status="ready_for_transition",
+            proposed_action="delete_vacancy",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "delete_vacancy"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="confirmation_required",
+        notification_template="vacancy_deletion_confirmation_required",
+        notification_text="Please confirm vacancy deletion.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12openx",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12openx",
+        build_update(text="Delete vacancy"),
+    )
+
+    assert templates == ["vacancy_deletion_confirmation_required"]
+    assert service.vacancy_service.deletion_calls
+    assert service.vacancy_service.deletion_calls[-1]["text"] == "delete vacancy"
+
+
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)

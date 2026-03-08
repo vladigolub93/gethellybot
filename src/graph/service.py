@@ -45,7 +45,7 @@ class StageAgentExecutionResult:
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
     CANDIDATE_STAGES = {"CV_PENDING", "SUMMARY_REVIEW", "QUESTIONS_PENDING", "VERIFICATION_PENDING", "READY"}
-    MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA"}
+    MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA", "OPEN"}
 
     def __init__(self, session):
         self.session = session

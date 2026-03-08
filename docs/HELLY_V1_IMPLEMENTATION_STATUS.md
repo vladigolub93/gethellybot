@@ -56,8 +56,9 @@ Architectural status note:
 - candidate `READY` is now graph-owned for status guidance and delete-profile initiation
 - manager `INTAKE_PENDING` is now graph-owned for text-based vacancy intake and help handling
 - manager `CLARIFICATION_QA` is now graph-owned for text-based clarification completion and help handling
+- manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, and manager onboarding through `CLARIFICATION_QA`, but `OPEN`, interview, review, and delete-confirmation stages are still primarily help-oriented overlays around existing handlers
+- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, and the full manager onboarding/user-open path through `OPEN`, but interview, review, and delete-confirmation stages are still primarily help-oriented overlays around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -180,7 +181,7 @@ Status vs SRS:
 - `Implemented`: state-aware in-step AI help for `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
 - `Implemented`: `INTAKE_PENDING` text-based vacancy intake and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `CLARIFICATION_QA` text-based clarification completion and in-stage guidance now run through a graph-owned stage agent
-- `Partial`: `OPEN` still runs through the legacy state-aware controller path
+- `Implemented`: `OPEN` status guidance and delete-vacancy initiation now run through a graph-owned stage agent
 
 ### What is only partial
 
