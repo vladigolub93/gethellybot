@@ -441,6 +441,35 @@ def test_graph_candidate_stage_handles_verification_pending_help() -> None:
     assert "video" in reply.lower() or "later" in reply.lower()
 
 
+def test_graph_candidate_stage_does_not_treat_verification_question_as_completion() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp7q", state="VERIFICATION_PENDING")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u10q",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Can I do this later from another device?",
+    )
+
+    assert result is not None
+    assert result.stage == "VERIFICATION_PENDING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_accepts_verification_video_submission() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

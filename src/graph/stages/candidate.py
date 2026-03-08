@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
@@ -10,29 +8,13 @@ from src.llm.service import (
     safe_candidate_ready_decision,
     safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
+    safe_candidate_verification_decision,
     safe_interview_invitation_decision,
     safe_interview_in_progress_decision,
     safe_parse_candidate_questions,
     safe_state_assistance_decision,
 )
 from src.orchestrator.policy import resolve_state_context
-
-def _candidate_verification_help_patterns() -> tuple[str, ...]:
-    return (
-        r"\bwhy\b",
-        r"\bhow\b",
-        r"\bhelp\b",
-        r"\bcannot\b",
-        r"\bcan't\b",
-        r"\bcant\b",
-        r"\blater\b",
-        r"\bdesktop\b",
-        r"\bcamera\b",
-        r"\bvideo\b",
-        r"\bphrase\b",
-        r"\bwhat happens after\b",
-        r"\bwhat next\b",
-    )
 
 
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
@@ -50,10 +32,6 @@ def load_candidate_stage_knowledge_node(state: HellyGraphState) -> HellyGraphSta
         snippets.append(context.help_text)
     state.knowledge_snippets = [item for item in snippets if item]
     return state
-
-def _is_candidate_verification_help(text: str) -> bool:
-    normalized = " ".join((text or "").lower().split())
-    return any(re.search(pattern, normalized) for pattern in _candidate_verification_help_patterns())
 
 def build_candidate_stage_detect_node(session):
     def _node(state: HellyGraphState) -> HellyGraphState:
@@ -146,7 +124,21 @@ def build_candidate_stage_detect_node(session):
                 state.proposed_action = "send_verification_video"
                 state.structured_payload = {"submission_type": "video"}
                 return state
-            is_help = _is_candidate_verification_help(text)
+            decision = safe_candidate_verification_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=state.knowledge_snippets or state.recent_context,
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            state.parsed_input["intent"] = "help"
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
         elif state.active_stage == "READY":
             decision = safe_candidate_ready_decision(
                 session,
@@ -260,7 +252,9 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             state.proposed_action = "send_verification_video"
             state.structured_payload = {"submission_type": "video"}
             return state
-        is_help = _is_candidate_verification_help(text)
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
     elif state.active_stage == "READY":
         state.intent = "help"
         state.parsed_input["intent"] = "help"

@@ -473,6 +473,7 @@ The largest remaining gap is no longer prompt execution, multimodal ingestion, o
 Recent stage-ownership progress:
 
 - `MANAGER_REVIEW` now uses a dedicated manager-side decision prompt so help/clarification vs approve/reject is owned by the stage agent before backend review execution runs.
+- `VERIFICATION_PENDING` now uses a dedicated candidate-side decision prompt so text meaning inside the verification step is owned by the stage agent, while raw video submission remains a Telegram media event by design.
 
 ## 7. Production Readiness Assessment
 

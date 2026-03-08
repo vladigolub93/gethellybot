@@ -1,0 +1,9 @@
+- input: "Why do I need a video?"
+  expected:
+    intent: help
+    proposed_action: null
+
+- input: "I am on desktop right now."
+  expected:
+    intent: help
+    proposed_action: null

@@ -81,6 +81,37 @@ Latest user message:
 """
 
 
+def manager_review_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the manager-review step.
+
+Valid outcomes:
+- help question or clarification
+- explicit approve-candidate intent
+- explicit reject-candidate intent
+
+Rules:
+- treat questions like "what does this mean?", "what are the risks?", "what are the strengths?", and "what happens if I approve?" as help
+- only propose `approve_candidate` when the manager is clearly approving
+- only propose `reject_candidate` when the manager is clearly rejecting
+- do not invent an approval decision if the manager is still asking questions
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 STATE_ASSISTANCE_SYSTEM_PROMPT = """You are the state-aware assistance layer for Helly.
 
 Purpose:
@@ -253,6 +284,35 @@ Rules:
 - treat questions like "what happens now?", "what should I do next?", "when will I hear back?", "when will I get opportunities?", and "do I need to do anything else?" as help, not as delete intent
 - only propose `delete_profile` when the candidate is clearly asking to remove their profile
 - do not invent matching outcomes or timelines
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
+def candidate_verification_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the verification-video step.
+
+Valid outcomes:
+- help question or clarification
+- unsupported text that should stay in the verification step
+
+Rules:
+- treat questions like "why do I need a video?", "what phrase should I say?", "can I do this later?", "I am on desktop", and "what happens after this?" as help
+- do not claim verification is complete from text alone
+- do not invent alternative completion methods unless they are already part of the current step guidance
 - do not transition stages yourself
 
 Current step guidance:

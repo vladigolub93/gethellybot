@@ -217,7 +217,7 @@ Exit:
 20. Remove deterministic intent classification from `CV_PENDING`. `Completed`
 21. Remove deterministic intent classification from `SUMMARY_REVIEW`. `Completed`
 22. Remove deterministic intent classification from `QUESTIONS_PENDING`. `Completed`
-23. Remove deterministic intent classification from `VERIFICATION_PENDING`.
+23. Remove deterministic intent classification from `VERIFICATION_PENDING`. `Completed`
 24. Remove deterministic intent classification from `READY`. `Completed`
 
 For `SUMMARY_REVIEW` specifically:

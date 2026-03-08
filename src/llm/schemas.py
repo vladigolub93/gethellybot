@@ -56,6 +56,15 @@ class CandidateReadyDecisionSchema(BaseModel):
     reason_code: Optional[str] = None
 
 
+class CandidateVerificationDecisionSchema(BaseModel):
+    intent: str
+    response_text: Optional[str] = None
+    proposed_action: Optional[str] = None
+    keep_current_state: bool = True
+    needs_follow_up: bool = False
+    reason_code: Optional[str] = None
+
+
 class ContactRequiredDecisionSchema(BaseModel):
     intent: str
     response_text: Optional[str] = None
@@ -116,6 +125,15 @@ class VacancyClarificationDecisionSchema(BaseModel):
 
 
 class VacancyOpenDecisionSchema(BaseModel):
+    intent: str
+    response_text: Optional[str] = None
+    proposed_action: Optional[str] = None
+    keep_current_state: bool = True
+    needs_follow_up: bool = False
+    reason_code: Optional[str] = None
+
+
+class ManagerReviewDecisionSchema(BaseModel):
     intent: str
     response_text: Optional[str] = None
     proposed_action: Optional[str] = None
