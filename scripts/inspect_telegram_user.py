@@ -201,24 +201,34 @@ def load_snapshot(*, telegram_user_id: int | None, telegram_chat_id: int | None)
             """,
             entity_params,
         )
+        transition_clauses = ["actor_user_id = :user_id"]
+        transition_params: dict[str, Any] = {"user_id": user["id"]}
+        if candidate_profile is not None:
+            transition_clauses.append(
+                "(entity_type = 'candidate_profile' and entity_id = cast(:candidate_profile_id as uuid))"
+            )
+            transition_params["candidate_profile_id"] = candidate_profile["id"]
+        if vacancy is not None:
+            transition_clauses.append(
+                "(entity_type = 'vacancy' and entity_id = cast(:vacancy_id as uuid))"
+            )
+            transition_params["vacancy_id"] = vacancy["id"]
+        if interview_session is not None:
+            transition_clauses.append(
+                "(entity_type = 'interview_session' and entity_id = cast(:interview_session_id as uuid))"
+            )
+            transition_params["interview_session_id"] = interview_session["id"]
+
         latest_state_transition = _one(
             conn,
-            """
+            f"""
             select id, entity_type, entity_id, from_state, to_state, trigger_type, created_at
             from state_transition_logs
-            where actor_user_id = :user_id
-               or (entity_type = 'candidate_profile' and entity_id = :candidate_profile_id::uuid)
-               or (entity_type = 'vacancy' and entity_id = :vacancy_id::uuid)
-               or (entity_type = 'interview_session' and entity_id = :interview_session_id::uuid)
+            where {' or '.join(transition_clauses)}
             order by created_at desc
             limit 1
             """,
-            {
-                "user_id": user["id"],
-                "candidate_profile_id": (candidate_profile or {}).get("id"),
-                "vacancy_id": (vacancy or {}).get("id"),
-                "interview_session_id": (interview_session or {}).get("id"),
-            },
+            transition_params,
         )
 
         counts = {

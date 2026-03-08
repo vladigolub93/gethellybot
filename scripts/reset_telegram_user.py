@@ -207,6 +207,26 @@ def reset_user(*, user_id: str, plan: dict[str, list[str]]) -> dict[str, int]:
             "delete from candidate_verifications where profile_id = any(:profile_ids)",
             {"profile_ids": plan["candidate_profile_ids"] or [None]},
         )
+        summary["candidate_profile_current_version_unlinks"] = _delete_scalar(
+            conn,
+            """
+            update candidate_profiles
+            set current_version_id = null
+            where user_id = :user_id
+              and current_version_id is not null
+            """,
+            {"user_id": user_id},
+        )
+        summary["vacancy_current_version_unlinks"] = _delete_scalar(
+            conn,
+            """
+            update vacancies
+            set current_version_id = null
+            where manager_user_id = :user_id
+              and current_version_id is not null
+            """,
+            {"user_id": user_id},
+        )
         summary["candidate_profile_versions"] = _delete_by_ids(
             conn,
             "delete from candidate_profile_versions where id in :ids",
@@ -226,7 +246,7 @@ def reset_user(*, user_id: str, plan: dict[str, list[str]]) -> dict[str, int]:
             conn,
             """
             delete from outbox_events
-            where (entity_type = 'user' and entity_id = :user_id::uuid)
+            where (entity_type = 'user' and entity_id = cast(:user_id as uuid))
                or (entity_type = 'candidate_profile' and entity_id = any(:candidate_profile_ids))
                or (entity_type = 'vacancy' and entity_id = any(:vacancy_ids))
                or (entity_type = 'match' and entity_id = any(:match_ids))
@@ -274,14 +294,14 @@ def reset_user(*, user_id: str, plan: dict[str, list[str]]) -> dict[str, int]:
                 "session_ids": plan["interview_session_ids"] or [None],
             },
         )
-        summary["raw_messages"] = _delete_scalar(
-            conn,
-            "delete from raw_messages where user_id = :user_id",
-            {"user_id": user_id},
-        )
         summary["user_consents"] = _delete_scalar(
             conn,
             "delete from user_consents where user_id = :user_id",
+            {"user_id": user_id},
+        )
+        summary["raw_messages"] = _delete_scalar(
+            conn,
+            "delete from raw_messages where user_id = :user_id",
             {"user_id": user_id},
         )
         summary["files"] = _delete_scalar(
