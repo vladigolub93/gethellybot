@@ -242,6 +242,7 @@ Status:
   - Telegram routing now caches and reuses a single graph stage result per migrated candidate/manager message path, reducing duplicated graph execution inside one update cycle
   - migrated stage help resolution no longer depends on `bot_controller` fallback for candidate, manager, interview, review, and delete conversational paths
   - entry-stage consent and role-selection execution no longer depends on legacy raw-text command branches
+  - entry-stage help resolution no longer depends on `bot_controller` fallback; if graph provides no stage-owned reply, runtime falls through to generic recovery instead
   - full test suite currently passes with graph-owned routing and stage-resolution coverage
 
 ## 5. Definition of Done

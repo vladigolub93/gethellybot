@@ -313,11 +313,11 @@ def test_contact_required_help_intercepts_before_identity_gating() -> None:
     assert service.notifications_repo.calls[-1]["template_key"] == "request_contact"
 
 
-def test_contact_required_help_falls_back_to_old_controller_if_graph_returns_none() -> None:
+def test_contact_required_without_graph_reply_falls_back_to_generic_recovery() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
     service.stage_agents = FakeStageAgentService(None)
-    service.bot_controller = FakeBotController("Fallback contact guidance.")
+    service.bot_controller = FakeBotController("Recovery: Why?")
 
     user = SimpleNamespace(
         id="g1hf",
@@ -328,10 +328,9 @@ def test_contact_required_help_falls_back_to_old_controller_if_graph_returns_non
 
     templates = service._apply_identity_flow(user, "raw-g1hf", build_update(text="Why?"))
 
-    assert templates == ["state_aware_help"]
+    assert templates == ["unsupported_input"]
     assert service.stage_agents.calls
-    assert service.bot_controller.calls
-    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Fallback contact guidance."
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: Why?"
 
 
 def test_start_with_contact_but_without_consent_requests_consent() -> None:
