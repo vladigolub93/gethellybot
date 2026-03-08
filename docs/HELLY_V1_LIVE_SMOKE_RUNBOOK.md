@@ -35,6 +35,16 @@ Useful tools:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
 
+Railway log check:
+
+- after each live smoke step, confirm the API logs contain `graph_stage_executed`
+- useful fields in that log line:
+  - `stage`
+  - `stage_status`
+  - `proposed_action`
+  - `action_accepted`
+  - `telegram_user_id`
+
 ## 3. Candidate Onboarding Smoke
 
 ### Flow

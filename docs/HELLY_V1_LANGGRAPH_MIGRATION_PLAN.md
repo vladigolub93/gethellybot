@@ -257,6 +257,7 @@ Status:
   - live reset tooling now supports clean-slate smoke reruns and defaults to dry-run unless `--execute` is passed
   - `scripts/report_telegram_user.py`
   - live smoke tooling now also supports compact status reports on top of raw inspection snapshots
+  - graph runtime now emits structured `graph_stage_executed` log events for live Railway verification of stage execution
 
 ### Step 8. Regression and Production Hardening
 

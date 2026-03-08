@@ -372,6 +372,7 @@ Current execution note:
 - Phase 11 now also includes an assertion-oriented Telegram-user smoke validator for expected candidate/vacancy/interview/match/notification state after a manual bot run
 - Phase 11 now also includes a safe-by-default Telegram-user reset tool for clean live smoke reruns without manual SQL
 - Phase 11 now also includes a compact Telegram-user smoke report tool for quick stage/status checks after a manual bot run
+- Phase 11 now also includes structured `graph_stage_executed` runtime logs for Railway-side verification that LangGraph stage execution actually ran during live smoke flows
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage
 
 ## 9. Definition of Done

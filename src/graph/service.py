@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.config.logging import get_logger
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
@@ -37,6 +38,9 @@ from src.graph.stages.manager import (
     load_manager_stage_knowledge_node,
 )
 from src.orchestrator.policy import resolve_state_context
+
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -111,7 +115,7 @@ class LangGraphStageAgentService:
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
         )
-        return StageAgentExecutionResult(
+        execution_result = StageAgentExecutionResult(
             stage=stage,
             reply_text=result.get("reply_text"),
             stage_status=result.get("stage_status"),
@@ -120,6 +124,12 @@ class LangGraphStageAgentService:
             structured_payload=result.get("structured_payload") or {},
             validation_result=result.get("validation_result") or {},
         )
+        self._log_stage_execution(
+            user=user,
+            latest_message_type=latest_message_type,
+            execution_result=execution_result,
+        )
+        return execution_result
 
     def resolve_current_stage_context(self, *, user):
         stage = self._resolve_supported_stage(user)
@@ -167,7 +177,7 @@ class LangGraphStageAgentService:
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
         )
-        return StageAgentExecutionResult(
+        execution_result = StageAgentExecutionResult(
             stage=stage,
             reply_text=result.get("reply_text"),
             stage_status=result.get("stage_status"),
@@ -176,6 +186,12 @@ class LangGraphStageAgentService:
             structured_payload=result.get("structured_payload") or {},
             validation_result=result.get("validation_result") or {},
         )
+        self._log_stage_execution(
+            user=user,
+            latest_message_type=latest_message_type,
+            execution_result=execution_result,
+        )
+        return execution_result
 
     def _resolve_role(self, user) -> str | None:
         if getattr(user, "is_candidate", False):
@@ -213,6 +229,24 @@ class LangGraphStageAgentService:
 
     def _resolve_supported_stage(self, user) -> str | None:
         return self._resolve_entry_stage(user) or self._resolve_candidate_stage(user) or self._resolve_manager_stage(user)
+
+    def _log_stage_execution(
+        self,
+        *,
+        user,
+        latest_message_type: str,
+        execution_result: StageAgentExecutionResult,
+    ) -> None:
+        logger.info(
+            "graph_stage_executed",
+            user_id=str(getattr(user, "id", "")),
+            telegram_user_id=getattr(user, "telegram_user_id", None),
+            stage=execution_result.stage,
+            stage_status=execution_result.stage_status,
+            proposed_action=execution_result.proposed_action,
+            action_accepted=execution_result.action_accepted,
+            latest_message_type=latest_message_type,
+        )
 
     def _resolve_manager_stage(self, user) -> str | None:
         if not getattr(user, "is_hiring_manager", False):
