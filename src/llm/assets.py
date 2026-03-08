@@ -8,10 +8,24 @@ PROMPTS_ROOT = Path(__file__).resolve().parents[2] / "prompts"
 DOCS_ROOT = Path(__file__).resolve().parents[2] / "docs"
 
 
+@lru_cache(maxsize=1)
+def load_shared_telegram_style_rules() -> str:
+    path = PROMPTS_ROOT / "_shared" / "TELEGRAM_STYLE.md"
+    return path.read_text(encoding="utf-8").strip()
+
+
 @lru_cache(maxsize=64)
 def load_system_prompt(*parts: str) -> str:
     path = PROMPTS_ROOT.joinpath(*parts, "SYSTEM.md")
-    return path.read_text(encoding="utf-8").strip()
+    base_prompt = path.read_text(encoding="utf-8").strip()
+    shared_style = load_shared_telegram_style_rules()
+    return "\n\n".join(
+        [
+            base_prompt,
+            "Shared Telegram Delivery Rules:",
+            shared_style,
+        ]
+    ).strip()
 
 
 @lru_cache(maxsize=1)
