@@ -327,6 +327,35 @@ Latest user message:
 """
 
 
+def vacancy_open_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the vacancy open step.
+
+Valid outcomes:
+- help question or status question
+- explicit delete-vacancy intent
+
+Rules:
+- treat questions like "what happens now?", "when will I see candidates?", "how does matching work?", and "do I need to do anything else?" as help, not as delete intent
+- only propose `delete_vacancy` when the manager is clearly asking to remove the vacancy
+- do not invent candidates or claim matching already produced results
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def vacancy_clarifications_prompt(text: str) -> str:
     return f"""Task: parse vacancy clarification answers from the text below.
 

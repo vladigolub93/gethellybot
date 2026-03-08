@@ -39,6 +39,7 @@ from src.llm.prompts import (
     small_talk_prompt,
     vacancy_clarification_decision_prompt,
     vacancy_intake_decision_prompt,
+    vacancy_open_decision_prompt,
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
@@ -69,6 +70,7 @@ from src.llm.schemas import (
     VacancyClarificationDecisionSchema,
     VacancyInconsistencySchema,
     VacancyIntakeDecisionSchema,
+    VacancyOpenDecisionSchema,
     VacancyClarificationSchema,
     VacancySummaryReviewDecisionSchema,
     VacancySummarySchema,
@@ -801,6 +803,40 @@ def vacancy_clarification_decision_with_llm(
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
             "answer_text": answer_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def vacancy_open_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=VacancyOpenDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("vacancy", "open_decision"),
+        user_prompt=vacancy_open_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="vacancy_open_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "delete_vacancy"}:
+        proposed_action = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -2212,6 +2248,76 @@ def safe_candidate_ready_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_candidate_ready_decision_v1",
+    )
+
+
+def safe_vacancy_open_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return vacancy_open_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_open_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Your vacancy is open for matching. You do not need to do anything else right now, and I will bring qualified candidates once they are ready.",
+        "proposed_action": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "vacancy_open_help_fallback",
+    }
+    if command in {"delete vacancy", "delete job", "remove vacancy"}:
+        payload.update(
+            {
+                "intent": "delete_request",
+                "response_text": "Understood. I can help you remove this vacancy.",
+                "proposed_action": "delete_vacancy",
+                "needs_follow_up": False,
+                "reason_code": "vacancy_open_delete_request",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "what happens now",
+            "what next",
+            "when will i see",
+            "when will i get",
+            "when candidate",
+            "when match",
+            "how matching",
+            "do i need to do anything",
+            "why am i not seeing",
+            "?",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance
+                or "Your vacancy is open for matching. You do not need to do anything else right now, and I will bring qualified candidates once they are ready.",
+                "needs_follow_up": True,
+                "reason_code": "vacancy_open_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_open_decision_v1",
     )
 
 

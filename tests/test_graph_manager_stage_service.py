@@ -299,6 +299,34 @@ def test_graph_manager_stage_handles_open_help() -> None:
     assert "candidate" in reply.lower() or "match" in reply.lower()
 
 
+def test_graph_manager_stage_does_not_treat_open_status_question_as_delete() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v5q", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m5q",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="When will I see candidates?",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_manager_stage_accepts_open_delete_intent() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

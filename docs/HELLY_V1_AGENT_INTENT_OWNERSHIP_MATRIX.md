@@ -49,7 +49,7 @@ This field identifies the concrete deterministic logic that still needs to be re
 | `INTAKE_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now only executes validated `send_job_description_text` handoff for text submissions | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `VACANCY_SUMMARY_REVIEW` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; adjacent clarification stage still pending for same depth of intent ownership | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `CLARIFICATION_QA` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend only executes parsed clarification payload after agent-owned meaning decision | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
-| `OPEN` | `mixed` | `agent-first` | regex help patterns, deterministic delete intent aliases | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
+| `OPEN` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend only executes validated `delete_vacancy` handoff after agent-owned meaning decision | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `INTERVIEW_INVITED` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now executes validated invitation actions directly instead of owning message meaning | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [interview/service.py](/Users/vladigolub/Desktop/gethellybot/src/interview/service.py) |
 | `INTERVIEW_IN_PROGRESS` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; voice/video answer execution still uses backend media path by design | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [interview/service.py](/Users/vladigolub/Desktop/gethellybot/src/interview/service.py) |
 | `MANAGER_REVIEW` | `mixed` | `agent-first` | regex help patterns, deterministic approve/reject aliases | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py) |
@@ -145,10 +145,9 @@ Strict order:
 3. `INTERVIEW_IN_PROGRESS`
 4. `QUESTIONS_PENDING`
 5. `DELETE_CONFIRMATION`
-6. `OPEN`
-7. `CONTACT_REQUIRED`
-8. `ROLE_SELECTION`
-9. `MANAGER_REVIEW`
+6. `CONTACT_REQUIRED`
+7. `ROLE_SELECTION`
+8. `MANAGER_REVIEW`
 
 ## 8. Definition of Done
 

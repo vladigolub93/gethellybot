@@ -241,6 +241,7 @@ Status vs SRS:
 - `Implemented`: `CLARIFICATION_QA` text-based clarification completion and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `CLARIFICATION_QA` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; clarification questions like `gross or net budget?` no longer rely on backend help regexes
 - `Implemented`: `OPEN` status guidance and delete-vacancy initiation now run through a graph-owned stage agent
+- `Implemented`: `OPEN` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; status questions no longer rely on regex help patterns or delete aliases
 
 ### What is only partial
 

@@ -241,7 +241,7 @@ Exit:
 31. Remove deterministic intent classification from `INTAKE_PENDING`. `Completed`
 32. Remove deterministic intent classification from `VACANCY_SUMMARY_REVIEW`. `Completed`
 33. Remove deterministic intent classification from `CLARIFICATION_QA`. `Completed`
-34. Remove deterministic intent classification from `OPEN`.
+34. Remove deterministic intent classification from `OPEN`. `Completed`
 
 For `VACANCY_SUMMARY_REVIEW` specifically:
 
