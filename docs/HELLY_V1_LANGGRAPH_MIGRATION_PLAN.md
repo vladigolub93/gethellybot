@@ -259,6 +259,10 @@ Status:
     - `INTERVIEW_IN_PROGRESS`
     - `MANAGER_REVIEW`
     - `DELETE_CONFIRMATION`
+  - graph-native Telegram routing tests now cover:
+    - entry -> candidate -> CV/questions handoff
+    - entry -> hiring manager -> JD/clarification handoff
+    - candidate interview accept/answer and manager approve review handoff
   - full test suite currently passes with graph-owned routing and stage-resolution coverage
 
 ## 5. Definition of Done

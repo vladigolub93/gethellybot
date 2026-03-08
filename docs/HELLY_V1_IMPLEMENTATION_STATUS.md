@@ -69,6 +69,7 @@ Architectural status note:
 - entry-stage help resolution no longer uses `bot_controller` as a stage-level fallback; only generic unsupported-input recovery remains outside graph-owned guidance
 - graph-native flow coverage now includes sequential candidate and manager journey tests across multiple stage transitions
 - graph-native flow coverage now also includes interaction-path sequences across invitation, active interview, manager review, and delete confirmation
+- graph-native Telegram routing coverage now includes end-to-end text journeys from graph-owned stage decision to backend handoff and notification emission
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status
