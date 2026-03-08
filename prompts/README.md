@@ -52,12 +52,17 @@ Prompt families now covered at the asset level:
   - `candidate_verification_pending`
   - `candidate_ready`
   - `vacancy_intake_pending`
+  - `vacancy_summary_review` (required next manager-stage prompt family)
   - `vacancy_clarification_qa`
   - `vacancy_open`
   - `interview_invited`
   - `interview_in_progress`
   - `manager_review`
   - `delete_confirmation`
+
+Retired from the active stage inventory:
+
+- `consent_required`
 
 Still pending at the runtime wiring level:
 

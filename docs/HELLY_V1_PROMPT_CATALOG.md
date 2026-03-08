@@ -150,23 +150,36 @@ prompts/
     candidate_evaluate/
   orchestrator/
     bot_controller/
-    state_policies/
+    state_assistance/
       contact_required/
-      consent_required/
       role_selection/
       candidate_cv_pending/
       candidate_summary_review/
       candidate_questions_pending/
       candidate_verification_pending/
-      vacancy_jd_pending/
-      vacancy_clarification/
+      candidate_ready/
+      vacancy_intake_pending/
+      vacancy_summary_review/   # required next family for the redesigned manager flow
+      vacancy_clarification_qa/
+      vacancy_open/
       interview_invited/
-      interview_active/
+      interview_in_progress/
+      manager_review/
+      delete_confirmation/
   messaging/
     recovery/
     small_talk/
     role_selection/
+    deletion_confirmation/
+    interview_invitation_copy/
+    response_copywriter/
 ```
+
+Notes:
+
+- `consent_required/` is retired from the active stage inventory after the no-consent entry redesign.
+- entry onboarding now uses `CONTACT_REQUIRED` only when the user has neither a Telegram `username` nor a shared Telegram `contact`.
+- `vacancy_summary_review/` is a required canonical prompt family because manager onboarding must include a manager-facing vacancy summary approval step before clarification begins.
 
 ## 4. Standard Prompt Asset Files
 

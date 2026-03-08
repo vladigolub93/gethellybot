@@ -241,37 +241,49 @@ Canonical answer:
 
 Helly needs these fields to make matching usable. Without them, the system cannot reliably filter candidates by hiring constraints.
 
-### 6.4 Can I create more than one vacancy?
+### 6.4 Why am I seeing a vacancy summary before clarification?
+
+Canonical answer:
+
+Helly first turns the raw vacancy input into a short manager-facing summary so you can quickly confirm that the role was understood correctly. This summary is based on the stored vacancy text and is only a review step before Helly asks the clarification questions needed to open the vacancy.
+
+### 6.5 Can I correct the vacancy summary?
+
+Canonical answer:
+
+Yes. You can approve the summary if it looks right or provide one correction round if something important is wrong. After that correction is applied, Helly shows the final version for approval before moving on.
+
+### 6.6 Can I create more than one vacancy?
 
 Canonical answer:
 
 Yes. Helly supports multiple vacancies per hiring manager.
 
-### 6.5 Will I see all candidates?
+### 6.7 Will I see all candidates?
 
 Canonical answer:
 
 No. Helly is designed to reduce recruiting noise. You receive only candidates who passed the matching and interview stages and reached manager review.
 
-### 6.6 What do I receive when a candidate reaches review?
+### 6.8 What do I receive when a candidate reaches review?
 
 Canonical answer:
 
 You receive a candidate package that includes the candidate summary, interview summary, evaluation result, and related profile context prepared by Helly.
 
-### 6.7 Why do I need to approve or reject?
+### 6.9 Why do I need to approve or reject?
 
 Canonical answer:
 
 Manager approval is the final business decision before Helly introduces both sides in Telegram.
 
-### 6.8 When is my contact used or exposed?
+### 6.10 When is my contact used or exposed?
 
 Canonical answer:
 
 Your contact is collected to identify your Telegram account, keep your vacancy flow tied to one manager profile, and support the final introduction stage after a candidate is approved. It is not used to expose you broadly during the earlier matching flow.
 
-### 6.9 Can I delete a vacancy?
+### 6.11 Can I delete a vacancy?
 
 Canonical answer:
 
