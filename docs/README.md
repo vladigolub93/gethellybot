@@ -24,6 +24,7 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_LANGGRAPH_MIGRATION_PLAN.md](./HELLY_V1_LANGGRAPH_MIGRATION_PLAN.md): execution sequence for migrating the current state-aware controller/routing baseline into LangGraph stage agents.
 - [HELLY_V1_AGENT_OWNED_STAGE_ARCHITECTURE.md](./HELLY_V1_AGENT_OWNED_STAGE_ARCHITECTURE.md): canonical target architecture where every major user-facing state is owned by its own LangGraph stage agent with prompt instructions and KB grounding.
 - [HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md](./HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md): full rebuild plan for moving Helly from the current partial migration state to fully agent-owned stage execution.
+- [HELLY_V1_AGENT_OWNERSHIP_COMPLETION_PLAN.md](./HELLY_V1_AGENT_OWNERSHIP_COMPLETION_PLAN.md): detailed project-wide plan for removing remaining backend intent ownership so migrated stages become truly agent-owned in meaning, not just in routing.
 - [HELLY_V1_ENTRY_AND_VACANCY_REDESIGN_TASK_LIST.md](./HELLY_V1_ENTRY_AND_VACANCY_REDESIGN_TASK_LIST.md): focused detailed task list for the next redesign slice: no-consent entry flow, username-or-contact identity, vacancy summary review, and thin supervisor/router enforcement.
 - [HELLY_V1_PROMPT_CATALOG.md](./HELLY_V1_PROMPT_CATALOG.md): AI capability inventory, prompt asset structure, schema contracts, model policy, and evaluation requirements.
 - [HELLY_V1_AGENT_KNOWLEDGE_BASE.md](./HELLY_V1_AGENT_KNOWLEDGE_BASE.md): canonical FAQ and product-truth grounding for all user-facing AI agents and state-specific prompts.
@@ -43,4 +44,4 @@ This folder contains the working documentation set for Helly v1.
 2. Read `HELLY_V1_REFERENCE_RESEARCH.md` to understand reusable external patterns and avoid copying the wrong examples.
 3. Read `HELLY_V1_ARCHITECTURE_BLUEPRINT.md` to establish implementation architecture.
 4. Read `HELLY_V1_DATA_MODEL_AND_ERD.md`, `HELLY_V1_STATE_MACHINES.md`, `HELLY_V1_AGENT_OWNED_STAGE_ARCHITECTURE.md`, `HELLY_V1_AGENT_KNOWLEDGE_BASE.md`, and `HELLY_V1_PROMPT_CATALOG.md` for the current implementation-grade design.
-5. Read `HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md`, `HELLY_V1_IMPLEMENTATION_PLAN.md`, `HELLY_V1_ENGINEERING_BACKLOG.md`, and `HELLY_V1_MASTER_TASK_LIST.md` to convert architecture into delivery sequencing and task execution.
+5. Read `HELLY_V1_AGENT_OWNED_STAGE_REBUILD_PLAN.md`, `HELLY_V1_AGENT_OWNERSHIP_COMPLETION_PLAN.md`, `HELLY_V1_IMPLEMENTATION_PLAN.md`, `HELLY_V1_ENGINEERING_BACKLOG.md`, and `HELLY_V1_MASTER_TASK_LIST.md` to convert architecture into delivery sequencing and task execution.

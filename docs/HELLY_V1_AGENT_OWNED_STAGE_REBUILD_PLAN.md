@@ -25,6 +25,12 @@ From this point forward, implementation should assume:
 - the end-state is `agent-owned stages`
 - not `state-aware helper logic around rigid handlers`
 
+For the remaining architecture debt after graph migration, use:
+
+- [HELLY_V1_AGENT_OWNERSHIP_COMPLETION_PLAN.md](./HELLY_V1_AGENT_OWNERSHIP_COMPLETION_PLAN.md)
+
+That document is the detailed execution plan for removing remaining backend intent ownership from already migrated stages.
+
 ## 2. Rebuild Goal
 
 The rebuild is complete when Helly works like this:

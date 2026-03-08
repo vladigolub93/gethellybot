@@ -99,6 +99,7 @@ Architectural status note:
 - graph runtime now emits structured `graph_stage_executed` logs with stage, status, proposed action, acceptance result, and Telegram user context for live Railway smoke verification
 - `graph_stage_executed` now also has explicit test coverage, so the log contract is verified alongside runtime behavior
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks outside the fully thin graph-first runtime
+- important architectural gap: some migrated stages are still only partially agent-owned in intent, because backend-side deterministic detectors inside graph stage modules and service handoff layers can still classify raw user text before the intended fully agent-owned model is complete
 
 ## 3. Infrastructure and Delivery Status
 
