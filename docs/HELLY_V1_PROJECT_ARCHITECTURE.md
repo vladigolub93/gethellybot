@@ -61,6 +61,9 @@ Canonical direction update:
 
 - the active target is no longer a shared state-aware assistance layer around handlers
 - the active target is one stage-owning AI agent per major user-facing state
+- runtime coordination must use a thin `LangGraph supervisor/router`
+- the supervisor/router selects the active stage agent and routes validated output
+- the supervisor/router must not behave like a global free-form chat agent above all stages
 
 ## 4. Fixed v1 Infrastructure
 

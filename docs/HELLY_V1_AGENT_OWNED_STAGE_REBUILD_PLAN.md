@@ -48,6 +48,9 @@ Rules for the rebuild:
 - every stage agent must know its own completion criteria
 - every transition must be backed by structured output, not raw string matching
 - Telegram service must become thin transport glue
+- graph-level coordination must be handled by a thin `LangGraph supervisor/router`
+- the supervisor/router must select stage agents and route validated output only
+- the supervisor/router must not become a global always-on chat agent
 - domain services must stop owning conversational behavior
 
 ## 4. Stage Inventory to Build

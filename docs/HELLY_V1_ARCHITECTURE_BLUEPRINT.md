@@ -206,6 +206,12 @@ Responsibilities:
 - invoke LangGraph stage agents for the active workflow stage
 - validate proposed actions before any persisted transition
 
+Architectural rule:
+
+- this layer acts as a thin `LangGraph supervisor/router`
+- it resolves the active persisted stage, selects the correct stage agent, and passes validated output into backend services
+- it must not behave like a global free-form conversational agent above all stages
+
 ## 6.4 `candidate_profile`
 
 Responsibilities:
