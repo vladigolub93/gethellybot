@@ -399,6 +399,53 @@ class TelegramUpdateService:
                         )
                     )
                     return templates
+            if (
+                stage_result is not None
+                and stage_result.stage == "DELETE_CONFIRMATION"
+                and stage_result.action_accepted
+                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
+            ):
+                deletion_input_text = (
+                    "Confirm delete profile"
+                    if stage_result.proposed_action == "confirm_delete"
+                    else "Cancel delete"
+                )
+                deletion_result = self.candidate_service.handle_deletion_message(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    text=deletion_input_text,
+                )
+                if deletion_result is not None:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            deletion_result.notification_template,
+                            {
+                                "text": deletion_result.notification_text,
+                                "reply_markup": deletion_confirmation_keyboard("candidate")
+                                if deletion_result.status == "confirmation_required"
+                                else None,
+                            },
+                        )
+                    )
+                    return templates
+            if (
+                stage_result is not None
+                and stage_result.stage == "DELETE_CONFIRMATION"
+                and not stage_result.action_accepted
+                and stage_result.reply_text
+            ):
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {
+                            "text": stage_result.reply_text,
+                            "reply_markup": deletion_confirmation_keyboard("candidate"),
+                        },
+                    )
+                )
+                return templates
 
         if user.is_candidate and normalized_update.content_type == "text":
             deletion_result = self.candidate_service.handle_deletion_message(
@@ -452,6 +499,53 @@ class TelegramUpdateService:
                         )
                     )
                     return templates
+            if (
+                stage_result is not None
+                and stage_result.stage == "DELETE_CONFIRMATION"
+                and stage_result.action_accepted
+                and stage_result.proposed_action in {"confirm_delete", "cancel_delete"}
+            ):
+                deletion_input_text = (
+                    "Confirm delete vacancy"
+                    if stage_result.proposed_action == "confirm_delete"
+                    else "Cancel delete"
+                )
+                deletion_result = self.vacancy_service.handle_deletion_message(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    text=deletion_input_text,
+                )
+                if deletion_result is not None:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            deletion_result.notification_template,
+                            {
+                                "text": deletion_result.notification_text,
+                                "reply_markup": deletion_confirmation_keyboard("vacancy")
+                                if deletion_result.status == "confirmation_required"
+                                else None,
+                            },
+                        )
+                    )
+                    return templates
+            if (
+                stage_result is not None
+                and stage_result.stage == "DELETE_CONFIRMATION"
+                and not stage_result.action_accepted
+                and stage_result.reply_text
+            ):
+                templates.append(
+                    self._notify(
+                        user.id,
+                        "state_aware_help",
+                        {
+                            "text": stage_result.reply_text,
+                            "reply_markup": deletion_confirmation_keyboard("vacancy"),
+                        },
+                    )
+                )
+                return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
             deletion_result = self.vacancy_service.handle_deletion_message(

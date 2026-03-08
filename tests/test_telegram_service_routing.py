@@ -1581,9 +1581,17 @@ def test_interview_invite_help_is_intercepted_before_interview_handler() -> None
 
 def test_candidate_delete_confirmation_help_is_intercepted_after_delete_prompt() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
-        "If you confirm deletion, the profile will be removed from active recruiting flow and active interviews or matches may be cancelled."
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="If you confirm deletion, the profile will be removed from active recruiting flow and active interviews or matches may be cancelled.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
+    service.bot_controller = FakeBotController("Old delete fallback should not be used.")
     service.candidate_service = FakeCandidateService()
     service.candidate_service.deletion_result = None
     service.interview_service = FailIfCalledService()
@@ -1605,14 +1613,24 @@ def test_candidate_delete_confirmation_help_is_intercepted_after_delete_prompt()
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
-    assert service.candidate_service.deletion_calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+    assert not service.candidate_service.deletion_calls
+    assert not service.bot_controller.calls
 
 
 def test_vacancy_delete_confirmation_help_is_intercepted_after_delete_prompt() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
-        "If you confirm deletion, the vacancy will be removed from active flow and related interviews or matches may be cancelled."
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="If you confirm deletion, the vacancy will be removed from active flow and related interviews or matches may be cancelled.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
+    service.bot_controller = FakeBotController("Old delete fallback should not be used.")
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
     service.vacancy_service = FakeVacancyService()
@@ -1634,7 +1652,9 @@ def test_vacancy_delete_confirmation_help_is_intercepted_after_delete_prompt() -
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
-    assert service.vacancy_service.deletion_calls
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+    assert not service.vacancy_service.deletion_calls
+    assert not service.bot_controller.calls
 
 
 def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
@@ -2518,6 +2538,49 @@ def test_candidate_delete_confirm_passthrough_reaches_deletion_handler() -> None
     assert service.candidate_service.deletion_calls
 
 
+def test_graph_delete_confirmation_stage_can_own_candidate_confirm() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="Understood. I will delete the profile now.",
+            stage_status="ready_for_transition",
+            proposed_action="confirm_delete",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "confirm_delete"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="candidate_deleted",
+        notification_text="Profile deleted.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u11g",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw11g",
+        build_update(text="Confirm delete profile"),
+    )
+
+    assert templates == ["candidate_deleted"]
+    assert service.candidate_service.deletion_calls
+    assert service.candidate_service.deletion_calls[-1]["text"] == "Confirm delete profile"
+
+
 def test_candidate_generic_confirm_delete_alias_reaches_deletion_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -2668,6 +2731,49 @@ def test_candidate_delete_cancel_passthrough_reaches_deletion_handler() -> None:
     assert service.candidate_service.deletion_calls
 
 
+def test_graph_delete_confirmation_stage_can_own_candidate_cancel() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="Understood. I will keep the profile active.",
+            stage_status="ready_for_transition",
+            proposed_action="cancel_delete",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "cancel_delete"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.deletion_result = SimpleNamespace(
+        status="cancelled",
+        notification_template="candidate_deletion_cancelled",
+        notification_text="Profile deletion cancelled.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u11ga",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw11ga",
+        build_update(text="Cancel delete"),
+    )
+
+    assert templates == ["candidate_deletion_cancelled"]
+    assert service.candidate_service.deletion_calls
+    assert service.candidate_service.deletion_calls[-1]["text"] == "Cancel delete"
+
+
 def test_candidate_keep_profile_alias_reaches_deletion_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -2756,6 +2862,49 @@ def test_vacancy_delete_confirm_passthrough_reaches_deletion_handler() -> None:
 
     assert templates == ["vacancy_deleted"]
     assert service.vacancy_service.deletion_calls
+
+
+def test_graph_delete_confirmation_stage_can_own_vacancy_confirm() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="Understood. I will delete the vacancy now.",
+            stage_status="ready_for_transition",
+            proposed_action="confirm_delete",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "confirm_delete"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="deleted",
+        notification_template="vacancy_deleted",
+        notification_text="Vacancy deleted.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u12g",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12g",
+        build_update(text="Confirm delete vacancy"),
+    )
+
+    assert templates == ["vacancy_deleted"]
+    assert service.vacancy_service.deletion_calls
+    assert service.vacancy_service.deletion_calls[-1]["text"] == "Confirm delete vacancy"
 
 
 def test_vacancy_generic_confirm_delete_alias_reaches_deletion_handler() -> None:
@@ -2906,6 +3055,49 @@ def test_vacancy_delete_cancel_passthrough_reaches_deletion_handler() -> None:
 
     assert templates == ["vacancy_deletion_cancelled"]
     assert service.vacancy_service.deletion_calls
+
+
+def test_graph_delete_confirmation_stage_can_own_vacancy_cancel() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="DELETE_CONFIRMATION",
+            reply_text="Understood. I will keep the vacancy active.",
+            stage_status="ready_for_transition",
+            proposed_action="cancel_delete",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "cancel_delete"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.deletion_result = SimpleNamespace(
+        status="cancelled",
+        notification_template="vacancy_deletion_cancelled",
+        notification_text="Vacancy deletion cancelled.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u12ga",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12ga",
+        build_update(text="Cancel delete"),
+    )
+
+    assert templates == ["vacancy_deletion_cancelled"]
+    assert service.vacancy_service.deletion_calls
+    assert service.vacancy_service.deletion_calls[-1]["text"] == "Cancel delete"
 
 
 def test_vacancy_keep_vacancy_alias_reaches_deletion_handler() -> None:

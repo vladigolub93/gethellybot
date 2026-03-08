@@ -24,6 +24,12 @@ from src.graph.stages.entry import (
     load_entry_context_node,
     load_entry_knowledge_node,
 )
+from src.graph.stages.deletion import (
+    build_delete_stage_reply_node,
+    detect_delete_stage_intent_node,
+    load_delete_stage_context_node,
+    load_delete_stage_knowledge_node,
+)
 from src.graph.stages.manager import (
     build_manager_stage_reply_node,
     detect_manager_stage_intent_node,
@@ -46,6 +52,7 @@ class StageAgentExecutionResult:
 
 class LangGraphStageAgentService:
     ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
+    SHARED_STAGES = {"DELETE_CONFIRMATION"}
     CANDIDATE_STAGES = {
         "CV_PENDING",
         "SUMMARY_REVIEW",
@@ -68,6 +75,7 @@ class LangGraphStageAgentService:
         register_foundation_stage_graphs()
         self._compiled_graphs = {}
         self._register_entry_stage_nodes()
+        self._register_shared_stage_nodes()
         self._register_candidate_stage_nodes()
         self._register_manager_stage_nodes()
 
@@ -186,6 +194,8 @@ class LangGraphStageAgentService:
         candidate = self.candidates.get_active_by_user_id(user.id)
         if candidate is None:
             return None
+        if self._has_pending_deletion(candidate):
+            return "DELETE_CONFIRMATION"
         active_session = self.interviews.get_active_session_for_candidate(candidate.id)
         if active_session is not None:
             return "INTERVIEW_IN_PROGRESS"
@@ -203,12 +213,15 @@ class LangGraphStageAgentService:
         if not getattr(user, "is_hiring_manager", False):
             return None
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
+        latest_active_vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
+        if latest_active_vacancy is not None and self._has_pending_deletion(latest_active_vacancy):
+            return "DELETE_CONFIRMATION"
         manager_review_match = self.matches.get_latest_manager_review_for_manager(
             [vacancy.id for vacancy in manager_vacancies]
         )
         if manager_review_match is not None:
             return "MANAGER_REVIEW"
-        vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
+        vacancy = latest_active_vacancy
         if vacancy is None:
             return None
         if vacancy.state in self.MANAGER_STAGES:
@@ -227,6 +240,25 @@ class LangGraphStageAgentService:
                     "load_knowledge": load_entry_knowledge_node,
                     "detect_intent": detect_entry_intent_node,
                     "propose_action": build_entry_reply_node(self.session),
+                    "validate_action": registry.get_nodes(stage).get("validate_action")
+                    or (lambda state: state),
+                    "emit_side_effects": registry.get_nodes(stage).get("emit_side_effects")
+                    or (lambda state: state),
+                },
+            )
+
+    def _register_shared_stage_nodes(self) -> None:
+        for stage in self.SHARED_STAGES:
+            definition = registry.get_definition(stage)
+            if definition is None:
+                continue
+            registry.register_stage(
+                definition=definition,
+                nodes={
+                    "load_context": load_delete_stage_context_node,
+                    "load_knowledge": load_delete_stage_knowledge_node,
+                    "detect_intent": detect_delete_stage_intent_node,
+                    "propose_action": build_delete_stage_reply_node(self.session),
                     "validate_action": registry.get_nodes(stage).get("validate_action")
                     or (lambda state: state),
                     "emit_side_effects": registry.get_nodes(stage).get("emit_side_effects")
@@ -307,3 +339,9 @@ class LangGraphStageAgentService:
             missing_requirements=context.missing_requirements,
         )
         return compiled.invoke(state_input.as_dict())
+
+    @staticmethod
+    def _has_pending_deletion(entity) -> bool:
+        context = getattr(entity, "questions_context_json", {}) or {}
+        deletion = context.get("deletion") or {}
+        return bool(deletion.get("pending"))

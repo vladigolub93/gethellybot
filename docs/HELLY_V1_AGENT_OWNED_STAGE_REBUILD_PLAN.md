@@ -341,7 +341,8 @@ Current execution note:
 - `INTERVIEW_INVITED` is now implemented as a graph-owned invitation-decision stage
 - `INTERVIEW_IN_PROGRESS` is now implemented as a graph-owned active-answer stage
 - `MANAGER_REVIEW` is now implemented as a graph-owned review-decision stage
-- the next rebuild target is `DELETE_CONFIRMATION`
+- `DELETE_CONFIRMATION` is now implemented as a graph-owned deletion-decision stage
+- the next rebuild target is Phase 8 and Phase 9 cleanup work: removing remaining legacy controller ownership and simplifying Telegram routing around graph-first execution
 
 ## 9. Definition of Done
 

@@ -205,6 +205,9 @@ Status:
   - graph-owned execution for `MANAGER_REVIEW`
   - graph-driven validation and backend handoff for `approve_candidate`
   - graph-driven validation and backend handoff for `reject_candidate`
+  - graph-owned execution for `DELETE_CONFIRMATION`
+  - graph-driven validation and backend handoff for `confirm_delete`
+  - graph-driven validation and backend handoff for `cancel_delete`
 
 ### Step 7. Routing Simplification
 

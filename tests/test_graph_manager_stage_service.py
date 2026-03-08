@@ -249,3 +249,64 @@ def test_graph_manager_stage_accepts_manager_review_approve() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "approve_candidate"
     assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_manager_stage_handles_delete_confirmation_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v9",
+            state="OPEN",
+            questions_context_json={"deletion": {"pending": True}},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m9",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Can I cancel this instead of deleting the vacancy?",
+    )
+
+    assert reply is not None
+    assert "cancel" in reply.lower() or "vacancy" in reply.lower()
+
+
+def test_graph_manager_stage_accepts_delete_confirmation() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v10",
+            state="OPEN",
+            questions_context_json={"deletion": {"pending": True}},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m10",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Confirm delete vacancy",
+    )
+
+    assert result is not None
+    assert result.stage == "DELETE_CONFIRMATION"
+    assert result.action_accepted is True
+    assert result.proposed_action == "confirm_delete"
+    assert result.stage_status == "ready_for_transition"

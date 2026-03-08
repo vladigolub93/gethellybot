@@ -175,6 +175,69 @@ def test_graph_candidate_stage_accepts_summary_approve() -> None:
     assert result.proposed_action == "approve_summary"
 
 
+def test_graph_candidate_stage_handles_delete_confirmation_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp4d",
+            state="READY",
+            questions_context_json={"deletion": {"pending": True}},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u7d",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="What exactly will be cancelled if I confirm?",
+    )
+
+    assert reply is not None
+    assert "confirm" in reply.lower() or "delete" in reply.lower()
+
+
+def test_graph_candidate_stage_accepts_delete_confirmation() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp4e",
+            state="READY",
+            questions_context_json={"deletion": {"pending": True}},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u7e",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Confirm delete profile",
+    )
+
+    assert result is not None
+    assert result.stage == "DELETE_CONFIRMATION"
+    assert result.action_accepted is True
+    assert result.proposed_action == "confirm_delete"
+    assert result.stage_status == "ready_for_transition"
+
+
 def test_graph_candidate_stage_handles_questions_pending_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
