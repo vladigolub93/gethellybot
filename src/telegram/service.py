@@ -67,6 +67,132 @@ class TelegramUpdateService:
             return role_selection_keyboard()
         return None
 
+    def _notify_entry_stage(
+        self,
+        *,
+        user_id,
+        stage: str,
+        text: str,
+    ) -> str:
+        template_key = {
+            "CONTACT_REQUIRED": "request_contact",
+            "CONSENT_REQUIRED": "request_consent",
+            "ROLE_SELECTION": "request_role",
+        }.get(stage, "state_aware_help")
+        return self._notify(
+            user_id,
+            template_key,
+            {
+                "text": text,
+                "reply_markup": self._entry_stage_reply_markup(stage),
+            },
+        )
+
+    def _handle_contact_share(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+    ) -> List[str]:
+        self.identity_service.attach_contact(user, normalized_update)
+        next_stage = (
+            "CONSENT_REQUIRED"
+            if not self.identity_service.has_data_processing_consent(user)
+            else "ROLE_SELECTION"
+        )
+        next_text = (
+            self._copy("Please confirm data processing consent using the button below.")
+            if next_stage == "CONSENT_REQUIRED"
+            else self.messaging.compose_role_selection()
+        )
+        return [self._notify_entry_stage(user_id=user.id, stage=next_stage, text=next_text)]
+
+    def _handle_start_command(self, *, user) -> List[str]:
+        if not user.phone_number:
+            return [
+                self._notify_entry_stage(
+                    user_id=user.id,
+                    stage="CONTACT_REQUIRED",
+                    text=self._copy("Please share your contact using the button below to continue."),
+                )
+            ]
+        if not self.identity_service.has_data_processing_consent(user):
+            return [
+                self._notify_entry_stage(
+                    user_id=user.id,
+                    stage="CONSENT_REQUIRED",
+                    text=self._copy("Please confirm data processing consent using the button below."),
+                )
+            ]
+        return [
+            self._notify_entry_stage(
+                user_id=user.id,
+                stage="ROLE_SELECTION",
+                text=self.messaging.compose_role_selection(),
+            )
+        ]
+
+    def _handle_entry_stage_result(
+        self,
+        *,
+        user,
+        raw_message_id,
+        entry_result,
+    ) -> List[str] | None:
+        if entry_result is None:
+            return None
+
+        if entry_result.action_accepted and entry_result.proposed_action == "reply_i_agree":
+            self.identity_service.grant_data_processing_consent(
+                user, source_raw_message_id=raw_message_id
+            )
+            return [
+                self._notify_entry_stage(
+                    user_id=user.id,
+                    stage="ROLE_SELECTION",
+                    text=self.messaging.compose_role_selection(
+                        latest_user_message="consent confirmed"
+                    ),
+                )
+            ]
+
+        if entry_result.action_accepted and entry_result.proposed_action in {"candidate", "hiring_manager"}:
+            role = "candidate" if entry_result.proposed_action == "candidate" else "hiring_manager"
+            self.identity_service.set_role(user, role)
+            if role == "candidate":
+                self.candidate_service.start_onboarding(user, trigger_ref_id=raw_message_id)
+            else:
+                self.vacancy_service.start_onboarding(user, trigger_ref_id=raw_message_id)
+            template_key = (
+                "candidate_onboarding_started"
+                if role == "candidate"
+                else "manager_onboarding_started"
+            )
+            message_text = (
+                "Candidate flow started. Please upload your CV or describe your experience."
+                if role == "candidate"
+                else "Hiring manager flow started. Please send the job description."
+            )
+            return [
+                self._notify(
+                    user.id,
+                    template_key,
+                    {"text": self._copy(message_text)},
+                )
+            ]
+
+        if entry_result.reply_text:
+            return [
+                self._notify_entry_stage(
+                    user_id=user.id,
+                    stage=entry_result.stage,
+                    text=entry_result.reply_text,
+                )
+            ]
+
+        return None
+
     def _resolve_graph_help_text(
         self,
         *,
@@ -733,6 +859,306 @@ class TelegramUpdateService:
             )
         ]
 
+    def _apply_candidate_flow(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if normalized_update.content_type == "text":
+            deletion_templates = self._handle_candidate_delete_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if deletion_templates is not None:
+                return deletion_templates
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                    reply_markup=deletion_confirmation_keyboard("candidate"),
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+
+            deletion_result = self.candidate_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text,
+            )
+            if deletion_result is not None:
+                return [
+                    self._notify(
+                        user.id,
+                        deletion_result.notification_template,
+                        {
+                            "text": deletion_result.notification_text,
+                            "reply_markup": deletion_confirmation_keyboard("candidate")
+                            if deletion_result.status == "confirmation_required"
+                            else None,
+                        },
+                    )
+                ]
+
+        if normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                candidate_interaction_templates = self._handle_candidate_interaction_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if candidate_interaction_templates is not None:
+                    return candidate_interaction_templates
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+            interview_message_templates = self._handle_candidate_interview_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+            )
+            if interview_message_templates is not None:
+                return interview_message_templates
+
+        if normalized_update.content_type == "text":
+            summary_templates = self._handle_candidate_summary_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                stage_result=stage_result,
+            )
+            if summary_templates is not None:
+                return summary_templates
+
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+            summary_message_templates = self._handle_candidate_summary_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text or "",
+            )
+            if summary_message_templates is not None:
+                return summary_message_templates
+
+        if normalized_update.content_type in {"text", "video"}:
+            verification_templates = self._handle_candidate_verification_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=stage_result,
+            )
+            if verification_templates is not None:
+                return verification_templates
+            if normalized_update.content_type == "text":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+            verification_message_templates = self._handle_candidate_verification_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                file_id=file_id,
+            )
+            if verification_message_templates is not None:
+                return verification_message_templates
+
+        if normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+            questions_message_templates = self._handle_candidate_questions_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+            )
+            if questions_message_templates is not None:
+                return questions_message_templates
+
+        if normalized_update.content_type in {"text", "document", "voice"}:
+            if normalized_update.content_type == "text":
+                candidate_intake_templates = self._handle_candidate_intake_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if candidate_intake_templates is not None:
+                    return candidate_intake_templates
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+            return self._handle_candidate_intake_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+            )
+
+        return None
+
+    def _apply_manager_flow(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if normalized_update.content_type == "text":
+            deletion_templates = self._handle_manager_delete_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if deletion_templates is not None:
+                return deletion_templates
+            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                    reply_markup=deletion_confirmation_keyboard("vacancy"),
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+
+            deletion_result = self.vacancy_service.handle_deletion_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text,
+            )
+            if deletion_result is not None:
+                return [
+                    self._notify(
+                        user.id,
+                        deletion_result.notification_template,
+                        {
+                            "text": deletion_result.notification_text,
+                            "reply_markup": deletion_confirmation_keyboard("vacancy")
+                            if deletion_result.status == "confirmation_required"
+                            else None,
+                        },
+                    )
+                ]
+
+            manager_templates = self._handle_manager_review_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if manager_templates is not None:
+                return manager_templates
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+            manager_message_templates = self._handle_manager_review_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                text=normalized_update.text or "",
+            )
+            if manager_message_templates is not None:
+                return manager_message_templates
+
+        if normalized_update.content_type in {"text", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                clarification_templates = self._handle_manager_clarification_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    stage_result=stage_result,
+                )
+                if clarification_templates is not None:
+                    return clarification_templates
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
+            clarification_message_templates = self._handle_manager_clarification_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+            )
+            if clarification_message_templates is not None:
+                return clarification_message_templates
+
+        if normalized_update.content_type == "text":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+
+        if normalized_update.content_type in {"text", "document", "voice", "video"}:
+            if normalized_update.content_type == "text":
+                manager_intake_templates = self._handle_manager_intake_stage_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    normalized_update=normalized_update,
+                    file_id=file_id,
+                    stage_result=stage_result,
+                )
+                if manager_intake_templates is not None:
+                    return manager_intake_templates
+            return self._handle_manager_intake_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+            )
+
+        return None
+
     def _resolve_recovery_context(self, *, user):
         if hasattr(self.stage_agents, "resolve_current_stage_context"):
             return self.stage_agents.resolve_current_stage_context(user=user)
@@ -817,30 +1243,11 @@ class TelegramUpdateService:
         manager_stage_result = None
 
         if normalized_update.contact_phone_number:
-            self.identity_service.attach_contact(user, normalized_update)
-            if not self.identity_service.has_data_processing_consent(user):
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "request_consent",
-                        {
-                            "text": self._copy("Please confirm data processing consent using the button below."),
-                            "reply_markup": consent_keyboard(),
-                        },
-                    )
-                )
-            else:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "request_role",
-                        {
-                            "text": self.messaging.compose_role_selection(),
-                            "reply_markup": role_selection_keyboard(),
-                        },
-                    )
-                )
-            return templates
+            return self._handle_contact_share(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+            )
 
         should_offer_identity_assistance = (
             not user.phone_number
@@ -853,109 +1260,16 @@ class TelegramUpdateService:
                 latest_user_message=normalized_update.text or "",
                 latest_message_type=normalized_update.content_type,
             )
-            if entry_result is not None:
-                if entry_result.action_accepted and entry_result.proposed_action == "reply_i_agree":
-                    self.identity_service.grant_data_processing_consent(
-                        user, source_raw_message_id=raw_message_id
-                    )
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            "request_role",
-                            {
-                                "text": self.messaging.compose_role_selection(latest_user_message="consent confirmed"),
-                                "reply_markup": role_selection_keyboard(),
-                            },
-                        )
-                    )
-                    return templates
-
-                if entry_result.action_accepted and entry_result.proposed_action in {"candidate", "hiring_manager"}:
-                    role = "candidate" if entry_result.proposed_action == "candidate" else "hiring_manager"
-                    self.identity_service.set_role(user, role)
-                    if role == "candidate":
-                        self.candidate_service.start_onboarding(
-                            user, trigger_ref_id=raw_message_id
-                        )
-                    else:
-                        self.vacancy_service.start_onboarding(
-                            user, trigger_ref_id=raw_message_id
-                        )
-                    template_key = (
-                        "candidate_onboarding_started"
-                        if role == "candidate"
-                        else "manager_onboarding_started"
-                    )
-                    message_text = (
-                        "Candidate flow started. Please upload your CV or describe your experience."
-                        if role == "candidate"
-                        else "Hiring manager flow started. Please send the job description."
-                    )
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            template_key,
-                            {"text": self._copy(message_text)},
-                        )
-                    )
-                    return templates
-
-                if entry_result.reply_text:
-                    stage_template = {
-                        "CONTACT_REQUIRED": "request_contact",
-                        "CONSENT_REQUIRED": "request_consent",
-                        "ROLE_SELECTION": "request_role",
-                    }.get(entry_result.stage, "state_aware_help")
-                    templates.append(
-                        self._notify(
-                            user.id,
-                            stage_template,
-                            {
-                                "text": entry_result.reply_text,
-                                "reply_markup": self._entry_stage_reply_markup(entry_result.stage),
-                            },
-                        )
-                    )
-                    return templates
+            entry_templates = self._handle_entry_stage_result(
+                user=user,
+                raw_message_id=raw_message_id,
+                entry_result=entry_result,
+            )
+            if entry_templates is not None:
+                return entry_templates
 
         if text_value == "/start":
-            if not user.phone_number:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "request_contact",
-                        {
-                            "text": self._copy("Please share your contact using the button below to continue."),
-                            "reply_markup": contact_request_keyboard(),
-                        },
-                    )
-                )
-                return templates
-
-            if not self.identity_service.has_data_processing_consent(user):
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "request_consent",
-                        {
-                            "text": self._copy("Please confirm data processing consent using the button below."),
-                            "reply_markup": consent_keyboard(),
-                        },
-                    )
-                )
-                return templates
-
-            templates.append(
-                self._notify(
-                    user.id,
-                    "request_role",
-                    {
-                        "text": self.messaging.compose_role_selection(),
-                        "reply_markup": role_selection_keyboard(),
-                    },
-                )
-            )
-            return templates
+            return self._handle_start_command(user=user)
 
         if user.is_candidate and normalized_update.content_type in {"text", "video"}:
             candidate_stage_result = self._maybe_run_graph_stage(
@@ -969,297 +1283,27 @@ class TelegramUpdateService:
                 normalized_update=normalized_update,
             )
 
-        if user.is_candidate and normalized_update.content_type == "text":
-            stage_result = candidate_stage_result
-            deletion_templates = self._handle_candidate_delete_stage_action(
+        if user.is_candidate:
+            candidate_templates = self._apply_candidate_flow(
                 user=user,
                 raw_message_id=raw_message_id,
-                stage_result=stage_result,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=candidate_stage_result,
             )
-            if deletion_templates is not None:
-                return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                    reply_markup=deletion_confirmation_keyboard("candidate"),
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
+            if candidate_templates is not None:
+                return candidate_templates
 
-        if user.is_candidate and normalized_update.content_type == "text":
-            deletion_result = self.candidate_service.handle_deletion_message(
+        if user.is_hiring_manager:
+            manager_templates = self._apply_manager_flow(
                 user=user,
                 raw_message_id=raw_message_id,
-                text=normalized_update.text,
-            )
-            if deletion_result is not None:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        deletion_result.notification_template,
-                        {
-                            "text": deletion_result.notification_text,
-                            "reply_markup": deletion_confirmation_keyboard("candidate")
-                            if deletion_result.status == "confirmation_required"
-                            else None,
-                        },
-                    )
-                )
-                return templates
-
-        if user.is_hiring_manager and normalized_update.content_type == "text":
-            stage_result = manager_stage_result
-            deletion_templates = self._handle_manager_delete_stage_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                stage_result=stage_result,
-            )
-            if deletion_templates is not None:
-                return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                    reply_markup=deletion_confirmation_keyboard("vacancy"),
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-
-        if user.is_hiring_manager and normalized_update.content_type == "text":
-            deletion_result = self.vacancy_service.handle_deletion_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text,
-            )
-            if deletion_result is not None:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        deletion_result.notification_template,
-                        {
-                            "text": deletion_result.notification_text,
-                            "reply_markup": deletion_confirmation_keyboard("vacancy")
-                            if deletion_result.status == "confirmation_required"
-                            else None,
-                        },
-                    )
-                )
-                return templates
-
-        if user.is_hiring_manager and normalized_update.content_type == "text":
-            stage_result = manager_stage_result
-            manager_templates = self._handle_manager_review_stage_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                stage_result=stage_result,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=manager_stage_result,
             )
             if manager_templates is not None:
                 return manager_templates
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-                stage_result=stage_result,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-            manager_message_templates = self._handle_manager_review_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text or "",
-            )
-            if manager_message_templates is not None:
-                return manager_message_templates
-
-        if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                stage_result = candidate_stage_result
-                candidate_interaction_templates = self._handle_candidate_interaction_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if candidate_interaction_templates is not None:
-                    return candidate_interaction_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            interview_message_templates = self._handle_candidate_interview_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
-            if interview_message_templates is not None:
-                return interview_message_templates
-
-        if user.is_candidate and normalized_update.content_type == "text":
-            stage_result = candidate_stage_result
-            summary_templates = self._handle_candidate_summary_stage_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                stage_result=stage_result,
-            )
-            if summary_templates is not None:
-                return summary_templates
-
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-                stage_result=stage_result,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-            summary_message_templates = self._handle_candidate_summary_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text or "",
-            )
-            if summary_message_templates is not None:
-                return summary_message_templates
-
-        if user.is_candidate and normalized_update.content_type in {"text", "video"}:
-            stage_result = candidate_stage_result
-            verification_templates = self._handle_candidate_verification_stage_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-            if verification_templates is not None:
-                return verification_templates
-            if normalized_update.content_type == "text":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            verification_message_templates = self._handle_candidate_verification_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                content_type=normalized_update.content_type,
-                file_id=file_id,
-            )
-            if verification_message_templates is not None:
-                return verification_message_templates
-
-        if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            questions_message_templates = self._handle_candidate_questions_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
-            if questions_message_templates is not None:
-                return questions_message_templates
-
-        if user.is_hiring_manager and normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                stage_result = manager_stage_result
-                clarification_templates = self._handle_manager_clarification_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    stage_result=stage_result,
-                )
-                if clarification_templates is not None:
-                    return clarification_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            clarification_message_templates = self._handle_manager_clarification_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
-            if clarification_message_templates is not None:
-                return clarification_message_templates
-
-        if user.is_hiring_manager and normalized_update.content_type == "text":
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-
-        if user.is_hiring_manager and normalized_update.content_type in {"text", "document", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                stage_result = manager_stage_result
-                manager_intake_templates = self._handle_manager_intake_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if manager_intake_templates is not None:
-                    return manager_intake_templates
-            return self._handle_manager_intake_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
-
-        if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
-            if normalized_update.content_type == "text":
-                stage_result = candidate_stage_result
-                candidate_intake_templates = self._handle_candidate_intake_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if candidate_intake_templates is not None:
-                    return candidate_intake_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            return self._handle_candidate_intake_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
 
         templates.append(
             self._notify(

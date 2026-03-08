@@ -228,6 +228,8 @@ Status:
   - repeated graph-help reply dispatch for migrated stages is also centralized into a shared helper instead of repeated inline `graph reply -> notification` branches
   - repeated compatibility fallback service-to-notification dispatch for summary review, verification, questions, clarification, intake, manager review, and candidate interview paths is also centralized into reusable Telegram helpers
   - `TelegramUpdateService` no longer calls `BotControllerService` directly for generic unsupported-input recovery; recovery now resolves stage context through graph/messaging-native transport helpers
+  - early entry/onboarding transport handling for contact attach, `/start`, and accepted entry-stage actions is now extracted into dedicated helpers instead of remaining inline inside `_apply_identity_flow`
+  - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, further reducing transport branching in `TelegramUpdateService`
 
 ### Step 8. Production Validation
 
