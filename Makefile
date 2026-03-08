@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state reset-telegram-user report-telegram-user
+.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state reset-telegram-user report-telegram-user watch-telegram-user
 
 run-api:
 	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -33,6 +33,9 @@ reset-telegram-user:
 
 report-telegram-user:
 	.venv/bin/python scripts/report_telegram_user.py --telegram-user-id $(TELEGRAM_USER_ID)
+
+watch-telegram-user:
+	.venv/bin/python scripts/watch_telegram_user.py --telegram-user-id $(TELEGRAM_USER_ID) --require-user
 
 db-upgrade:
 	alembic upgrade head

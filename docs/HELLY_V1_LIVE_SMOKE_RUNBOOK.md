@@ -29,6 +29,8 @@ Useful tools:
   - `.venv/bin/python scripts/inspect_telegram_user.py --telegram-user-id <id>`
 - print a compact smoke report:
   - `.venv/bin/python scripts/report_telegram_user.py --telegram-user-id <id>`
+- watch until a live condition is reached:
+  - `.venv/bin/python scripts/watch_telegram_user.py --telegram-user-id <id> --require-user --expect-candidate-state SUMMARY_REVIEW`
 - validate expected state:
   - `.venv/bin/python scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
 - reset a tester to a clean slate:

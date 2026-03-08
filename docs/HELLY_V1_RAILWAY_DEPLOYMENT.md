@@ -218,6 +218,18 @@ set +a
 .venv/bin/python scripts/report_telegram_user.py --telegram-user-id <telegram-user-id>
 ```
 
+To wait until a live smoke condition is reached:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/watch_telegram_user.py \
+  --telegram-user-id <telegram-user-id> \
+  --require-user \
+  --expect-candidate-state SUMMARY_REVIEW
+```
+
 To reset one Telegram tester to a clean slate before repeating a live smoke flow:
 
 ```bash
