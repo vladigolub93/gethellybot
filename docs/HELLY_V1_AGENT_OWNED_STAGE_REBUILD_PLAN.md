@@ -342,6 +342,7 @@ Current execution note:
 - `INTERVIEW_IN_PROGRESS` is now implemented as a graph-owned active-answer stage
 - `MANAGER_REVIEW` is now implemented as a graph-owned review-decision stage
 - `DELETE_CONFIRMATION` is now implemented as a graph-owned deletion-decision stage
+- Telegram routing now prefers graph-owned stage replies and graph-owned action handoff before falling back to legacy controller assistance in migrated paths
 - the next rebuild target is Phase 8 and Phase 9 cleanup work: removing remaining legacy controller ownership and simplifying Telegram routing around graph-first execution
 
 ## 9. Definition of Done

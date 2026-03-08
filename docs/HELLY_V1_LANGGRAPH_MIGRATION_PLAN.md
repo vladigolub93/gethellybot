@@ -208,6 +208,7 @@ Status:
   - graph-owned execution for `DELETE_CONFIRMATION`
   - graph-driven validation and backend handoff for `confirm_delete`
   - graph-driven validation and backend handoff for `cancel_delete`
+  - Telegram routing now uses graph-first help/reply resolution for migrated stages before compatibility fallback to the old controller path
 
 ### Step 7. Routing Simplification
 

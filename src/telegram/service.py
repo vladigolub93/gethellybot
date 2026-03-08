@@ -68,6 +68,30 @@ class TelegramUpdateService:
             return role_selection_keyboard()
         return None
 
+    def _resolve_graph_help_text(
+        self,
+        *,
+        user,
+        latest_user_message: str,
+        latest_message_type: str = "text",
+        stage_result=None,
+    ) -> str | None:
+        if stage_result is not None:
+            if not stage_result.action_accepted and stage_result.reply_text:
+                return stage_result.reply_text
+            return None
+        graph_reply = self.stage_agents.maybe_build_stage_reply(
+            user=user,
+            latest_user_message=latest_user_message,
+            latest_message_type=latest_message_type,
+        )
+        if graph_reply:
+            return graph_reply
+        return self.bot_controller.maybe_build_in_state_assistance(
+            user=user,
+            latest_user_message=latest_user_message,
+        )
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -604,13 +628,10 @@ class TelegramUpdateService:
                         )
                     )
                     return templates
-            assistance_text = (
-                stage_result.reply_text
-                if stage_result is not None and not stage_result.action_accepted
-                else None
-            ) or self.bot_controller.maybe_build_in_state_assistance(
+            assistance_text = self._resolve_graph_help_text(
                 user=user,
                 latest_user_message=normalized_update.text or "",
+                stage_result=stage_result,
             )
             if assistance_text:
                 templates.append(
@@ -717,13 +738,10 @@ class TelegramUpdateService:
                             )
                         )
                         return templates
-                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                ) or self.bot_controller.maybe_build_in_state_assistance(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
+                    stage_result=stage_result,
                 )
                 if assistance_text:
                     templates.append(
@@ -799,13 +817,10 @@ class TelegramUpdateService:
                     )
                     return templates
 
-            assistance_text = self.stage_agents.maybe_build_stage_reply(
+            assistance_text = self._resolve_graph_help_text(
                 user=user,
                 latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            ) or self.bot_controller.maybe_build_in_state_assistance(
-                user=user,
-                latest_user_message=normalized_update.text or "",
+                stage_result=stage_result,
             )
             if assistance_text:
                 templates.append(
@@ -876,13 +891,10 @@ class TelegramUpdateService:
                     )
                     return templates
             if normalized_update.content_type == "text":
-                assistance_text = (
-                    stage_result.reply_text
-                    if stage_result is not None and not stage_result.action_accepted
-                    else None
-                ) or self.bot_controller.maybe_build_in_state_assistance(
+                assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    stage_result=stage_result,
                 )
                 if assistance_text:
                     templates.append(
@@ -911,13 +923,10 @@ class TelegramUpdateService:
 
         if user.is_candidate and normalized_update.content_type in {"text", "voice", "video"}:
             if normalized_update.content_type == "text":
-                assistance_text = self.stage_agents.maybe_build_stage_reply(
+                assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",
-                    latest_message_type=normalized_update.content_type,
-                ) or self.bot_controller.maybe_build_in_state_assistance(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
+                    stage_result=None,
                 )
                 if assistance_text:
                     templates.append(
@@ -972,13 +981,10 @@ class TelegramUpdateService:
                             )
                         )
                         return templates
-                assistance_text = (
-                    stage_result.reply_text
-                    if stage_result is not None and not stage_result.action_accepted
-                    else None
-                ) or self.bot_controller.maybe_build_in_state_assistance(
+                assistance_text = self._resolve_graph_help_text(
                     user=user,
                     latest_user_message=normalized_update.text or "",
+                    stage_result=stage_result,
                 )
                 if assistance_text:
                     templates.append(
@@ -1007,13 +1013,10 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
-            assistance_text = self.stage_agents.maybe_build_stage_reply(
+            assistance_text = self._resolve_graph_help_text(
                 user=user,
                 latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            ) or self.bot_controller.maybe_build_in_state_assistance(
-                user=user,
-                latest_user_message=normalized_update.text or "",
+                stage_result=None,
             )
             if assistance_text:
                 templates.append(
@@ -1079,25 +1082,6 @@ class TelegramUpdateService:
             )
             return templates
 
-        if user.is_candidate and normalized_update.content_type == "text":
-            assistance_text = self.stage_agents.maybe_build_stage_reply(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                latest_message_type=normalized_update.content_type,
-            ) or self.bot_controller.maybe_build_in_state_assistance(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-            )
-            if assistance_text:
-                templates.append(
-                    self._notify(
-                        user.id,
-                        "state_aware_help",
-                        {"text": assistance_text},
-                    )
-                )
-                return templates
-
         if user.is_candidate and normalized_update.content_type in {"text", "document", "voice"}:
             if normalized_update.content_type == "text":
                 stage_result = self.stage_agents.maybe_run_stage(
@@ -1128,6 +1112,20 @@ class TelegramUpdateService:
                             user.id,
                             intake_result.notification_template,
                             {"text": self._copy(message_map[intake_result.notification_template])},
+                        )
+                    )
+                    return templates
+                assistance_text = self._resolve_graph_help_text(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    stage_result=stage_result,
+                )
+                if assistance_text:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            "state_aware_help",
+                            {"text": assistance_text},
                         )
                     )
                     return templates
