@@ -490,6 +490,7 @@ Recent stage-ownership progress:
 - conversation-polish execution is now explicitly broken down in `HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md`, covering shared prompt tuning, message choreography, local context memory, microcopy cleanup, and transcript-driven iteration.
 - the first high-impact prompt rewrite pass is now applied to `CONTACT_REQUIRED`, `ROLE_SELECTION`, `CV_PENDING`, `SUMMARY_REVIEW`, and `VACANCY_SUMMARY_REVIEW`, shifting those stages toward calmer, more human, recruiter-like Telegram behavior without changing their action contracts.
 - the second high-impact prompt rewrite pass is now applied to `QUESTIONS_PENDING`, `VERIFICATION_PENDING`, `READY`, `INTAKE_PENDING`, and `CLARIFICATION_QA`, improving answer-first behavior and reducing ATS-like or support-bot phrasing in those stages.
+- the third high-impact prompt rewrite pass is now applied to `OPEN`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`, improving conversational warmth and decision-stage clarity without changing their action contracts.
 
 ## 7. Production Readiness Assessment
 
