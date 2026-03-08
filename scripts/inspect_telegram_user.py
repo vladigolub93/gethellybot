@@ -22,6 +22,8 @@ class Snapshot:
     interview_session: dict[str, Any] | None
     evaluation_result: dict[str, Any] | None
     latest_notification: dict[str, Any] | None
+    latest_raw_message: dict[str, Any] | None
+    latest_state_transition: dict[str, Any] | None
     counts: dict[str, int]
 
 
@@ -73,6 +75,8 @@ def load_snapshot(*, telegram_user_id: int | None, telegram_chat_id: int | None)
                 interview_session=None,
                 evaluation_result=None,
                 latest_notification=None,
+                latest_raw_message=None,
+                latest_state_transition=None,
                 counts={},
             )
 
@@ -186,6 +190,36 @@ def load_snapshot(*, telegram_user_id: int | None, telegram_chat_id: int | None)
             """,
             entity_params,
         )
+        latest_raw_message = _one(
+            conn,
+            """
+            select id, direction, content_type, telegram_chat_id, text_content, created_at
+            from raw_messages
+            where user_id = :user_id
+            order by created_at desc
+            limit 1
+            """,
+            entity_params,
+        )
+        latest_state_transition = _one(
+            conn,
+            """
+            select id, entity_type, entity_id, from_state, to_state, trigger_type, created_at
+            from state_transition_logs
+            where actor_user_id = :user_id
+               or (entity_type = 'candidate_profile' and entity_id = :candidate_profile_id::uuid)
+               or (entity_type = 'vacancy' and entity_id = :vacancy_id::uuid)
+               or (entity_type = 'interview_session' and entity_id = :interview_session_id::uuid)
+            order by created_at desc
+            limit 1
+            """,
+            {
+                "user_id": user["id"],
+                "candidate_profile_id": (candidate_profile or {}).get("id"),
+                "vacancy_id": (vacancy or {}).get("id"),
+                "interview_session_id": (interview_session or {}).get("id"),
+            },
+        )
 
         counts = {
             "raw_messages": _count(
@@ -230,6 +264,8 @@ def load_snapshot(*, telegram_user_id: int | None, telegram_chat_id: int | None)
         interview_session=interview_session,
         evaluation_result=evaluation_result,
         latest_notification=latest_notification,
+        latest_raw_message=latest_raw_message,
+        latest_state_transition=latest_state_transition,
         counts=counts,
     )
 

@@ -33,6 +33,8 @@ def main() -> None:
     interview = snapshot.interview_session or {}
     match = snapshot.invited_match or {}
     notification = snapshot.latest_notification or {}
+    raw_message = snapshot.latest_raw_message or {}
+    state_transition = snapshot.latest_state_transition or {}
 
     print("status: found")
     _print("user_id", user["id"])
@@ -53,6 +55,13 @@ def main() -> None:
     _print("match_status", match.get("status"))
     _print("interview_state", interview.get("state"))
     _print("latest_notification", notification.get("template_key"))
+    _print("latest_message_type", raw_message.get("content_type"))
+    _print("latest_message_text", raw_message.get("text_content"))
+    if state_transition:
+        _print(
+            "latest_transition",
+            f"{state_transition.get('entity_type')} {state_transition.get('from_state')} -> {state_transition.get('to_state')}",
+        )
 
     if snapshot.counts:
         counts = snapshot.counts

@@ -207,6 +207,8 @@ This prints a JSON snapshot of:
 - latest vacancy and version
 - latest match / interview / evaluation
 - latest notification
+- latest raw message
+- latest state transition
 - row counts for messages, notifications, files, matches, vacancies
 
 To print a compact current smoke-status report instead of raw JSON:
