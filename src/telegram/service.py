@@ -475,10 +475,45 @@ class TelegramUpdateService:
                 return templates
 
         if user.is_hiring_manager and normalized_update.content_type == "text":
-            assistance_text = self.stage_agents.maybe_build_stage_reply(
+            stage_result = self.stage_agents.maybe_run_stage(
                 user=user,
                 latest_user_message=normalized_update.text or "",
                 latest_message_type=normalized_update.content_type,
+            )
+            if (
+                stage_result is not None
+                and stage_result.stage == "MANAGER_REVIEW"
+                and stage_result.action_accepted
+                and stage_result.proposed_action in {"approve_candidate", "reject_candidate"}
+            ):
+                manager_input_text = (
+                    "Approve candidate"
+                    if stage_result.proposed_action == "approve_candidate"
+                    else "Reject candidate"
+                )
+                manager_result = self.evaluation_service.handle_manager_message(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    text=manager_input_text,
+                )
+                if manager_result is not None:
+                    templates.append(
+                        self._notify(
+                            user.id,
+                            manager_result.notification_template,
+                            {
+                                "text": manager_result.notification_text,
+                                "reply_markup": manager_review_keyboard()
+                                if manager_result.status == "help"
+                                else None,
+                            },
+                        )
+                    )
+                    return templates
+            assistance_text = (
+                stage_result.reply_text
+                if stage_result is not None and not stage_result.action_accepted
+                else None
             ) or self.bot_controller.maybe_build_in_state_assistance(
                 user=user,
                 latest_user_message=normalized_update.text or "",

@@ -19,6 +19,17 @@ class FakeVacanciesRepository:
     def get_latest_active_by_manager_user_id(self, manager_user_id):
         return self.vacancy
 
+    def get_by_manager_user_id(self, user_id):
+        return [self.vacancy] if self.vacancy is not None else []
+
+
+class FakeMatchingRepository:
+    def __init__(self, manager_review_match=None):
+        self.manager_review_match = manager_review_match
+
+    def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
+        return self.manager_review_match
+
 
 def test_graph_manager_stage_handles_intake_pending_help() -> None:
     service = LangGraphStageAgentService(session=object())
@@ -26,6 +37,7 @@ def test_graph_manager_stage_handles_intake_pending_help() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v1", state="INTAKE_PENDING")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m1",
@@ -50,6 +62,7 @@ def test_graph_manager_stage_allows_passthrough_for_real_jd_text() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v2", state="INTAKE_PENDING")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m2",
@@ -77,6 +90,7 @@ def test_graph_manager_stage_handles_clarification_help() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v3", state="CLARIFICATION_QA")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m3",
@@ -101,6 +115,7 @@ def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v4", state="CLARIFICATION_QA")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m4",
@@ -132,6 +147,7 @@ def test_graph_manager_stage_handles_open_help() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v5", state="OPEN")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m5",
@@ -156,6 +172,7 @@ def test_graph_manager_stage_accepts_open_delete_intent() -> None:
     service.vacancies = FakeVacanciesRepository(
         SimpleNamespace(id="v6", state="OPEN")
     )
+    service.matches = FakeMatchingRepository()
 
     user = SimpleNamespace(
         id="m6",
@@ -174,4 +191,61 @@ def test_graph_manager_stage_accepts_open_delete_intent() -> None:
     assert result.stage == "OPEN"
     assert result.action_accepted is True
     assert result.proposed_action == "delete_vacancy"
+    assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_manager_stage_handles_manager_review_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v7", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository(
+        manager_review_match=SimpleNamespace(id="m1", status="manager_review")
+    )
+
+    user = SimpleNamespace(
+        id="m7",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="What happens if I approve this candidate?",
+    )
+
+    assert reply is not None
+    assert "approve" in reply.lower() or "candidate" in reply.lower()
+
+
+def test_graph_manager_stage_accepts_manager_review_approve() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v8", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository(
+        manager_review_match=SimpleNamespace(id="m2", status="manager_review")
+    )
+
+    user = SimpleNamespace(
+        id="m8",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Approve candidate",
+    )
+
+    assert result is not None
+    assert result.stage == "MANAGER_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "approve_candidate"
     assert result.stage_status == "ready_for_transition"

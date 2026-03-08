@@ -925,7 +925,14 @@ def test_candidate_document_cv_passthrough_reaches_cv_handler() -> None:
 def test_manager_jd_help_is_intercepted_before_jd_intake() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
-        "Yes. You can paste the role title, stack, seniority, budget, and work format as plain text."
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTAKE_PENDING",
+            reply_text="Yes. You can paste the role title, stack, seniority, budget, and work format as plain text.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
     service.bot_controller = FakeBotController(
         "Old manager intake fallback should not be used."
@@ -1658,6 +1665,42 @@ def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
     assert not service.evaluation_service.calls
 
 
+def test_graph_manager_review_stage_can_own_help_response() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="MANAGER_REVIEW",
+            reply_text="The report explains why this candidate reached manager review and what changes if you approve or reject.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+
+    user = SimpleNamespace(
+        id="u7g",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw7g",
+        build_update(text="What happens if I approve this candidate?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"].startswith("The report explains")
+    assert not service.evaluation_service.calls
+
+
 def test_manager_approve_passthrough_reaches_manager_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)
@@ -1686,6 +1729,49 @@ def test_manager_approve_passthrough_reaches_manager_handler() -> None:
 
     assert templates == ["manager_candidate_approved"]
     assert service.evaluation_service.calls
+
+
+def test_graph_manager_review_stage_can_own_approve() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="MANAGER_REVIEW",
+            reply_text="Understood. I will approve the candidate and prepare the handoff.",
+            stage_status="ready_for_transition",
+            proposed_action="approve_candidate",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "approve_candidate"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="approved",
+        notification_template="manager_candidate_approved",
+        notification_text="Candidate approved.",
+    )
+
+    user = SimpleNamespace(
+        id="u8g",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw8g",
+        build_update(text="Approve candidate"),
+    )
+
+    assert templates == ["manager_candidate_approved"]
+    assert service.evaluation_service.calls
+    assert service.evaluation_service.calls[-1]["text"] == "Approve candidate"
 
 
 def test_manager_approve_alias_passthrough_reaches_manager_handler() -> None:
@@ -2936,7 +3022,14 @@ def test_graph_manager_clarification_stage_can_own_text_completion() -> None:
 def test_manager_open_help_is_intercepted_before_fallback() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
-        "Your vacancy is open. Helly is matching candidates and will send qualified profiles."
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="Your vacancy is open. Helly is matching candidates and will send qualified profiles.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
     service.bot_controller = FakeBotController("Old open fallback should not be used.")
     service.candidate_service = FailIfCalledService()

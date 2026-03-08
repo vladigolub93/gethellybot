@@ -323,7 +323,6 @@ The next concrete implementation tasks should be:
 4. migrate interaction stages:
    - `INTERVIEW_INVITED`
    - `INTERVIEW_IN_PROGRESS`
-   - `MANAGER_REVIEW`
    - `DELETE_CONFIRMATION`
 5. refactor Telegram routing so graph becomes the default path for all supported stages
 
@@ -341,7 +340,8 @@ Current execution note:
 - `OPEN` is now implemented as a graph-owned manager status/delete-initiation stage
 - `INTERVIEW_INVITED` is now implemented as a graph-owned invitation-decision stage
 - `INTERVIEW_IN_PROGRESS` is now implemented as a graph-owned active-answer stage
-- the next rebuild target is the rest of interaction flow, starting with `MANAGER_REVIEW`
+- `MANAGER_REVIEW` is now implemented as a graph-owned review-decision stage
+- the next rebuild target is `DELETE_CONFIRMATION`
 
 ## 9. Definition of Done
 

@@ -59,8 +59,9 @@ Architectural status note:
 - manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - `INTERVIEW_INVITED` is now graph-owned for invitation guidance and accept/skip execution
 - `INTERVIEW_IN_PROGRESS` is now graph-owned for active text-answer turns and in-stage clarification
-- Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview entry/active stages through `INTERVIEW_IN_PROGRESS`, but manager review and delete-confirmation stages are still primarily help-oriented overlays around existing handlers
+- `MANAGER_REVIEW` is now graph-owned for review guidance and approve/reject execution
+- Telegram still falls back to the old controller/routing layer for the remaining non-migrated stages
+- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review stages through `MANAGER_REVIEW`, but delete-confirmation remains primarily an overlay around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -244,6 +245,7 @@ Status vs SRS:
 - `Implemented`: candidate can accept or skip
 - `Implemented`: `INTERVIEW_INVITED` invitation guidance and accept/skip execution now run through a graph-owned stage agent
 - `Implemented`: `INTERVIEW_IN_PROGRESS` active text-answer turns and in-stage clarification now run through a graph-owned stage agent
+- `Implemented`: `MANAGER_REVIEW` review guidance and approve/reject execution now run through a graph-owned stage agent
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
 - `Implemented`: one follow-up-per-topic runtime

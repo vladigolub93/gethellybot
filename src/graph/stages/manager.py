@@ -58,6 +58,19 @@ def _manager_open_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _manager_review_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat does this mean\b",
+        r"\bhow should i read\b",
+        r"\bexplain\b",
+        r"\bwhat are the risks\b",
+        r"\bwhat are the strengths\b",
+        r"\bwhy was this candidate selected\b",
+        r"\bwhat happens if i approve\b",
+        r"\bwhat happens if i reject\b",
+    )
+
+
 def load_manager_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -99,6 +112,20 @@ def _detect_manager_open_action(text: str) -> tuple[str | None, dict]:
     return None, {}
 
 
+def _is_manager_review_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _manager_review_help_patterns())
+
+
+def _detect_manager_review_action(text: str) -> tuple[str | None, dict]:
+    command = normalize_command_text(text or "")
+    if command in {"approve candidate", "approve"}:
+        return "approve_candidate", {}
+    if command in {"reject candidate", "reject"}:
+        return "reject_candidate", {}
+    return None, {}
+
+
 def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
@@ -126,6 +153,19 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
             state.parsed_input["intent"] = "help"
             return state
         proposed_action, payload = _detect_manager_open_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+            return state
+        is_help = False
+    if state.active_stage == "MANAGER_REVIEW":
+        if _is_manager_review_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_manager_review_action(text)
         if proposed_action is not None:
             state.intent = "stage_completion_input"
             state.parsed_input["intent"] = "stage_completion_input"
@@ -180,6 +220,15 @@ def build_manager_stage_reply_node(session):
         if state.active_stage == "OPEN" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
             state.reply_text = "I can help you remove this vacancy if you want to stop matching for it."
+            state.confidence = 0.9
+            return state
+
+        if state.active_stage == "MANAGER_REVIEW" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            if state.proposed_action == "approve_candidate":
+                state.reply_text = "Understood. I will approve the candidate and prepare the handoff."
+            else:
+                state.reply_text = "Understood. I will reject the candidate."
             state.confidence = 0.9
             return state
 

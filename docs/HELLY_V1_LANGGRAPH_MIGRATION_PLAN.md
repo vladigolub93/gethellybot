@@ -202,6 +202,9 @@ Status:
   - graph-driven validation and backend handoff for `skip_opportunity`
   - graph-owned execution for `INTERVIEW_IN_PROGRESS`
   - graph-driven validation and backend handoff for `answer_current_question`
+  - graph-owned execution for `MANAGER_REVIEW`
+  - graph-driven validation and backend handoff for `approve_candidate`
+  - graph-driven validation and backend handoff for `reject_candidate`
 
 ### Step 7. Routing Simplification
 

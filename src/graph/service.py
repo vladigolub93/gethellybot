@@ -55,7 +55,7 @@ class LangGraphStageAgentService:
         "INTERVIEW_INVITED",
         "INTERVIEW_IN_PROGRESS",
     }
-    MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA", "OPEN"}
+    MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA", "OPEN", "MANAGER_REVIEW"}
 
     def __init__(self, session):
         self.session = session
@@ -202,6 +202,12 @@ class LangGraphStageAgentService:
     def _resolve_manager_stage(self, user) -> str | None:
         if not getattr(user, "is_hiring_manager", False):
             return None
+        manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
+        manager_review_match = self.matches.get_latest_manager_review_for_manager(
+            [vacancy.id for vacancy in manager_vacancies]
+        )
+        if manager_review_match is not None:
+            return "MANAGER_REVIEW"
         vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
         if vacancy is None:
             return None
