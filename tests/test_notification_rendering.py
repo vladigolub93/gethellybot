@@ -1,4 +1,5 @@
 from src.notifications.rendering import (
+    render_notification_messages,
     render_notification_reply_markup,
     render_notification_text,
 )
@@ -122,3 +123,27 @@ def test_render_notification_reply_markup_returns_payload_markup() -> None:
     )
 
     assert rendered == reply_markup
+
+
+def test_render_notification_messages_splits_long_paragraph_groups() -> None:
+    long_summary = (
+        "You are Ivan, a Senior Backend Engineer with 6 years of experience building backend APIs and platform systems. "
+        "You have strong hands-on experience with Python, FastAPI, PostgreSQL, Docker, Kubernetes, AWS, CI/CD, and event-driven architecture. "
+        "You have worked on fintech, SaaS, and internal platform products supporting business-critical workflows.\n\n"
+        "This looks strong overall. If anything is off, tell me what to fix and I will update it once.\n\n"
+        "When you are happy with it, approve the summary to continue."
+    )
+
+    rendered = render_notification_messages(
+        template_key="candidate_summary_ready_for_review",
+        payload={
+            "text": "Does this summary look correct, or would you like to change anything?",
+            "summary": {
+                "approval_summary_text": long_summary,
+            },
+        },
+    )
+
+    assert len(rendered) >= 2
+    assert rendered[0].startswith("Does this summary look correct")
+    assert rendered[-1].endswith("approve the summary to continue.")

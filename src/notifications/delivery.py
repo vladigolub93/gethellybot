@@ -5,8 +5,8 @@ from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
 from src.integrations.telegram_bot import TelegramBotClient
 from src.notifications.rendering import (
+    render_notification_messages,
     render_notification_reply_markup,
-    render_notification_text,
 )
 
 
@@ -35,7 +35,7 @@ class NotificationDeliveryService:
             if user is None or not user.telegram_chat_id:
                 raise ValueError("Notification user or telegram_chat_id is not available.")
 
-            text = render_notification_text(
+            messages = render_notification_messages(
                 template_key=notification.template_key,
                 payload=notification.payload_json or {},
             )
@@ -43,26 +43,30 @@ class NotificationDeliveryService:
                 template_key=notification.template_key,
                 payload=notification.payload_json or {},
             )
-            telegram_result = self.telegram.send_text_message(
-                chat_id=user.telegram_chat_id,
-                text=text,
-                reply_markup=reply_markup,
-            )
-            self.raw_messages.create(
-                user_id=user.id,
-                telegram_update_id=None,
-                telegram_message_id=telegram_result.get("message_id"),
-                telegram_chat_id=user.telegram_chat_id,
-                direction="outbound",
-                content_type="text",
-                payload_json=telegram_result,
-                text_content=text,
-            )
+            telegram_results = []
+            for index, text in enumerate(messages):
+                telegram_result = self.telegram.send_text_message(
+                    chat_id=user.telegram_chat_id,
+                    text=text,
+                    reply_markup=reply_markup if index == len(messages) - 1 else None,
+                )
+                telegram_results.append(telegram_result)
+                self.raw_messages.create(
+                    user_id=user.id,
+                    telegram_update_id=None,
+                    telegram_message_id=telegram_result.get("message_id"),
+                    telegram_chat_id=user.telegram_chat_id,
+                    direction="outbound",
+                    content_type="text",
+                    payload_json=telegram_result,
+                    text_content=text,
+                )
             self.notifications.mark_sent(notification)
             return {
                 "status": "sent",
                 "notification_id": str(notification.id),
-                "telegram_message_id": telegram_result.get("message_id"),
+                "telegram_message_id": telegram_results[-1].get("message_id") if telegram_results else None,
+                "message_count": len(telegram_results),
             }
         except Exception as exc:
             self.notifications.mark_failed(notification, error_message=str(exc))

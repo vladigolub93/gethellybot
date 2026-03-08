@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 
+MAX_TELEGRAM_MESSAGE_CHARS = 900
+SOFT_SPLIT_CHARS = 420
+
+
 def _humanize_key(key: str) -> str:
     return key.replace("_", " ").strip().capitalize()
 
@@ -147,6 +151,45 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
     if not rendered:
         rendered = f"Helly notification: {template_key}"
     return rendered[:3900]
+
+
+def render_notification_messages(*, template_key: str, payload: dict) -> list[str]:
+    rendered = render_notification_text(template_key=template_key, payload=payload)
+    paragraphs = [part.strip() for part in rendered.split("\n\n") if part.strip()]
+    if not paragraphs:
+        return [rendered]
+    if len(rendered) <= SOFT_SPLIT_CHARS and len(paragraphs) <= 2:
+        return [rendered]
+    if len(rendered) <= MAX_TELEGRAM_MESSAGE_CHARS and len(paragraphs) <= 2:
+        return [rendered]
+    target_limit = (
+        SOFT_SPLIT_CHARS
+        if len(rendered) > SOFT_SPLIT_CHARS and len(paragraphs) > 2
+        else MAX_TELEGRAM_MESSAGE_CHARS
+    )
+
+    messages: list[str] = []
+    current_parts: list[str] = []
+    current_length = 0
+
+    for paragraph in paragraphs:
+        paragraph_length = len(paragraph)
+        separator_length = 2 if current_parts else 0
+        projected_length = current_length + separator_length + paragraph_length
+
+        if current_parts and projected_length > target_limit:
+            messages.append("\n\n".join(current_parts).strip())
+            current_parts = [paragraph]
+            current_length = paragraph_length
+            continue
+
+        current_parts.append(paragraph)
+        current_length = projected_length
+
+    if current_parts:
+        messages.append("\n\n".join(current_parts).strip())
+
+    return messages or [rendered]
 
 
 def render_notification_reply_markup(*, template_key: str, payload: dict):
