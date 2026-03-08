@@ -254,6 +254,11 @@ Status:
     - `CLARIFICATION_QA`
     - `OPEN`
     - `DELETE_CONFIRMATION`
+  - graph-native sequential flow tests now cover interaction stage progression:
+    - `INTERVIEW_INVITED`
+    - `INTERVIEW_IN_PROGRESS`
+    - `MANAGER_REVIEW`
+    - `DELETE_CONFIRMATION`
   - full test suite currently passes with graph-owned routing and stage-resolution coverage
 
 ## 5. Definition of Done

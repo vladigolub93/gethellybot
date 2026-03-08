@@ -352,6 +352,7 @@ Current execution note:
 - entry-stage help no longer relies on `bot_controller` fallback either; only generic recovery remains outside graph-owned guidance
 - graph-native stage-resolution coverage now verifies priority ordering across candidate and manager stage families, including `READY`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`
 - graph-native flow coverage now includes sequential candidate and manager journey tests across multiple stage transitions, not only single-stage unit checks
+- graph-native flow coverage now also includes interaction-path sequences across invitation, active interview, manager review, and delete confirmation
 - the next rebuild target is Phase 9 and Phase 10 cleanup work: removing remaining legacy controller ownership, simplifying Telegram routing around graph-first execution, and expanding graph-native end-to-end coverage
 
 ## 9. Definition of Done
