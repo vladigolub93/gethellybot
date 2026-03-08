@@ -488,6 +488,7 @@ Recent stage-ownership progress:
 - `TelegramUpdateService` no longer uses raw-text compatibility fallback in candidate summary review, manager summary review, or manager review paths after a graph-owned stage decision; those segments now wait for explicit stage-agent output.
 - a dedicated conversation-quality layer is now documented in `HELLY_V1_CONVERSATION_QUALITY_PLAN.md` and `HELLY_V1_VOICE_AND_TONE_GUIDE.md`, and the shared Telegram style rules have been expanded to target warmer, more human, Telegram-native recruiter behavior across all runtime-loaded prompts.
 - conversation-polish execution is now explicitly broken down in `HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md`, covering shared prompt tuning, message choreography, local context memory, microcopy cleanup, and transcript-driven iteration.
+- the first high-impact prompt rewrite pass is now applied to `CONTACT_REQUIRED`, `ROLE_SELECTION`, `CV_PENDING`, `SUMMARY_REVIEW`, and `VACANCY_SUMMARY_REVIEW`, shifting those stages toward calmer, more human, recruiter-like Telegram behavior without changing their action contracts.
 
 ## 7. Production Readiness Assessment
 
