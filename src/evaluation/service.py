@@ -150,6 +150,30 @@ class EvaluationService:
         if not user.is_hiring_manager:
             return None
 
+        lowered = normalize_command_text(text)
+        if lowered in {"approve candidate", "approve"}:
+            return self.execute_manager_review_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="approve_candidate",
+            )
+        if lowered in {"reject candidate", "reject"}:
+            return self.execute_manager_review_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="reject_candidate",
+            )
+
+        return ManagerDecisionResult(
+            status="help",
+            notification_template="manager_candidate_review_help",
+            notification_text=self._copy("Reply 'Approve candidate' or 'Reject candidate'."),
+        )
+
+    def execute_manager_review_action(self, *, user, raw_message_id, action: str):
+        if not user.is_hiring_manager:
+            return None
+
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
         match = self.matches.get_latest_manager_review_for_manager(
             [vacancy.id for vacancy in manager_vacancies]
@@ -157,12 +181,10 @@ class EvaluationService:
         if match is None:
             return None
 
-        lowered = normalize_command_text(text)
-        if lowered in {"approve candidate", "approve"}:
+        if action == "approve_candidate":
             return self._approve_candidate(user=user, match=match, raw_message_id=raw_message_id)
-        if lowered in {"reject candidate", "reject"}:
+        if action == "reject_candidate":
             return self._reject_candidate(user=user, match=match, raw_message_id=raw_message_id)
-
         return ManagerDecisionResult(
             status="help",
             notification_template="manager_candidate_review_help",

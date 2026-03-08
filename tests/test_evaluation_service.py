@@ -208,3 +208,20 @@ def test_manager_reject_updates_match_and_candidate() -> None:
     assert result.status == "rejected"
     assert match.status == "rejected"
     assert candidate.state == "REJECTED"
+
+
+def test_execute_manager_review_action_approves_without_raw_text_parsing() -> None:
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
+    match.status = "manager_review"
+    user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
+
+    result = service.execute_manager_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_candidate",
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert match.status == "approved"
+    assert candidate.state == "APPROVED"

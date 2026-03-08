@@ -235,6 +235,10 @@ class FakeEvaluationService:
         self.calls.append(kwargs)
         return self.result
 
+    def execute_manager_review_action(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
 
 class FakeInterviewService:
     def __init__(self):
@@ -1899,7 +1903,7 @@ def test_graph_manager_review_stage_can_own_approve() -> None:
 
     assert templates == ["manager_candidate_approved"]
     assert service.evaluation_service.calls
-    assert service.evaluation_service.calls[-1]["text"] == "Approve candidate"
+    assert service.evaluation_service.calls[-1]["action"] == "approve_candidate"
 
 
 def test_manager_approve_alias_passthrough_reaches_manager_handler() -> None:

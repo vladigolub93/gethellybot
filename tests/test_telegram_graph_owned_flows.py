@@ -208,6 +208,10 @@ class FakeEvaluationService:
         self.calls.append(kwargs)
         return self.result
 
+    def execute_manager_review_action(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
 
 class DispatchingStageAgentService:
     def __init__(self):
@@ -538,4 +542,4 @@ def test_graph_owned_interaction_flow_routes_accept_answer_and_manager_approve()
     )
     templates = service._apply_identity_flow(manager_user, "raw3", build_update(text="Approve candidate"))
     assert templates == ["manager_candidate_review_progressed"]
-    assert service.evaluation_service.calls[-1]["text"] == "Approve candidate"
+    assert service.evaluation_service.calls[-1]["action"] == "approve_candidate"

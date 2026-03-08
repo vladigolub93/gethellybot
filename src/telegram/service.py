@@ -375,15 +375,10 @@ class TelegramUpdateService:
             and stage_result.proposed_action in {"approve_candidate", "reject_candidate"}
         ):
             return None
-        manager_input_text = (
-            "Approve candidate"
-            if stage_result.proposed_action == "approve_candidate"
-            else "Reject candidate"
-        )
-        manager_result = self.evaluation_service.handle_manager_message(
+        manager_result = self.evaluation_service.execute_manager_review_action(
             user=user,
             raw_message_id=raw_message_id,
-            text=manager_input_text,
+            action=stage_result.proposed_action,
         )
         if manager_result is None:
             return None
@@ -442,26 +437,11 @@ class TelegramUpdateService:
         ):
             text = (stage_result.structured_payload or {}).get("answer_text") or normalized_update.text
         elif (
-            stage_result.stage == "QUESTIONS_PENDING"
-            and stage_result.proposed_action == "send_salary_location_work_format"
+            stage_result.stage != "INTERVIEW_IN_PROGRESS"
+            or stage_result.proposed_action != "answer_current_question"
         ):
-            questions_result = self.candidate_service.handle_questions_parsed_payload(
-                user=user,
-                raw_message_id=raw_message_id,
-                parsed_payload=stage_result.structured_payload or {},
-            )
-            if questions_result is None:
-                return None
-            return [
-                self._notify_result(
-                    user_id=user.id,
-                    template_key=questions_result.notification_template,
-                    text=questions_result.notification_text,
-                )
-            ]
-        else:
             return None
-
+        text = (stage_result.structured_payload or {}).get("answer_text") or normalized_update.text
         interview_result = self.interview_service.handle_candidate_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1120,12 +1100,34 @@ class TelegramUpdateService:
         raw_message_id,
         normalized_update: NormalizedTelegramUpdate,
         file_id,
+        stage_result,
     ) -> List[str] | None:
+        if (
+            stage_result is not None
+            and stage_result.stage == "QUESTIONS_PENDING"
+            and stage_result.action_accepted
+            and stage_result.proposed_action == "send_salary_location_work_format"
+        ):
+            questions_result = self.candidate_service.handle_questions_parsed_payload(
+                user=user,
+                raw_message_id=raw_message_id,
+                parsed_payload=stage_result.structured_payload or {},
+            )
+            if questions_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=questions_result.notification_template,
+                    text=questions_result.notification_text,
+                )
+            ]
         if normalized_update.content_type == "text":
             assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=normalized_update.text or "",
                 user_id=user.id,
+                stage_result=stage_result,
             )
             if assistance_templates is not None:
                 return assistance_templates
@@ -1385,6 +1387,7 @@ class TelegramUpdateService:
                         raw_message_id=raw_message_id,
                         normalized_update=normalized_update,
                         file_id=file_id,
+                        stage_result=stage_result,
                     ),
                 ),
                 (
