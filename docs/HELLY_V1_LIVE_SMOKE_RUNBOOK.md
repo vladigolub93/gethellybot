@@ -39,6 +39,8 @@ Useful tools:
   - `.venv/bin/python scripts/validate_stage_help_safety.py --telegram-user-id <id> ...`
 - validate that the latest inbound message did not produce a newer state transition:
   - `.venv/bin/python scripts/validate_no_post_message_transition.py --telegram-user-id <id> ...`
+- validate that Railway logs contain the graph-owned stage execution event:
+  - `.venv/bin/python scripts/validate_graph_stage_logs.py --expect-telegram-user-id <id> --expect-stage <stage>`
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -52,6 +54,17 @@ Railway log check:
   - `proposed_action`
   - `action_accepted`
   - `telegram_user_id`
+
+Example:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_graph_stage_logs.py \
+  --expect-telegram-user-id <id> \
+  --expect-stage SUMMARY_REVIEW
+```
 
 ## 3. Candidate Onboarding Smoke
 
@@ -242,6 +255,17 @@ set +a
   --expect-vacancy-state VACANCY_SUMMARY_REVIEW \
   --expect-latest-inbound-contains "How long" \
   --forbid-vacancy-version-source-type summary_user_edit
+```
+
+Railway log verification for the same step:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_graph_stage_logs.py \
+  --expect-telegram-user-id <manager-id> \
+  --expect-stage VACANCY_SUMMARY_REVIEW
 ```
 
 ## 7. Delete Confirmation Smoke

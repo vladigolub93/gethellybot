@@ -285,6 +285,22 @@ set +a
   --forbid-candidate-version-source-type summary_user_edit
 ```
 
+To validate that Railway production logs contain a graph-owned stage execution event:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_graph_stage_logs.py \
+  --expect-telegram-user-id <telegram-user-id> \
+  --expect-stage SUMMARY_REVIEW
+```
+
+This requires:
+
+- `RAILWAY_API_TOKEN`
+- `RAILWAY_ENVIRONMENT_ID`
+
 ## 12. Operational Notes
 
 - outbound Telegram delivery is asynchronous via the scheduler and worker
