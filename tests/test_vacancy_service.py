@@ -230,10 +230,10 @@ def test_vacancy_summary_review_approve_moves_to_clarifications() -> None:
     )
     fake_repo.set_current_version(vacancy, version.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Approve summary",
+        action="approve_summary",
     )
 
     assert result is not None
@@ -262,10 +262,11 @@ def test_vacancy_summary_review_edit_queues_one_correction_round() -> None:
     )
     fake_repo.set_current_version(vacancy, version.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="The role is Go-first, not Python-first.",
+        action="request_summary_change",
+        structured_payload={"edit_text": "The role is Go-first, not Python-first."},
     )
 
     assert result is not None
@@ -378,15 +379,15 @@ def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
     service.matching.active_matches.append(match)
     service.interviews.sessions_by_match_id[match.id] = interview
 
-    first = service.handle_deletion_message(
+    first = service.execute_deletion_action(
         user=user,
         raw_message_id=uuid4(),
-        text="delete vacancy",
+        action="delete_vacancy",
     )
-    second = service.handle_deletion_message(
+    second = service.execute_deletion_action(
         user=user,
         raw_message_id=uuid4(),
-        text="confirm delete vacancy",
+        action="confirm_delete",
     )
 
     assert first is not None

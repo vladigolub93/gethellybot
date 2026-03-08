@@ -104,6 +104,10 @@ class FakeCandidateService:
         self.deletion_calls.append(kwargs)
         return None
 
+    def execute_deletion_action(self, **kwargs):
+        self.deletion_calls.append(kwargs)
+        return None
+
 
 class FakeVacancyService:
     def __init__(self):
@@ -181,6 +185,10 @@ class FakeVacancyService:
         return self.clarification_answer_result
 
     def handle_deletion_message(self, **kwargs):
+        self.deletion_calls.append(kwargs)
+        return None
+
+    def execute_deletion_action(self, **kwargs):
         self.deletion_calls.append(kwargs)
         return None
 

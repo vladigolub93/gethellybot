@@ -28,7 +28,6 @@ from src.llm.service import (
 from src.messaging.service import MessagingService
 from src.matching.waves import InviteWaveService
 from src.state.service import StateService
-from src.shared.text import normalize_command_text
 from src.telegram.keyboards import interview_invitation_keyboard
 
 
@@ -194,54 +193,6 @@ class InterviewService:
             "remaining_shortlisted_count": max(remaining_shortlisted_count - invited_count, 0),
             "shortlist_exhausted": remaining_shortlisted_count <= invited_count,
         }
-
-    def handle_candidate_message(
-        self,
-        *,
-        user,
-        raw_message_id,
-        content_type: str,
-        text=None,
-        file_id=None,
-    ):
-        candidate = self.candidates.get_active_by_user_id(user.id)
-        if candidate is None:
-            return None
-
-        active_session = self.interviews.get_active_session_for_candidate(candidate.id)
-        if active_session is not None:
-            return self.execute_active_interview_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="answer_current_question",
-                content_type=content_type,
-                text=text,
-                file_id=file_id,
-            )
-
-        invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
-        if invited_match is None:
-            return None
-
-        lowered = normalize_command_text(text)
-        if content_type == "text" and lowered in {"accept interview", "accept"}:
-            return self.execute_invitation_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="accept_interview",
-            )
-        if content_type == "text" and lowered in {"skip opportunity", "skip"}:
-            return self.execute_invitation_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="skip_opportunity",
-            )
-
-        return InterviewUserResult(
-            status="invite_pending",
-            notification_template="candidate_interview_invitation_help",
-            notification_text=self._copy("Reply 'Accept interview' or 'Skip opportunity'."),
-        )
 
     def execute_active_interview_action(
         self,

@@ -218,10 +218,10 @@ def test_approve_summary_moves_candidate_to_questions_pending() -> None:
     )
     fake_repo.set_current_version(profile, version.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Approve summary",
+        action="approve_summary",
     )
 
     assert result is not None
@@ -250,10 +250,11 @@ def test_edit_summary_enqueues_processing_job() -> None:
     )
     fake_repo.set_current_version(profile, version.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Please emphasize backend leadership and platform ownership.",
+        action="request_summary_change",
+        structured_payload={"edit_text": "Please emphasize backend leadership and platform ownership."},
     )
 
     assert result is not None
@@ -354,10 +355,11 @@ def test_summary_change_prompt_requests_specific_correction() -> None:
     )
     fake_repo.set_current_version(profile, version.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Change summary",
+        action=None,
+        structured_payload={"needs_edit_details": True},
     )
 
     assert result is not None
@@ -392,10 +394,11 @@ def test_second_summary_edit_is_rejected() -> None:
     )
     fake_repo.set_current_version(profile, edited.id)
 
-    result = service.handle_summary_review_action(
+    result = service.execute_summary_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Actually change it again",
+        action="request_summary_change",
+        structured_payload={"edit_text": "Actually change it again"},
     )
 
     assert result is not None
@@ -563,15 +566,15 @@ def test_candidate_deletion_requires_confirmation_then_soft_deletes() -> None:
     service.matching.active_matches.append(match)
     service.interviews.sessions_by_match_id[match.id] = interview
 
-    first = service.handle_deletion_message(
+    first = service.execute_deletion_action(
         user=user,
         raw_message_id=uuid4(),
-        text="delete profile",
+        action="delete_profile",
     )
-    second = service.handle_deletion_message(
+    second = service.execute_deletion_action(
         user=user,
         raw_message_id=uuid4(),
-        text="confirm delete profile",
+        action="confirm_delete",
     )
 
     assert first is not None

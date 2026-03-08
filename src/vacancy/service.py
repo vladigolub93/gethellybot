@@ -16,7 +16,6 @@ from src.llm.service import (
 )
 from src.messaging.service import MessagingService
 from src.state.service import StateService
-from src.shared.text import normalize_command_text
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
     follow_up_prompt,
@@ -252,35 +251,6 @@ class VacancyService:
             actor_user_id=user.id,
         )
 
-    def handle_summary_review_action(
-        self,
-        *,
-        user,
-        raw_message_id,
-        text: Optional[str],
-    ) -> Optional[VacancySummaryReviewResult]:
-        # Compatibility wrapper for legacy/raw-text callers.
-        normalized_text = (text or "").strip()
-        lowered = normalize_command_text(normalized_text)
-        action = None
-        payload: dict = {}
-        if lowered in {"approve summary", "approve", "approve vacancy summary"}:
-            action = "approve_summary"
-        else:
-            if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
-                normalized_text = normalized_text.split(":", 1)[1].strip()
-            if lowered in {"change summary", "edit summary", "change", "edit"}:
-                payload["needs_edit_details"] = True
-            elif normalized_text:
-                action = "request_summary_change"
-                payload["edit_text"] = normalized_text
-        return self.execute_summary_review_action(
-            user=user,
-            raw_message_id=raw_message_id,
-            action=action,
-            structured_payload=payload,
-        )
-
     def execute_summary_review_action(
         self,
         *,
@@ -499,39 +469,6 @@ class VacancyService:
         for key in missing_keys:
             if not follow_up_used.get(key, False):
                 return key
-        return None
-
-    def handle_deletion_message(
-        self,
-        *,
-        user,
-        raw_message_id,
-        text: Optional[str],
-    ) -> Optional[VacancyDeletionResult]:
-        # Compatibility wrapper for legacy/raw-text callers.
-        vacancy = self.repo.get_latest_active_by_manager_user_id(user.id)
-        if vacancy is None:
-            return None
-
-        normalized_text = normalize_command_text(text)
-        if normalized_text in {"delete vacancy", "delete this vacancy", "remove vacancy"}:
-            return self.execute_deletion_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="delete_vacancy",
-            )
-        if normalized_text in {"confirm delete", "confirm delete vacancy"}:
-            return self.execute_deletion_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="confirm_delete",
-            )
-        if normalized_text in {"cancel delete", "keep vacancy", "don't delete", "dont delete"}:
-            return self.execute_deletion_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="cancel_delete",
-            )
         return None
 
     def execute_deletion_action(

@@ -232,6 +232,10 @@ class FakeCandidateService:
         self.deletion_calls.append(kwargs)
         return self.deletion_result
 
+    def execute_deletion_action(self, **kwargs):
+        self.deletion_calls.append(kwargs)
+        return self.deletion_result
+
     def start_onboarding(self, user, trigger_ref_id):
         self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
 
@@ -272,6 +276,10 @@ class FakeVacancyService:
         self.clarification_result = None
 
     def handle_deletion_message(self, **kwargs):
+        self.deletion_calls.append(kwargs)
+        return self.deletion_result
+
+    def execute_deletion_action(self, **kwargs):
         self.deletion_calls.append(kwargs)
         return self.deletion_result
 
@@ -1690,7 +1698,7 @@ def test_graph_ready_stage_can_own_delete_profile_intent() -> None:
 
     assert templates == ["candidate_deletion_confirmation_required"]
     assert service.candidate_service.deletion_calls
-    assert service.candidate_service.deletion_calls[-1]["text"] == "delete profile"
+    assert service.candidate_service.deletion_calls[-1]["action"] == "delete_profile"
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:
@@ -2787,7 +2795,7 @@ def test_graph_delete_confirmation_stage_can_own_candidate_confirm() -> None:
 
     assert templates == ["candidate_deleted"]
     assert service.candidate_service.deletion_calls
-    assert service.candidate_service.deletion_calls[-1]["text"] == "Confirm delete profile"
+    assert service.candidate_service.deletion_calls[-1]["action"] == "confirm_delete"
 
 
 def test_candidate_generic_confirm_delete_alias_reaches_deletion_handler() -> None:
@@ -2980,7 +2988,7 @@ def test_graph_delete_confirmation_stage_can_own_candidate_cancel() -> None:
 
     assert templates == ["candidate_deletion_cancelled"]
     assert service.candidate_service.deletion_calls
-    assert service.candidate_service.deletion_calls[-1]["text"] == "Cancel delete"
+    assert service.candidate_service.deletion_calls[-1]["action"] == "cancel_delete"
 
 
 def test_candidate_keep_profile_alias_reaches_deletion_handler() -> None:
@@ -3113,7 +3121,7 @@ def test_graph_delete_confirmation_stage_can_own_vacancy_confirm() -> None:
 
     assert templates == ["vacancy_deleted"]
     assert service.vacancy_service.deletion_calls
-    assert service.vacancy_service.deletion_calls[-1]["text"] == "Confirm delete vacancy"
+    assert service.vacancy_service.deletion_calls[-1]["action"] == "confirm_delete"
 
 
 def test_vacancy_generic_confirm_delete_alias_reaches_deletion_handler() -> None:
@@ -3306,7 +3314,7 @@ def test_graph_delete_confirmation_stage_can_own_vacancy_cancel() -> None:
 
     assert templates == ["vacancy_deletion_cancelled"]
     assert service.vacancy_service.deletion_calls
-    assert service.vacancy_service.deletion_calls[-1]["text"] == "Cancel delete"
+    assert service.vacancy_service.deletion_calls[-1]["action"] == "cancel_delete"
 
 
 def test_vacancy_keep_vacancy_alias_reaches_deletion_handler() -> None:
@@ -3499,7 +3507,7 @@ def test_graph_open_stage_can_own_delete_vacancy_intent() -> None:
 
     assert templates == ["vacancy_deletion_confirmation_required"]
     assert service.vacancy_service.deletion_calls
-    assert service.vacancy_service.deletion_calls[-1]["text"] == "delete vacancy"
+    assert service.vacancy_service.deletion_calls[-1]["action"] == "delete_vacancy"
 
 
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:

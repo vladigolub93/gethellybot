@@ -11,7 +11,6 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_evaluate_candidate
 from src.messaging.service import MessagingService
 from src.state.service import StateService
-from src.shared.text import normalize_command_text
 from src.telegram.keyboards import manager_review_keyboard
 from src.evaluation.package_builder import build_candidate_package
 
@@ -145,30 +144,6 @@ class EvaluationService:
             "status": status,
             "final_score": evaluation["final_score"],
         }
-
-    def handle_manager_message(self, *, user, raw_message_id, text: str):
-        if not user.is_hiring_manager:
-            return None
-
-        lowered = normalize_command_text(text)
-        if lowered in {"approve candidate", "approve"}:
-            return self.execute_manager_review_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="approve_candidate",
-            )
-        if lowered in {"reject candidate", "reject"}:
-            return self.execute_manager_review_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="reject_candidate",
-            )
-
-        return ManagerDecisionResult(
-            status="help",
-            notification_template="manager_candidate_review_help",
-            notification_text=self._copy("Reply 'Approve candidate' or 'Reject candidate'."),
-        )
 
     def execute_manager_review_action(self, *, user, raw_message_id, action: str):
         if not user.is_hiring_manager:

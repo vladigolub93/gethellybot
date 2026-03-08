@@ -269,11 +269,10 @@ def test_accept_invitation_starts_interview() -> None:
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
 
-    result = service.handle_candidate_message(
+    result = service.execute_invitation_action(
         user=user,
         raw_message_id=uuid4(),
-        content_type="text",
-        text="Accept interview",
+        action="accept_interview",
     )
 
     assert result is not None
@@ -308,11 +307,10 @@ def test_accept_invitation_builds_questions_from_persisted_cv_text(monkeypatch: 
 
     monkeypatch.setattr("src.interview.service.safe_build_interview_question_plan", _fake_build_plan)
 
-    result = service.handle_candidate_message(
+    result = service.execute_invitation_action(
         user=user,
         raw_message_id=uuid4(),
-        content_type="text",
-        text="Accept interview",
+        action="accept_interview",
     )
 
     assert result is not None
@@ -324,17 +322,17 @@ def test_interview_answers_complete_session() -> None:
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
-    service.handle_candidate_message(
+    service.execute_invitation_action(
         user=user,
         raw_message_id=uuid4(),
-        content_type="text",
-        text="Accept interview",
+        action="accept_interview",
     )
 
     for index in range(4):
-        result = service.handle_candidate_message(
+        result = service.execute_active_interview_action(
             user=user,
             raw_message_id=uuid4(),
+            action="answer_current_question",
             content_type="text",
             text=f"Answer {index + 1}",
         )
@@ -373,11 +371,10 @@ def test_strong_answer_inserts_followup_question(monkeypatch: pytest.MonkeyPatch
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
     user = SimpleNamespace(id=candidate.user_id)
-    service.handle_candidate_message(
+    service.execute_invitation_action(
         user=user,
         raw_message_id=uuid4(),
-        content_type="text",
-        text="Accept interview",
+        action="accept_interview",
     )
 
     monkeypatch.setattr(
@@ -405,9 +402,10 @@ def test_strong_answer_inserts_followup_question(monkeypatch: pytest.MonkeyPatch
         ),
     )
 
-    result = service.handle_candidate_message(
+    result = service.execute_active_interview_action(
         user=user,
         raw_message_id=uuid4(),
+        action="answer_current_question",
         content_type="text",
         text="I designed and implemented the API myself.",
     )

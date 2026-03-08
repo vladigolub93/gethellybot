@@ -175,10 +175,10 @@ def test_manager_approve_creates_introduction_event() -> None:
     match.status = "manager_review"
     user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
 
-    result = service.handle_manager_message(
+    result = service.execute_manager_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Approve candidate",
+        action="approve_candidate",
     )
 
     assert result is not None
@@ -198,10 +198,10 @@ def test_manager_reject_updates_match_and_candidate() -> None:
     match.status = "manager_review"
     user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
 
-    result = service.handle_manager_message(
+    result = service.execute_manager_review_action(
         user=user,
         raw_message_id=uuid4(),
-        text="Reject candidate",
+        action="reject_candidate",
     )
 
     assert result is not None

@@ -284,18 +284,11 @@ class TelegramUpdateService:
                 if stage_result.proposed_action == "confirm_delete"
                 else "Cancel delete"
             )
-        if hasattr(self.candidate_service, "execute_deletion_action"):
-            deletion_result = self.candidate_service.execute_deletion_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="delete_profile" if stage_result.stage == "READY" else stage_result.proposed_action,
-            )
-        else:
-            deletion_result = self.candidate_service.handle_deletion_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=deletion_text,
-            )
+        deletion_result = self.candidate_service.execute_deletion_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action="delete_profile" if stage_result.stage == "READY" else stage_result.proposed_action,
+        )
         if deletion_result is None:
             return None
         return [
@@ -336,18 +329,11 @@ class TelegramUpdateService:
                 if stage_result.proposed_action == "confirm_delete"
                 else "Cancel delete"
             )
-        if hasattr(self.vacancy_service, "execute_deletion_action"):
-            deletion_result = self.vacancy_service.execute_deletion_action(
-                user=user,
-                raw_message_id=raw_message_id,
-                action="delete_vacancy" if stage_result.stage == "OPEN" else stage_result.proposed_action,
-            )
-        else:
-            deletion_result = self.vacancy_service.handle_deletion_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=deletion_text,
-            )
+        deletion_result = self.vacancy_service.execute_deletion_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action="delete_vacancy" if stage_result.stage == "OPEN" else stage_result.proposed_action,
+        )
         if deletion_result is None:
             return None
         return [
@@ -724,31 +710,6 @@ class TelegramUpdateService:
             )
         ]
 
-    def _handle_manager_review_message(
-        self,
-        *,
-        user,
-        raw_message_id,
-        text: str,
-    ) -> List[str] | None:
-        manager_result = self.evaluation_service.handle_manager_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=text,
-        )
-        if manager_result is None:
-            return None
-        return [
-            self._notify_result(
-                user_id=user.id,
-                template_key=manager_result.notification_template,
-                text=manager_result.notification_text,
-                reply_markup=manager_review_keyboard()
-                if manager_result.status == "help"
-                else remove_keyboard(),
-            )
-        ]
-
     def _handle_candidate_interview_message(
         self,
         *,
@@ -757,13 +718,20 @@ class TelegramUpdateService:
         normalized_update: NormalizedTelegramUpdate,
         file_id,
     ) -> List[str] | None:
-        interview_result = self.interview_service.handle_candidate_message(
+        interview_result = self.interview_service.execute_active_interview_action(
             user=user,
             raw_message_id=raw_message_id,
+            action="answer_current_question",
             content_type=normalized_update.content_type,
             text=normalized_update.text,
             file_id=file_id,
         )
+        if interview_result is None:
+            interview_result = self.interview_service.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action=None,
+            )
         if interview_result is None:
             return None
         return [
@@ -774,52 +742,6 @@ class TelegramUpdateService:
                 reply_markup=interview_invitation_keyboard()
                 if interview_result.status == "invite_pending"
                 else remove_keyboard(),
-            )
-        ]
-
-    def _handle_candidate_summary_message(
-        self,
-        *,
-        user,
-        raw_message_id,
-        text: str,
-    ) -> List[str] | None:
-        summary_review_result = self.candidate_service.handle_summary_review_action(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=text,
-        )
-        if summary_review_result is None:
-            return None
-        message_map = {
-            "candidate_summary_approved": "Summary approved. Send your salary expectations, current location, and preferred work format (remote, hybrid, or office).",
-            "candidate_summary_edit_processing": "Thanks. Updating your summary based on your correction.",
-            "candidate_summary_edit_limit_reached": "You can only change the summary once. Please approve the latest version to continue.",
-            "candidate_summary_edit_empty": "Tell me exactly what is incorrect in the summary, and I will update it once.",
-            "candidate_summary_not_available": "No current summary is available to review.",
-            "candidate_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
-        }
-        return [
-            self._notify_result(
-                user_id=user.id,
-                template_key=summary_review_result.notification_template,
-                text=self._copy(message_map[summary_review_result.notification_template]),
-                reply_markup=(
-                    summary_review_keyboard(edit_allowed=True)
-                    if summary_review_result.notification_template in {
-                        "candidate_summary_review_help",
-                        "candidate_summary_edit_empty",
-                    }
-                    else summary_review_keyboard(edit_allowed=False)
-                    if summary_review_result.notification_template
-                    == "candidate_summary_edit_limit_reached"
-                    else remove_keyboard()
-                    if summary_review_result.notification_template in {
-                        "candidate_summary_approved",
-                        "candidate_summary_edit_processing",
-                    }
-                    else None
-                ),
             )
         ]
 
