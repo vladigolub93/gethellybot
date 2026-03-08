@@ -362,6 +362,7 @@ Current execution note:
 - candidate summary-review dispatch, candidate verification dispatch, manager clarification dispatch, manager intake dispatch, and candidate intake dispatch are now also extracted into reusable Telegram transport helpers instead of duplicated inline routing branches
 - repeated graph-help notification dispatch in migrated stages is now centralized through a shared Telegram transport helper instead of repeated inline `resolve -> notify -> return` blocks
 - repeated compatibility fallback dispatch for manager review, candidate interview, candidate summary review, candidate verification, candidate questions, manager clarification, manager intake, and candidate intake is now also centralized through reusable Telegram transport helpers
+- `TelegramUpdateService` no longer depends directly on `BotControllerService`; generic unsupported-input recovery now resolves current stage context through graph/messaging-native transport logic
 - Phase 11 has started with reusable production validation automation for Railway health and Telegram webhook checks
 - live production validation baseline has passed against the current Railway deployment: API `/health` returns `ok`, webhook URL matches `APP_BASE_URL/telegram/webhook`, and pending updates are `0`
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage

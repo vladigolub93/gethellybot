@@ -121,6 +121,11 @@ class LangGraphStageAgentService:
             validation_result=result.get("validation_result") or {},
         )
 
+    def resolve_current_stage_context(self, *, user):
+        stage = self._resolve_supported_stage(user)
+        role = self._resolve_role(user)
+        return resolve_state_context(role=role, state=stage)
+
     def maybe_build_stage_reply(
         self,
         *,

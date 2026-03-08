@@ -5,6 +5,7 @@ from typing import Optional
 from types import SimpleNamespace
 
 from src.graph.service import StageAgentExecutionResult
+from src.orchestrator.policy import resolve_state_context
 from src.telegram.service import TelegramUpdateService
 from src.telegram.types import NormalizedTelegramUpdate
 
@@ -23,6 +24,9 @@ class FakeMessagingService:
 
     def compose_role_selection(self, latest_user_message=None) -> str:
         return "Choose your role."
+
+    def compose_recovery(self, *, state: str | None, allowed_actions: list[str], latest_user_message: str) -> str:
+        return f"Recovery for {state}: {latest_user_message}"
 
 
 class FakeBotController:
@@ -102,6 +106,13 @@ class FakeStageAgentService:
             }
         )
         return self.stage_result
+
+    def resolve_current_stage_context(self, *, user):
+        if not getattr(user, "phone_number", None):
+            return resolve_state_context(role=None, state="CONTACT_REQUIRED")
+        if not getattr(user, "is_candidate", False) and not getattr(user, "is_hiring_manager", False):
+            return resolve_state_context(role=None, state="ROLE_SELECTION")
+        return resolve_state_context(role=None, state=None)
 
 
 class FailIfCalledService:
@@ -330,7 +341,10 @@ def test_contact_required_without_graph_reply_falls_back_to_generic_recovery() -
 
     assert templates == ["unsupported_input"]
     assert service.stage_agents.calls
-    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: Why?"
+    assert (
+        service.notifications_repo.calls[-1]["payload_json"]["text"]
+        == "Please share your contact using the button below to continue."
+    )
 
 
 def test_start_with_contact_but_without_consent_requests_consent() -> None:
@@ -3575,7 +3589,7 @@ def test_unsupported_input_uses_recovery_for_user_without_active_role_flow() -> 
 
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
-    assert service.notifications_repo.calls[-1]["payload_json"]["text"].startswith("Recovery:")
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Choose your role."
 
 
 def test_unsupported_voice_input_uses_recovery_for_user_without_active_role_flow() -> None:
@@ -3603,7 +3617,7 @@ def test_unsupported_voice_input_uses_recovery_for_user_without_active_role_flow
 
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
-    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: voice"
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Choose your role."
 
 
 def test_unsupported_document_input_uses_recovery_for_user_without_active_role_flow() -> None:
@@ -3631,4 +3645,4 @@ def test_unsupported_document_input_uses_recovery_for_user_without_active_role_f
 
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
-    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Recovery: document"
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Choose your role."

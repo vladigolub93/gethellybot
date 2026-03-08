@@ -227,6 +227,7 @@ Status:
   - repeated graph-to-backend handoff branches for candidate delete, manager delete, manager review, candidate interaction, candidate summary review, candidate verification, manager clarification, manager intake, and candidate intake are extracted into reusable helpers instead of duplicated inline routing code
   - repeated graph-help reply dispatch for migrated stages is also centralized into a shared helper instead of repeated inline `graph reply -> notification` branches
   - repeated compatibility fallback service-to-notification dispatch for summary review, verification, questions, clarification, intake, manager review, and candidate interview paths is also centralized into reusable Telegram helpers
+  - `TelegramUpdateService` no longer calls `BotControllerService` directly for generic unsupported-input recovery; recovery now resolves stage context through graph/messaging-native transport helpers
 
 ### Step 8. Production Validation
 

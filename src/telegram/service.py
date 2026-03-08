@@ -16,7 +16,7 @@ from src.graph.service import LangGraphStageAgentService
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
-from src.orchestrator.service import BotControllerService
+from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
     consent_keyboard,
@@ -53,7 +53,6 @@ class TelegramUpdateService:
         self.candidate_service = CandidateProfileService(session)
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
-        self.bot_controller = BotControllerService(session)
         self.vacancy_service = VacancyService(session)
 
     def _copy(self, approved_intent: str) -> str:
@@ -734,6 +733,38 @@ class TelegramUpdateService:
             )
         ]
 
+    def _resolve_recovery_context(self, *, user):
+        if hasattr(self.stage_agents, "resolve_current_stage_context"):
+            return self.stage_agents.resolve_current_stage_context(user=user)
+
+        role = None
+        if getattr(user, "is_candidate", False):
+            role = "candidate"
+        elif getattr(user, "is_hiring_manager", False):
+            role = "hiring_manager"
+
+        if not getattr(user, "phone_number", None):
+            return resolve_state_context(role=role, state="CONTACT_REQUIRED")
+        if not self.identity_service.has_data_processing_consent(user):
+            return resolve_state_context(role=role, state="CONSENT_REQUIRED")
+        if role is None:
+            return resolve_state_context(role=None, state="ROLE_SELECTION")
+        return resolve_state_context(role=role, state=None)
+
+    def _build_generic_recovery_message(self, *, user, latest_user_message: str) -> str:
+        context = self._resolve_recovery_context(user=user)
+        if context.state in {"CONTACT_REQUIRED", "CONSENT_REQUIRED"}:
+            return context.guidance_text
+        if context.state == "ROLE_SELECTION":
+            return self.messaging.compose_role_selection(
+                latest_user_message=latest_user_message or None,
+            )
+        return self.messaging.compose_recovery(
+            state=context.state,
+            allowed_actions=context.allowed_actions,
+            latest_user_message=latest_user_message,
+        )
+
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
@@ -1235,7 +1266,7 @@ class TelegramUpdateService:
                 user.id,
                 "unsupported_input",
                 {
-                    "text": self.bot_controller.build_recovery_message(
+                    "text": self._build_generic_recovery_message(
                         user=user,
                         latest_user_message=normalized_update.text
                         or normalized_update.content_type,
