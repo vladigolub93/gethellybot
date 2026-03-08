@@ -111,11 +111,11 @@ Agent guidance:
 - do not say that contact cards are always automatically shared as a Telegram object unless that behavior is explicitly implemented
 - do say that the system only connects both sides after the approval flow
 
-### 4.3 Why do you need my consent?
+### 4.3 Why do you need my contact?
 
 Canonical answer:
 
-Helly needs consent before storing profile data and continuing onboarding. The platform collects structured recruiting information, files, and conversation data to build profiles, run matching, and support interviews.
+Helly only asks for a shared contact if your Telegram account does not have a usable `username`. Helly needs either your Telegram `username` or a shared contact so it can link your account to one profile and later support an approved introduction between both sides.
 
 ### 4.4 Why do I need to choose a role?
 

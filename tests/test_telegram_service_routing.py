@@ -350,7 +350,7 @@ def test_contact_required_without_graph_reply_falls_back_to_generic_recovery() -
     )
 
 
-def test_start_with_username_but_without_contact_requests_consent() -> None:
+def test_start_with_username_but_without_contact_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
 
@@ -364,11 +364,11 @@ def test_start_with_username_but_without_contact_requests_consent() -> None:
 
     templates = service._apply_identity_flow(user, "raw-g1u", build_update(text="/start"))
 
-    assert templates == ["request_consent"]
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_consent"
+    assert templates == ["request_role"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
 
 
-def test_start_with_contact_but_without_consent_requests_consent() -> None:
+def test_start_with_contact_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
 
@@ -381,19 +381,19 @@ def test_start_with_contact_but_without_consent_requests_consent() -> None:
 
     templates = service._apply_identity_flow(user, "raw-g2", build_update(text="/start"))
 
-    assert templates == ["request_consent"]
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_consent"
+    assert templates == ["request_role"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
 
 
-def test_consent_required_help_intercepts_before_identity_gating() -> None:
+def test_role_selection_help_intercepts_after_identity_gating() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
     service.stage_agents = FakeStageAgentService(
         None,
         entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text="Helly needs consent before storing profile data.",
+            stage="ROLE_SELECTION",
+            reply_text="Choose Candidate if you are looking for a job, or Hiring Manager if you want to hire.",
             stage_status="in_progress",
             proposed_action=None,
             action_accepted=False,
@@ -407,13 +407,13 @@ def test_consent_required_help_intercepts_before_identity_gating() -> None:
         is_hiring_manager=False,
     )
 
-    templates = service._apply_identity_flow(user, "raw-g2h", build_update(text="Why do you need my consent?"))
+    templates = service._apply_identity_flow(user, "raw-g2h", build_update(text="Why do I need to choose my role?"))
 
-    assert templates == ["request_consent"]
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_consent"
+    assert templates == ["request_role"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
 
 
-def test_start_with_contact_and_consent_requests_role() -> None:
+def test_start_with_contact_and_existing_identity_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
 
@@ -458,7 +458,7 @@ def test_role_selection_help_intercepts_before_identity_gating() -> None:
     assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
 
 
-def test_contact_share_without_consent_requests_consent() -> None:
+def test_contact_share_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
 
@@ -475,12 +475,12 @@ def test_contact_share_without_consent_requests_consent() -> None:
         build_update(contact_phone_number="+380974527344"),
     )
 
-    assert templates == ["request_consent"]
+    assert templates == ["request_role"]
     assert service.identity_service.attach_calls
     assert user.phone_number == "+380974527344"
 
 
-def test_contact_share_with_existing_consent_requests_role() -> None:
+def test_contact_share_with_existing_identity_requests_role() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=True)
 
@@ -502,147 +502,7 @@ def test_contact_share_with_existing_consent_requests_role() -> None:
     assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
 
 
-def test_consent_message_grants_consent_and_requests_role() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text=None,
-            stage_status="completed",
-            proposed_action="reply_i_agree",
-            action_accepted=True,
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4b",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4b", build_update(text="I agree"))
-
-    assert templates == ["request_role"]
-    assert service.identity_service.grant_calls
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
-
-
-def test_agree_alias_grants_consent_and_requests_role() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text=None,
-            stage_status="completed",
-            proposed_action="reply_i_agree",
-            action_accepted=True,
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4d",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4d", build_update(text="agree"))
-
-    assert templates == ["request_role"]
-    assert service.identity_service.grant_calls
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
-
-
-def test_consent_alias_grants_consent_and_requests_role() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text=None,
-            stage_status="completed",
-            proposed_action="reply_i_agree",
-            action_accepted=True,
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4e",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4e", build_update(text="consent"))
-
-    assert templates == ["request_role"]
-    assert service.identity_service.grant_calls
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
-
-
-def test_consent_with_punctuation_grants_consent_and_requests_role() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text=None,
-            stage_status="completed",
-            proposed_action="reply_i_agree",
-            action_accepted=True,
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4f",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4f", build_update(text="I agree."))
-
-    assert templates == ["request_role"]
-    assert service.identity_service.grant_calls
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_role"
-
-
-def test_consent_before_contact_requests_contact() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONTACT_REQUIRED",
-            reply_text="Please share your contact using the button below before confirming consent.",
-            stage_status="in_progress",
-            proposed_action=None,
-            action_accepted=False,
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4c",
-        phone_number=None,
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4c", build_update(text="I agree"))
-
-    assert templates == ["request_contact"]
-    assert not service.identity_service.grant_calls
-    assert service.notifications_repo.calls[-1]["template_key"] == "request_contact"
-
-
-def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() -> None:
+def test_candidate_message_before_identity_requests_contact() -> None:
     service = build_service()
     service.identity_service = FakeIdentityService(consent=False)
     service.stage_agents = FakeStageAgentService(
@@ -659,52 +519,22 @@ def test_role_selection_before_contact_requests_contact_and_blocks_onboarding() 
     service.vacancy_service = FakeVacancyService()
 
     user = SimpleNamespace(
-        id="g5",
+        id="g4b",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
 
-    templates = service._apply_identity_flow(user, "raw-g5", build_update(text="Candidate"))
+    templates = service._apply_identity_flow(user, "raw-g4b", build_update(text="Candidate"))
 
     assert templates == ["request_contact"]
     assert not service.candidate_service.start_calls
-    assert not service.vacancy_service.start_calls
-
-
-def test_role_selection_without_consent_requests_consent_and_blocks_onboarding() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text="Please confirm consent using the button below before choosing a role.",
-            stage_status="in_progress",
-            proposed_action=None,
-            action_accepted=False,
-        ),
-    )
-    service.candidate_service = FakeCandidateService()
-    service.vacancy_service = FakeVacancyService()
-
-    user = SimpleNamespace(
-        id="g5a",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g5a", build_update(text="Candidate"))
-
-    assert templates == ["request_consent"]
-    assert not service.candidate_service.start_calls
-    assert not service.vacancy_service.start_calls
 
 
 def test_candidate_role_selection_starts_candidate_onboarding() -> None:
     service = build_service()
-    service.identity_service = FakeIdentityService(consent=True)
+    service.identity_service = FakeIdentityService(consent=False)
     service.stage_agents = FakeStageAgentService(
         None,
         entry_result=StageAgentExecutionResult(
@@ -719,13 +549,13 @@ def test_candidate_role_selection_starts_candidate_onboarding() -> None:
     service.vacancy_service = FakeVacancyService()
 
     user = SimpleNamespace(
-        id="g5b",
+        id="g4d",
         phone_number="+123",
         is_candidate=False,
         is_hiring_manager=False,
     )
 
-    templates = service._apply_identity_flow(user, "raw-g5b", build_update(text="Candidate"))
+    templates = service._apply_identity_flow(user, "raw-g4d", build_update(text="Candidate"))
 
     assert templates == ["candidate_onboarding_started"]
     assert service.identity_service.set_role_calls[-1]["role"] == "candidate"
@@ -736,37 +566,9 @@ def test_candidate_role_selection_starts_candidate_onboarding() -> None:
     }
 
 
-def test_graph_entry_stage_can_grant_consent() -> None:
-    service = build_service()
-    service.identity_service = FakeIdentityService(consent=False)
-    service.stage_agents = FakeStageAgentService(
-        None,
-        entry_result=StageAgentExecutionResult(
-            stage="CONSENT_REQUIRED",
-            reply_text="Thanks. I will record your consent and move to role selection.",
-            stage_status="ready_for_transition",
-            proposed_action="reply_i_agree",
-            action_accepted=True,
-            validation_result={"accepted": True, "normalized_action": "reply_i_agree"},
-        ),
-    )
-
-    user = SimpleNamespace(
-        id="g4x",
-        phone_number="+123",
-        is_candidate=False,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(user, "raw-g4x", build_update(text="I agree"))
-
-    assert templates == ["request_role"]
-    assert service.identity_service.grant_calls
-
-
 def test_graph_entry_stage_can_start_candidate_onboarding() -> None:
     service = build_service()
-    service.identity_service = FakeIdentityService(consent=True)
+    service.identity_service = FakeIdentityService(consent=False)
     service.candidate_service = FakeCandidateService()
     service.vacancy_service = FakeVacancyService()
     service.stage_agents = FakeStageAgentService(
@@ -783,13 +585,13 @@ def test_graph_entry_stage_can_start_candidate_onboarding() -> None:
     )
 
     user = SimpleNamespace(
-        id="g5x",
+        id="g4e",
         phone_number="+123",
         is_candidate=False,
         is_hiring_manager=False,
     )
 
-    templates = service._apply_identity_flow(user, "raw-g5x", build_update(text="Candidate"))
+    templates = service._apply_identity_flow(user, "raw-g4e", build_update(text="Candidate"))
 
     assert templates == ["candidate_onboarding_started"]
     assert service.identity_service.set_role_calls[-1]["role"] == "candidate"
@@ -798,7 +600,7 @@ def test_graph_entry_stage_can_start_candidate_onboarding() -> None:
 
 def test_uppercase_candidate_role_selection_starts_candidate_onboarding() -> None:
     service = build_service()
-    service.identity_service = FakeIdentityService(consent=True)
+    service.identity_service = FakeIdentityService(consent=False)
     service.stage_agents = FakeStageAgentService(
         None,
         entry_result=StageAgentExecutionResult(
@@ -813,16 +615,15 @@ def test_uppercase_candidate_role_selection_starts_candidate_onboarding() -> Non
     service.vacancy_service = FakeVacancyService()
 
     user = SimpleNamespace(
-        id="g5bb",
+        id="g4f",
         phone_number="+123",
         is_candidate=False,
         is_hiring_manager=False,
     )
 
-    templates = service._apply_identity_flow(user, "raw-g5bb", build_update(text="CANDIDATE"))
+    templates = service._apply_identity_flow(user, "raw-g4f", build_update(text="CANDIDATE"))
 
     assert templates == ["candidate_onboarding_started"]
-    assert service.identity_service.set_role_calls[-1]["role"] == "candidate"
     assert service.candidate_service.start_calls
 
 

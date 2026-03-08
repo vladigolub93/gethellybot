@@ -96,7 +96,6 @@ Status:
 Migrate:
 
 - `CONTACT_REQUIRED`
-- `CONSENT_REQUIRED`
 - `ROLE_SELECTION`
 
 Exit:
@@ -109,11 +108,10 @@ Status:
 - implemented:
   - entry-stage graph service
   - graph-owned execution for `CONTACT_REQUIRED`
-  - graph-owned execution for `CONSENT_REQUIRED`
   - graph-owned execution for `ROLE_SELECTION`
-  - structured consent transition through graph validation
   - structured role-selection transition through graph validation
   - Telegram entry flow now uses graph execution first for text-based onboarding interactions
+  - entry identity gating now uses `username OR shared contact`
 
 ### Step 4. Candidate Onboarding Agents
 
@@ -292,7 +290,7 @@ Status:
     - `DELETE_CONFIRMATION`
   - Telegram routing now caches and reuses a single graph stage result per migrated candidate/manager message path, reducing duplicated graph execution inside one update cycle
   - migrated stage help resolution no longer depends on `bot_controller` fallback for candidate, manager, interview, review, and delete conversational paths
-  - entry-stage consent and role-selection execution no longer depends on legacy raw-text command branches
+  - entry-stage role-selection execution no longer depends on legacy raw-text command branches
   - entry-stage help resolution no longer depends on `bot_controller` fallback; if graph provides no stage-owned reply, runtime falls through to generic recovery instead
   - graph-native sequential flow tests now cover candidate stage progression:
     - `CV_PENDING`

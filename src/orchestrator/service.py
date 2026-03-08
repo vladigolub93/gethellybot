@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
-from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -18,7 +17,6 @@ class BotControllerService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
-        self.consents = UserConsentsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
         self.vacancies = VacanciesRepository(session)
@@ -39,7 +37,7 @@ class BotControllerService:
             recent_context=[],
         )
         default_response = self._default_response(context)
-        if context.state in {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}:
+        if context.state in {"CONTACT_REQUIRED", "ROLE_SELECTION"}:
             return default_response
         if result.payload.get("intent") == "small_talk":
             return self.messaging.compose_small_talk(
@@ -62,7 +60,6 @@ class BotControllerService:
             return None
         if context.state not in {
             "CONTACT_REQUIRED",
-            "CONSENT_REQUIRED",
             "ROLE_SELECTION",
             "CV_PENDING",
             "INTAKE_PENDING",
@@ -106,8 +103,6 @@ class BotControllerService:
 
         if not has_primary_contact_channel(user):
             return resolve_state_context(role=role, state="CONTACT_REQUIRED")
-        if not self.consents.has_granted(user.id, "data_processing"):
-            return resolve_state_context(role=role, state="CONSENT_REQUIRED")
         if role is None:
             return resolve_state_context(role=None, state="ROLE_SELECTION")
 
@@ -150,8 +145,6 @@ class BotControllerService:
     def _default_response(self, context: ResolvedStateContext) -> str:
         if context.state == "CONTACT_REQUIRED":
             return context.guidance_text
-        if context.state == "CONSENT_REQUIRED":
-            return context.guidance_text
         if context.state == "ROLE_SELECTION":
             return self.messaging.compose_role_selection()
         if context.guidance_text:
@@ -187,17 +180,6 @@ class BotControllerService:
                 r"\bphone\b",
                 r"\bnumber\b",
                 r"\bprivacy\b",
-            ],
-            "CONSENT_REQUIRED": [
-                r"\bwhy\b",
-                r"\bhow\b",
-                r"\bhelp\b",
-                r"\bwhat for\b",
-                r"\bconsent\b",
-                r"\bdata\b",
-                r"\bprivacy\b",
-                r"\bstore\b",
-                r"\bneed\b",
             ],
             "ROLE_SELECTION": [
                 r"\bwhy\b",

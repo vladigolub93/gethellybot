@@ -41,15 +41,6 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         ),
         missing_requirements=["telegram_contact_channel"],
     ),
-    "CONSENT_REQUIRED": StatePolicyDefinition(
-        state="CONSENT_REQUIRED",
-        goal="Collect explicit data-processing consent before profile creation.",
-        allowed_actions=["reply_i_agree"],
-        assistance_prompt_slug="consent_required",
-        guidance_text="Please confirm data processing consent to continue.",
-        help_text="Helly needs your consent before storing profile data. Please confirm data processing consent to continue.",
-        missing_requirements=["data_processing_consent"],
-    ),
     "ROLE_SELECTION": StatePolicyDefinition(
         state="ROLE_SELECTION",
         goal="Choose whether the user is onboarding as a candidate or hiring manager.",

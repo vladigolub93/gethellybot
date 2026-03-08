@@ -45,7 +45,6 @@ Prompt families now covered at the asset level:
 - `messaging/response_copywriter`
 - graph-owned stage agents:
   - `contact_required`
-  - `consent_required`
   - `role_selection`
   - `candidate_cv_pending`
   - `candidate_summary_review`

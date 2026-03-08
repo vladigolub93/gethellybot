@@ -3,18 +3,8 @@ from types import SimpleNamespace
 from src.graph.service import LangGraphStageAgentService
 
 
-class FakeConsentsRepository:
-    def __init__(self, *, granted: bool):
-        self.granted = granted
-
-    def has_granted(self, user_id, consent_type):
-        assert consent_type == "data_processing"
-        return self.granted
-
-
 def test_graph_entry_service_handles_contact_required() -> None:
     service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=False)
 
     user = SimpleNamespace(
         id="u1",
@@ -31,39 +21,16 @@ def test_graph_entry_service_handles_contact_required() -> None:
     )
 
     assert reply is not None
-    assert "contact" in reply.lower()
+    assert "contact" in reply.lower() or "username" in reply.lower()
 
 
-def test_graph_entry_service_handles_consent_required() -> None:
+def test_graph_entry_service_handles_role_selection_when_username_exists() -> None:
     service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=False)
 
     user = SimpleNamespace(
         id="u2",
-        phone_number="+123",
-        username=None,
-        is_candidate=False,
-        is_hiring_manager=False,
-        telegram_chat_id=200,
-    )
-
-    reply = service.maybe_build_entry_reply(
-        user=user,
-        latest_user_message="Why do you need consent?",
-    )
-
-    assert reply is not None
-    assert "consent" in reply.lower() or "data" in reply.lower()
-
-
-def test_graph_entry_service_handles_role_selection() -> None:
-    service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=True)
-
-    user = SimpleNamespace(
-        id="u3",
-        phone_number="+123",
-        username=None,
+        phone_number=None,
+        username="hellyuser",
         is_candidate=False,
         is_hiring_manager=False,
         telegram_chat_id=200,
@@ -78,37 +45,11 @@ def test_graph_entry_service_handles_role_selection() -> None:
     assert "candidate" in reply.lower() or "hiring manager" in reply.lower()
 
 
-def test_graph_entry_service_accepts_consent_transition() -> None:
-    service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=False)
-
-    user = SimpleNamespace(
-        id="u4",
-        phone_number="+123",
-        username=None,
-        is_candidate=False,
-        is_hiring_manager=False,
-        telegram_chat_id=200,
-    )
-
-    result = service.maybe_run_entry_stage(
-        user=user,
-        latest_user_message="I agree",
-    )
-
-    assert result is not None
-    assert result.stage == "CONSENT_REQUIRED"
-    assert result.action_accepted is True
-    assert result.proposed_action == "reply_i_agree"
-    assert result.stage_status == "ready_for_transition"
-
-
 def test_graph_entry_service_accepts_role_selection_transition() -> None:
     service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=True)
 
     user = SimpleNamespace(
-        id="u5",
+        id="u3",
         phone_number="+123",
         username=None,
         is_candidate=False,
@@ -130,10 +71,9 @@ def test_graph_entry_service_accepts_role_selection_transition() -> None:
 
 def test_graph_entry_service_skips_contact_stage_when_username_exists() -> None:
     service = LangGraphStageAgentService(session=object())
-    service.consents = FakeConsentsRepository(granted=False)
 
     user = SimpleNamespace(
-        id="u6",
+        id="u4",
         phone_number=None,
         username="hellyuser",
         is_candidate=False,
@@ -143,8 +83,9 @@ def test_graph_entry_service_skips_contact_stage_when_username_exists() -> None:
 
     result = service.maybe_run_entry_stage(
         user=user,
-        latest_user_message="Why do you need consent?",
+        latest_user_message="Why should I choose a role first?",
     )
 
     assert result is not None
-    assert result.stage == "CONSENT_REQUIRED"
+    assert result.stage == "ROLE_SELECTION"
+    assert result.action_accepted is False

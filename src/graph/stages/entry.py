@@ -20,18 +20,6 @@ def _entry_help_patterns(stage: str) -> tuple[str, ...]:
             r"\blater\b",
             r"\bprivacy\b",
         )
-    if stage == "CONSENT_REQUIRED":
-        return (
-            r"\bwhy\b",
-            r"\bhow\b",
-            r"\bhelp\b",
-            r"\bconsent\b",
-            r"\bprivacy\b",
-            r"\bdata\b",
-            r"\bstore\b",
-            r"\bskip\b",
-            r"\blater\b",
-        )
     return (
         r"\bwhy\b",
         r"\bhow\b",
@@ -49,8 +37,6 @@ def _normalize_text(value: str) -> str:
 
 
 def _detect_entry_completion(stage: str, normalized: str) -> tuple[str | None, dict]:
-    if stage == "CONSENT_REQUIRED" and normalized in {"i agree", "agree", "consent"}:
-        return "reply_i_agree", {"consent_type": "data_processing"}
     if stage == "ROLE_SELECTION":
         if normalized == "candidate":
             return "candidate", {"role": "candidate"}
@@ -102,9 +88,7 @@ def build_entry_reply_node(session):
         state.confidence = 0.85
         if state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
-            if state.active_stage == "CONSENT_REQUIRED":
-                state.reply_text = "Thanks. I will record your consent and move to role selection."
-            elif state.active_stage == "ROLE_SELECTION":
+            if state.active_stage == "ROLE_SELECTION":
                 selected_role = state.structured_payload.get("role")
                 if selected_role == "candidate":
                     state.reply_text = "Understood. I will start the candidate flow."

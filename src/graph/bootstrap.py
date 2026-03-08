@@ -43,7 +43,6 @@ def register_default_stage_graph(stage: str) -> None:
 def register_foundation_stage_graphs() -> None:
     for stage in (
         "CONTACT_REQUIRED",
-        "CONSENT_REQUIRED",
         "ROLE_SELECTION",
         "CV_PENDING",
         "SUMMARY_REVIEW",
@@ -59,4 +58,3 @@ def register_foundation_stage_graphs() -> None:
         "DELETE_CONFIRMATION",
     ):
         register_default_stage_graph(stage)
-

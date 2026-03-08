@@ -10,7 +10,6 @@ def setup_module() -> None:
 def test_foundation_registers_expected_stage_graphs() -> None:
     for stage in (
         "CONTACT_REQUIRED",
-        "CONSENT_REQUIRED",
         "ROLE_SELECTION",
         "CV_PENDING",
         "INTAKE_PENDING",

@@ -16,14 +16,6 @@ def contact_request_keyboard() -> dict:
     }
 
 
-def consent_keyboard() -> dict:
-    return {
-        "keyboard": [["I agree"]],
-        "resize_keyboard": True,
-        "one_time_keyboard": True,
-    }
-
-
 def role_selection_keyboard() -> dict:
     return {
         "keyboard": [["Candidate", "Hiring Manager"]],

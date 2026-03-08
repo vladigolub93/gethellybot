@@ -181,7 +181,7 @@ def test_build_recovery_message_for_missing_contact() -> None:
     )
 
 
-def test_build_recovery_message_with_username_but_without_contact_requests_consent() -> None:
+def test_build_recovery_message_with_username_but_without_contact_requests_role() -> None:
     user = SimpleNamespace(
         id="u1",
         phone_number=None,
@@ -198,7 +198,7 @@ def test_build_recovery_message_with_username_but_without_contact_requests_conse
 
     message = service.build_recovery_message(user=user, latest_user_message="hello")
 
-    assert message == "Please confirm data processing consent to continue."
+    assert message == "Choose your role: Candidate or Hiring Manager."
 
 
 def test_maybe_build_in_state_assistance_for_missing_contact_question() -> None:
@@ -219,7 +219,7 @@ def test_maybe_build_in_state_assistance_for_missing_contact_question() -> None:
     assert "contact" in message.lower() or "profile" in message.lower()
 
 
-def test_maybe_build_in_state_assistance_for_missing_consent_question() -> None:
+def test_maybe_build_in_state_assistance_for_role_question_after_identity_is_ready() -> None:
     user = SimpleNamespace(id="u1", phone_number="+123", is_candidate=False, is_hiring_manager=False)
     service = BotControllerService(session=object())
     service.consents = FakeConsentsRepository(granted=False)
@@ -230,11 +230,11 @@ def test_maybe_build_in_state_assistance_for_missing_consent_question() -> None:
 
     message = service.maybe_build_in_state_assistance(
         user=user,
-        latest_user_message="Why do you need my consent?",
+        latest_user_message="Why do I need to choose a role?",
     )
 
     assert message is not None
-    assert "consent" in message.lower() or "data" in message.lower()
+    assert "candidate" in message.lower() or "hiring manager" in message.lower()
 
 
 def test_maybe_build_in_state_assistance_for_role_selection_question() -> None:

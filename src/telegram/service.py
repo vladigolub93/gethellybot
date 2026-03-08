@@ -6,7 +6,6 @@ from typing import Callable, List, Sequence
 from sqlalchemy.orm import Session
 
 from src.candidate_profile.service import CandidateProfileService
-from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.files import FilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
@@ -20,7 +19,6 @@ from src.messaging.service import MessagingService
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
-    consent_keyboard,
     contact_request_keyboard,
     deletion_confirmation_keyboard,
     interview_invitation_keyboard,
@@ -46,10 +44,9 @@ class TelegramUpdateService:
         self.session = session
         self.users_repo = UsersRepository(session)
         self.raw_messages_repo = RawMessagesRepository(session)
-        self.consents_repo = UserConsentsRepository(session)
         self.files_repo = FilesRepository(session)
         self.notifications_repo = NotificationsRepository(session)
-        self.identity_service = IdentityService(self.users_repo, self.consents_repo)
+        self.identity_service = IdentityService(self.users_repo, None)
         self.messaging = MessagingService(session)
         self.stage_agents = LangGraphStageAgentService(session)
         self.candidate_service = CandidateProfileService(session)
@@ -63,8 +60,6 @@ class TelegramUpdateService:
     def _entry_stage_reply_markup(self, stage: str | None):
         if stage == "CONTACT_REQUIRED":
             return contact_request_keyboard()
-        if stage == "CONSENT_REQUIRED":
-            return consent_keyboard()
         if stage == "ROLE_SELECTION":
             return role_selection_keyboard()
         return None
@@ -78,7 +73,6 @@ class TelegramUpdateService:
     ) -> str:
         template_key = {
             "CONTACT_REQUIRED": "request_contact",
-            "CONSENT_REQUIRED": "request_consent",
             "ROLE_SELECTION": "request_role",
         }.get(stage, "state_aware_help")
         return self._notify(
@@ -98,17 +92,13 @@ class TelegramUpdateService:
         normalized_update: NormalizedTelegramUpdate,
     ) -> List[str]:
         self.identity_service.attach_contact(user, normalized_update)
-        next_stage = (
-            "CONSENT_REQUIRED"
-            if not self.identity_service.has_data_processing_consent(user)
-            else "ROLE_SELECTION"
-        )
-        next_text = (
-            self._copy("Please confirm data processing consent using the button below.")
-            if next_stage == "CONSENT_REQUIRED"
-            else self.messaging.compose_role_selection()
-        )
-        return [self._notify_entry_stage(user_id=user.id, stage=next_stage, text=next_text)]
+        return [
+            self._notify_entry_stage(
+                user_id=user.id,
+                stage="ROLE_SELECTION",
+                text=self.messaging.compose_role_selection(),
+            )
+        ]
 
     def _handle_start_command(self, *, user) -> List[str]:
         if not has_primary_contact_channel(user):
@@ -119,14 +109,6 @@ class TelegramUpdateService:
                     text=self._copy(
                         "Please share your contact using the button below to continue if you do not have a Telegram username available."
                     ),
-                )
-            ]
-        if not self.identity_service.has_data_processing_consent(user):
-            return [
-                self._notify_entry_stage(
-                    user_id=user.id,
-                    stage="CONSENT_REQUIRED",
-                    text=self._copy("Please confirm data processing consent using the button below."),
                 )
             ]
         return [
@@ -146,20 +128,6 @@ class TelegramUpdateService:
     ) -> List[str] | None:
         if entry_result is None:
             return None
-
-        if entry_result.action_accepted and entry_result.proposed_action == "reply_i_agree":
-            self.identity_service.grant_data_processing_consent(
-                user, source_raw_message_id=raw_message_id
-            )
-            return [
-                self._notify_entry_stage(
-                    user_id=user.id,
-                    stage="ROLE_SELECTION",
-                    text=self.messaging.compose_role_selection(
-                        latest_user_message="consent confirmed"
-                    ),
-                )
-            ]
 
         if entry_result.action_accepted and entry_result.proposed_action in {"candidate", "hiring_manager"}:
             role = "candidate" if entry_result.proposed_action == "candidate" else "hiring_manager"
@@ -1385,15 +1353,13 @@ class TelegramUpdateService:
 
         if not has_primary_contact_channel(user):
             return resolve_state_context(role=role, state="CONTACT_REQUIRED")
-        if not self.identity_service.has_data_processing_consent(user):
-            return resolve_state_context(role=role, state="CONSENT_REQUIRED")
         if role is None:
             return resolve_state_context(role=None, state="ROLE_SELECTION")
         return resolve_state_context(role=role, state=None)
 
     def _build_generic_recovery_message(self, *, user, latest_user_message: str) -> str:
         context = self._resolve_recovery_context(user=user)
-        if context.state in {"CONTACT_REQUIRED", "CONSENT_REQUIRED"}:
+        if context.state == "CONTACT_REQUIRED":
             return context.guidance_text
         if context.state == "ROLE_SELECTION":
             return self.messaging.compose_role_selection(

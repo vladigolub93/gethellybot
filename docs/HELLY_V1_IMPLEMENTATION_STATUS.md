@@ -50,7 +50,8 @@ Architectural status note:
 - `LangGraph` foundation modules and canonical graph state contract are now added
 - the canonical supported runtime for LangGraph execution is now `Python 3.12`
 - Dockerized `Python 3.12` runtime has been validated locally with `langgraph` import and full test execution
-- entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
+- entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED` and `ROLE_SELECTION`
+- entry identity is now considered sufficient when the user has either a Telegram `username` or a shared `contact`
 - candidate `CV_PENDING` is now graph-owned for text-based stage completion and help handling
 - candidate `SUMMARY_REVIEW` is now graph-owned for approve/correction execution and help handling
 - candidate `QUESTIONS_PENDING` is now graph-owned for text-based structured question-answer handoff and help handling
@@ -67,7 +68,7 @@ Architectural status note:
 - graph-native integration coverage now includes stage-resolution priority tests for candidate and manager families, verifying that higher-priority interaction stages override lower-priority status stages in the expected order
 - Telegram transport now reuses a single graph stage result per migrated candidate/manager update instead of re-running graph execution in each downstream branch
 - migrated candidate, manager, interview, review, and delete help paths no longer use `bot_controller` as a conversational fallback; these in-stage replies are now graph-owned
-- entry-stage consent and role-selection execution no longer use legacy raw-text command branches as the primary execution path
+- entry-stage role-selection execution no longer uses legacy raw-text command branches as the primary execution path
 - entry-stage help resolution no longer uses `bot_controller` as a stage-level fallback; only generic unsupported-input recovery remains outside graph-owned guidance
 - graph-native flow coverage now includes sequential candidate and manager journey tests across multiple stage transitions
 - graph-native flow coverage now also includes interaction-path sequences across invitation, active interview, manager review, and delete confirmation
@@ -124,7 +125,7 @@ Architectural status note:
 - `Implemented`: consent capture exists
 - `Implemented`: role selection exists
 - `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection
-- `Implemented`: entry onboarding is now executed through graph-owned stage agents for `CONTACT_REQUIRED`, `CONSENT_REQUIRED`, and `ROLE_SELECTION`
+- `Implemented`: entry onboarding is now executed through graph-owned stage agents for `CONTACT_REQUIRED` and `ROLE_SELECTION`
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
   - the `User` table can technically support multiple role flags
@@ -152,7 +153,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover valid business-action passthrough for summary approval, candidate questions, verification submission, manager clarification answers, and manager rejection
 - `Implemented`: routing regressions now also cover candidate CV intake, manager JD intake, active interview answers, and cancel-delete passthrough; this also fixed a real manager-routing bug where empty clarification handling could block later JD intake routing
 - `Implemented`: routing regressions now also cover entry gating for `/start`, contact share, consent, and blocked role selection before prerequisites are satisfied
-- `Implemented`: routing regressions now also cover successful entry transitions for consent grant, contact-with-consent, and role-based onboarding start for both candidate and hiring manager
+- `Implemented`: routing regressions now also cover successful entry transitions for username/contact identity and role-based onboarding start for both candidate and hiring manager
 - `Implemented`: routing regressions now also cover multimodal intake paths for candidate and manager onboarding, including candidate `voice/document` CV input, manager `voice/video` JD input, and non-text recovery fallback outside any active role flow
 - `Implemented`: routing regressions now also cover post-intake multimodal behavior, including interview answers over `voice/video`, candidate question answers over `voice`, manager clarification answers over `voice`, and `document` recovery fallback outside any active role flow
 - `Implemented`: routing regressions now also cover normalized aliases for role selection and interview accept/skip actions; this also fixed a real entry-gating issue where consent could be granted before contact was collected

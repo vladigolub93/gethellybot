@@ -186,7 +186,7 @@ class DispatchingStageAgentService:
         command = normalize_command_text(latest_user_message)
         self.calls.append({"kind": "entry", "text": latest_user_message, "command": command})
 
-        if not getattr(user, "phone_number", None):
+        if not (getattr(user, "phone_number", None) or getattr(user, "username", None)):
             if "why" in (latest_user_message or "").lower():
                 return StageAgentExecutionResult(
                     stage="CONTACT_REQUIRED",
@@ -198,14 +198,6 @@ class DispatchingStageAgentService:
             return None
 
         if not getattr(user, "is_candidate", False) and not getattr(user, "is_hiring_manager", False):
-            if command in {"i agree", "agree", "consent"}:
-                return StageAgentExecutionResult(
-                    stage="CONSENT_REQUIRED",
-                    reply_text=None,
-                    stage_status="completed",
-                    proposed_action="reply_i_agree",
-                    action_accepted=True,
-                )
             if command == "candidate":
                 return StageAgentExecutionResult(
                     stage="ROLE_SELECTION",
@@ -356,6 +348,7 @@ def test_graph_owned_candidate_text_flow_routes_entry_cv_and_questions() -> None
     user = SimpleNamespace(
         id="candidate-flow",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
@@ -368,11 +361,8 @@ def test_graph_owned_candidate_text_flow_routes_entry_cv_and_questions() -> None
         "raw2",
         build_update(contact_phone_number="+123456789"),
     )
-    assert templates == ["request_consent"]
-    assert user.phone_number == "+123456789"
-
-    templates = service._apply_identity_flow(user, "raw3", build_update(text="I agree"))
     assert templates == ["request_role"]
+    assert user.phone_number == "+123456789"
 
     templates = service._apply_identity_flow(user, "raw4", build_update(text="Candidate"))
     assert templates == ["candidate_onboarding_started"]
@@ -403,6 +393,7 @@ def test_graph_owned_manager_text_flow_routes_entry_intake_and_clarifications() 
     user = SimpleNamespace(
         id="manager-flow",
         phone_number=None,
+        username=None,
         is_candidate=False,
         is_hiring_manager=False,
     )
@@ -412,9 +403,6 @@ def test_graph_owned_manager_text_flow_routes_entry_intake_and_clarifications() 
         "raw1",
         build_update(contact_phone_number="+123456789"),
     )
-    assert templates == ["request_consent"]
-
-    templates = service._apply_identity_flow(user, "raw2", build_update(text="I agree"))
     assert templates == ["request_role"]
 
     templates = service._apply_identity_flow(user, "raw3", build_update(text="Hiring Manager"))

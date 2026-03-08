@@ -5,7 +5,6 @@ from typing import Any
 
 from src.config.logging import get_logger
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
-from src.db.repositories.consents import UserConsentsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -56,7 +55,7 @@ class StageAgentExecutionResult:
 
 
 class LangGraphStageAgentService:
-    ENTRY_STAGES = {"CONTACT_REQUIRED", "CONSENT_REQUIRED", "ROLE_SELECTION"}
+    ENTRY_STAGES = {"CONTACT_REQUIRED", "ROLE_SELECTION"}
     SHARED_STAGES = {"DELETE_CONFIRMATION"}
     CANDIDATE_STAGES = {
         "CV_PENDING",
@@ -72,7 +71,6 @@ class LangGraphStageAgentService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
-        self.consents = UserConsentsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matches = MatchingRepository(session)
         self.vacancies = VacanciesRepository(session)
@@ -204,8 +202,6 @@ class LangGraphStageAgentService:
     def _resolve_entry_stage(self, user) -> str | None:
         if not has_primary_contact_channel(user):
             return "CONTACT_REQUIRED"
-        if not self.consents.has_granted(user.id, "data_processing"):
-            return "CONSENT_REQUIRED"
         if not getattr(user, "is_candidate", False) and not getattr(user, "is_hiring_manager", False):
             return "ROLE_SELECTION"
         return None
