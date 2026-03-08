@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import Callable, List, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -246,6 +246,20 @@ class TelegramUpdateService:
                 "reply_markup": reply_markup,
             },
         )
+
+    def _dispatch_segment_chain(
+        self,
+        *,
+        content_type: str,
+        segments: Sequence[tuple[set[str], Callable[[], List[str] | None]]],
+    ) -> List[str] | None:
+        for allowed_content_types, handler in segments:
+            if content_type not in allowed_content_types:
+                continue
+            templates = handler()
+            if templates is not None:
+                return templates
+        return None
 
     def _maybe_handle_graph_help(
         self,
@@ -1232,68 +1246,68 @@ class TelegramUpdateService:
         file_id,
         stage_result,
     ) -> List[str] | None:
-        if normalized_update.content_type == "text":
-            deletion_templates = self._apply_candidate_delete_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                latest_user_message=normalized_update.text or "",
-                stage_result=stage_result,
-            )
-            if deletion_templates is not None:
-                return deletion_templates
-
-        if normalized_update.content_type in {"text", "voice", "video"}:
-            interview_message_templates = self._apply_candidate_interview_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-            if interview_message_templates is not None:
-                return interview_message_templates
-
-        if normalized_update.content_type == "text":
-            summary_templates = self._apply_candidate_summary_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                stage_result=stage_result,
-            )
-            if summary_templates is not None:
-                return summary_templates
-
-        if normalized_update.content_type in {"text", "video"}:
-            verification_templates = self._apply_candidate_verification_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-            if verification_templates is not None:
-                return verification_templates
-
-        if normalized_update.content_type in {"text", "voice", "video"}:
-            questions_message_templates = self._apply_candidate_questions_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-            )
-            if questions_message_templates is not None:
-                return questions_message_templates
-
-        if normalized_update.content_type in {"text", "document", "voice"}:
-            return self._apply_candidate_intake_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-
-        return None
+        return self._dispatch_segment_chain(
+            content_type=normalized_update.content_type,
+            segments=[
+                (
+                    {"text"},
+                    lambda: self._apply_candidate_delete_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text", "voice", "video"},
+                    lambda: self._apply_candidate_interview_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
+                    lambda: self._apply_candidate_summary_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text", "video"},
+                    lambda: self._apply_candidate_verification_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text", "voice", "video"},
+                    lambda: self._apply_candidate_questions_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                    ),
+                ),
+                (
+                    {"text", "document", "voice"},
+                    lambda: self._apply_candidate_intake_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                        stage_result=stage_result,
+                    ),
+                ),
+            ],
+        )
 
     def _apply_manager_flow(
         self,
@@ -1304,54 +1318,57 @@ class TelegramUpdateService:
         file_id,
         stage_result,
     ) -> List[str] | None:
-        if normalized_update.content_type == "text":
-            deletion_templates = self._apply_manager_delete_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                latest_user_message=normalized_update.text or "",
-                stage_result=stage_result,
-            )
-            if deletion_templates is not None:
-                return deletion_templates
-            manager_templates = self._apply_manager_review_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                latest_user_message=normalized_update.text or "",
-                stage_result=stage_result,
-            )
-            if manager_templates is not None:
-                return manager_templates
-
-        if normalized_update.content_type in {"text", "voice", "video"}:
-            clarification_message_templates = self._apply_manager_clarification_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-            if clarification_message_templates is not None:
-                return clarification_message_templates
-
-        if normalized_update.content_type == "text":
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-
-        if normalized_update.content_type in {"text", "document", "voice", "video"}:
-            return self._apply_manager_intake_segment(
-                user=user,
-                raw_message_id=raw_message_id,
-                normalized_update=normalized_update,
-                file_id=file_id,
-                stage_result=stage_result,
-            )
-
-        return None
+        return self._dispatch_segment_chain(
+            content_type=normalized_update.content_type,
+            segments=[
+                (
+                    {"text"},
+                    lambda: self._apply_manager_delete_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
+                    lambda: self._apply_manager_review_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text", "voice", "video"},
+                    lambda: self._apply_manager_clarification_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
+                    lambda: self._maybe_handle_graph_help(
+                        user=user,
+                        latest_user_message=normalized_update.text or "",
+                        user_id=user.id,
+                    ),
+                ),
+                (
+                    {"text", "document", "voice", "video"},
+                    lambda: self._apply_manager_intake_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
+                        file_id=file_id,
+                        stage_result=stage_result,
+                    ),
+                ),
+            ],
+        )
 
     def _resolve_recovery_context(self, *, user):
         if hasattr(self.stage_agents, "resolve_current_stage_context"):

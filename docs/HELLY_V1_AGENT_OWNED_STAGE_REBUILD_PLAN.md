@@ -368,6 +368,7 @@ Current execution note:
 - remaining candidate-side and manager-side transport segments are now also split into dedicated helpers for delete, interview/review, summary, verification, questions, clarification, and intake branches, reducing inline routing depth further
 - raw-message creation, candidate/manager graph stage-result precompute, generic unsupported-input recovery, and processed-update assembly are now also extracted into dedicated Telegram transport helpers, pushing `TelegramUpdateService` closer to thin ingress/egress glue
 - entry-stage routing and role-flow dispatch are now also extracted into `_apply_entry_flow(...)`, `_precompute_role_stage_results(...)`, and `_apply_role_flows(...)`, reducing orchestration depth inside `_apply_identity_flow`
+- candidate-side and manager-side transport dispatch are now also expressed as ordered segment chains through `_dispatch_segment_chain(...)` instead of repeated inline `if content_type ...` cascades
 - Phase 11 has started with reusable production validation automation for Railway health and Telegram webhook checks
 - live production validation baseline has passed against the current Railway deployment: API `/health` returns `ok`, webhook URL matches `APP_BASE_URL/telegram/webhook`, and pending updates are `0`
 - live production validation tooling now also supports `VALIDATION_APP_BASE_URL`, so Railway checks can run cleanly even when local `.env` keeps `APP_BASE_URL` on localhost
