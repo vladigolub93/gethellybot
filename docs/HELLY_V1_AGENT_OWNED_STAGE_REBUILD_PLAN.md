@@ -340,7 +340,8 @@ Current execution note:
 - `CLARIFICATION_QA` is now implemented as a graph-owned manager clarification stage
 - `OPEN` is now implemented as a graph-owned manager status/delete-initiation stage
 - `INTERVIEW_INVITED` is now implemented as a graph-owned invitation-decision stage
-- the next rebuild target is the rest of interaction flow, starting with `INTERVIEW_IN_PROGRESS`
+- `INTERVIEW_IN_PROGRESS` is now implemented as a graph-owned active-answer stage
+- the next rebuild target is the rest of interaction flow, starting with `MANAGER_REVIEW`
 
 ## 9. Definition of Done
 

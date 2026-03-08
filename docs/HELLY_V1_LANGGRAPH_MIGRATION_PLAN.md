@@ -200,6 +200,8 @@ Status:
   - graph-owned execution for `INTERVIEW_INVITED`
   - graph-driven validation and backend handoff for `accept_interview`
   - graph-driven validation and backend handoff for `skip_opportunity`
+  - graph-owned execution for `INTERVIEW_IN_PROGRESS`
+  - graph-driven validation and backend handoff for `answer_current_question`
 
 ### Step 7. Routing Simplification
 

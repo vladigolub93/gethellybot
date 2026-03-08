@@ -2104,6 +2104,54 @@ def test_interview_answer_passthrough_reaches_interview_handler() -> None:
     assert service.interview_service.calls
 
 
+def test_graph_interview_in_progress_stage_can_own_text_answer() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTERVIEW_IN_PROGRESS",
+            reply_text="Thanks. I will use this answer and continue the interview.",
+            stage_status="ready_for_transition",
+            proposed_action="answer_current_question",
+            action_accepted=True,
+            structured_payload={
+                "answer_text": "In that project I designed the API boundary and owned the background job pipeline."
+            },
+            validation_result={"accepted": True, "normalized_action": "answer_current_question"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="processing",
+        notification_template="candidate_interview_answer_processing",
+        notification_text="Answer received.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10cx",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10cx",
+        build_update(text="In that project I designed the API boundary and owned the background job pipeline."),
+    )
+
+    assert templates == ["candidate_interview_answer_processing"]
+    assert service.interview_service.calls
+    assert (
+        service.interview_service.calls[-1]["text"]
+        == "In that project I designed the API boundary and owned the background job pipeline."
+    )
+
+
 def test_interview_voice_answer_passthrough_reaches_interview_handler() -> None:
     service = build_service()
     service.bot_controller = FakeBotController(None)

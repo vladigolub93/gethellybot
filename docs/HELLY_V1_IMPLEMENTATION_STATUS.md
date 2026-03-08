@@ -58,8 +58,9 @@ Architectural status note:
 - manager `CLARIFICATION_QA` is now graph-owned for text-based clarification completion and help handling
 - manager `OPEN` is now graph-owned for status guidance and delete-vacancy initiation
 - `INTERVIEW_INVITED` is now graph-owned for invitation guidance and accept/skip execution
+- `INTERVIEW_IN_PROGRESS` is now graph-owned for active text-answer turns and in-stage clarification
 - Telegram still falls back to the old controller/routing layer for all remaining stages
-- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the invitation decision stage `INTERVIEW_INVITED`, but active interview, review, and delete-confirmation stages are still primarily help-oriented overlays around existing handlers
+- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview entry/active stages through `INTERVIEW_IN_PROGRESS`, but manager review and delete-confirmation stages are still primarily help-oriented overlays around existing handlers
 
 ## 3. Infrastructure and Delivery Status
 
@@ -242,6 +243,7 @@ Status vs SRS:
 - `Implemented`: invite wave evaluation now expires stale unanswered invitations before deciding whether to expand
 - `Implemented`: candidate can accept or skip
 - `Implemented`: `INTERVIEW_INVITED` invitation guidance and accept/skip execution now run through a graph-owned stage agent
+- `Implemented`: `INTERVIEW_IN_PROGRESS` active text-answer turns and in-stage clarification now run through a graph-owned stage agent
 - `Implemented`: interview session creation
 - `Implemented`: question plan generation
 - `Implemented`: one follow-up-per-topic runtime

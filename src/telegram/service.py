@@ -548,6 +548,28 @@ class TelegramUpdateService:
                         return templates
                 if (
                     stage_result is not None
+                    and stage_result.stage == "INTERVIEW_IN_PROGRESS"
+                    and stage_result.action_accepted
+                    and stage_result.proposed_action == "answer_current_question"
+                ):
+                    interview_result = self.interview_service.handle_candidate_message(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        content_type=normalized_update.content_type,
+                        text=(stage_result.structured_payload or {}).get("answer_text") or normalized_update.text,
+                        file_id=file_id,
+                    )
+                    if interview_result is not None:
+                        templates.append(
+                            self._notify(
+                                user.id,
+                                interview_result.notification_template,
+                                {"text": interview_result.notification_text},
+                            )
+                        )
+                        return templates
+                if (
+                    stage_result is not None
                     and stage_result.stage == "QUESTIONS_PENDING"
                     and stage_result.action_accepted
                     and stage_result.proposed_action == "send_salary_location_work_format"

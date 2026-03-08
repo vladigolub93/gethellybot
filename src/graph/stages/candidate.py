@@ -108,6 +108,19 @@ def _candidate_interview_invited_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _candidate_interview_in_progress_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhat do you mean\b",
+        r"\bcan you repeat\b",
+        r"\bcan you clarify\b",
+        r"\bi do not understand\b",
+        r"\bwhat exactly are you asking\b",
+        r"\bhow should i answer\b",
+        r"\bcan i answer by voice\b",
+        r"\bcan i send video\b",
+    )
+
+
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
@@ -205,6 +218,11 @@ def _detect_candidate_interview_invited_action(text: str) -> tuple[str | None, d
     return None, {}
 
 
+def _is_candidate_interview_in_progress_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _candidate_interview_in_progress_help_patterns())
+
+
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
@@ -270,6 +288,16 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
             state.structured_payload = payload
             return state
         is_help = False
+    elif state.active_stage == "INTERVIEW_IN_PROGRESS":
+        if _is_candidate_interview_in_progress_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+        else:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = "answer_current_question"
+            state.structured_payload = {"answer_text": text.strip()}
+        return state
     else:
         is_help = False
     state.parsed_input["intent"] = "help" if is_help else "candidate_input"
@@ -351,6 +379,12 @@ def build_candidate_stage_reply_node(session):
                 state.reply_text = "Thanks. I will start the interview."
             else:
                 state.reply_text = "Understood. I will skip this opportunity."
+            state.confidence = 0.9
+            return state
+
+        if state.active_stage == "INTERVIEW_IN_PROGRESS" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = "Thanks. I will use this answer and continue the interview."
             state.confidence = 0.9
             return state
 

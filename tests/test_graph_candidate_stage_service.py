@@ -397,3 +397,58 @@ def test_graph_candidate_stage_accepts_interview_invite_accept() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "accept_interview"
     assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_candidate_stage_handles_interview_in_progress_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp11", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s1"))
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u14",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Can you clarify what exactly you are asking?",
+    )
+
+    assert reply is not None
+    assert "answer" in reply.lower() or "question" in reply.lower()
+
+
+def test_graph_candidate_stage_accepts_interview_in_progress_answer() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp12", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s2"))
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u15",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="I designed the API boundary and implemented the background processing myself.",
+    )
+
+    assert result is not None
+    assert result.stage == "INTERVIEW_IN_PROGRESS"
+    assert result.action_accepted is True
+    assert result.proposed_action == "answer_current_question"
+    assert result.stage_status == "ready_for_transition"
