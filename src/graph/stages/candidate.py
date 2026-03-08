@@ -17,11 +17,20 @@ from src.llm.service import (
 from src.orchestrator.policy import resolve_state_context
 
 
+def _combined_recent_context(state: HellyGraphState) -> list[str]:
+    combined: list[str] = []
+    for item in list(state.recent_context) + list(state.knowledge_snippets):
+        if item and item not in combined:
+            combined.append(item)
+    return combined
+
+
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
     state.missing_requirements = list(context.missing_requirements)
-    state.recent_context = [context.guidance_text]
+    if context.guidance_text and context.guidance_text not in state.recent_context:
+        state.recent_context.append(context.guidance_text)
     return state
 
 
@@ -41,7 +50,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -65,7 +74,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -91,7 +100,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -128,7 +137,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -144,7 +153,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -165,7 +174,7 @@ def build_candidate_stage_detect_node(session):
                 session,
                 latest_user_message=text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -204,7 +213,7 @@ def build_candidate_stage_detect_node(session):
                 latest_user_message=text,
                 current_question_text=current_question_text,
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -284,7 +293,7 @@ def build_candidate_stage_reply_node(session):
                 session,
                 context=context,
                 latest_user_message=state.latest_user_message,
-                recent_context=state.knowledge_snippets,
+                recent_context=_combined_recent_context(state),
             )
             state.reply_text = result.payload.get("response_text") or context.help_text or context.guidance_text
             state.follow_up_needed = True

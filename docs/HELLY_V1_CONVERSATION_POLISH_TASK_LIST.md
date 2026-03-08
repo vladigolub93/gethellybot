@@ -40,8 +40,8 @@ The target is a more natural, more human, more Telegram-native Helly that feels 
 
 ## 5. Phase D. Local Context Memory
 
-21. Define the minimal local conversation memory payload per stage.
-22. Feed recent user/bot turns into user-facing stage agents.
+21. Define the minimal local conversation memory payload per stage. Completed.
+22. Feed recent user/bot turns into user-facing stage agents. Completed.
 23. Add rules to avoid repeating the same explanation twice in a row.
 24. Add rules to reference the user's most recent concern directly.
 25. Add tests for repeated-question handling.

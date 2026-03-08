@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -55,3 +55,23 @@ class RawMessagesRepository:
         raw_message.text_content = text_content
         self.session.flush()
         return raw_message
+
+    def list_recent_text_context(self, *, user_id: UUID, limit: int = 6) -> List[str]:
+        stmt = (
+            select(RawMessage)
+            .where(
+                RawMessage.user_id == user_id,
+                RawMessage.text_content.is_not(None),
+            )
+            .order_by(RawMessage.created_at.desc())
+            .limit(limit)
+        )
+        rows = list(self.session.execute(stmt).scalars())
+        rendered: List[str] = []
+        for row in reversed(rows):
+            text = (row.text_content or "").strip()
+            if not text:
+                continue
+            speaker = "User" if row.direction == "inbound" else "Helly"
+            rendered.append(f"{speaker}: {text}")
+        return rendered

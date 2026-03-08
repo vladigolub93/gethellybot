@@ -21,6 +21,7 @@ class StageGraphRouter:
         latest_message_type: str | None,
         allowed_actions: list[str],
         missing_requirements: list[str],
+        recent_context: list[str] | None = None,
     ) -> HellyGraphState:
         return HellyGraphState(
             user_id=user_id,
@@ -31,5 +32,5 @@ class StageGraphRouter:
             latest_message_type=latest_message_type,
             allowed_actions=list(allowed_actions),
             missing_requirements=list(missing_requirements),
+            recent_context=list(recent_context or []),
         )
-

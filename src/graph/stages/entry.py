@@ -11,17 +11,12 @@ from src.llm.service import (
 from src.orchestrator.policy import resolve_state_context
 
 
-def _entry_help_patterns(stage: str) -> tuple[str, ...]:
-    return (
-        r"\bwhy\b",
-        r"\bhow\b",
-        r"\bhelp\b",
-        r"\brole\b",
-        r"\bcandidate\b",
-        r"\bhiring manager\b",
-        r"\bdifference\b",
-        r"\bwhich\b",
-    )
+def _combined_recent_context(state: HellyGraphState) -> list[str]:
+    combined: list[str] = []
+    for item in list(state.recent_context) + list(state.knowledge_snippets):
+        if item and item not in combined:
+            combined.append(item)
+    return combined
 
 
 def _normalize_text(value: str) -> str:
@@ -30,7 +25,8 @@ def load_entry_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
     state.missing_requirements = list(context.missing_requirements)
-    state.recent_context = [context.guidance_text]
+    if context.guidance_text and context.guidance_text not in state.recent_context:
+        state.recent_context.append(context.guidance_text)
     return state
 
 
@@ -51,7 +47,7 @@ def build_entry_detect_node(session):
                 session,
                 latest_user_message=state.latest_user_message or "",
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -68,7 +64,7 @@ def build_entry_detect_node(session):
                 session,
                 latest_user_message=state.latest_user_message or "",
                 current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
-                recent_context=state.knowledge_snippets or state.recent_context,
+                recent_context=_combined_recent_context(state),
             )
             payload = dict(decision.payload or {})
             state.intent = payload.get("intent") or "help"
@@ -85,13 +81,8 @@ def build_entry_detect_node(session):
                 state.follow_up_question = payload.get("response_text")
             return state
 
-        is_help = any(re.search(pattern, normalized) for pattern in _entry_help_patterns(state.active_stage or ""))
-        if is_help:
-            state.intent = "help"
-            state.parsed_input["intent"] = "help"
-        else:
-            state.intent = "unknown"
-            state.parsed_input["intent"] = "unknown"
+        state.intent = "unknown"
+        state.parsed_input["intent"] = "unknown"
         return state
 
     return _node
@@ -118,7 +109,7 @@ def build_entry_reply_node(session):
                 session,
                 context=context,
                 latest_user_message=state.latest_user_message,
-                recent_context=state.knowledge_snippets,
+                recent_context=_combined_recent_context(state),
             )
             state.reply_text = result.payload.get("response_text") or context.help_text or context.guidance_text
             state.follow_up_needed = True

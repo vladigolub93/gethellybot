@@ -5,11 +5,20 @@ from src.llm.service import safe_delete_confirmation_decision, safe_state_assist
 from src.orchestrator.policy import resolve_state_context
 
 
+def _combined_recent_context(state: HellyGraphState) -> list[str]:
+    combined: list[str] = []
+    for item in list(state.recent_context) + list(state.knowledge_snippets):
+        if item and item not in combined:
+            combined.append(item)
+    return combined
+
+
 def load_delete_stage_context_node(state: HellyGraphState) -> HellyGraphState:
     context = resolve_state_context(role=state.role, state=state.active_stage)
     state.allowed_actions = list(context.allowed_actions)
     state.missing_requirements = list(context.missing_requirements)
-    state.recent_context = [context.guidance_text]
+    if context.guidance_text and context.guidance_text not in state.recent_context:
+        state.recent_context.append(context.guidance_text)
     return state
 
 
@@ -39,7 +48,7 @@ def build_delete_stage_reply_node(session):
             latest_user_message=state.latest_user_message,
             entity_label=entity_label,
             current_step_guidance=context.guidance_text,
-            recent_context=state.knowledge_snippets,
+            recent_context=_combined_recent_context(state),
         )
         payload = dict(decision.payload or {})
         state.intent = payload.get("intent") or "help"

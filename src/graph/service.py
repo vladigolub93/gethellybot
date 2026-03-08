@@ -7,6 +7,7 @@ from src.config.logging import get_logger
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
+from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.graph.bootstrap import register_foundation_stage_graphs
 from src.identity.rules import has_primary_contact_channel
@@ -81,6 +82,7 @@ class LangGraphStageAgentService:
         self.candidates = CandidateProfilesRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matches = MatchingRepository(session)
+        self.raw_messages = RawMessagesRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.router = StageGraphRouter()
         register_foundation_stage_graphs()
@@ -381,6 +383,7 @@ class LangGraphStageAgentService:
             latest_message_type=latest_message_type,
             allowed_actions=context.allowed_actions,
             missing_requirements=context.missing_requirements,
+            recent_context=self._load_recent_turn_context(user),
         )
         return compiled.invoke(state_input.as_dict())
 
@@ -389,3 +392,12 @@ class LangGraphStageAgentService:
         context = getattr(entity, "questions_context_json", {}) or {}
         deletion = context.get("deletion") or {}
         return bool(deletion.get("pending"))
+
+    def _load_recent_turn_context(self, user) -> list[str]:
+        user_id = getattr(user, "id", None)
+        if user_id is None:
+            return []
+        try:
+            return self.raw_messages.list_recent_text_context(user_id=user_id, limit=6)
+        except Exception:
+            return []

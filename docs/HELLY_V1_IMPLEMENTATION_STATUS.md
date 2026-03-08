@@ -493,6 +493,7 @@ Recent stage-ownership progress:
 - the third high-impact prompt rewrite pass is now applied to `OPEN`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`, improving conversational warmth and decision-stage clarity without changing their action contracts.
 - notification delivery now has a first multi-message pacing foundation: long user-facing notifications can be split into multiple shorter Telegram messages while keeping reply keyboards on the final message, which creates a cleaner explanation-plus-CTA rhythm.
 - explicit multi-message choreography is now applied to the most visible review/invitation notifications, including candidate summary review, vacancy summary review, interview invitation, and manager review handoff.
+- stage agents now receive a compact recent-turn memory assembled from persisted `raw_messages`, so entry, candidate, manager, and deletion stages can see the latest local user/bot context instead of responding from the current message alone.
 
 ## 7. Production Readiness Assessment
 
