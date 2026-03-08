@@ -160,6 +160,10 @@ Exit:
 
 - every remaining non-agent intent decision is mapped
 
+Current artifact for this phase:
+
+- [HELLY_V1_AGENT_INTENT_OWNERSHIP_MATRIX.md](./HELLY_V1_AGENT_INTENT_OWNERSHIP_MATRIX.md)
+
 ### Phase C. Define the Canonical Agent Decision Contract
 
 9. Expand the stage agent output contract so it fully covers:
