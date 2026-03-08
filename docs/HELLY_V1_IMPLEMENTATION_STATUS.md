@@ -79,6 +79,7 @@ Architectural status note:
 - early entry/onboarding transport handling for contact attach, `/start`, and accepted entry-stage actions is now extracted into dedicated helpers instead of remaining inline inside `_apply_identity_flow`
 - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, reducing branching in `TelegramUpdateService`
 - a reusable production validation script now checks Railway API health and Telegram webhook registration against the configured `APP_BASE_URL`
+- the production validation script now also supports `VALIDATION_APP_BASE_URL` so live Railway validation can be run even when local `.env` keeps `APP_BASE_URL` on localhost
 - the reusable production validation script has already been run successfully against the live Railway deployment, confirming `health: ok`, webhook correctness, and zero pending Telegram updates at validation time
 - a reusable live DB inspection script now queries Supabase state for a Telegram user and has been validated successfully against the live environment
 - a reusable Telegram-user smoke validator now asserts expected candidate/vacancy/interview/match/notification state from live Supabase snapshots and has been validated in failure mode against the live environment

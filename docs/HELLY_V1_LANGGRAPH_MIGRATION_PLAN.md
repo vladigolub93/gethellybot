@@ -244,6 +244,7 @@ Status:
 - implemented:
   - `scripts/validate-production.sh`
   - `make validate-production`
+  - live validation override support through `VALIDATION_APP_BASE_URL` for cases where local `.env` keeps `APP_BASE_URL` on localhost
   - live validation run against Railway production:
     - API `/health` returned `ok`
     - Telegram webhook URL matched `APP_BASE_URL/telegram/webhook`

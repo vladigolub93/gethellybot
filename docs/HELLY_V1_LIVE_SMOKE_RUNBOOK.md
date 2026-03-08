@@ -18,9 +18,10 @@ It should be used together with:
 Before running live smoke checks:
 
 1. `make validate-production` must pass.
-2. The Telegram webhook must point to `APP_BASE_URL/telegram/webhook`.
-3. You must know the tester `telegram_user_id` or `telegram_chat_id`.
-4. The tester's old rows should be cleared if you want a clean onboarding run.
+2. If local `.env` points `APP_BASE_URL` at localhost, export `VALIDATION_APP_BASE_URL=https://<railway-api-domain>` before running `make validate-production`.
+3. The Telegram webhook must point to the live validation base URL used in step 1, ending with `/telegram/webhook`.
+4. You must know the tester `telegram_user_id` or `telegram_chat_id`.
+5. The tester's old rows should be cleared if you want a clean onboarding run.
 
 Useful tools:
 

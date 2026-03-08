@@ -367,6 +367,7 @@ Current execution note:
 - remaining candidate-side and manager-side transport chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, reducing `TelegramUpdateService` further toward thin graph-oriented transport glue
 - Phase 11 has started with reusable production validation automation for Railway health and Telegram webhook checks
 - live production validation baseline has passed against the current Railway deployment: API `/health` returns `ok`, webhook URL matches `APP_BASE_URL/telegram/webhook`, and pending updates are `0`
+- live production validation tooling now also supports `VALIDATION_APP_BASE_URL`, so Railway checks can run cleanly even when local `.env` keeps `APP_BASE_URL` on localhost
 - Phase 11 now also includes a live DB inspection tool for Telegram-user smoke tests, and the script has been validated against the live Supabase environment
 - Phase 11 now also includes an assertion-oriented Telegram-user smoke validator for expected candidate/vacancy/interview/match/notification state after a manual bot run
 - the next rebuild target is the remainder of Phase 9 cleanup plus broader Phase 11 live validation coverage

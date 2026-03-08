@@ -180,6 +180,7 @@ Automated baseline validation:
 ```bash
 set -a
 source .env
+export VALIDATION_APP_BASE_URL=https://<railway-api-domain>
 set +a
 make validate-production
 ```
@@ -187,7 +188,7 @@ make validate-production
 This checks:
 
 - API `/health`
-- Telegram webhook registration against `APP_BASE_URL/telegram/webhook`
+- Telegram webhook registration against `VALIDATION_APP_BASE_URL/telegram/webhook` when that override is set, otherwise `APP_BASE_URL/telegram/webhook`
 - pending webhook update count
 
 To inspect live DB state for a Telegram user after a smoke test:

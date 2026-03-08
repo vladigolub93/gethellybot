@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -z "${APP_BASE_URL:-}" ]]; then
-  echo "APP_BASE_URL is required" >&2
+VALIDATION_BASE_URL="${VALIDATION_APP_BASE_URL:-${APP_BASE_URL:-}}"
+
+if [[ -z "${VALIDATION_BASE_URL:-}" ]]; then
+  echo "VALIDATION_APP_BASE_URL or APP_BASE_URL is required" >&2
   exit 1
 fi
 
@@ -11,9 +13,9 @@ if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
   exit 1
 fi
 
-EXPECTED_WEBHOOK_URL="${APP_BASE_URL%/}/telegram/webhook"
+EXPECTED_WEBHOOK_URL="${VALIDATION_BASE_URL%/}/telegram/webhook"
 
-HEALTH_BODY="$(curl -fsS "${APP_BASE_URL%/}/health")"
+HEALTH_BODY="$(curl -fsS "${VALIDATION_BASE_URL%/}/health")"
 
 python3 - "$HEALTH_BODY" <<'PY'
 import json
