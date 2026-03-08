@@ -168,12 +168,11 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 After deploy:
 
 1. Open the bot in Telegram and send `/start`
-2. Share contact
-3. Reply `I agree`
-4. Choose `Candidate`
-5. Send a short text CV
-6. Confirm a notification is returned from the live bot
-7. Confirm `raw_messages`, `notifications`, and `job_execution_logs` are populated in Supabase
+2. If the user has no Telegram username, share contact
+3. Choose `Candidate`
+4. Send a short text CV
+5. Confirm a notification is returned from the live bot
+6. Confirm `raw_messages`, `notifications`, and `job_execution_logs` are populated in Supabase
 
 Automated baseline validation:
 
@@ -272,6 +271,19 @@ Supported assertions:
 - interview state
 - match status
 - latest notification template
+
+To assert that a help question did not incorrectly trigger a stage transition:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_stage_help_safety.py \
+  --telegram-user-id <telegram-user-id> \
+  --expect-candidate-state SUMMARY_REVIEW \
+  --expect-latest-inbound-contains "How long" \
+  --forbid-candidate-version-source-type summary_user_edit
+```
 
 ## 12. Operational Notes
 

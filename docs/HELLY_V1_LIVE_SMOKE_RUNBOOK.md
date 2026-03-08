@@ -35,6 +35,8 @@ Useful tools:
   - `.venv/bin/python scripts/check_telegram_user_checkpoint.py --telegram-user-id <id> --require-user --expect-candidate-state READY`
 - validate expected state:
   - `.venv/bin/python scripts/validate_telegram_user_state.py --telegram-user-id <id> ...`
+- validate that a help question did not trigger an incorrect transition:
+  - `.venv/bin/python scripts/validate_stage_help_safety.py --telegram-user-id <id> ...`
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -55,13 +57,12 @@ Railway log check:
 
 1. Open the bot.
 2. Send `/start`.
-3. Share contact.
-4. Confirm consent.
-5. Choose `Candidate`.
-6. Send a short text CV or experience summary.
-7. Approve summary.
-8. Send salary, location, and work format.
-9. Send verification video.
+3. If you do not have a Telegram username, share contact.
+4. Choose `Candidate`.
+5. Send a short text CV or experience summary.
+6. Approve summary.
+7. Send salary, location, and work format.
+8. Send verification video.
 
 ### Expected product behavior
 
@@ -107,10 +108,10 @@ set +a
 
 1. Open the bot with a clean user.
 2. Send `/start`.
-3. Share contact.
-4. Confirm consent.
-5. Choose `Hiring Manager`.
-6. Send a short text JD.
+3. If you do not have a Telegram username, share contact.
+4. Choose `Hiring Manager`.
+5. Send a short text JD.
+6. Review the generated vacancy summary, correct it once if needed, then approve it.
 7. Answer clarification questions until vacancy opens.
 
 ### Expected product behavior
@@ -201,6 +202,34 @@ Useful fields to inspect:
 - `latest_notification.template_key`
 - `invited_match.status`
 - `evaluation_result.status`
+
+## 6.1 Help-Question Safety Checks
+
+Candidate summary review:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_stage_help_safety.py \
+  --telegram-user-id <candidate-id> \
+  --expect-candidate-state SUMMARY_REVIEW \
+  --expect-latest-inbound-contains "How long" \
+  --forbid-candidate-version-source-type summary_user_edit
+```
+
+Manager vacancy summary review:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_stage_help_safety.py \
+  --telegram-user-id <manager-id> \
+  --expect-vacancy-state VACANCY_SUMMARY_REVIEW \
+  --expect-latest-inbound-contains "How long" \
+  --forbid-vacancy-version-source-type summary_user_edit
+```
 
 ## 7. Delete Confirmation Smoke
 
