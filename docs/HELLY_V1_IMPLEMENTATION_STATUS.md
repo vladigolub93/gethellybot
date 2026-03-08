@@ -53,6 +53,7 @@ Architectural status note:
 - entry-stage runtime execution is now graph-owned for `CONTACT_REQUIRED` and `ROLE_SELECTION`
 - entry identity is now considered sufficient when the user has either a Telegram `username` or a shared `contact`
 - candidate `CV_PENDING` is now graph-owned for text-based stage completion and help handling
+- candidate `CV_PENDING` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; help/questions like missing-CV or LinkedIn alternatives no longer rely on regex heuristics
 - candidate `SUMMARY_REVIEW` is now graph-owned for approve/correction execution and help handling
 - candidate `SUMMARY_REVIEW` meaning is now interpreted by a dedicated stage-agent decision prompt before backend execution; timing/help questions no longer rely on raw-text fallback classification
 - candidate `QUESTIONS_PENDING` is now graph-owned for text-based structured question-answer handoff and help handling

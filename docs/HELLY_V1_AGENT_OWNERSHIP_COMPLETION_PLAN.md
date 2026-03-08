@@ -214,7 +214,7 @@ Exit:
 
 ### Phase F. Rebuild Candidate Stages to LLM-First Intent
 
-20. Remove deterministic intent classification from `CV_PENDING`.
+20. Remove deterministic intent classification from `CV_PENDING`. `Completed`
 21. Remove deterministic intent classification from `SUMMARY_REVIEW`. `Completed`
 22. Remove deterministic intent classification from `QUESTIONS_PENDING`. `Completed`
 23. Remove deterministic intent classification from `VERIFICATION_PENDING`.

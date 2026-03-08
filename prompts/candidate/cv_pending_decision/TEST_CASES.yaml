@@ -1,0 +1,6 @@
+- input: "If I don't have a CV yet?"
+  expected_intent: "help"
+- input: "Can I send a LinkedIn PDF instead?"
+  expected_intent: "help"
+- input: "Senior backend engineer with 7 years in Python, Go, AWS, and PostgreSQL."
+  expected_action: "send_cv_text"

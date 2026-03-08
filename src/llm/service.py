@@ -15,6 +15,7 @@ from src.llm.assets import build_user_facing_grounded_system_prompt, load_system
 from src.llm.prompts import (
     STATE_ASSISTANCE_SYSTEM_PROMPT,
     bot_controller_prompt,
+    candidate_cv_decision_prompt,
     candidate_rerank_prompt,
     candidate_cv_prompt,
     candidate_questions_decision_prompt,
@@ -44,6 +45,7 @@ from src.llm.prompts import (
 from src.llm.state_assistance import state_assistance_prompt
 from src.llm.schemas import (
     BotControllerDecisionSchema,
+    CandidateCvDecisionSchema,
     CandidateRerankSchema,
     CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
@@ -442,6 +444,44 @@ def candidate_summary_review_decision_with_llm(
             "response_text": response_text,
             "proposed_action": proposed_action,
             "edit_text": edit_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def candidate_cv_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateCvDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("candidate", "cv_pending_decision"),
+        user_prompt=candidate_cv_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_cv_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "send_cv_text"}:
+        proposed_action = None
+    cv_text = _clean_text(result.payload.get("cv_text"), limit=4000)
+    if proposed_action == "send_cv_text" and not cv_text:
+        cv_text = _clean_text(latest_user_message, limit=4000)
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
+            "cv_text": cv_text,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -1752,6 +1792,85 @@ def safe_interview_invitation_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_invitation_decision_v1",
+    )
+
+
+def safe_candidate_cv_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_cv_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_cv_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "You can upload a CV, paste a work summary, send a LinkedIn PDF, or describe your experience in a voice message.",
+        "proposed_action": None,
+        "cv_text": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "candidate_cv_help_fallback",
+    }
+    if any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "skip",
+            "later",
+            "linkedin",
+            "pdf",
+            "no cv",
+            "no resume",
+            "do not have",
+            "don't have",
+            "dont have",
+            "what should i send",
+            "what do i send",
+            "what can i send",
+            "what next",
+            "?",
+        ]
+    ):
+        return LLMResult(
+            payload=payload,
+            model_name="baseline-deterministic",
+            prompt_version="baseline_candidate_cv_decision_v1",
+        )
+
+    if normalized_text:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "experience_input",
+                "response_text": None,
+                "proposed_action": "send_cv_text",
+                "cv_text": normalized_text,
+                "needs_follow_up": False,
+                "reason_code": "candidate_cv_text_submission",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_candidate_cv_decision_v1",
+        )
+
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_cv_decision_v1",
     )
 
 

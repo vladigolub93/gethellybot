@@ -41,7 +41,7 @@ This field identifies the concrete deterministic logic that still needs to be re
 | --- | --- | --- | --- | --- |
 | `CONTACT_REQUIRED` | `mixed` | `agent-first` | regex help patterns, deterministic role/contact completion detection, `unknown` fallback | [entry.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/entry.py) |
 | `ROLE_SELECTION` | `mixed` | `agent-first` | hard-coded `candidate` / `hiring manager` completion mapping, regex help patterns | [entry.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/entry.py) |
-| `CV_PENDING` | `mixed` | `agent-first` | regex help patterns, `len<=40 && ?` heuristic, default non-help text -> `send_cv_text` | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py) |
+| `CV_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now only executes validated `send_cv_text` handoff for text submissions | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
 | `SUMMARY_REVIEW` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; vacancy-side mirror stage still pending for symmetry | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
 | `QUESTIONS_PENDING` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend still executes parsed payload and voice path by design | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py) |
 | `VERIFICATION_PENDING` | `mixed` | `agent-first` | deterministic `latest_message_type == video` completion rule, regex help patterns | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py) |
@@ -145,14 +145,13 @@ Strict order:
 3. `INTERVIEW_IN_PROGRESS`
 4. `QUESTIONS_PENDING`
 5. `DELETE_CONFIRMATION`
-6. `CV_PENDING`
-7. `INTAKE_PENDING`
-8. `CLARIFICATION_QA`
-9. `READY`
-10. `OPEN`
-11. `CONTACT_REQUIRED`
-12. `ROLE_SELECTION`
-13. `MANAGER_REVIEW`
+6. `INTAKE_PENDING`
+7. `CLARIFICATION_QA`
+8. `READY`
+9. `OPEN`
+10. `CONTACT_REQUIRED`
+11. `ROLE_SELECTION`
+12. `MANAGER_REVIEW`
 
 ## 8. Definition of Done
 

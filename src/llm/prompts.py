@@ -99,6 +99,36 @@ Latest user message:
 """
 
 
+def candidate_cv_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the CV or experience submission step.
+
+Valid outcomes:
+- help question or clarification about what can be submitted
+- real CV or experience input that should be stored and processed
+
+Rules:
+- treat questions like "what should I send?", "I don't have a CV", "can I use LinkedIn?", "can I send voice?", "why do you need this?", and "what happens next?" as help, not as CV input
+- only propose `send_cv_text` when the candidate is clearly providing resume text, experience details, or a useful work-history summary
+- if the candidate is clearly providing experience input, include the original text in `cv_text`
+- do not invent candidate experience
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def candidate_questions_prompt(text: str) -> str:
     return f"""Task: parse candidate mandatory profile answers from the text below.
 
