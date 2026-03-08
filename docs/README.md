@@ -30,6 +30,9 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_PROMPT_CATALOG.md](./HELLY_V1_PROMPT_CATALOG.md): AI capability inventory, prompt asset structure, schema contracts, model policy, and evaluation requirements.
 - [HELLY_V1_AGENT_KNOWLEDGE_BASE.md](./HELLY_V1_AGENT_KNOWLEDGE_BASE.md): canonical FAQ and product-truth grounding for all user-facing AI agents and state-specific prompts.
 - [HELLY_V1_LLM_COVERAGE.md](./HELLY_V1_LLM_COVERAGE.md): full prompt-family coverage matrix showing which LLM capabilities already have assets, which are runtime-wired, and which still need implementation wiring.
+- [HELLY_V1_CONVERSATION_QUALITY_PLAN.md](./HELLY_V1_CONVERSATION_QUALITY_PLAN.md): the conversational quality roadmap for making Helly feel more natural, Telegram-native, and human.
+- [HELLY_V1_VOICE_AND_TONE_GUIDE.md](./HELLY_V1_VOICE_AND_TONE_GUIDE.md): canonical voice rules for making Helly sound like a sharp, warm recruiter from the IT world.
+- [HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md](./HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md): ordered execution list for prompt tuning, message choreography, local conversational memory, and live transcript polish.
 
 ## Delivery Planning
 

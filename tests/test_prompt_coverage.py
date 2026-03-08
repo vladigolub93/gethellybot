@@ -92,4 +92,5 @@ def test_shared_telegram_style_is_appended_to_system_prompts() -> None:
 
     assert "Shared Telegram Delivery Rules:" in prompt
     assert "You are communicating inside Telegram" in prompt
-    assert "friendly AI recruiter" in prompt
+    assert "friendly recruiter from the IT world" in prompt
+    assert "Answer the actual question before pushing the next step." in prompt

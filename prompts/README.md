@@ -11,6 +11,7 @@ Rules:
 - user-facing prompt families should stay grounded in `/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_AGENT_KNOWLEDGE_BASE.md`
 - every graph-owned stage agent must have a dedicated prompt asset through `orchestrator/state_assistance/<slug>/SYSTEM.md`
 - every runtime-loaded `SYSTEM.md` automatically receives the shared Telegram recruiter style rules from `/Users/vladigolub/Desktop/gethellybot/prompts/_shared/TELEGRAM_STYLE.md`
+- the canonical conversational target for those shared rules is described in `/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_CONVERSATION_QUALITY_PLAN.md` and `/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_VOICE_AND_TONE_GUIDE.md`
 
 Current active runtime capabilities:
 

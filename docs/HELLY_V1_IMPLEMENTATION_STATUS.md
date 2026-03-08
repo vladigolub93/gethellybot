@@ -486,6 +486,8 @@ Recent stage-ownership progress:
 - live-validation tooling now also includes `validate_phase_l.py`, which runs all remaining Phase L scenarios together and reports a consolidated pass/fail summary.
 - live-validation tooling now also includes `report_phase_l_readiness.py`, which reports the exact environment blockers preventing fully automated Phase L execution from the current machine and now distinguishes between `post-real-user-message validation` readiness and `synthetic webhook replay` readiness on a per-scenario basis.
 - `TelegramUpdateService` no longer uses raw-text compatibility fallback in candidate summary review, manager summary review, or manager review paths after a graph-owned stage decision; those segments now wait for explicit stage-agent output.
+- a dedicated conversation-quality layer is now documented in `HELLY_V1_CONVERSATION_QUALITY_PLAN.md` and `HELLY_V1_VOICE_AND_TONE_GUIDE.md`, and the shared Telegram style rules have been expanded to target warmer, more human, Telegram-native recruiter behavior across all runtime-loaded prompts.
+- conversation-polish execution is now explicitly broken down in `HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md`, covering shared prompt tuning, message choreography, local context memory, microcopy cleanup, and transcript-driven iteration.
 
 ## 7. Production Readiness Assessment
 
