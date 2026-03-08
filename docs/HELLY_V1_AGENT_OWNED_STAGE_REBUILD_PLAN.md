@@ -361,6 +361,7 @@ Current execution note:
 - candidate delete dispatch, manager delete dispatch, manager review dispatch, and candidate interaction dispatch are now extracted into reusable Telegram transport helpers instead of duplicated inline routing branches
 - candidate summary-review dispatch, candidate verification dispatch, manager clarification dispatch, manager intake dispatch, and candidate intake dispatch are now also extracted into reusable Telegram transport helpers instead of duplicated inline routing branches
 - repeated graph-help notification dispatch in migrated stages is now centralized through a shared Telegram transport helper instead of repeated inline `resolve -> notify -> return` blocks
+- repeated compatibility fallback dispatch for manager review, candidate interview, candidate summary review, candidate verification, candidate questions, manager clarification, manager intake, and candidate intake is now also centralized through reusable Telegram transport helpers
 - the next rebuild target is Phase 9 and Phase 10 cleanup work: removing remaining legacy controller ownership, simplifying Telegram routing around graph-first execution, and expanding graph-native end-to-end coverage
 
 ## 9. Definition of Done
