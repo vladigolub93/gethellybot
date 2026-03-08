@@ -266,14 +266,14 @@ Exit:
 
 ### Phase I. Remove Remaining Stage Interpretation From Telegram Transport
 
-42. Remove stage-specific meaning decisions from `TelegramUpdateService`. `In progress`
+42. Remove stage-specific meaning decisions from `TelegramUpdateService`. `Completed`
 43. Leave only:
     - normalize update
     - resolve active stage
     - call graph
     - render result
     - handoff to backend execution
-44. Verify transport contains no stage-specific `help vs action` meaning logic. `In progress`
+44. Verify transport contains no stage-specific `help vs action` meaning logic. `Completed`
 
 Exit:
 

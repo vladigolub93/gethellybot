@@ -475,6 +475,7 @@ Recent stage-ownership progress:
 - `MANAGER_REVIEW` now uses a dedicated manager-side decision prompt so help/clarification vs approve/reject is owned by the stage agent before backend review execution runs.
 - `VERIFICATION_PENDING` now uses a dedicated candidate-side decision prompt so text meaning inside the verification step is owned by the stage agent, while raw video submission remains a Telegram media event by design.
 - `INTERVIEW_IN_PROGRESS` now uses an explicit `answer_current_question` execution path, so the active interview service no longer interprets raw text in the primary graph-owned path.
+- migrated text stages in `TelegramUpdateService` no longer fall back to raw domain handlers for meaning interpretation; transport now hands off only graph-owned actions or non-text media execution paths.
 - `TelegramUpdateService` no longer uses raw-text compatibility fallback in candidate summary review, manager summary review, or manager review paths after a graph-owned stage decision; those segments now wait for explicit stage-agent output.
 
 ## 7. Production Readiness Assessment

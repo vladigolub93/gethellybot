@@ -978,26 +978,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
-
-        deletion_result = self.candidate_service.handle_deletion_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=latest_user_message,
-        )
-        if deletion_result is None:
-            return None
-        return [
-            self._notify(
-                user.id,
-                deletion_result.notification_template,
-                {
-                    "text": deletion_result.notification_text,
-                    "reply_markup": deletion_confirmation_keyboard("candidate")
-                    if deletion_result.status == "confirmation_required"
-                    else remove_keyboard(),
-                },
-            )
-        ]
+        return None
 
     def _apply_candidate_interview_segment(
         self,
@@ -1026,6 +1007,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
+            return None
         return self._handle_candidate_interview_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1131,6 +1113,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
+            return None
         return self._handle_candidate_questions_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1165,6 +1148,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
+            return None
         return self._handle_candidate_intake_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1197,26 +1181,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
-
-        deletion_result = self.vacancy_service.handle_deletion_message(
-            user=user,
-            raw_message_id=raw_message_id,
-            text=latest_user_message,
-        )
-        if deletion_result is None:
-            return None
-        return [
-            self._notify(
-                user.id,
-                deletion_result.notification_template,
-                {
-                    "text": deletion_result.notification_text,
-                    "reply_markup": deletion_confirmation_keyboard("vacancy")
-                    if deletion_result.status == "confirmation_required"
-                    else remove_keyboard(),
-                },
-            )
-        ]
+        return None
 
     def _apply_manager_review_segment(
         self,
@@ -1268,6 +1233,7 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
+            return None
         return self._handle_manager_clarification_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1323,6 +1289,7 @@ class TelegramUpdateService:
             )
             if manager_intake_templates is not None:
                 return manager_intake_templates
+            return None
         return self._handle_manager_intake_message(
             user=user,
             raw_message_id=raw_message_id,

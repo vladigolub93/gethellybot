@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from src.graph.service import StageAgentExecutionResult
 from src.orchestrator.policy import resolve_state_context
+from src.shared.text import normalize_command_text
 from src.telegram.service import TelegramUpdateService
 from src.telegram.types import NormalizedTelegramUpdate
 
@@ -105,7 +106,21 @@ class FakeStageAgentService:
                 "kind": "stage_execution",
             }
         )
-        return self.stage_result
+        if self.stage_result is not None:
+            return self.stage_result
+        if self.response is not None:
+            return StageAgentExecutionResult(
+                stage="TEST_STAGE",
+                reply_text=self.response,
+                stage_status="in_progress",
+                proposed_action=None,
+                action_accepted=False,
+                structured_payload={},
+                validation_result={"accepted": False, "normalized_action": None},
+            )
+        if latest_message_type != "text":
+            return None
+        return self._infer_stage_result(user=user, latest_user_message=latest_user_message)
 
     def resolve_current_stage_context(self, *, user):
         if not getattr(user, "phone_number", None) and not getattr(user, "username", None):
@@ -113,6 +128,75 @@ class FakeStageAgentService:
         if not getattr(user, "is_candidate", False) and not getattr(user, "is_hiring_manager", False):
             return resolve_state_context(role=None, state="ROLE_SELECTION")
         return resolve_state_context(role=None, state=None)
+
+    def _infer_stage_result(self, *, user, latest_user_message: str):
+        command = normalize_command_text(latest_user_message)
+        text = latest_user_message or ""
+        lowered = text.lower()
+
+        if getattr(user, "is_candidate", False):
+            if command in {"accept interview", "accept"}:
+                return _stage_result("INTERVIEW_INVITED", "accept_interview")
+            if command in {"skip opportunity", "skip"}:
+                return _stage_result("INTERVIEW_INVITED", "skip_opportunity")
+            if command in {"delete profile", "delete my profile", "remove profile"}:
+                return _stage_result("READY", "delete_profile")
+            if command in {"confirm delete", "confirm delete profile"}:
+                return _stage_result("DELETE_CONFIRMATION", "confirm_delete")
+            if command in {"cancel delete", "keep profile", "don't delete", "dont delete"}:
+                return _stage_result("DELETE_CONFIRMATION", "cancel_delete")
+            if "designed the api boundary" in lowered or "owned the background job pipeline" in lowered:
+                return _stage_result(
+                    "INTERVIEW_IN_PROGRESS",
+                    "answer_current_question",
+                    {"answer_text": latest_user_message},
+                )
+            if "usd" in lowered and ("remote" in lowered or "warsaw" in lowered):
+                return _stage_result(
+                    "QUESTIONS_PENDING",
+                    "send_salary_location_work_format",
+                    {"answer_text": latest_user_message},
+                )
+            if latest_user_message.strip():
+                return _stage_result(
+                    "CV_PENDING",
+                    "send_cv_text",
+                    {"cv_text": latest_user_message},
+                )
+
+        if getattr(user, "is_hiring_manager", False):
+            if command in {"delete vacancy", "delete this vacancy", "remove vacancy"}:
+                return _stage_result("OPEN", "delete_vacancy")
+            if command in {"confirm delete", "confirm delete vacancy"}:
+                return _stage_result("DELETE_CONFIRMATION", "confirm_delete")
+            if command in {"cancel delete", "keep vacancy", "don't delete", "dont delete"}:
+                return _stage_result("DELETE_CONFIRMATION", "cancel_delete")
+            if "budget is" in lowered or "remote across" in lowered:
+                return _stage_result(
+                    "CLARIFICATION_QA",
+                    "send_vacancy_clarifications",
+                    {"answer_text": latest_user_message},
+                )
+            if latest_user_message.strip():
+                return _stage_result(
+                    "INTAKE_PENDING",
+                    "send_job_description_text",
+                    {"job_description_text": latest_user_message},
+                )
+
+        return None
+
+
+def _stage_result(stage: str, action: str, payload: dict | None = None) -> StageAgentExecutionResult:
+    return StageAgentExecutionResult(
+        stage=stage,
+        reply_text=f"{stage}:{action}",
+        stage_status="ready_for_transition",
+        proposed_action=action,
+        action_accepted=True,
+        structured_payload=payload or {},
+        validation_result={"accepted": True, "normalized_action": action},
+    )
 
 
 class FailIfCalledService:
