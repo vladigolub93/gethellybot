@@ -771,9 +771,17 @@ def test_candidate_cv_help_is_intercepted_before_cv_intake() -> None:
 
 def test_candidate_cv_short_help_question_is_intercepted_before_cv_intake() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
-        "No problem. You can paste your experience as text, send a voice note, or upload a LinkedIn PDF."
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="CV_PENDING",
+            reply_text="No problem. You can paste your experience as text, send a voice note, or upload a LinkedIn PDF.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
+    service.bot_controller = FakeBotController("Old CV fallback should not be used.")
     service.candidate_service = FakeCandidateService()
     service.interview_service = FailIfCalledService()
     service.vacancy_service = FailIfCalledService()
@@ -790,6 +798,7 @@ def test_candidate_cv_short_help_question_is_intercepted_before_cv_intake() -> N
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert not service.bot_controller.calls
     assert not service.candidate_service.cv_calls
 
 
@@ -1553,9 +1562,17 @@ def test_graph_ready_stage_can_own_delete_profile_intent() -> None:
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
-        "The interview is short and you can answer in text, voice, or video."
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTERVIEW_INVITED",
+            reply_text="The interview is short and you can answer in text, voice, or video.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
+    service.bot_controller = FakeBotController("Old interview fallback should not be used.")
     service.candidate_service = FakeCandidateService()
     service.interview_service = FakeInterviewService()
     service.vacancy_service = FailIfCalledService()
@@ -1576,6 +1593,7 @@ def test_interview_invite_help_is_intercepted_before_interview_handler() -> None
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert not service.bot_controller.calls
     assert not service.interview_service.calls
 
 
@@ -1659,9 +1677,17 @@ def test_vacancy_delete_confirmation_help_is_intercepted_after_delete_prompt() -
 
 def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
     service = build_service()
-    service.bot_controller = FakeBotController(
-        "The evaluation summarizes strengths, risks, and recommendation before you approve or reject."
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="MANAGER_REVIEW",
+            reply_text="The evaluation summarizes strengths, risks, and recommendation before you approve or reject.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+        ),
     )
+    service.bot_controller = FakeBotController("Old review fallback should not be used.")
     service.candidate_service = FailIfCalledService()
     service.interview_service = FailIfCalledService()
     service.vacancy_service = FakeVacancyService()
@@ -1682,6 +1708,7 @@ def test_manager_review_help_is_intercepted_before_manager_handler() -> None:
 
     assert templates == ["state_aware_help"]
     assert service.notifications_repo.calls[-1]["template_key"] == "state_aware_help"
+    assert not service.bot_controller.calls
     assert not service.evaluation_service.calls
 
 

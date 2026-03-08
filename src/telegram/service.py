@@ -85,12 +85,7 @@ class TelegramUpdateService:
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
         )
-        if graph_reply:
-            return graph_reply
-        return self.bot_controller.maybe_build_in_state_assistance(
-            user=user,
-            latest_user_message=latest_user_message,
-        )
+        return graph_reply
 
     def _maybe_run_graph_stage(
         self,
