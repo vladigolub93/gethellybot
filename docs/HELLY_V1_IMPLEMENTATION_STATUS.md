@@ -482,6 +482,7 @@ Recent stage-ownership progress:
 - live-validation tooling now also includes `validate_no_post_message_transition.py`, which can assert that the latest inbound Telegram message did not produce a newer state transition unless one was explicitly expected.
 - live-validation tooling now also includes `validate_graph_stage_logs.py`, which can assert against Railway logs that `graph_stage_executed` was emitted for a given stage and Telegram user.
 - live-validation tooling now also includes `validate_live_stage_checkpoint.py`, which combines DB-state checks, help-safety checks, no-transition checks, and Railway graph log validation for one live stage checkpoint.
+- live-validation tooling now also includes `validate_live_smoke_scenario.py`, which wraps the remaining Phase L scenarios into reproducible one-command validations.
 - `TelegramUpdateService` no longer uses raw-text compatibility fallback in candidate summary review, manager summary review, or manager review paths after a graph-owned stage decision; those segments now wait for explicit stage-agent output.
 
 ## 7. Production Readiness Assessment

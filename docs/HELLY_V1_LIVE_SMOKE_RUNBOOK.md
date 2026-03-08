@@ -43,6 +43,8 @@ Useful tools:
   - `.venv/bin/python scripts/validate_graph_stage_logs.py --expect-telegram-user-id <id> --expect-stage <stage>`
 - run one composite validation for a live checkpoint:
   - `.venv/bin/python scripts/validate_live_stage_checkpoint.py --telegram-user-id <id> ...`
+- run one predefined Phase L scenario validation:
+  - `.venv/bin/python scripts/validate_live_smoke_scenario.py --telegram-user-id <id> --scenario <scenario>`
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
@@ -284,6 +286,35 @@ set +a
   --expect-log-stage VACANCY_SUMMARY_REVIEW \
   --railway-token "$RAILWAY_API_TOKEN" \
   --railway-environment-id "$RAILWAY_ENVIRONMENT_ID"
+```
+
+Predefined scenario wrappers:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_live_smoke_scenario.py \
+  --telegram-user-id <candidate-id> \
+  --scenario candidate_summary_review_help
+```
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_live_smoke_scenario.py \
+  --telegram-user-id <candidate-id> \
+  --scenario candidate_questions_clarification
+```
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/validate_live_smoke_scenario.py \
+  --telegram-user-id <manager-id> \
+  --scenario manager_vacancy_summary_review_help
 ```
 
 ## 7. Delete Confirmation Smoke
