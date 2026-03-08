@@ -62,6 +62,7 @@ Architectural status note:
 - `MANAGER_REVIEW` is now graph-owned for review guidance and approve/reject execution
 - `DELETE_CONFIRMATION` is now graph-owned for confirm/cancel execution and deletion-consequence guidance
 - Telegram now uses graph-first execution as the primary path for all migrated stages and only falls back to the old controller/routing layer as a compatibility path when graph does not return a stage-owned answer
+- graph-native integration coverage now includes stage-resolution priority tests for candidate and manager families, verifying that higher-priority interaction stages override lower-priority status stages in the expected order
 - important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status
@@ -127,7 +128,7 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
 - `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
-- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, with `178` passing tests covering help interception, business-action passthrough, normalization, aliases, multimodal routing, and early identity/onboarding assistance
+- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, and the broader graph-owned rebuild now has `244` passing tests including graph stage-resolution coverage
 - `Partial`: the old state-aware routing/controller layer is no longer the primary path for migrated stages, but it still exists as compatibility fallback and some duplicated handler glue remains in Telegram transport
 
 Status vs SRS:

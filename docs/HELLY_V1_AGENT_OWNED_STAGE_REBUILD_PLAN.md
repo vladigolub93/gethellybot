@@ -329,6 +329,8 @@ The next concrete implementation tasks should be:
 Current execution note:
 
 - Phase 1 is complete
+- Phase 8 is materially complete for all major user-facing stages
+- Phase 9 is in progress, with graph-first execution now primary in migrated Telegram paths
 - entry flow in Phase 4 is now implemented as graph-owned execution for text-based onboarding interactions
 - `CV_PENDING` is now implemented as a graph-owned text stage
 - `SUMMARY_REVIEW` is now implemented as a graph-owned approval/correction stage
@@ -343,7 +345,8 @@ Current execution note:
 - `MANAGER_REVIEW` is now implemented as a graph-owned review-decision stage
 - `DELETE_CONFIRMATION` is now implemented as a graph-owned deletion-decision stage
 - Telegram routing now prefers graph-owned stage replies and graph-owned action handoff before falling back to legacy controller assistance in migrated paths
-- the next rebuild target is Phase 8 and Phase 9 cleanup work: removing remaining legacy controller ownership and simplifying Telegram routing around graph-first execution
+- graph-native stage-resolution coverage now verifies priority ordering across candidate and manager stage families, including `READY`, `INTERVIEW_INVITED`, `INTERVIEW_IN_PROGRESS`, `MANAGER_REVIEW`, and `DELETE_CONFIRMATION`
+- the next rebuild target is Phase 9 and Phase 10 cleanup work: removing remaining legacy controller ownership, simplifying Telegram routing around graph-first execution, and expanding graph-native end-to-end coverage
 
 ## 9. Definition of Done
 

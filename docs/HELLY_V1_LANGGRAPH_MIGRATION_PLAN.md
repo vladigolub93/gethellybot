@@ -226,6 +226,21 @@ Deliver:
 - migration parity tests against old behavior
 - production smoke tests for candidate and manager flows
 
+Status:
+
+- in progress
+- implemented:
+  - graph-stage resolution coverage for candidate priority ordering:
+    - `READY`
+    - `INTERVIEW_INVITED`
+    - `INTERVIEW_IN_PROGRESS`
+    - `DELETE_CONFIRMATION`
+  - graph-stage resolution coverage for manager priority ordering:
+    - `OPEN`
+    - `MANAGER_REVIEW`
+    - `DELETE_CONFIRMATION`
+  - full test suite currently passes with graph-owned routing and stage-resolution coverage
+
 ## 5. Definition of Done
 
 The migration is complete when:
