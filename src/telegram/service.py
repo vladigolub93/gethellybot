@@ -859,6 +859,340 @@ class TelegramUpdateService:
             )
         ]
 
+    def _apply_candidate_delete_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        deletion_templates = self._handle_candidate_delete_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if deletion_templates is not None:
+            return deletion_templates
+        if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=latest_user_message,
+                user_id=user.id,
+                stage_result=stage_result,
+                reply_markup=deletion_confirmation_keyboard("candidate"),
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+
+        deletion_result = self.candidate_service.handle_deletion_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=latest_user_message,
+        )
+        if deletion_result is None:
+            return None
+        return [
+            self._notify(
+                user.id,
+                deletion_result.notification_template,
+                {
+                    "text": deletion_result.notification_text,
+                    "reply_markup": deletion_confirmation_keyboard("candidate")
+                    if deletion_result.status == "confirmation_required"
+                    else None,
+                },
+            )
+        ]
+
+    def _apply_candidate_interview_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if normalized_update.content_type == "text":
+            candidate_interaction_templates = self._handle_candidate_interaction_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=stage_result,
+            )
+            if candidate_interaction_templates is not None:
+                return candidate_interaction_templates
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return self._handle_candidate_interview_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+        )
+
+    def _apply_candidate_summary_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        stage_result,
+    ) -> List[str] | None:
+        summary_templates = self._handle_candidate_summary_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            stage_result=stage_result,
+        )
+        if summary_templates is not None:
+            return summary_templates
+        assistance_templates = self._maybe_handle_graph_help(
+            user=user,
+            latest_user_message=normalized_update.text or "",
+            user_id=user.id,
+            stage_result=stage_result,
+        )
+        if assistance_templates is not None:
+            return assistance_templates
+        return self._handle_candidate_summary_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=normalized_update.text or "",
+        )
+
+    def _apply_candidate_verification_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        verification_templates = self._handle_candidate_verification_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+            stage_result=stage_result,
+        )
+        if verification_templates is not None:
+            return verification_templates
+        if normalized_update.content_type == "text":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return self._handle_candidate_verification_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            content_type=normalized_update.content_type,
+            file_id=file_id,
+        )
+
+    def _apply_candidate_questions_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+    ) -> List[str] | None:
+        if normalized_update.content_type == "text":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return self._handle_candidate_questions_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+        )
+
+    def _apply_candidate_intake_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str]:
+        if normalized_update.content_type == "text":
+            candidate_intake_templates = self._handle_candidate_intake_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=stage_result,
+            )
+            if candidate_intake_templates is not None:
+                return candidate_intake_templates
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return self._handle_candidate_intake_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+        )
+
+    def _apply_manager_delete_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        deletion_templates = self._handle_manager_delete_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if deletion_templates is not None:
+            return deletion_templates
+        if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=latest_user_message,
+                user_id=user.id,
+                stage_result=stage_result,
+                reply_markup=deletion_confirmation_keyboard("vacancy"),
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+
+        deletion_result = self.vacancy_service.handle_deletion_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=latest_user_message,
+        )
+        if deletion_result is None:
+            return None
+        return [
+            self._notify(
+                user.id,
+                deletion_result.notification_template,
+                {
+                    "text": deletion_result.notification_text,
+                    "reply_markup": deletion_confirmation_keyboard("vacancy")
+                    if deletion_result.status == "confirmation_required"
+                    else None,
+                },
+            )
+        ]
+
+    def _apply_manager_review_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        manager_templates = self._handle_manager_review_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if manager_templates is not None:
+            return manager_templates
+        assistance_templates = self._maybe_handle_graph_help(
+            user=user,
+            latest_user_message=latest_user_message,
+            user_id=user.id,
+            stage_result=stage_result,
+        )
+        if assistance_templates is not None:
+            return assistance_templates
+        return self._handle_manager_review_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=latest_user_message,
+        )
+
+    def _apply_manager_clarification_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str] | None:
+        if normalized_update.content_type == "text":
+            clarification_templates = self._handle_manager_clarification_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                stage_result=stage_result,
+            )
+            if clarification_templates is not None:
+                return clarification_templates
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return self._handle_manager_clarification_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+        )
+
+    def _apply_manager_intake_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        file_id,
+        stage_result,
+    ) -> List[str]:
+        if normalized_update.content_type == "text":
+            manager_intake_templates = self._handle_manager_intake_stage_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                normalized_update=normalized_update,
+                file_id=file_id,
+                stage_result=stage_result,
+            )
+            if manager_intake_templates is not None:
+                return manager_intake_templates
+        return self._handle_manager_intake_message(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            file_id=file_id,
+        )
+
     def _apply_candidate_flow(
         self,
         *,
@@ -869,73 +1203,28 @@ class TelegramUpdateService:
         stage_result,
     ) -> List[str] | None:
         if normalized_update.content_type == "text":
-            deletion_templates = self._handle_candidate_delete_stage_action(
+            deletion_templates = self._apply_candidate_delete_segment(
                 user=user,
                 raw_message_id=raw_message_id,
+                latest_user_message=normalized_update.text or "",
                 stage_result=stage_result,
             )
             if deletion_templates is not None:
                 return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                    reply_markup=deletion_confirmation_keyboard("candidate"),
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-
-            deletion_result = self.candidate_service.handle_deletion_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text,
-            )
-            if deletion_result is not None:
-                return [
-                    self._notify(
-                        user.id,
-                        deletion_result.notification_template,
-                        {
-                            "text": deletion_result.notification_text,
-                            "reply_markup": deletion_confirmation_keyboard("candidate")
-                            if deletion_result.status == "confirmation_required"
-                            else None,
-                        },
-                    )
-                ]
 
         if normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                candidate_interaction_templates = self._handle_candidate_interaction_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if candidate_interaction_templates is not None:
-                    return candidate_interaction_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            interview_message_templates = self._handle_candidate_interview_message(
+            interview_message_templates = self._apply_candidate_interview_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
                 file_id=file_id,
+                stage_result=stage_result,
             )
             if interview_message_templates is not None:
                 return interview_message_templates
 
         if normalized_update.content_type == "text":
-            summary_templates = self._handle_candidate_summary_stage_action(
+            summary_templates = self._apply_candidate_summary_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
@@ -944,24 +1233,8 @@ class TelegramUpdateService:
             if summary_templates is not None:
                 return summary_templates
 
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-                stage_result=stage_result,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-            summary_message_templates = self._handle_candidate_summary_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text or "",
-            )
-            if summary_message_templates is not None:
-                return summary_message_templates
-
         if normalized_update.content_type in {"text", "video"}:
-            verification_templates = self._handle_candidate_verification_stage_action(
+            verification_templates = self._apply_candidate_verification_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
@@ -970,34 +1243,9 @@ class TelegramUpdateService:
             )
             if verification_templates is not None:
                 return verification_templates
-            if normalized_update.content_type == "text":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            verification_message_templates = self._handle_candidate_verification_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                content_type=normalized_update.content_type,
-                file_id=file_id,
-            )
-            if verification_message_templates is not None:
-                return verification_message_templates
 
         if normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            questions_message_templates = self._handle_candidate_questions_message(
+            questions_message_templates = self._apply_candidate_questions_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
@@ -1007,29 +1255,12 @@ class TelegramUpdateService:
                 return questions_message_templates
 
         if normalized_update.content_type in {"text", "document", "voice"}:
-            if normalized_update.content_type == "text":
-                candidate_intake_templates = self._handle_candidate_intake_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if candidate_intake_templates is not None:
-                    return candidate_intake_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            return self._handle_candidate_intake_message(
+            return self._apply_candidate_intake_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
                 file_id=file_id,
+                stage_result=stage_result,
             )
 
         return None
@@ -1044,88 +1275,30 @@ class TelegramUpdateService:
         stage_result,
     ) -> List[str] | None:
         if normalized_update.content_type == "text":
-            deletion_templates = self._handle_manager_delete_stage_action(
+            deletion_templates = self._apply_manager_delete_segment(
                 user=user,
                 raw_message_id=raw_message_id,
+                latest_user_message=normalized_update.text or "",
                 stage_result=stage_result,
             )
             if deletion_templates is not None:
                 return deletion_templates
-            if stage_result is not None and stage_result.stage == "DELETE_CONFIRMATION":
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                    reply_markup=deletion_confirmation_keyboard("vacancy"),
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-
-            deletion_result = self.vacancy_service.handle_deletion_message(
+            manager_templates = self._apply_manager_review_segment(
                 user=user,
                 raw_message_id=raw_message_id,
-                text=normalized_update.text,
-            )
-            if deletion_result is not None:
-                return [
-                    self._notify(
-                        user.id,
-                        deletion_result.notification_template,
-                        {
-                            "text": deletion_result.notification_text,
-                            "reply_markup": deletion_confirmation_keyboard("vacancy")
-                            if deletion_result.status == "confirmation_required"
-                            else None,
-                        },
-                    )
-                ]
-
-            manager_templates = self._handle_manager_review_stage_action(
-                user=user,
-                raw_message_id=raw_message_id,
+                latest_user_message=normalized_update.text or "",
                 stage_result=stage_result,
             )
             if manager_templates is not None:
                 return manager_templates
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-                stage_result=stage_result,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
-            manager_message_templates = self._handle_manager_review_message(
-                user=user,
-                raw_message_id=raw_message_id,
-                text=normalized_update.text or "",
-            )
-            if manager_message_templates is not None:
-                return manager_message_templates
 
         if normalized_update.content_type in {"text", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                clarification_templates = self._handle_manager_clarification_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    stage_result=stage_result,
-                )
-                if clarification_templates is not None:
-                    return clarification_templates
-                assistance_templates = self._maybe_handle_graph_help(
-                    user=user,
-                    latest_user_message=normalized_update.text or "",
-                    user_id=user.id,
-                    stage_result=stage_result,
-                )
-                if assistance_templates is not None:
-                    return assistance_templates
-            clarification_message_templates = self._handle_manager_clarification_message(
+            clarification_message_templates = self._apply_manager_clarification_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
                 file_id=file_id,
+                stage_result=stage_result,
             )
             if clarification_message_templates is not None:
                 return clarification_message_templates
@@ -1140,21 +1313,12 @@ class TelegramUpdateService:
                 return assistance_templates
 
         if normalized_update.content_type in {"text", "document", "voice", "video"}:
-            if normalized_update.content_type == "text":
-                manager_intake_templates = self._handle_manager_intake_stage_action(
-                    user=user,
-                    raw_message_id=raw_message_id,
-                    normalized_update=normalized_update,
-                    file_id=file_id,
-                    stage_result=stage_result,
-                )
-                if manager_intake_templates is not None:
-                    return manager_intake_templates
-            return self._handle_manager_intake_message(
+            return self._apply_manager_intake_segment(
                 user=user,
                 raw_message_id=raw_message_id,
                 normalized_update=normalized_update,
                 file_id=file_id,
+                stage_result=stage_result,
             )
 
         return None

@@ -365,6 +365,7 @@ Current execution note:
 - `TelegramUpdateService` no longer depends directly on `BotControllerService`; generic unsupported-input recovery now resolves current stage context through graph/messaging-native transport logic
 - early entry/onboarding transport branches for contact attach, `/start`, and entry-stage accepted actions are now extracted into dedicated helpers instead of remaining inline inside `_apply_identity_flow`
 - remaining candidate-side and manager-side transport chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, reducing `TelegramUpdateService` further toward thin graph-oriented transport glue
+- remaining candidate-side and manager-side transport segments are now also split into dedicated helpers for delete, interview/review, summary, verification, questions, clarification, and intake branches, reducing inline routing depth further
 - Phase 11 has started with reusable production validation automation for Railway health and Telegram webhook checks
 - live production validation baseline has passed against the current Railway deployment: API `/health` returns `ok`, webhook URL matches `APP_BASE_URL/telegram/webhook`, and pending updates are `0`
 - live production validation tooling now also supports `VALIDATION_APP_BASE_URL`, so Railway checks can run cleanly even when local `.env` keeps `APP_BASE_URL` on localhost

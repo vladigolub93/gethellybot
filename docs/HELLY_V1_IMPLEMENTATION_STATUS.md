@@ -78,6 +78,7 @@ Architectural status note:
 - `TelegramUpdateService` no longer holds a direct `BotControllerService` dependency; generic unsupported-input recovery now resolves current stage context through graph/messaging-native transport logic
 - early entry/onboarding transport handling for contact attach, `/start`, and accepted entry-stage actions is now extracted into dedicated helpers instead of remaining inline inside `_apply_identity_flow`
 - remaining candidate-side and manager-side routing chains are now grouped behind `_apply_candidate_flow(...)` and `_apply_manager_flow(...)`, reducing branching in `TelegramUpdateService`
+- remaining candidate-side and manager-side routing segments are now also split into dedicated transport helpers for delete, interview/review, summary, verification, questions, clarification, and intake paths, reducing inline branch depth further
 - a reusable production validation script now checks Railway API health and Telegram webhook registration against the configured `APP_BASE_URL`
 - the production validation script now also supports `VALIDATION_APP_BASE_URL` so live Railway validation can be run even when local `.env` keeps `APP_BASE_URL` on localhost
 - the reusable production validation script has already been run successfully against the live Railway deployment, confirming `health: ok`, webhook correctness, and zero pending Telegram updates at validation time
@@ -90,7 +91,7 @@ Architectural status note:
 - live inspection/report tooling now also exposes the latest raw Telegram message and latest state transition for faster smoke-test debugging
 - graph runtime now emits structured `graph_stage_executed` logs with stage, status, proposed action, acceptance result, and Telegram user context for live Railway smoke verification
 - `graph_stage_executed` now also has explicit test coverage, so the log contract is verified alongside runtime behavior
-- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks and duplicated handler wiring outside the fully thin graph-first runtime
+- important architectural gap: graph-owned execution now covers entry onboarding, the full candidate onboarding/user-ready path through `READY`, the full manager onboarding/user-open path through `OPEN`, and the interview/review/delete stages through `DELETE_CONFIRMATION`, but Telegram transport still contains compatibility fallbacks outside the fully thin graph-first runtime
 
 ## 3. Infrastructure and Delivery Status
 
