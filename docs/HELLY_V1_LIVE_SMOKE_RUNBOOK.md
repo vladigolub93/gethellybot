@@ -34,6 +34,10 @@ Useful tools:
   - `.venv/bin/python scripts/inspect_telegram_user.py --telegram-user-id <id>`
 - print a compact smoke report:
   - `.venv/bin/python scripts/report_telegram_user.py --telegram-user-id <id>`
+- export recent conversation turns:
+  - `.venv/bin/python scripts/export_telegram_conversation.py --telegram-user-id <id> --format markdown`
+- review likely robotic Helly turns:
+  - `.venv/bin/python scripts/review_conversation_quality.py --telegram-user-id <id>`
 - watch until a live condition is reached:
   - `.venv/bin/python scripts/watch_telegram_user.py --telegram-user-id <id> --require-user --expect-candidate-state SUMMARY_REVIEW`
 - wait and print a final checkpoint report in one command:
@@ -257,6 +261,37 @@ set +a
   --telegram-user-id <candidate-id> \
   --expect-inbound-contains "How long"
 ```
+
+## 6.2 Conversation Quality Review
+
+After a live smoke run, export the recent chat and review the top robotic Helly turns:
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/export_telegram_conversation.py \
+  --telegram-user-id <id> \
+  --format markdown \
+  --limit 60
+```
+
+```bash
+set -a
+source .env
+set +a
+.venv/bin/python scripts/review_conversation_quality.py \
+  --telegram-user-id <id> \
+  --limit 80 \
+  --top 10
+```
+
+Use that output to:
+
+1. collect candidate onboarding snippets
+2. collect manager onboarding snippets
+3. identify the top robotic turns
+4. map each turn to either prompt tuning or runtime microcopy cleanup
 
 Manager vacancy summary review:
 
