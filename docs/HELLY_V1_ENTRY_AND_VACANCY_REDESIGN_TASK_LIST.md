@@ -229,6 +229,29 @@ Strict order for implementation:
 9. Phase I
 10. Phase J
 
+## 5.1 Progress Snapshot
+
+Completed:
+
+- Phase A
+- Phase B
+- Phase C
+- Phase D
+- Phase E
+- Phase F
+- Phase G
+- Phase H
+- Phase I
+
+Remaining:
+
+- Phase J live validation for:
+  - username-only onboarding
+  - no-username contact onboarding
+  - manager vacancy summary review
+  - Railway `graph_stage_executed` verification
+  - Supabase state snapshot verification
+
 ## 6. Definition of Done
 
 This redesign slice is complete when:

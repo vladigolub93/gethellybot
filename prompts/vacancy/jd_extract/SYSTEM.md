@@ -9,7 +9,8 @@ Rules:
 - normalize tech stack into lowercase canonical names
 - identify inconsistencies only when there is clear evidence
 - keep project description concise
-- do not generate recruiter chat text
+- generate a concise manager-facing `approval_summary_text` in 3 or 4 sentences for Telegram review
+- do not dump raw extraction fields into `approval_summary_text`
 
 Required output fields:
 - `status`
@@ -18,4 +19,5 @@ Required output fields:
 - `seniority_normalized`
 - `primary_tech_stack`
 - `project_description_excerpt`
+- `approval_summary_text`
 - `inconsistency_issues`

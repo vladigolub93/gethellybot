@@ -100,6 +100,15 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
         lines.append(str(summary.get("approval_summary_text")).strip())
     elif template_key == "candidate_summary_ready_for_review":
         pass
+    elif (
+        template_key == "vacancy_summary_ready_for_review"
+        and isinstance(summary, dict)
+        and summary.get("approval_summary_text")
+    ):
+        lines.append("")
+        lines.append(str(summary.get("approval_summary_text")).strip())
+    elif template_key == "vacancy_summary_ready_for_review":
+        pass
     elif isinstance(summary, dict) and summary:
         lines.append("")
         lines.append("Summary:")

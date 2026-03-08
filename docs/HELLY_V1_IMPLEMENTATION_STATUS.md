@@ -119,12 +119,11 @@ Architectural status note:
 
 ## 4. SRS Audit by Capability
 
-## 4.1 Identity, Consent, and Role Entry
+## 4.1 Identity and Role Entry
 
-- `Implemented`: a usable Telegram contact channel is required before onboarding starts; a Telegram username is enough, otherwise shared contact is requested
-- `Implemented`: consent capture exists
+- `Implemented`: a usable Telegram identity for onboarding is `username` or shared `contact`; if `username` is absent, shared contact is requested
 - `Implemented`: role selection exists
-- `Implemented`: state-aware in-step AI help now also covers contact collection, consent collection, and role selection
+- `Implemented`: state-aware in-step AI help now covers contact collection and role selection
 - `Implemented`: entry onboarding is now executed through graph-owned stage agents for `CONTACT_REQUIRED` and `ROLE_SELECTION`
 - `Implemented`: raw inbound messages are persisted
 - `Partial`: role model is currently exclusive in runtime behavior
@@ -133,8 +132,7 @@ Architectural status note:
 
 Status vs SRS:
 
-- `FR-001 Contact Sharing`: implemented
-- `FR-002 Consent`: implemented
+- `FR-001 Contact Sharing`: implemented with username-or-contact identity rule
 - `FR-003 Role Selection`: implemented
 
 ## 4.2 Telegram-First Interaction
@@ -152,18 +150,18 @@ Status vs SRS:
 - `Implemented`: routing regressions now also cover interview accept/skip passthrough, delete-confirm passthrough, and the generic unsupported-input recovery path for users outside an active role flow
 - `Implemented`: routing regressions now also cover valid business-action passthrough for summary approval, candidate questions, verification submission, manager clarification answers, and manager rejection
 - `Implemented`: routing regressions now also cover candidate CV intake, manager JD intake, active interview answers, and cancel-delete passthrough; this also fixed a real manager-routing bug where empty clarification handling could block later JD intake routing
-- `Implemented`: routing regressions now also cover entry gating for `/start`, contact share, consent, and blocked role selection before prerequisites are satisfied
+- `Implemented`: routing regressions now also cover entry gating for `/start`, contact share, and blocked role selection before prerequisites are satisfied
 - `Implemented`: routing regressions now also cover successful entry transitions for username/contact identity and role-based onboarding start for both candidate and hiring manager
 - `Implemented`: routing regressions now also cover multimodal intake paths for candidate and manager onboarding, including candidate `voice/document` CV input, manager `voice/video` JD input, and non-text recovery fallback outside any active role flow
 - `Implemented`: routing regressions now also cover post-intake multimodal behavior, including interview answers over `voice/video`, candidate question answers over `voice`, manager clarification answers over `voice`, and `document` recovery fallback outside any active role flow
-- `Implemented`: routing regressions now also cover normalized aliases for role selection and interview accept/skip actions; this also fixed a real entry-gating issue where consent could be granted before contact was collected
+- `Implemented`: routing regressions now also cover normalized aliases for role selection and interview accept/skip actions; this also fixed a real entry-gating issue where consent-like commands could be misinterpreted before identity was collected
 - `Implemented`: routing regressions now also cover near-canonical phrasing variants across summary review, manager decisions, and deletion cancellation, including `approve profile`, `edit summary`, `approve`, `reject`, and `don't delete`
 - `Implemented`: routing regressions now also cover generic deletion aliases and summary-change phrasing, including `confirm delete`, `keep profile`, `keep vacancy`, and `change summary`
-- `Implemented`: routing regressions now also cover normalization variants, including trimmed whitespace around canonical commands and consent aliases such as `agree` and `consent`
+- `Implemented`: routing regressions now also cover normalization variants, including trimmed whitespace around canonical commands and role-selection aliases
 - `Implemented`: routing regressions now also cover uppercase normalization for core commands across summary approval, interview acceptance, manager decisions, and deletion confirmation
-- `Implemented`: routing regressions now also cover punctuation-normalized command handling across consent, summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
+- `Implemented`: routing regressions now also cover punctuation-normalized command handling across summary approval, interview acceptance, manager rejection, and deletion confirmation; runtime command parsing now uses a shared normalization helper instead of ad-hoc per-handler lowercase checks
 - `Implemented`: routing and unit coverage now also include summary-edit punctuation, manager-approve punctuation, interview-skip punctuation, vacancy-delete punctuation, and direct tests for the shared command normalizer
-- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, and the broader graph-owned rebuild now has `244` passing tests including graph stage-resolution coverage
+- `Implemented`: the state-aware conversation hardening slice is now complete as a bounded implementation milestone, and the broader graph-owned rebuild now has `259` passing tests including graph stage-resolution coverage
 - `Partial`: the old state-aware routing/controller layer is no longer the primary path for migrated stages, but it still exists as compatibility fallback and some duplicated handler glue remains in Telegram transport
 
 Status vs SRS:
@@ -217,12 +215,18 @@ Status vs SRS:
 
 - `Implemented`: hiring manager role entry
 - `Implemented`: JD intake path for text, document, voice, and video submissions
+- `Implemented`: canonical parsed `vacancy_text` is persisted on the vacancy version as `extracted_text` or `transcript_text` before downstream LLM analysis
 - `Implemented`: vacancy versioning
+- `Implemented`: vacancy summary review step
+- `Implemented`: manager-facing vacancy summary is generated from persisted `vacancy_text`, while raw parsed vacancy text stays internal and is not rendered back to the manager in review notifications
+- `Implemented`: vacancy summary approve action
+- `Implemented`: vacancy summary edit loop with one correction round
 - `Implemented`: vacancy clarification step
 - `Implemented`: required fields for budget, countries, work format, team size, project description, primary stack
 - `Implemented`: vacancy transitions to `OPEN`
-- `Implemented`: state-aware in-step AI help for `INTAKE_PENDING`, `CLARIFICATION_QA`, and `OPEN`
+- `Implemented`: state-aware in-step AI help for `INTAKE_PENDING`, `VACANCY_SUMMARY_REVIEW`, `CLARIFICATION_QA`, and `OPEN`
 - `Implemented`: `INTAKE_PENDING` text-based vacancy intake and in-stage guidance now run through a graph-owned stage agent
+- `Implemented`: `VACANCY_SUMMARY_REVIEW` approve/correction execution and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `CLARIFICATION_QA` text-based clarification completion and in-stage guidance now run through a graph-owned stage agent
 - `Implemented`: `OPEN` status guidance and delete-vacancy initiation now run through a graph-owned stage agent
 

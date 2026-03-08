@@ -45,6 +45,19 @@ def _manager_clarification_help_patterns() -> tuple[str, ...]:
     )
 
 
+def _manager_summary_review_help_patterns() -> tuple[str, ...]:
+    return (
+        r"\bwhy\b",
+        r"\bhow\b",
+        r"\bhelp\b",
+        r"\bwhat should i change\b",
+        r"\bwhat can i change\b",
+        r"\bwhere did this summary come from\b",
+        r"\bwhat happens after approval\b",
+        r"\bwhy do i need to approve\b",
+    )
+
+
 def _manager_open_help_patterns() -> tuple[str, ...]:
     return (
         r"\bwhat happens now\b",
@@ -100,6 +113,25 @@ def _is_manager_clarification_help(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in _manager_clarification_help_patterns())
 
 
+def _is_manager_summary_review_help(text: str) -> bool:
+    normalized = " ".join((text or "").lower().split())
+    return any(re.search(pattern, normalized) for pattern in _manager_summary_review_help_patterns())
+
+
+def _detect_manager_summary_review_action(text: str) -> tuple[str | None, dict]:
+    command = normalize_command_text(text or "")
+    if command in {"approve summary", "approve", "approve vacancy summary"}:
+        return "approve_summary", {}
+    if command in {"change summary", "edit summary", "change", "edit"}:
+        return None, {}
+    edit_text = (text or "").strip()
+    if command.startswith("edit summary:") or command.startswith("edit:"):
+        edit_text = edit_text.split(":", 1)[1].strip()
+    if edit_text:
+        return "request_summary_change", {"edit_text": edit_text}
+    return None, {}
+
+
 def _is_manager_open_help(text: str) -> bool:
     normalized = " ".join((text or "").lower().split())
     return any(re.search(pattern, normalized) for pattern in _manager_open_help_patterns())
@@ -146,6 +178,27 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
         else:
             state.intent = "stage_completion_input"
             state.parsed_input["intent"] = "stage_completion_input"
+        return state
+    if state.active_stage == "VACANCY_SUMMARY_REVIEW":
+        if _is_manager_summary_review_help(text):
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        proposed_action, payload = _detect_manager_summary_review_action(text)
+        if proposed_action is not None:
+            state.intent = "stage_completion_input"
+            state.parsed_input["intent"] = "stage_completion_input"
+            state.proposed_action = proposed_action
+            state.structured_payload = payload
+            return state
+        if normalize_command_text(text or "") in {"change summary", "edit summary", "change", "edit"}:
+            state.intent = "help"
+            state.parsed_input["intent"] = "help"
+            return state
+        state.intent = "stage_completion_input"
+        state.parsed_input["intent"] = "stage_completion_input"
+        state.proposed_action = "request_summary_change"
+        state.structured_payload = {"edit_text": text.strip()}
         return state
     if state.active_stage == "OPEN":
         if _is_manager_open_help(text):
@@ -200,6 +253,15 @@ def build_manager_stage_reply_node(session):
         if state.active_stage == "INTAKE_PENDING" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
             state.reply_text = "Thanks. I will use this job description to prepare the vacancy draft."
+            state.confidence = 0.9
+            return state
+
+        if state.active_stage == "VACANCY_SUMMARY_REVIEW" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            if state.proposed_action == "approve_summary":
+                state.reply_text = "Understood. I will lock the summary and move to the required vacancy details."
+            else:
+                state.reply_text = "Understood. I will update the vacancy summary based on your correction."
             state.confidence = 0.9
             return state
 

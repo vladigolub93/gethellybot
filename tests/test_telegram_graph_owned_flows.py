@@ -105,11 +105,16 @@ class FakeVacancyService:
     def __init__(self):
         self.start_calls = []
         self.intake_calls = []
+        self.summary_calls = []
         self.clarification_calls = []
         self.deletion_calls = []
         self.intake_result = SimpleNamespace(
             notification_template="vacancy_jd_received_processing",
             status="accepted",
+        )
+        self.summary_result = SimpleNamespace(
+            notification_template="vacancy_summary_approved",
+            status="approved",
         )
         self.clarification_result = SimpleNamespace(
             notification_template="vacancy_clarification_updated",
@@ -124,6 +129,18 @@ class FakeVacancyService:
     def handle_jd_intake(self, **kwargs):
         self.intake_calls.append(kwargs)
         return self.intake_result
+
+    def handle_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        text = normalize_command_text(kwargs.get("text") or "")
+        if text in {"approve summary", "approve", "approve vacancy summary"}:
+            return self.summary_result
+        if text and "summary" not in text and "role is" in (kwargs.get("text") or "").lower():
+            return SimpleNamespace(
+                notification_template="vacancy_summary_edit_processing",
+                status="edit_processing",
+            )
+        return None
 
     def handle_clarification_parsed_payload(self, **kwargs):
         self.clarification_calls.append(kwargs)
@@ -282,6 +299,14 @@ class DispatchingStageAgentService:
                     action_accepted=True,
                     structured_payload={"job_description_text": latest_user_message},
                 )
+            if command == "approve summary":
+                return StageAgentExecutionResult(
+                    stage="VACANCY_SUMMARY_REVIEW",
+                    reply_text="Understood. I will lock the summary and move to the required vacancy details.",
+                    stage_status="ready_for_transition",
+                    proposed_action="approve_summary",
+                    action_accepted=True,
+                )
             if "budget: 7000-9000 usd" in (latest_user_message or "").lower():
                 return StageAgentExecutionResult(
                     stage="CLARIFICATION_QA",
@@ -420,6 +445,10 @@ def test_graph_owned_manager_text_flow_routes_entry_intake_and_clarifications() 
     assert templates == ["vacancy_jd_received_processing"]
     assert service.vacancy_service.intake_calls
     assert "Senior Python engineer" in service.vacancy_service.intake_calls[-1]["text"]
+
+    templates = service._apply_identity_flow(user, "raw4b", build_update(text="Approve summary"))
+    assert templates == ["vacancy_summary_approved"]
+    assert service.vacancy_service.summary_calls
 
     templates = service._apply_identity_flow(
         user,

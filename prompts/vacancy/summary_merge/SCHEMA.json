@@ -1,15 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "VacancyJdExtract",
+  "title": "VacancySummaryMerge",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "status": {
       "type": "string",
       "enum": ["draft"]
-    },
-    "source_type": {
-      "type": ["string", "null"]
     },
     "role_title": {
       "type": ["string", "null"],
@@ -21,7 +18,9 @@
     },
     "primary_tech_stack": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "maxItems": 12
     },
     "project_description_excerpt": {
@@ -34,13 +33,14 @@
     },
     "inconsistency_issues": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "maxItems": 12
     }
   },
   "required": [
     "status",
-    "source_type",
     "role_title",
     "seniority_normalized",
     "primary_tech_stack",

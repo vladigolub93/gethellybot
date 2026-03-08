@@ -144,6 +144,21 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         guidance_text="The job description is being processed. Clarification questions will follow if needed.",
         help_text="The job description is being processed. Clarification questions will follow if needed.",
     ),
+    "VACANCY_SUMMARY_REVIEW": StatePolicyDefinition(
+        state="VACANCY_SUMMARY_REVIEW",
+        goal="Get approval for the generated vacancy summary or collect one correction round.",
+        allowed_actions=["approve_summary", "request_summary_change"],
+        assistance_prompt_slug="vacancy_summary_review",
+        guidance_text=(
+            "Review the vacancy summary and either approve it or tell me exactly what should be corrected. "
+            "One correction round is available."
+        ),
+        help_text=(
+            "Review the vacancy summary and either approve it or tell me exactly what should be corrected. "
+            "One correction round is available before final approval."
+        ),
+        missing_requirements=["vacancy_summary_approval"],
+    ),
     "CLARIFICATION_QA": StatePolicyDefinition(
         state="CLARIFICATION_QA",
         goal="Resolve mandatory vacancy fields before opening the vacancy.",

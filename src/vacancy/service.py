@@ -29,6 +29,7 @@ from src.vacancy.states import (
     VACANCY_STATE_JD_PROCESSING,
     VACANCY_STATE_NEW,
     VACANCY_STATE_OPEN,
+    VACANCY_STATE_SUMMARY_REVIEW,
 )
 
 
@@ -43,6 +44,12 @@ class VacancyClarificationResult:
     status: str
     notification_template: str
     notification_text: str
+
+
+@dataclass(frozen=True)
+class VacancySummaryReviewResult:
+    status: str
+    notification_template: str
 
 
 @dataclass(frozen=True)
@@ -243,6 +250,112 @@ class VacancyService:
             parsed=dict(parsed_payload or {}),
             trigger_type="user_action",
             actor_user_id=user.id,
+        )
+
+    def handle_summary_review_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        text: Optional[str],
+    ) -> Optional[VacancySummaryReviewResult]:
+        vacancy = self.ensure_active_intake_vacancy_for_manager(user)
+        if vacancy.state != VACANCY_STATE_SUMMARY_REVIEW:
+            return None
+
+        normalized_text = (text or "").strip()
+        if not normalized_text:
+            return VacancySummaryReviewResult(
+                status="empty",
+                notification_template="vacancy_summary_review_help",
+            )
+
+        lowered = normalize_command_text(normalized_text)
+        current_version = self.repo.get_current_version(vacancy)
+        if current_version is None:
+            return VacancySummaryReviewResult(
+                status="missing",
+                notification_template="vacancy_summary_not_available",
+            )
+
+        if lowered in {"approve summary", "approve", "approve vacancy summary"}:
+            self.repo.mark_version_approved(current_version)
+            self.state_service.transition(
+                entity_type="vacancy",
+                entity=vacancy,
+                to_state=VACANCY_STATE_CLARIFICATION_QA,
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=user.id,
+                metadata_json={"action": "approve_summary"},
+            )
+            return VacancySummaryReviewResult(
+                status="approved",
+                notification_template="vacancy_summary_approved",
+            )
+
+        correction_count = self.repo.count_versions_by_source_type(vacancy.id, "summary_user_edit")
+        if correction_count >= 1:
+            return VacancySummaryReviewResult(
+                status="limit_reached",
+                notification_template="vacancy_summary_edit_limit_reached",
+            )
+
+        if lowered in {"change summary", "edit summary", "change", "edit"}:
+            return VacancySummaryReviewResult(
+                status="awaiting_edit_details",
+                notification_template="vacancy_summary_edit_empty",
+            )
+
+        edit_text = normalized_text
+        if lowered.startswith("edit summary:") or lowered.startswith("edit:"):
+            edit_text = normalized_text.split(":", 1)[1].strip()
+
+        if not edit_text:
+            return VacancySummaryReviewResult(
+                status="empty_edit",
+                notification_template="vacancy_summary_edit_empty",
+            )
+
+        self.state_service.transition(
+            entity_type="vacancy",
+            entity=vacancy,
+            to_state=VACANCY_STATE_JD_PROCESSING,
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=user.id,
+            metadata_json={"action": "edit_summary"},
+        )
+        new_version = self.repo.create_version(
+            vacancy_id=vacancy.id,
+            version_no=self.repo.next_version_no(vacancy.id),
+            source_type="summary_user_edit",
+            source_raw_message_id=raw_message_id,
+            summary_json={
+                "edit_request_text": edit_text,
+                "base_version_id": str(current_version.id),
+            },
+            normalization_json={"edit_request_text": edit_text},
+            approval_status="draft",
+        )
+        self.repo.set_current_version(vacancy, new_version.id)
+        self.queue.enqueue(
+            JobMessage(
+                job_type="vacancy_summary_edit_apply_v1",
+                payload={
+                    "vacancy_id": str(vacancy.id),
+                    "vacancy_version_id": str(new_version.id),
+                    "base_version_id": str(current_version.id),
+                    "edit_request_text": edit_text,
+                },
+                idempotency_key=f"vacancy_summary_edit_apply_v1:{new_version.id}",
+                entity_type="vacancy_version",
+                entity_id=new_version.id,
+            )
+        )
+        return VacancySummaryReviewResult(
+            status="edit_processing",
+            notification_template="vacancy_summary_edit_processing",
         )
 
     def _apply_clarification_text(

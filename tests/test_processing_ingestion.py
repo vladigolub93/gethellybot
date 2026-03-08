@@ -55,15 +55,34 @@ class FakeCandidateRepo:
 
 
 class FakeVacancyRepo:
-    def __init__(self, vacancy):
+    def __init__(self, vacancy, version=None):
         self.vacancy = vacancy
+        self.version = version
 
     def get_by_id(self, _vacancy_id):
         return self.vacancy
 
+    def get_version_by_id(self, _version_id):
+        return self.version
+
     def update_version_embedding(self, version, *, semantic_embedding):
         version.semantic_embedding = semantic_embedding
         return version
+
+    def update_version_source_text(self, version, *, extracted_text=None, transcript_text=None):
+        version.extracted_text = extracted_text
+        version.transcript_text = transcript_text
+        return version
+
+    def update_version_analysis(self, version, **kwargs):
+        for key, value in kwargs.items():
+            setattr(version, key, value)
+        return version
+
+    def update_clarifications(self, vacancy, **kwargs):
+        for key, value in kwargs.items():
+            setattr(vacancy, key, value)
+        return vacancy
 
 
 class FakeRawMessagesRepo:
@@ -191,6 +210,85 @@ def test_vacancy_processing_transcribes_clarification_before_parse() -> None:
     assert result["status"] == "follow_up"
     assert raw_message.text_content.startswith("Budget 7000")
     assert service.notifications.rows[0].payload_json["text"] == "Need project description."
+
+
+def test_vacancy_processing_extracts_document_text_before_summary_review(monkeypatch) -> None:
+    vacancy = SimpleNamespace(id=uuid4(), manager_user_id=uuid4(), state="JD_PROCESSING")
+    version = SimpleNamespace(
+        id=uuid4(),
+        source_type="document_upload",
+        extracted_text=None,
+        transcript_text=None,
+        source_raw_message_id=None,
+    )
+    service = VacancyProcessingService(SimpleNamespace())
+    service.repo = FakeVacancyRepo(vacancy, version)
+    service.raw_messages = FakeRawMessagesRepo(SimpleNamespace(id=uuid4(), text_content=None))
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+    service.ingestion = SimpleNamespace(
+        ingest_vacancy_version=lambda _version: SimpleNamespace(
+            text="Senior Python engineer for a fintech platform using FastAPI and PostgreSQL.",
+            mode="document_extract",
+            source="document_pdf",
+        )
+    )
+
+    captured = {}
+
+    def _fake_extract(_session, source_text, source_type):
+        captured["source_text"] = source_text
+        captured["source_type"] = source_type
+        return LLMResult(
+            payload={
+                "summary": {
+                    "status": "draft",
+                    "source_type": source_type,
+                    "role_title": "Senior Python Engineer",
+                    "primary_tech_stack": ["python", "fastapi", "postgresql"],
+                    "project_description_excerpt": source_text,
+                    "approval_summary_text": (
+                        "This vacancy is for a senior Python engineer. "
+                        "The main stack includes python, fastapi, and postgresql. "
+                        "The role is focused on a fintech product and related platform systems."
+                    ),
+                },
+                "inconsistency_json": {"issues": []},
+            },
+            model_name="gpt-5.4",
+            prompt_version="vacancy_jd_extract_llm_v1",
+        )
+
+    monkeypatch.setattr(
+        "src.vacancy.processing.safe_extract_vacancy_summary",
+        _fake_extract,
+    )
+    monkeypatch.setattr(
+        "src.vacancy.processing.safe_detect_vacancy_inconsistencies",
+        lambda *_args, **_kwargs: LLMResult(
+            payload={"findings": []},
+            model_name="gpt-5.4",
+            prompt_version="vacancy_inconsistency_detect_llm_v1",
+        ),
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="vacancy_jd_extract_v1",
+            payload_json={
+                "vacancy_id": str(vacancy.id),
+                "vacancy_version_id": str(version.id),
+            },
+        )
+    )
+
+    assert result["status"] == "summary_ready"
+    assert captured["source_text"] == "Senior Python engineer for a fintech platform using FastAPI and PostgreSQL."
+    assert version.extracted_text == captured["source_text"]
+    assert version.approval_summary_text.startswith("This vacancy is for a senior Python engineer.")
+    assert vacancy.state == "VACANCY_SUMMARY_REVIEW"
+    assert service.notifications.rows[0].template_key == "vacancy_summary_ready_for_review"
 
 
 def test_interview_processing_transcribes_answer_before_handling() -> None:

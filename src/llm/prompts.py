@@ -103,11 +103,34 @@ Extract if present:
 - seniority_normalized (junior, middle, senior)
 - primary_tech_stack (normalized lowercase list)
 - project_description_excerpt
+- approval_summary_text: exactly 3 or 4 concise manager-facing sentences for approval in chat
 - inconsistency issues
+
+Rules for approval_summary_text:
+- describe the vacancy in concise professional English
+- do not dump raw extracted fields
+- sentence 1 should describe the role and seniority when available
+- sentence 2 should describe the main stack or technical focus
+- sentence 3 or 4 should describe product, domain, work context, or key delivery scope
+- do not invent details not grounded in the job description
 
 Source type: {source_type}
 Job description:
 {source_text}
+"""
+
+
+def vacancy_summary_edit_prompt(base_summary: dict, edit_request_text: str) -> str:
+    return f"""Task: merge a hiring manager's correction into the existing structured vacancy summary.
+
+Keep existing correct facts unless the manager explicitly corrects them.
+Preserve the same output structure, including `approval_summary_text`.
+
+Current summary:
+{base_summary}
+
+Manager corrections:
+{edit_request_text}
 """
 
 

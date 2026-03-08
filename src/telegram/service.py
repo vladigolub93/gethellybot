@@ -573,6 +573,65 @@ class TelegramUpdateService:
             )
         ]
 
+    def _handle_manager_summary_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "VACANCY_SUMMARY_REVIEW"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"approve_summary", "request_summary_change"}
+        ):
+            return None
+        summary_input_text = (
+            "Approve summary"
+            if stage_result.proposed_action == "approve_summary"
+            else (stage_result.structured_payload or {}).get("edit_text") or normalized_update.text
+        )
+        summary_review_result = self.vacancy_service.handle_summary_review_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=summary_input_text,
+        )
+        if summary_review_result is None:
+            return None
+        message_map = {
+            "vacancy_summary_approved": "Summary approved. Now send budget range, countries allowed, work format, team size, project description, and primary tech stack.",
+            "vacancy_summary_edit_processing": "Thanks. Updating the vacancy summary based on your correction.",
+            "vacancy_summary_edit_limit_reached": "You can only change the vacancy summary once. Please approve the latest version to continue.",
+            "vacancy_summary_edit_empty": "Tell me exactly what is incorrect in the vacancy summary, and I will update it once.",
+            "vacancy_summary_not_available": "No current vacancy summary is available to review.",
+            "vacancy_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+        }
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=summary_review_result.notification_template,
+                text=self._copy(message_map[summary_review_result.notification_template]),
+                reply_markup=(
+                    summary_review_keyboard(edit_allowed=True)
+                    if summary_review_result.notification_template in {
+                        "vacancy_summary_review_help",
+                        "vacancy_summary_edit_empty",
+                    }
+                    else summary_review_keyboard(edit_allowed=False)
+                    if summary_review_result.notification_template
+                    == "vacancy_summary_edit_limit_reached"
+                    else remove_keyboard()
+                    if summary_review_result.notification_template in {
+                        "vacancy_summary_approved",
+                        "vacancy_summary_edit_processing",
+                    }
+                    else None
+                ),
+            )
+        ]
+
     def _handle_manager_intake_stage_action(
         self,
         *,
@@ -1182,6 +1241,72 @@ class TelegramUpdateService:
             file_id=file_id,
         )
 
+    def _apply_manager_summary_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+        stage_result,
+    ) -> List[str] | None:
+        if normalized_update.content_type != "text":
+            return None
+        summary_templates = self._handle_manager_summary_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+            stage_result=stage_result,
+        )
+        if summary_templates is not None:
+            return summary_templates
+        assistance_templates = self._maybe_handle_graph_help(
+            user=user,
+            latest_user_message=normalized_update.text or "",
+            user_id=user.id,
+            stage_result=stage_result,
+            reply_markup=summary_review_keyboard(edit_allowed=True),
+        )
+        if assistance_templates is not None:
+            return assistance_templates
+        summary_review_result = self.vacancy_service.handle_summary_review_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            text=normalized_update.text or "",
+        )
+        if summary_review_result is None:
+            return None
+        message_map = {
+            "vacancy_summary_approved": "Summary approved. Now send budget range, countries allowed, work format, team size, project description, and primary tech stack.",
+            "vacancy_summary_edit_processing": "Thanks. Updating the vacancy summary based on your correction.",
+            "vacancy_summary_edit_limit_reached": "You can only change the vacancy summary once. Please approve the latest version to continue.",
+            "vacancy_summary_edit_empty": "Tell me exactly what is incorrect in the vacancy summary, and I will update it once.",
+            "vacancy_summary_not_available": "No current vacancy summary is available to review.",
+            "vacancy_summary_review_help": "Reply 'Approve summary' if it looks correct, or tell me what should be changed.",
+        }
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=summary_review_result.notification_template,
+                text=self._copy(message_map[summary_review_result.notification_template]),
+                reply_markup=(
+                    summary_review_keyboard(edit_allowed=True)
+                    if summary_review_result.notification_template in {
+                        "vacancy_summary_review_help",
+                        "vacancy_summary_edit_empty",
+                    }
+                    else summary_review_keyboard(edit_allowed=False)
+                    if summary_review_result.notification_template
+                    == "vacancy_summary_edit_limit_reached"
+                    else remove_keyboard()
+                    if summary_review_result.notification_template in {
+                        "vacancy_summary_approved",
+                        "vacancy_summary_edit_processing",
+                    }
+                    else None
+                ),
+            )
+        ]
+
     def _apply_manager_intake_segment(
         self,
         *,
@@ -1307,6 +1432,15 @@ class TelegramUpdateService:
                         user=user,
                         raw_message_id=raw_message_id,
                         latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
+                    lambda: self._apply_manager_summary_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        normalized_update=normalized_update,
                         stage_result=stage_result,
                     ),
                 ),

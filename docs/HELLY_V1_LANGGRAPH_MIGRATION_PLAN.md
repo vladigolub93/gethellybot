@@ -171,7 +171,9 @@ Status:
   - graph-driven help handling for `INTAKE_PENDING`
   - graph-driven structured action proposal for manager text JD input
   - graph-driven `send_job_description_text` validation and backend handoff
-  - `VACANCY_SUMMARY_REVIEW` is now part of the canonical manager stage inventory and is the next required manager-stage migration step
+  - graph-owned execution for `VACANCY_SUMMARY_REVIEW`
+  - graph-driven validation and backend handoff for `approve_summary`
+  - graph-driven validation and backend handoff for `request_summary_change`
   - graph-owned execution for `CLARIFICATION_QA`
   - graph-driven structured parsing for text clarification answers
   - graph-driven `send_vacancy_clarifications` validation and backend handoff
@@ -302,7 +304,7 @@ Status:
     - `READY`
   - graph-native sequential flow tests now cover manager stage progression:
     - `INTAKE_PENDING`
-    - `VACANCY_SUMMARY_REVIEW` remains pending runtime migration and is not yet in the current graph-owned sequential flow coverage
+    - `VACANCY_SUMMARY_REVIEW`
     - `CLARIFICATION_QA`
     - `OPEN`
     - `DELETE_CONFIRMATION`

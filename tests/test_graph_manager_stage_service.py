@@ -109,6 +109,56 @@ def test_graph_manager_stage_handles_clarification_help() -> None:
     assert "budget" in reply.lower() or "vacancy" in reply.lower()
 
 
+def test_graph_manager_stage_handles_vacancy_summary_review_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v3a", state="VACANCY_SUMMARY_REVIEW")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m3a",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Why do I need to approve this summary?",
+    )
+
+    assert reply is not None
+    assert "approve" in reply.lower() or "summary" in reply.lower()
+
+
+def test_graph_manager_stage_accepts_vacancy_summary_approve() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v3b", state="VACANCY_SUMMARY_REVIEW")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m3b",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Approve summary",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_SUMMARY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "approve_summary"
+
+
 def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

@@ -13,6 +13,7 @@ INCOMPLETE_VACANCY_STATES = (
     "NEW",
     "INTAKE_PENDING",
     "JD_PROCESSING",
+    "VACANCY_SUMMARY_REVIEW",
     "CLARIFICATION_QA",
 )
 
@@ -91,9 +92,12 @@ class VacanciesRepository:
         source_raw_message_id=None,
         extracted_text=None,
         transcript_text=None,
+        approval_summary_text=None,
         summary_json=None,
         normalization_json=None,
         inconsistency_json=None,
+        approval_status="draft",
+        approved_by_manager=False,
         prompt_version=None,
         model_name=None,
     ) -> VacancyVersion:
@@ -105,9 +109,12 @@ class VacanciesRepository:
             source_raw_message_id=source_raw_message_id,
             extracted_text=extracted_text,
             transcript_text=transcript_text,
+            approval_summary_text=approval_summary_text,
             summary_json=summary_json,
             normalization_json=normalization_json,
             inconsistency_json=inconsistency_json,
+            approval_status=approval_status,
+            approved_by_manager=approved_by_manager,
             prompt_version=prompt_version,
             model_name=model_name,
         )
@@ -129,22 +136,37 @@ class VacanciesRepository:
         self,
         version: VacancyVersion,
         *,
+        approval_summary_text=None,
         summary_json=None,
         normalization_json=None,
         inconsistency_json=None,
+        approval_status: Optional[str] = None,
+        approved_by_manager: Optional[bool] = None,
         prompt_version: Optional[str] = None,
         model_name: Optional[str] = None,
     ) -> VacancyVersion:
+        if approval_summary_text is not None:
+            version.approval_summary_text = approval_summary_text
         if summary_json is not None:
             version.summary_json = summary_json
         if normalization_json is not None:
             version.normalization_json = normalization_json
         if inconsistency_json is not None:
             version.inconsistency_json = inconsistency_json
+        if approval_status is not None:
+            version.approval_status = approval_status
+        if approved_by_manager is not None:
+            version.approved_by_manager = approved_by_manager
         if prompt_version is not None:
             version.prompt_version = prompt_version
         if model_name is not None:
             version.model_name = model_name
+        self.session.flush()
+        return version
+
+    def mark_version_approved(self, version: VacancyVersion) -> VacancyVersion:
+        version.approval_status = "approved"
+        version.approved_by_manager = True
         self.session.flush()
         return version
 
@@ -228,3 +250,11 @@ class VacanciesRepository:
         version.semantic_embedding = semantic_embedding
         self.session.flush()
         return version
+
+    def count_versions_by_source_type(self, vacancy_id, source_type: str) -> int:
+        stmt = select(func.count(VacancyVersion.id)).where(
+            VacancyVersion.vacancy_id == vacancy_id,
+            VacancyVersion.source_type == source_type,
+        )
+        count = self.session.execute(stmt).scalar_one()
+        return int(count)

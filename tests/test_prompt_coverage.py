@@ -46,6 +46,7 @@ def test_core_prompt_families_exist() -> None:
         ("candidate", "summary_merge"),
         ("candidate", "mandatory_field_parse"),
         ("vacancy", "jd_extract"),
+        ("vacancy", "summary_merge"),
         ("vacancy", "clarification_parse"),
         ("vacancy", "inconsistency_detect"),
         ("interview", "question_plan"),

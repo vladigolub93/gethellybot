@@ -7,6 +7,7 @@ from src.vacancy.states import (
     VACANCY_STATE_INTAKE_PENDING,
     VACANCY_STATE_JD_PROCESSING,
     VACANCY_STATE_OPEN,
+    VACANCY_STATE_SUMMARY_REVIEW,
 )
 
 
@@ -58,7 +59,13 @@ class FakeVacanciesRepository:
         return len(self.versions) + 1
 
     def create_version(self, **kwargs):
-        version = SimpleNamespace(id=uuid4(), **kwargs)
+        payload = {
+            "id": uuid4(),
+            "approval_status": "draft",
+            "approved_by_manager": False,
+        }
+        payload.update(kwargs)
+        version = SimpleNamespace(**payload)
         self.versions.append(version)
         return version
 
@@ -83,6 +90,22 @@ class FakeVacanciesRepository:
         vacancy.deleted_at = "now"
         vacancy.state = "DELETED"
         return vacancy
+
+    def get_current_version(self, vacancy):
+        if vacancy.current_version_id is None:
+            return None
+        for version in self.versions:
+            if version.id == vacancy.current_version_id:
+                return version
+        return None
+
+    def mark_version_approved(self, version):
+        version.approval_status = "approved"
+        version.approved_by_manager = True
+        return version
+
+    def count_versions_by_source_type(self, vacancy_id, source_type):
+        return sum(1 for version in self.versions if version.vacancy_id == vacancy_id and version.source_type == source_type)
 
 
 class FakeStateService:
@@ -186,6 +209,70 @@ def test_clarification_completion_opens_vacancy() -> None:
     assert vacancy.state == VACANCY_STATE_OPEN
     assert vacancy.opened_at == "now"
     assert len(service.queue.messages) == 1
+
+
+def test_vacancy_summary_review_approve_moves_to_clarifications() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        vacancy_id=vacancy.id,
+        version_no=1,
+        source_type="pasted_text",
+        approval_summary_text="Summary",
+        summary_json={"approval_summary_text": "Summary"},
+    )
+    fake_repo.set_current_version(vacancy, version.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="Approve summary",
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert version.approval_status == "approved"
+
+
+def test_vacancy_summary_review_edit_queues_one_correction_round() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_SUMMARY_REVIEW)
+    version = fake_repo.create_version(
+        vacancy_id=vacancy.id,
+        version_no=1,
+        source_type="pasted_text",
+        approval_summary_text="Summary",
+        summary_json={"approval_summary_text": "Summary"},
+    )
+    fake_repo.set_current_version(vacancy, version.id)
+
+    result = service.handle_summary_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        text="The role is Go-first, not Python-first.",
+    )
+
+    assert result is not None
+    assert result.status == "edit_processing"
+    assert vacancy.state == VACANCY_STATE_JD_PROCESSING
+    assert fake_queue.messages
+    assert fake_queue.messages[-1].job_type == "vacancy_summary_edit_apply_v1"
 
 
 def test_clarification_requests_follow_up_when_partial() -> None:

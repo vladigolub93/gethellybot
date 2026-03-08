@@ -33,6 +33,7 @@ from src.llm.prompts import (
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
     vacancy_jd_prompt,
+    vacancy_summary_edit_prompt,
 )
 from src.llm.state_assistance import state_assistance_prompt
 from src.llm.schemas import (
@@ -53,7 +54,10 @@ from src.llm.schemas import (
     VacancySummarySchema,
 )
 from src.vacancy.question_parser import parse_vacancy_clarifications
-from src.vacancy.summary_builder import build_vacancy_summary
+from src.vacancy.summary_builder import (
+    build_vacancy_approval_summary_text,
+    build_vacancy_summary,
+)
 
 logger = get_logger(__name__)
 
@@ -435,13 +439,78 @@ def extract_vacancy_summary_with_llm(source_text: str, source_type: str) -> LLMR
             result.payload.get("project_description_excerpt") or source_text,
             limit=1200,
         ),
+        "approval_summary_text": _clean_text(
+            result.payload.get("approval_summary_text"),
+            limit=600,
+        ),
     }
+    if not summary["approval_summary_text"]:
+        summary["approval_summary_text"] = _clean_text(
+            build_vacancy_approval_summary_text(
+                role_title=summary["role_title"],
+                seniority_normalized=summary["seniority_normalized"],
+                primary_tech_stack=summary["primary_tech_stack"],
+                project_description_excerpt=summary["project_description_excerpt"],
+                source_text=source_text,
+            ),
+            limit=600,
+        )
     inconsistency_json = {"issues": result.payload.get("inconsistency_issues") or []}
     return LLMResult(
         payload={
             "summary": {key: value for key, value in summary.items() if value not in (None, [])},
             "inconsistency_json": inconsistency_json,
         },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def merge_vacancy_summary_with_llm(base_summary: dict, edit_request_text: str) -> LLMResult:
+    result = _client.parse(
+        schema=VacancySummarySchema,
+        system_prompt=load_system_prompt("vacancy", "summary_merge"),
+        user_prompt=vacancy_summary_edit_prompt(base_summary, edit_request_text),
+        primary_model=get_settings().openai_model_extraction,
+        prompt_version="vacancy_summary_edit_apply_llm_v1",
+    )
+    merged = dict(base_summary or {})
+    merged.update(
+        {
+            "status": "draft",
+            "role_title": _clean_text(result.payload.get("role_title") or merged.get("role_title"), limit=120),
+            "seniority_normalized": _normalize_seniority(
+                result.payload.get("seniority_normalized") or merged.get("seniority_normalized")
+            ),
+            "primary_tech_stack": _normalize_skill_list(
+                result.payload.get("primary_tech_stack") or merged.get("primary_tech_stack") or []
+            ),
+            "project_description_excerpt": _clean_text(
+                result.payload.get("project_description_excerpt")
+                or merged.get("project_description_excerpt"),
+                limit=1200,
+            ),
+            "approval_summary_text": _clean_text(
+                result.payload.get("approval_summary_text")
+                or merged.get("approval_summary_text"),
+                limit=600,
+            ),
+            "manager_edit_notes": _clean_text(edit_request_text, limit=500),
+        }
+    )
+    if not merged.get("approval_summary_text"):
+        merged["approval_summary_text"] = _clean_text(
+            build_vacancy_approval_summary_text(
+                role_title=merged.get("role_title"),
+                seniority_normalized=merged.get("seniority_normalized"),
+                primary_tech_stack=merged.get("primary_tech_stack") or [],
+                project_description_excerpt=merged.get("project_description_excerpt"),
+                source_text=merged.get("project_description_excerpt") or "",
+            ),
+            limit=600,
+        )
+    return LLMResult(
+        payload={key: value for key, value in merged.items() if value not in (None, [])},
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -1015,6 +1084,30 @@ def safe_extract_vacancy_summary(session, source_text: str, source_type: str) ->
         payload={"summary": summary, "inconsistency_json": inconsistency_json},
         model_name="baseline-deterministic",
         prompt_version="baseline_vacancy_jd_extract_v1",
+    )
+
+
+def safe_merge_vacancy_summary(session, base_summary: dict, edit_request_text: str) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return merge_vacancy_summary_with_llm(base_summary, edit_request_text)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_summary_edit_fallback_to_baseline", error=str(exc))
+    merged = dict(base_summary or {})
+    merged["status"] = "draft"
+    merged["manager_edit_notes"] = edit_request_text
+    if not merged.get("approval_summary_text"):
+        merged["approval_summary_text"] = build_vacancy_approval_summary_text(
+            role_title=merged.get("role_title"),
+            seniority_normalized=merged.get("seniority_normalized"),
+            primary_tech_stack=merged.get("primary_tech_stack") or [],
+            project_description_excerpt=merged.get("project_description_excerpt"),
+            source_text=merged.get("project_description_excerpt") or "",
+        )
+    return LLMResult(
+        payload=merged,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_summary_edit_apply_v1",
     )
 
 

@@ -50,6 +50,7 @@ def register_foundation_stage_graphs() -> None:
         "VERIFICATION_PENDING",
         "READY",
         "INTAKE_PENDING",
+        "VACANCY_SUMMARY_REVIEW",
         "CLARIFICATION_QA",
         "OPEN",
         "INTERVIEW_INVITED",

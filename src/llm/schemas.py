@@ -34,6 +34,7 @@ class VacancySummarySchema(BaseModel):
     seniority_normalized: Optional[str] = None
     primary_tech_stack: List[str] = Field(default_factory=list)
     project_description_excerpt: Optional[str] = None
+    approval_summary_text: Optional[str] = None
     inconsistency_issues: List[str] = Field(default_factory=list)
 
 

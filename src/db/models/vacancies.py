@@ -3,7 +3,7 @@ from typing import List, Optional
 from uuid import UUID as PyUUID
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
@@ -81,8 +81,15 @@ class VacancyVersion(Base, TimestampMixin):
         Vector(DEFAULT_EMBEDDING_DIMENSIONS),
         nullable=True,
     )
+    approval_summary_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     normalization_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     inconsistency_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    approval_status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'draft'")
+    )
+    approved_by_manager: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     prompt_version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

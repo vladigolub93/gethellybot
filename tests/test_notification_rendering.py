@@ -72,6 +72,44 @@ def test_candidate_summary_review_does_not_render_internal_mapping_without_appro
     assert rendered == "Your profile summary is ready."
 
 
+def test_vacancy_summary_review_prefers_manager_facing_summary_text() -> None:
+    rendered = render_notification_text(
+        template_key="vacancy_summary_ready_for_review",
+        payload={
+            "text": "Your vacancy summary is ready.",
+            "summary": {
+                "role_title": "Senior Backend Engineer",
+                "primary_tech_stack": ["python", "fastapi"],
+                "approval_summary_text": (
+                    "This vacancy is for a senior backend engineer. "
+                    "The main stack includes python and fastapi. "
+                    "The role is focused on a fintech product and related platform systems."
+                ),
+            },
+        },
+    )
+
+    assert "Your vacancy summary is ready." in rendered
+    assert "This vacancy is for a senior backend engineer." in rendered
+    assert "Summary:" not in rendered
+    assert "Role title:" not in rendered
+
+
+def test_vacancy_summary_review_does_not_render_internal_mapping_without_approval_text() -> None:
+    rendered = render_notification_text(
+        template_key="vacancy_summary_ready_for_review",
+        payload={
+            "text": "Your vacancy summary is ready.",
+            "summary": {
+                "role_title": "Senior Backend Engineer",
+                "project_description_excerpt": "Fintech platform team.",
+            },
+        },
+    )
+
+    assert rendered == "Your vacancy summary is ready."
+
+
 def test_render_notification_reply_markup_returns_payload_markup() -> None:
     reply_markup = {
         "keyboard": [["Candidate", "Hiring Manager"]],

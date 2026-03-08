@@ -175,10 +175,12 @@ class FakeCandidateService:
 class FakeVacancyService:
     def __init__(self):
         self.intake_calls = []
+        self.summary_calls = []
         self.clarification_calls = []
         self.deletion_calls = []
         self.start_calls = []
         self.deletion_result = None
+        self.summary_result = None
         self.clarification_result = None
 
     def handle_deletion_message(self, **kwargs):
@@ -187,6 +189,10 @@ class FakeVacancyService:
 
     def start_onboarding(self, user, trigger_ref_id):
         self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
+
+    def handle_summary_review_action(self, **kwargs):
+        self.summary_calls.append(kwargs)
+        return self.summary_result
 
     def handle_clarification_answer(self, **kwargs):
         self.clarification_calls.append(kwargs)

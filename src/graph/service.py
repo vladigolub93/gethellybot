@@ -66,7 +66,13 @@ class LangGraphStageAgentService:
         "INTERVIEW_INVITED",
         "INTERVIEW_IN_PROGRESS",
     }
-    MANAGER_STAGES = {"INTAKE_PENDING", "CLARIFICATION_QA", "OPEN", "MANAGER_REVIEW"}
+    MANAGER_STAGES = {
+        "INTAKE_PENDING",
+        "VACANCY_SUMMARY_REVIEW",
+        "CLARIFICATION_QA",
+        "OPEN",
+        "MANAGER_REVIEW",
+    }
 
     def __init__(self, session):
         self.session = session
