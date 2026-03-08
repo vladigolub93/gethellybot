@@ -257,7 +257,7 @@ Exit:
 
 38. Remove deterministic intent classification from `INTERVIEW_INVITED`. `Completed`
 39. Remove deterministic intent classification from `INTERVIEW_IN_PROGRESS`. `Completed`
-40. Remove deterministic intent classification from `MANAGER_REVIEW`.
+40. Remove deterministic intent classification from `MANAGER_REVIEW`. `Completed`
 41. Remove deterministic intent classification from `DELETE_CONFIRMATION`. `Completed`
 
 Exit:

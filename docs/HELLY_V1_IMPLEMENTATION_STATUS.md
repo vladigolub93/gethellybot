@@ -470,6 +470,10 @@ Current reality:
 
 The largest remaining gap is no longer prompt execution, multimodal ingestion, or basic deletion hygiene. It is stronger quality controls around transcription/document extraction, richer product UX, and production-grade operational hardening.
 
+Recent stage-ownership progress:
+
+- `MANAGER_REVIEW` now uses a dedicated manager-side decision prompt so help/clarification vs approve/reject is owned by the stage agent before backend review execution runs.
+
 ## 7. Production Readiness Assessment
 
 ### Ready now

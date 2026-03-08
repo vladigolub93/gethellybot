@@ -52,7 +52,7 @@ This field identifies the concrete deterministic logic that still needs to be re
 | `OPEN` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend only executes validated `delete_vacancy` handoff after agent-owned meaning decision | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 | `INTERVIEW_INVITED` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now executes validated invitation actions directly instead of owning message meaning | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [interview/service.py](/Users/vladigolub/Desktop/gethellybot/src/interview/service.py) |
 | `INTERVIEW_IN_PROGRESS` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; voice/video answer execution still uses backend media path by design | [candidate.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/candidate.py), [interview/service.py](/Users/vladigolub/Desktop/gethellybot/src/interview/service.py) |
-| `MANAGER_REVIEW` | `mixed` | `agent-first` | regex help patterns, deterministic approve/reject aliases | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py) |
+| `MANAGER_REVIEW` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend only executes validated approve/reject handoff after agent-owned meaning decision | [manager.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/manager.py), [evaluation/service.py](/Users/vladigolub/Desktop/gethellybot/src/evaluation/service.py) |
 | `DELETE_CONFIRMATION` | `agent-first (mostly completed)` | `agent-first` | live validation still needed; backend now executes validated delete actions instead of owning meaning | [deletion.py](/Users/vladigolub/Desktop/gethellybot/src/graph/stages/deletion.py), [candidate_profile/service.py](/Users/vladigolub/Desktop/gethellybot/src/candidate_profile/service.py), [vacancy/service.py](/Users/vladigolub/Desktop/gethellybot/src/vacancy/service.py) |
 
 ## 4. Highest-Risk Stages
@@ -145,7 +145,6 @@ Strict order:
 3. `INTERVIEW_IN_PROGRESS`
 4. `QUESTIONS_PENDING`
 5. `DELETE_CONFIRMATION`
-6. `MANAGER_REVIEW`
 
 ## 8. Definition of Done
 

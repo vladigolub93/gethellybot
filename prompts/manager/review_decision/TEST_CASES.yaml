@@ -1,0 +1,14 @@
+- input: "What are the risks here?"
+  expected:
+    intent: help
+    proposed_action: null
+
+- input: "Approve candidate"
+  expected:
+    intent: approve_candidate
+    proposed_action: approve_candidate
+
+- input: "Reject candidate"
+  expected:
+    intent: reject_candidate
+    proposed_action: reject_candidate
