@@ -511,6 +511,7 @@ Recent stage-ownership progress:
 - synthetic live-runtime results are now documented in `HELLY_V1_SYNTHETIC_PHASE_L_RESULTS.md`, including validated candidate `SUMMARY_REVIEW`, candidate `QUESTIONS_PENDING`, and manager `VACANCY_SUMMARY_REVIEW` scenarios.
 - ingestion now has an explicit quality-aware contract: low-confidence voice/video transcripts and low-text-density scanned documents are detected early and routed into user-friendly retry paths instead of being processed as if they were trustworthy inputs.
 - candidate, vacancy, and interview processing now treat those quality issues as user-retry scenarios rather than failed background jobs, and persist quality metadata on candidate/vacancy versions when summary extraction cannot proceed safely.
+- final release-candidate close-out state is now summarized in `HELLY_V1_RELEASE_CANDIDATE_CLOSEOUT.md`, which narrows the remaining blockers to manual Telegram proof, hosted Railway log confirmation, and one last transcript-driven polish pass.
 
 ## 7. Production Readiness Assessment
 
