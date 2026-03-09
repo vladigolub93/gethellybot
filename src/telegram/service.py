@@ -6,6 +6,7 @@ from typing import Callable, List, Sequence
 from sqlalchemy.orm import Session
 
 from src.candidate_profile.service import CandidateProfileService
+from src.config.logging import get_logger
 from src.db.repositories.files import FilesRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
@@ -16,6 +17,7 @@ from src.identity.rules import has_primary_contact_channel
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
+from src.notifications.delivery import NotificationDeliveryService
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
@@ -41,6 +43,7 @@ class ProcessedTelegramUpdate:
 
 class TelegramUpdateService:
     def __init__(self, session: Session):
+        self.logger = get_logger(__name__)
         self.session = session
         self.users_repo = UsersRepository(session)
         self.raw_messages_repo = RawMessagesRepository(session)
@@ -53,6 +56,8 @@ class TelegramUpdateService:
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
         self.vacancy_service = VacancyService(session)
+        self.notification_delivery = NotificationDeliveryService(session)
+        self._created_notification_ids: List[str] = []
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
@@ -1544,6 +1549,7 @@ class TelegramUpdateService:
         )
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
+        self._created_notification_ids = []
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
             return ProcessedTelegramUpdate(
@@ -1567,6 +1573,7 @@ class TelegramUpdateService:
             file_id=persisted_file.id if persisted_file is not None else None,
         )
         self.session.commit()
+        self._flush_immediate_notifications()
 
         return self._build_processed_update_result(
             user_id=user.id,
@@ -1631,11 +1638,30 @@ class TelegramUpdateService:
         return file_row
 
     def _notify(self, user_id, template_key: str, payload: dict) -> str:
-        self.notifications_repo.create(
+        notification = self.notifications_repo.create(
             user_id=user_id,
             entity_type="user",
             entity_id=user_id,
             template_key=template_key,
             payload_json=payload,
         )
+        notification_id = getattr(notification, "id", None)
+        if notification_id is not None:
+            self._created_notification_ids.append(str(notification_id))
         return template_key
+
+    def _flush_immediate_notifications(self) -> None:
+        if not self._created_notification_ids:
+            return
+        try:
+            self.notification_delivery.deliver_notification_ids(self._created_notification_ids)
+            self.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            self.session.rollback()
+            self.logger.warning(
+                "telegram_immediate_notification_flush_failed",
+                notification_count=len(self._created_notification_ids),
+                error=str(exc),
+            )
+        finally:
+            self._created_notification_ids = []

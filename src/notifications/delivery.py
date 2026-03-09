@@ -24,6 +24,9 @@ class NotificationDeliveryService:
 
         payload = job.payload_json or {}
         notification = self.notifications.get_by_id(payload["notification_id"])
+        return self.send_notification(notification)
+
+    def send_notification(self, notification) -> dict:
         if notification is None:
             raise ValueError("Notification was not found.")
         if notification.status == "sent":
@@ -71,3 +74,12 @@ class NotificationDeliveryService:
         except Exception as exc:
             self.notifications.mark_failed(notification, error_message=str(exc))
             raise
+
+    def deliver_notification_ids(self, notification_ids: list[str]) -> list[dict]:
+        results: list[dict] = []
+        for notification_id in notification_ids:
+            notification = self.notifications.get_by_id(notification_id)
+            if notification is None:
+                continue
+            results.append(self.send_notification(notification))
+        return results
