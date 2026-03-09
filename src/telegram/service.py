@@ -395,6 +395,38 @@ class TelegramUpdateService:
             )
         ]
 
+    def _handle_manager_open_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "OPEN"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"create_new_vacancy", "list_open_vacancies"}
+        ):
+            return None
+        open_result = self.vacancy_service.execute_open_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=stage_result.proposed_action,
+        )
+        if open_result is None:
+            return None
+        return [
+            self._notify_result(
+                user_id=user.id,
+                template_key=open_result.notification_template,
+                text=open_result.notification_text,
+                reply_markup=remove_keyboard()
+                if stage_result.proposed_action == "create_new_vacancy"
+                else None,
+            )
+        ]
+
     def _handle_candidate_interaction_stage_action(
         self,
         *,
@@ -1346,6 +1378,15 @@ class TelegramUpdateService:
                 ),
                 (
                     {"text"},
+                    lambda: self._apply_manager_open_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
                     lambda: self._apply_manager_review_segment(
                         user=user,
                         raw_message_id=raw_message_id,
@@ -1384,6 +1425,31 @@ class TelegramUpdateService:
                 ),
             ],
         )
+
+    def _apply_manager_open_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        action_templates = self._handle_manager_open_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if action_templates is not None:
+            return action_templates
+
+        if stage_result is not None and stage_result.stage == "OPEN":
+            return self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=latest_user_message,
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+        return None
 
     def _resolve_recovery_context(self, *, user):
         if hasattr(self.stage_agents, "resolve_current_stage_context"):

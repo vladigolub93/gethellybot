@@ -1080,7 +1080,12 @@ def vacancy_open_decision_with_llm(
         prompt_version="vacancy_open_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "delete_vacancy"}:
+    if proposed_action not in {
+        None,
+        "create_new_vacancy",
+        "list_open_vacancies",
+        "delete_vacancy",
+    }:
         proposed_action = None
     return LLMResult(
         payload={
@@ -2882,6 +2887,55 @@ def safe_vacancy_open_decision(
                 "proposed_action": "delete_vacancy",
                 "needs_follow_up": False,
                 "reason_code": "vacancy_open_delete_request",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "create another vacancy",
+            "create a new vacancy",
+            "create one more vacancy",
+            "create second vacancy",
+            "create another role",
+            "open another vacancy",
+            "open a new vacancy",
+            "add another vacancy",
+            "add one more vacancy",
+            "second vacancy",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "create_new_vacancy",
+                "response_text": "Nice. We can open another vacancy right now.",
+                "proposed_action": "create_new_vacancy",
+                "needs_follow_up": False,
+                "reason_code": "vacancy_open_create_request",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "show my vacancies",
+            "show my open vacancies",
+            "show open vacancies",
+            "list my vacancies",
+            "list my open vacancies",
+            "list open vacancies",
+            "what vacancies do i have",
+            "what open vacancies do i have",
+            "see my vacancies",
+            "see my open vacancies",
+            "see open vacancies",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "list_open_vacancies",
+                "response_text": "Sure. I can show your active vacancies.",
+                "proposed_action": "list_open_vacancies",
+                "needs_follow_up": False,
+                "reason_code": "vacancy_open_list_request",
             }
         )
     elif any(

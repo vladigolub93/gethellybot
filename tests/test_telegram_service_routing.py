@@ -270,10 +270,12 @@ class FakeVacancyService:
         self.summary_calls = []
         self.clarification_calls = []
         self.deletion_calls = []
+        self.open_action_calls = []
         self.start_calls = []
         self.deletion_result = None
         self.summary_result = None
         self.clarification_result = None
+        self.open_action_result = None
 
     def handle_deletion_message(self, **kwargs):
         self.deletion_calls.append(kwargs)
@@ -285,6 +287,10 @@ class FakeVacancyService:
 
     def start_onboarding(self, user, trigger_ref_id):
         self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
+
+    def execute_open_action(self, **kwargs):
+        self.open_action_calls.append(kwargs)
+        return self.open_action_result
 
     def handle_summary_review_action(self, **kwargs):
         self.summary_calls.append(kwargs)
@@ -3536,6 +3542,94 @@ def test_graph_open_stage_can_own_delete_vacancy_intent() -> None:
     assert templates == ["vacancy_deletion_confirmation_required"]
     assert service.vacancy_service.deletion_calls
     assert service.vacancy_service.deletion_calls[-1]["action"] == "delete_vacancy"
+
+
+def test_graph_open_stage_can_start_new_vacancy() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="Nice. Let’s open another vacancy.",
+            stage_status="ready_for_transition",
+            proposed_action="create_new_vacancy",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "create_new_vacancy"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="started",
+        notification_template="manager_onboarding_started",
+        notification_text="Nice. Let’s open another vacancy. Send the new JD.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12opennew",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12opennew",
+        build_update(text="Let's create another vacancy"),
+    )
+
+    assert templates == ["manager_onboarding_started"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "create_new_vacancy"
+
+
+def test_graph_open_stage_can_list_open_vacancies() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="Sure. I’ll show your active vacancies.",
+            stage_status="ready_for_transition",
+            proposed_action="list_open_vacancies",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "list_open_vacancies"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="listed",
+        notification_template="manager_open_vacancies_list",
+        notification_text="You have 2 open vacancies right now.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12openlist",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12openlist",
+        build_update(text="Show my open vacancies"),
+    )
+
+    assert templates == ["manager_open_vacancies_list"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "list_open_vacancies"
 
 
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:

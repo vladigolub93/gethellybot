@@ -384,6 +384,62 @@ def test_graph_manager_stage_accepts_open_delete_intent() -> None:
     assert result.stage_status == "ready_for_transition"
 
 
+def test_graph_manager_stage_accepts_open_create_new_vacancy_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6c", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m6c",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Let's create another vacancy",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "create_new_vacancy"
+    assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_manager_stage_accepts_open_list_vacancies_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6l", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m6l",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Show my open vacancies",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "list_open_vacancies"
+    assert result.stage_status == "ready_for_transition"
+
+
 def test_graph_manager_stage_handles_manager_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

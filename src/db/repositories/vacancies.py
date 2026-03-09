@@ -46,6 +46,18 @@ class VacanciesRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def get_open_by_manager_user_id(self, manager_user_id) -> list[Vacancy]:
+        stmt = (
+            select(Vacancy)
+            .where(
+                Vacancy.manager_user_id == manager_user_id,
+                Vacancy.state == "OPEN",
+                Vacancy.deleted_at.is_(None),
+            )
+            .order_by(Vacancy.updated_at.desc(), Vacancy.created_at.desc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def get_by_manager_user_id(self, manager_user_id) -> list[Vacancy]:
         stmt = select(Vacancy).where(
             Vacancy.manager_user_id == manager_user_id,

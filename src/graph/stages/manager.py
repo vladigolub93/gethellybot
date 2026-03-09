@@ -281,7 +281,12 @@ def build_manager_stage_reply_node(session):
 
         if state.active_stage == "OPEN" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
-            state.reply_text = "I can help you remove this vacancy if you want to stop matching for it."
+            if state.proposed_action == "create_new_vacancy":
+                state.reply_text = "Nice. Let’s open another vacancy."
+            elif state.proposed_action == "list_open_vacancies":
+                state.reply_text = "Sure. I’ll show your active vacancies."
+            else:
+                state.reply_text = "I can help you remove this vacancy if you want to stop matching for it."
             state.confidence = 0.9
             return state
 

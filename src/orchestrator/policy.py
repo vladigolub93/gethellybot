@@ -175,10 +175,21 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "OPEN": StatePolicyDefinition(
         state="OPEN",
         goal="Keep the vacancy active for matching and candidate review.",
-        allowed_actions=["wait_for_matches", "delete_vacancy"],
+        allowed_actions=[
+            "wait_for_matches",
+            "create_new_vacancy",
+            "list_open_vacancies",
+            "delete_vacancy",
+        ],
         assistance_prompt_slug="vacancy_open",
-        guidance_text="The vacancy is open. Helly is matching candidates and will only send qualified profiles.",
-        help_text="The vacancy is open. Helly is matching candidates and will only send qualified profiles.",
+        guidance_text=(
+            "The vacancy is open. Helly is matching candidates. You can ask what happens next, "
+            "start another vacancy, or ask to see your active vacancies."
+        ),
+        help_text=(
+            "The vacancy is open. Helly is matching candidates and will only send qualified profiles. "
+            "You can also start another vacancy or ask to see your active vacancies."
+        ),
     ),
     "INTERVIEW_INVITED": StatePolicyDefinition(
         state="INTERVIEW_INVITED",

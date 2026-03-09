@@ -59,6 +59,13 @@ class VacancyDeletionResult:
     notification_text: str
 
 
+@dataclass(frozen=True)
+class VacancyOpenActionResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
 class VacancyService:
     def __init__(self, session: Session):
         self.session = session
@@ -71,6 +78,32 @@ class VacancyService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    def execute_open_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+    ) -> Optional[VacancyOpenActionResult]:
+        if action == "create_new_vacancy":
+            self.start_onboarding(user, trigger_ref_id=raw_message_id)
+            return VacancyOpenActionResult(
+                status="started",
+                notification_template="manager_onboarding_started",
+                notification_text=self._copy(
+                    "Nice. Let’s open another vacancy. Send the new job description and I’ll turn it into a clean summary first."
+                ),
+            )
+
+        if action == "list_open_vacancies":
+            return VacancyOpenActionResult(
+                status="listed",
+                notification_template="manager_open_vacancies_list",
+                notification_text=self._format_open_vacancies(user),
+            )
+
+        return None
 
     def ensure_active_intake_vacancy_for_manager(self, user) -> object:
         vacancy = self.repo.get_latest_incomplete_by_manager_user_id(user.id)
@@ -598,6 +631,26 @@ class VacancyService:
         deletion.setdefault("pending", False)
         current["deletion"] = deletion
         return current
+
+    def _format_open_vacancies(self, user) -> str:
+        vacancies = self.repo.get_open_by_manager_user_id(user.id)
+        if not vacancies:
+            return self._copy("You don’t have any open vacancies right now.")
+
+        lines = [f"You have {len(vacancies)} open vacanc{'y' if len(vacancies) == 1 else 'ies'} right now:"]
+        for index, vacancy in enumerate(vacancies, start=1):
+            current_version = self.repo.get_current_version(vacancy)
+            label = (vacancy.role_title or "").strip()
+            if not label and current_version is not None:
+                summary = (current_version.approval_summary_text or "").strip()
+                if summary:
+                    label = summary.split(".")[0].strip()
+            if not label:
+                label = f"Vacancy {index}"
+            lines.append(f"{index}. {label}")
+
+        lines.append("If you want, send a new JD now and I’ll open one more.")
+        return "\n".join(lines)
 
     def _update_deletion_context(self, vacancy, context: dict) -> None:
         self.repo.update_questions_context(vacancy, context)

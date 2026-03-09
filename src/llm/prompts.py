@@ -516,10 +516,14 @@ def vacancy_open_decision_prompt(
 
 Valid outcomes:
 - help question or status question
+- explicit create-another-vacancy intent
+- explicit list-open-vacancies intent
 - explicit delete-vacancy intent
 
 Rules:
 - treat questions like "what happens now?", "when will I see candidates?", "how does matching work?", and "do I need to do anything else?" as help, not as delete intent
+- propose `create_new_vacancy` when the manager is clearly asking to open another vacancy, add one more role, or create a second vacancy
+- propose `list_open_vacancies` when the manager is clearly asking to see, list, or review their active/open vacancies
 - only propose `delete_vacancy` when the manager is clearly asking to remove the vacancy
 - do not invent candidates or claim matching already produced results
 - do not transition stages yourself
