@@ -111,6 +111,42 @@ def test_vacancy_summary_review_does_not_render_internal_mapping_without_approva
     assert rendered == "Your vacancy summary is ready."
 
 
+def test_vacancy_summary_review_does_not_render_empty_inconsistencies_section() -> None:
+    rendered = render_notification_text(
+        template_key="vacancy_summary_ready_for_review",
+        payload={
+            "text": "Your vacancy summary is ready.",
+            "summary": {
+                "approval_summary_text": (
+                    "This vacancy is for a senior backend engineer. "
+                    "The main stack includes node.js and redis. "
+                    "The role is focused on API delivery and platform reliability."
+                ),
+            },
+            "inconsistencies": {
+                "issues": [],
+            },
+        },
+    )
+
+    assert "Inconsistencies:" not in rendered
+
+
+def test_render_notification_omits_empty_mapping_sections() -> None:
+    rendered = render_notification_text(
+        template_key="manager_candidate_review_ready",
+        payload={
+            "text": "Candidate is ready.",
+            "candidate_summary": {"skills": []},
+            "evaluation": {},
+            "counterparty": {},
+            "inconsistencies": {"issues": []},
+        },
+    )
+
+    assert rendered == "Candidate is ready."
+
+
 def test_render_notification_reply_markup_returns_payload_markup() -> None:
     reply_markup = {
         "keyboard": [["Candidate", "Hiring Manager"]],

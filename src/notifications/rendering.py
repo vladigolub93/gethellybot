@@ -24,6 +24,15 @@ def _render_mapping(mapping: dict) -> list[str]:
     return lines
 
 
+def _append_section(lines: list[str], title: str, section_lines: list[str]) -> None:
+    visible_lines = [line for line in section_lines if str(line).strip()]
+    if not visible_lines:
+        return
+    lines.append("")
+    lines.append(title)
+    lines.extend(visible_lines)
+
+
 def _render_counterparty(counterparty: dict) -> list[str]:
     lines = []
     name = counterparty.get("name")
@@ -116,15 +125,11 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
     elif template_key == "vacancy_summary_ready_for_review":
         pass
     elif isinstance(summary, dict) and summary:
-        lines.append("")
-        lines.append("Summary:")
-        lines.extend(_render_mapping(summary))
+        _append_section(lines, "Summary:", _render_mapping(summary))
 
     evaluation = (payload or {}).get("evaluation")
     if isinstance(evaluation, dict) and evaluation:
-        lines.append("")
-        lines.append("Evaluation:")
-        lines.extend(_render_mapping(evaluation))
+        _append_section(lines, "Evaluation:", _render_mapping(evaluation))
 
     candidate_package = (payload or {}).get("candidate_package")
     if isinstance(candidate_package, dict) and candidate_package:
@@ -133,21 +138,15 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
 
     candidate_summary = (payload or {}).get("candidate_summary")
     if isinstance(candidate_summary, dict) and candidate_summary:
-        lines.append("")
-        lines.append("Candidate:")
-        lines.extend(_render_mapping(candidate_summary))
+        _append_section(lines, "Candidate:", _render_mapping(candidate_summary))
 
     counterparty = (payload or {}).get("counterparty")
     if isinstance(counterparty, dict) and counterparty:
-        lines.append("")
-        lines.append("Contact details:")
-        lines.extend(_render_counterparty(counterparty))
+        _append_section(lines, "Contact details:", _render_counterparty(counterparty))
 
     inconsistencies = (payload or {}).get("inconsistencies")
     if isinstance(inconsistencies, dict) and inconsistencies:
-        lines.append("")
-        lines.append("Inconsistencies:")
-        lines.extend(_render_mapping(inconsistencies))
+        _append_section(lines, "Inconsistencies:", _render_mapping(inconsistencies))
 
     rendered = "\n".join(lines).strip()
     if not rendered:
