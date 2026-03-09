@@ -208,6 +208,52 @@ def _clean_text(value: Optional[str], *, limit: int) -> Optional[str]:
     return normalized[:limit]
 
 
+def _clean_summary_text(value: Optional[str], *, limit: int) -> Optional[str]:
+    if value is None:
+        return None
+
+    normalized = " ".join(value.split()).strip()
+    if not normalized:
+        return None
+
+    def _last_sentence_end(text: str, upper_bound: int) -> int:
+        punctuation_positions = [
+            text.rfind(". ", 0, upper_bound + 1),
+            text.rfind("! ", 0, upper_bound + 1),
+            text.rfind("? ", 0, upper_bound + 1),
+            text.rfind(".", 0, upper_bound + 1),
+            text.rfind("!", 0, upper_bound + 1),
+            text.rfind("?", 0, upper_bound + 1),
+        ]
+        valid_positions = [position for position in punctuation_positions if position >= 0]
+        return max(valid_positions) if valid_positions else -1
+
+    if len(normalized) <= limit:
+        if normalized.endswith((".", "!", "?")):
+            return normalized
+        sentence_end = _last_sentence_end(normalized, len(normalized))
+        if sentence_end >= int(len(normalized) * 0.6):
+            trimmed = normalized[: sentence_end + 1].strip()
+            if trimmed:
+                return trimmed
+        return normalized
+
+    min_sentence_cutoff = int(limit * 0.6)
+    sentence_end = _last_sentence_end(normalized, limit)
+    if sentence_end >= min_sentence_cutoff:
+        trimmed = normalized[: sentence_end + 1].strip()
+        if trimmed:
+            return trimmed
+
+    word_boundary = normalized.rfind(" ", 0, limit + 1)
+    if word_boundary >= max(min_sentence_cutoff, 1):
+        trimmed = normalized[:word_boundary].rstrip(" ,;:-")
+        if trimmed:
+            return trimmed
+
+    return normalized[:limit].rstrip(" ,;:-")
+
+
 def _normalize_skill_list(values: list[str]) -> list[str]:
     normalized: list[str] = []
     for value in values or []:
@@ -358,20 +404,20 @@ def extract_candidate_summary_with_llm(source_text: str, source_type: str) -> LL
         ),
         "years_experience": result.payload.get("years_experience"),
         "skills": _normalize_skill_list(result.payload.get("skills") or []),
-        "approval_summary_text": _clean_text(
+        "approval_summary_text": _clean_summary_text(
             result.payload.get("approval_summary_text"),
-            limit=500,
+            limit=900,
         ),
     }
     if not summary["approval_summary_text"]:
-        summary["approval_summary_text"] = _clean_text(
+        summary["approval_summary_text"] = _clean_summary_text(
             build_approval_summary_text(
                 headline=summary["headline"] or "software professional",
                 source_text=source_text,
                 years_experience=summary["years_experience"],
                 skills=summary["skills"],
             ),
-            limit=500,
+            limit=900,
         )
     return LLMResult(
         payload={key: value for key, value in summary.items() if value not in (None, [])},
@@ -404,23 +450,23 @@ def merge_candidate_summary_with_llm(base_summary: dict, edit_request_text: str)
             "skills": _normalize_skill_list(
                 result.payload.get("skills") or merged.get("skills") or []
             ),
-            "approval_summary_text": _clean_text(
+            "approval_summary_text": _clean_summary_text(
                 result.payload.get("approval_summary_text")
                 or merged.get("approval_summary_text"),
-                limit=500,
+                limit=900,
             ),
             "candidate_edit_notes": _clean_text(edit_request_text, limit=500),
         }
     )
     if not merged.get("approval_summary_text"):
-        merged["approval_summary_text"] = _clean_text(
+        merged["approval_summary_text"] = _clean_summary_text(
             build_approval_summary_text(
                 headline=merged.get("headline") or "software professional",
                 source_text=merged.get("experience_excerpt") or "",
                 years_experience=merged.get("years_experience"),
                 skills=merged.get("skills") or [],
             ),
-            limit=500,
+            limit=900,
         )
     return LLMResult(
         payload={key: value for key, value in merged.items() if value not in (None, [])},
@@ -791,13 +837,13 @@ def extract_vacancy_summary_with_llm(source_text: str, source_type: str) -> LLMR
             result.payload.get("project_description_excerpt") or source_text,
             limit=1200,
         ),
-        "approval_summary_text": _clean_text(
+        "approval_summary_text": _clean_summary_text(
             result.payload.get("approval_summary_text"),
-            limit=600,
+            limit=900,
         ),
     }
     if not summary["approval_summary_text"]:
-        summary["approval_summary_text"] = _clean_text(
+        summary["approval_summary_text"] = _clean_summary_text(
             build_vacancy_approval_summary_text(
                 role_title=summary["role_title"],
                 seniority_normalized=summary["seniority_normalized"],
@@ -805,7 +851,7 @@ def extract_vacancy_summary_with_llm(source_text: str, source_type: str) -> LLMR
                 project_description_excerpt=summary["project_description_excerpt"],
                 source_text=source_text,
             ),
-            limit=600,
+            limit=900,
         )
     inconsistency_json = {"issues": result.payload.get("inconsistency_issues") or []}
     return LLMResult(
@@ -842,16 +888,16 @@ def merge_vacancy_summary_with_llm(base_summary: dict, edit_request_text: str) -
                 or merged.get("project_description_excerpt"),
                 limit=1200,
             ),
-            "approval_summary_text": _clean_text(
+            "approval_summary_text": _clean_summary_text(
                 result.payload.get("approval_summary_text")
                 or merged.get("approval_summary_text"),
-                limit=600,
+                limit=900,
             ),
             "manager_edit_notes": _clean_text(edit_request_text, limit=500),
         }
     )
     if not merged.get("approval_summary_text"):
-        merged["approval_summary_text"] = _clean_text(
+        merged["approval_summary_text"] = _clean_summary_text(
             build_vacancy_approval_summary_text(
                 role_title=merged.get("role_title"),
                 seniority_normalized=merged.get("seniority_normalized"),
@@ -859,7 +905,7 @@ def merge_vacancy_summary_with_llm(base_summary: dict, edit_request_text: str) -
                 project_description_excerpt=merged.get("project_description_excerpt"),
                 source_text=merged.get("project_description_excerpt") or "",
             ),
-            limit=600,
+            limit=900,
         )
     return LLMResult(
         payload={key: value for key, value in merged.items() if value not in (None, [])},
