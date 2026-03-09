@@ -12,6 +12,7 @@ from src.llm.service import (
     safe_vacancy_summary_review_decision,
 )
 from src.orchestrator.policy import resolve_state_context
+from src.vacancy.question_prompts import follow_up_prompt, question_prompt
 
 
 def _combined_recent_context(state: HellyGraphState) -> list[str]:
@@ -104,7 +105,11 @@ def build_manager_stage_detect_node(session):
                     state.parsed_input["intent"] = "needs_clarification"
                     state.intent = "needs_clarification"
                     state.follow_up_needed = True
-                    state.follow_up_question = payload.get("response_text") or "Share the missing vacancy details in one message, and I will parse them for you."
+                    state.follow_up_question = (
+                        payload.get("response_text")
+                        or state.follow_up_question
+                        or "Please answer the current vacancy question so I can continue."
+                    )
             else:
                 state.parsed_input["intent"] = "help"
             return state
@@ -273,7 +278,7 @@ def build_manager_stage_reply_node(session):
         if state.active_stage == "CLARIFICATION_QA" and state.parsed_input.get("intent") == "needs_clarification":
             state.reply_text = (
                 state.follow_up_question
-                or "Share the missing vacancy details in one message, and I will parse them for you."
+                or question_prompt("budget")
             )
             state.follow_up_needed = True
             state.follow_up_question = state.reply_text

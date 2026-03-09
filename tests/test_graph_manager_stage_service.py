@@ -303,6 +303,34 @@ def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     assert result.structured_payload["work_format"] == "remote"
 
 
+def test_graph_manager_stage_accepts_project_link_for_clarification() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v4link", state="CLARIFICATION_QA")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4link",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="https://repriced.ai",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["project_description"] == "https://repriced.ai"
+
+
 def test_graph_manager_stage_handles_open_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

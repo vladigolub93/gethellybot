@@ -104,6 +104,8 @@ def parse_team_size(text: str) -> dict:
 
 def parse_project_description(text: str) -> dict:
     normalized = _normalize_text(text)
+    if re.search(r"https?://\S+|www\.\S+", normalized, flags=re.IGNORECASE):
+        return {"project_description": normalized}
     match = re.search(r"(?:project|product|description)\s*:?\s*(.+)", normalized, flags=re.IGNORECASE)
     if match is not None:
         return {"project_description": match.group(1).strip()}

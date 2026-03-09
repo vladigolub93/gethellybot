@@ -17,3 +17,9 @@ def test_parse_vacancy_clarifications_combined_text() -> None:
     assert parsed["team_size"] == 6
     assert "payments platform" in parsed["project_description"]
     assert parsed["primary_tech_stack_json"][:3] == ["python", "fastapi", "postgresql"]
+
+
+def test_parse_vacancy_clarifications_accepts_project_link() -> None:
+    parsed = parse_vacancy_clarifications("https://repriced.ai")
+
+    assert parsed["project_description"] == "https://repriced.ai"
