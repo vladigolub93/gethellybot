@@ -1006,6 +1006,13 @@ class TelegramUpdateService:
             )
             if assistance_templates is not None:
                 return assistance_templates
+        if normalized_update.content_type in {"voice", "document"}:
+            return self._handle_candidate_verification_message(
+                user=user,
+                raw_message_id=raw_message_id,
+                content_type=normalized_update.content_type,
+                file_id=file_id,
+            )
         return self._handle_candidate_verification_message(
             user=user,
             raw_message_id=raw_message_id,
@@ -1284,7 +1291,7 @@ class TelegramUpdateService:
                     ),
                 ),
                 (
-                    {"text", "video"},
+                    {"text", "voice", "document", "video"},
                     lambda: self._apply_candidate_verification_segment(
                         user=user,
                         raw_message_id=raw_message_id,

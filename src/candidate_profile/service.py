@@ -14,6 +14,7 @@ from src.candidate_profile.question_prompts import (
     question_prompt,
 )
 from src.candidate_profile.verification import build_verification_phrase
+from src.candidate_profile.verification import phrase_matches_verification
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CONSENTED,
     CANDIDATE_STATE_CONTACT_COLLECTED,
@@ -27,8 +28,10 @@ from src.candidate_profile.states import (
     CANDIDATE_STATE_VERIFICATION_PENDING,
 )
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
+from src.db.repositories.files import FilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
+from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
 from src.llm.service import safe_build_deletion_confirmation, safe_parse_candidate_questions
@@ -74,6 +77,7 @@ class CandidateProfileService:
         self.session = session
         self.repo = CandidateProfilesRepository(session)
         self.verifications = CandidateVerificationsRepository(session)
+        self.files = FilesRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
         self.messaging = MessagingService(session)
@@ -697,12 +701,72 @@ class CandidateProfileService:
             verification = self._issue_verification(profile)
 
         if content_type != "video" or file_id is None:
+            if content_type == "voice":
+                instruction = (
+                    "Need a short selfie video here, not a voice note 🙂 "
+                    f"Record a quick video in Telegram and clearly say: '{verification.phrase_text}'."
+                )
+            else:
+                instruction = (
+                    "Need a short selfie video here, not text 🙂 "
+                    f"Record a quick video in Telegram and clearly say: '{verification.phrase_text}'."
+                )
+            return CandidateVerificationResult(
+                status="instruction",
+                notification_template="candidate_verification_instructions",
+                notification_text=instruction,
+            )
+
+        file_row = self.files.get_by_id(file_id)
+        if file_row is None:
             return CandidateVerificationResult(
                 status="instruction",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
-                    "Send a short video and clearly say: "
-                    f"'{verification.phrase_text}'."
+                    "I couldn't read that upload yet. "
+                    f"Please send a short selfie video and clearly say: '{verification.phrase_text}'."
+                ),
+            )
+
+        try:
+            ingestion = ContentIngestionService(self.session)
+            transcript_result = ingestion.ingest_file(file_row)
+            spoken_text = transcript_result.text
+        except ContentQualityError:
+            return CandidateVerificationResult(
+                status="retry_required",
+                notification_template="candidate_verification_instructions",
+                notification_text=(
+                    "I saved the video, but the audio was too noisy to verify the phrase. "
+                    f"Please resend a clearer selfie video and say: '{verification.phrase_text}'."
+                ),
+            )
+        except Exception:
+            return CandidateVerificationResult(
+                status="retry_required",
+                notification_template="candidate_verification_instructions",
+                notification_text=(
+                    "I couldn't verify the phrase from that video. "
+                    f"Please resend a short selfie video and clearly say: '{verification.phrase_text}'."
+                ),
+            )
+
+        verification.review_notes_json = {
+            "transcript_text": spoken_text,
+            "phrase_matched": phrase_matches_verification(
+                expected_phrase=verification.phrase_text,
+                spoken_text=spoken_text,
+            ),
+        }
+        self.session.flush()
+
+        if not verification.review_notes_json["phrase_matched"]:
+            return CandidateVerificationResult(
+                status="phrase_mismatch",
+                notification_template="candidate_verification_instructions",
+                notification_text=(
+                    "Video received, but the phrase didn’t match yet. "
+                    f"Please record one more short selfie video and say exactly: '{verification.phrase_text}'."
                 ),
             )
 

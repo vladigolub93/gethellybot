@@ -2677,6 +2677,34 @@ def test_candidate_verification_video_passthrough_reaches_verification_handler()
     assert service.candidate_service.verification_calls
 
 
+def test_candidate_verification_voice_passthrough_reaches_verification_handler() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10bv2",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10bv2",
+        build_update(content_type="voice"),
+        file_id="file-voice-1",
+    )
+
+    assert templates == ["candidate_verification_instructions"]
+    assert service.candidate_service.verification_calls
+    assert service.candidate_service.verification_calls[-1]["content_type"] == "voice"
+
+
 def test_graph_verification_stage_can_own_video_submission() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
