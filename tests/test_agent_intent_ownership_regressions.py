@@ -6,6 +6,7 @@ from src.graph.state import HellyGraphState
 from src.graph.stages.candidate import build_candidate_stage_detect_node
 from src.graph.stages.deletion import build_delete_stage_reply_node
 from src.graph.stages.manager import build_manager_stage_detect_node
+from src.llm.service import safe_build_deletion_confirmation, safe_delete_confirmation_decision
 
 
 def _state(*, stage: str, message: str, role: str = "candidate") -> HellyGraphState:
@@ -194,3 +195,47 @@ def test_delete_confirmation_explicit_confirm_creates_delete_action(monkeypatch)
 
     assert result.proposed_action == "confirm_delete"
     assert result.parsed_input["intent"] == "stage_completion_input"
+
+
+def test_delete_confirmation_explicit_confirm_short_circuits_before_llm(monkeypatch) -> None:
+    monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: True)
+    monkeypatch.setattr(
+        "src.llm.service.delete_confirmation_decision_with_llm",
+        lambda **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "This should not be used.",
+                "proposed_action": None,
+            }
+        ),
+    )
+
+    result = safe_delete_confirmation_decision(
+        session=object(),
+        latest_user_message="Confirm delete vacancy",
+        entity_label="vacancy",
+        current_step_guidance="Confirm or cancel.",
+    )
+
+    assert result.payload["proposed_action"] == "confirm_delete"
+    assert result.payload["reason_code"] == "delete_confirmation_explicit_command"
+
+
+def test_deletion_confirmation_copy_matches_vacancy_button_label(monkeypatch) -> None:
+    monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: False)
+
+    result = safe_build_deletion_confirmation(
+        session=object(),
+        entity_type="candidate_profile",
+        has_active_interview=False,
+        has_active_matches=False,
+    )
+    assert "Confirm delete profile" in result.payload["message"]
+
+    result = safe_build_deletion_confirmation(
+        session=object(),
+        entity_type="vacancy",
+        has_active_interview=False,
+        has_active_matches=False,
+    )
+    assert "Confirm delete vacancy" in result.payload["message"]

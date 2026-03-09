@@ -3253,6 +3253,42 @@ def safe_delete_confirmation_decision(
     current_step_guidance: str | None = None,
     recent_context: list[str] | None = None,
 ) -> LLMResult:
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    if command in {
+        "confirm delete",
+        "confirm delete profile",
+        "confirm delete vacancy",
+        "delete profile",
+        "delete vacancy",
+    }:
+        return LLMResult(
+            payload={
+                "intent": "confirm",
+                "response_text": f"Understood. I will delete the {entity_label} now.",
+                "proposed_action": "confirm_delete",
+                "keep_current_state": False,
+                "needs_follow_up": False,
+                "reason_code": "delete_confirmation_explicit_command",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_delete_confirmation_decision_v1",
+        )
+    if command in {"cancel delete", "keep profile", "keep vacancy", "don't delete", "dont delete"}:
+        return LLMResult(
+            payload={
+                "intent": "cancel",
+                "response_text": f"Understood. I will keep the {entity_label} active.",
+                "proposed_action": "cancel_delete",
+                "keep_current_state": False,
+                "needs_follow_up": False,
+                "reason_code": "delete_confirmation_cancel_command",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_delete_confirmation_decision_v1",
+        )
+
     if should_use_llm_runtime(session):
         try:
             return delete_confirmation_decision_with_llm(
@@ -3264,9 +3300,6 @@ def safe_delete_confirmation_decision(
         except Exception as exc:  # noqa: BLE001
             logger.warning("delete_confirmation_decision_fallback", error=str(exc))
 
-    normalized_text = (latest_user_message or "").strip()
-    command = normalize_command_text(normalized_text)
-    lowered = normalized_text.lower()
     payload = {
         "intent": "help",
         "response_text": current_step_guidance or f"Review the deletion details for this {entity_label} and either confirm or cancel.",
@@ -3482,9 +3515,10 @@ def safe_build_deletion_confirmation(
     if side_effects:
         side_effects_text = " It will also " + " and ".join(side_effects) + "."
     noun = "profile" if entity_type == "candidate_profile" else "vacancy"
+    confirm_label = "Confirm delete profile" if noun == "profile" else "Confirm delete vacancy"
     return LLMResult(
         payload={
-            "message": f"Please confirm deletion of this {noun}. Reply 'CONFIRM DELETE' to continue or 'Cancel delete' to keep it.{side_effects_text}",
+            "message": f"Please confirm deletion of this {noun}. Tap '{confirm_label}' to continue or 'Cancel delete' to keep it.{side_effects_text}",
             "is_explicit_confirmation_required": True,
         },
         model_name="baseline-deterministic",
