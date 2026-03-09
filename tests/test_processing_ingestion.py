@@ -177,6 +177,43 @@ def test_candidate_processing_extracts_document_text_before_summary(monkeypatch)
     assert service.notifications.rows
 
 
+def test_candidate_processing_skips_duplicate_review_ready_extract() -> None:
+    version_id = uuid4()
+    profile = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        state="SUMMARY_REVIEW",
+        current_version_id=version_id,
+    )
+    version = SimpleNamespace(
+        id=version_id,
+        source_type="document_upload",
+        extracted_text="Existing CV text",
+        transcript_text=None,
+        summary_json={"approval_summary_text": "Existing summary"},
+        approval_status="pending_user_review",
+    )
+    service = CandidateProcessingService(SimpleNamespace())
+    service.repo = FakeCandidateRepo(profile, version)
+    service.raw_messages = FakeRawMessagesRepo(SimpleNamespace(id=uuid4(), text_content=None))
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="candidate_cv_extract_v1",
+            payload_json={
+                "candidate_profile_id": str(profile.id),
+                "candidate_profile_version_id": str(version.id),
+            },
+        )
+    )
+
+    assert result["status"] == "ignored_already_ready"
+    assert service.notifications.rows == []
+
+
 def test_vacancy_processing_transcribes_clarification_before_parse() -> None:
     vacancy = SimpleNamespace(id=uuid4(), manager_user_id=uuid4(), state="CLARIFICATION_QA")
     raw_message = SimpleNamespace(id=uuid4(), user_id=vacancy.manager_user_id, text_content=None, content_type="voice", file_id=uuid4())
@@ -290,6 +327,43 @@ def test_vacancy_processing_extracts_document_text_before_summary_review(monkeyp
     assert version.approval_summary_text.startswith("This vacancy is for a senior Python engineer.")
     assert vacancy.state == "VACANCY_SUMMARY_REVIEW"
     assert service.notifications.rows[0].template_key == "vacancy_summary_ready_for_review"
+
+
+def test_vacancy_processing_skips_duplicate_review_ready_extract() -> None:
+    version_id = uuid4()
+    vacancy = SimpleNamespace(
+        id=uuid4(),
+        manager_user_id=uuid4(),
+        state="VACANCY_SUMMARY_REVIEW",
+        current_version_id=version_id,
+    )
+    version = SimpleNamespace(
+        id=version_id,
+        source_type="document_upload",
+        extracted_text="Existing JD text",
+        transcript_text=None,
+        summary_json={"approval_summary_text": "Existing vacancy summary"},
+        approval_status="pending_manager_review",
+    )
+    service = VacancyProcessingService(SimpleNamespace())
+    service.repo = FakeVacancyRepo(vacancy, version)
+    service.raw_messages = FakeRawMessagesRepo(SimpleNamespace(id=uuid4(), text_content=None))
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="vacancy_jd_extract_v1",
+            payload_json={
+                "vacancy_id": str(vacancy.id),
+                "vacancy_version_id": str(version.id),
+            },
+        )
+    )
+
+    assert result["status"] == "ignored_already_ready"
+    assert service.notifications.rows == []
 
 
 def test_interview_processing_transcribes_answer_before_handling() -> None:

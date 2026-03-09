@@ -41,6 +41,18 @@ class CandidateProcessingService:
         if profile is None or version is None:
             raise ValueError("Candidate profile or version was not found for processing.")
 
+        if (
+            dict(getattr(version, "summary_json", None) or {})
+            and getattr(version, "approval_status", None) == "pending_user_review"
+            and getattr(profile, "current_version_id", None) == version.id
+            and profile.state == CANDIDATE_STATE_SUMMARY_REVIEW
+        ):
+            return {
+                "status": "ignored_already_ready",
+                "candidate_profile_id": str(profile.id),
+                "candidate_profile_version_id": str(version.id),
+            }
+
         source_text = version.extracted_text or version.transcript_text or ""
         ingestion_mode = "passthrough"
         ingestion_source = version.source_type
@@ -171,6 +183,19 @@ class CandidateProcessingService:
         base_version = self.repo.get_version_by_id(payload.get("base_version_id"))
         if profile is None or version is None or base_version is None:
             raise ValueError("Candidate profile or summary version was not found for edit processing.")
+
+        if (
+            dict(getattr(version, "summary_json", None) or {})
+            and getattr(version, "approval_status", None) == "pending_user_review"
+            and getattr(profile, "current_version_id", None) == version.id
+            and profile.state == CANDIDATE_STATE_SUMMARY_REVIEW
+        ):
+            return {
+                "status": "ignored_already_ready",
+                "candidate_profile_id": str(profile.id),
+                "candidate_profile_version_id": str(version.id),
+                "edited": True,
+            }
 
         llm_result = safe_merge_candidate_summary(
             self.session,

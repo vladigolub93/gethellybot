@@ -50,6 +50,18 @@ class VacancyProcessingService:
         if vacancy is None or version is None:
             raise ValueError("Vacancy or version was not found for processing.")
 
+        if (
+            dict(getattr(version, "summary_json", None) or {})
+            and getattr(version, "approval_status", None) == "pending_manager_review"
+            and getattr(vacancy, "current_version_id", None) == version.id
+            and vacancy.state == VACANCY_STATE_SUMMARY_REVIEW
+        ):
+            return {
+                "status": "ignored_already_ready",
+                "vacancy_id": str(vacancy.id),
+                "vacancy_version_id": str(version.id),
+            }
+
         source_text = version.extracted_text or version.transcript_text or ""
         ingestion_mode = "passthrough"
         ingestion_source = version.source_type
@@ -184,6 +196,19 @@ class VacancyProcessingService:
         base_version = self.repo.get_version_by_id(payload.get("base_version_id"))
         if vacancy is None or version is None or base_version is None:
             raise ValueError("Vacancy or summary version was not found for edit processing.")
+
+        if (
+            dict(getattr(version, "summary_json", None) or {})
+            and getattr(version, "approval_status", None) == "pending_manager_review"
+            and getattr(vacancy, "current_version_id", None) == version.id
+            and vacancy.state == VACANCY_STATE_SUMMARY_REVIEW
+        ):
+            return {
+                "status": "ignored_already_ready",
+                "vacancy_id": str(vacancy.id),
+                "vacancy_version_id": str(version.id),
+                "edited": True,
+            }
 
         llm_result = safe_merge_vacancy_summary(
             self.session,
