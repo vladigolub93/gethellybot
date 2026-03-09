@@ -241,6 +241,7 @@ def test_vacancy_summary_review_approve_moves_to_clarifications() -> None:
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
     assert version.approval_status == "approved"
     assert vacancy.questions_context_json["current_question_key"] == "budget"
+    assert vacancy.questions_context_json["confirmed_fields"] == []
 
 
 def test_vacancy_summary_review_edit_queues_one_correction_round() -> None:
@@ -306,6 +307,8 @@ def test_execute_vacancy_summary_review_action_approve_moves_to_clarification() 
     assert result.status == "approved"
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
     assert version.approval_status == "approved"
+    assert vacancy.questions_context_json["current_question_key"] == "budget"
+    assert vacancy.questions_context_json["confirmed_fields"] == []
 
 
 def test_clarification_requests_follow_up_when_partial() -> None:
@@ -353,6 +356,7 @@ def test_clarification_asks_next_question_in_sequence() -> None:
                 "project_description": False,
                 "primary_tech_stack": False,
             },
+            "confirmed_fields": [],
             "current_question_key": "budget",
         },
     )
@@ -373,6 +377,54 @@ def test_clarification_asks_next_question_in_sequence() -> None:
     assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
     assert vacancy.questions_context_json["current_question_key"] == "work_format"
+    assert vacancy.questions_context_json["confirmed_fields"] == ["budget"]
+
+
+def test_clarification_still_asks_project_and_stack_when_prefilled_from_summary() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    vacancy.project_description = "Prefilled from JD extraction."
+    vacancy.primary_tech_stack_json = ["nodejs", "express", "redis"]
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "countries": False,
+                "work_format": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": ["budget", "work_format", "countries"],
+            "current_question_key": "team_size",
+        },
+    )
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={"team_size": 6},
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "project" in result.notification_text.lower()
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert vacancy.questions_context_json["current_question_key"] == "project_description"
+    assert vacancy.questions_context_json["confirmed_fields"] == [
+        "budget",
+        "countries",
+        "team_size",
+        "work_format",
+    ]
 
 
 def test_parsed_clarification_payload_opens_vacancy() -> None:

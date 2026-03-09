@@ -281,7 +281,8 @@ class VacancyService:
         if action == "approve_summary":
             self.repo.mark_version_approved(current_version)
             questions_context = self._ensure_questions_context(vacancy)
-            questions_context["current_question_key"] = self._next_missing_clarification_key(vacancy)
+            questions_context["confirmed_fields"] = []
+            questions_context["current_question_key"] = self._next_missing_clarification_key(vacancy, confirmed_fields=set())
             self.repo.update_questions_context(vacancy, questions_context)
             self.state_service.transition(
                 entity_type="vacancy",
@@ -394,17 +395,20 @@ class VacancyService:
         trigger_type: str,
         actor_user_id=None,
     ) -> VacancyClarificationResult:
-        missing_before = self._missing_clarification_keys(vacancy)
         questions_context = self._ensure_questions_context(vacancy)
+        confirmed_fields = set(questions_context.get("confirmed_fields") or [])
+        missing_before = self._missing_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
         current_question_key = questions_context.get("current_question_key")
         if current_question_key not in QUESTION_KEYS:
             current_question_key = missing_before[0] if missing_before else None
 
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
+            confirmed_fields.update(self._answered_clarification_keys(parsed))
 
-        missing_keys = self._missing_clarification_keys(vacancy)
+        missing_keys = self._missing_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
         if not missing_keys:
+            questions_context["confirmed_fields"] = sorted(confirmed_fields)
             self.state_service.transition(
                 entity_type="vacancy",
                 entity=vacancy,
@@ -434,6 +438,7 @@ class VacancyService:
             )
 
         next_question_key = missing_keys[0]
+        questions_context["confirmed_fields"] = sorted(confirmed_fields)
         questions_context["current_question_key"] = next_question_key
         self.repo.update_questions_context(vacancy, questions_context)
 
@@ -457,7 +462,15 @@ class VacancyService:
             notification_text=question_prompt(next_question_key),
         )
 
-    def _missing_clarification_keys(self, vacancy) -> list[str]:
+    def _missing_clarification_keys(self, vacancy, *, confirmed_fields: set[str] | None = None) -> list[str]:
+        if confirmed_fields is not None:
+            return [key for key in QUESTION_KEYS if key not in confirmed_fields]
+
+        questions_context = dict(vacancy.questions_context_json or {})
+        if "confirmed_fields" in questions_context:
+            stored_confirmed_fields = set(questions_context.get("confirmed_fields") or [])
+            return [key for key in QUESTION_KEYS if key not in stored_confirmed_fields]
+
         missing = []
         if vacancy.budget_min is None and vacancy.budget_max is None:
             missing.append("budget")
@@ -479,7 +492,24 @@ class VacancyService:
         for key in QUESTION_KEYS:
             follow_up_used.setdefault(key, False)
         current["follow_up_used"] = follow_up_used
+        current["confirmed_fields"] = list(current.get("confirmed_fields") or [])
         return current
+
+    def _answered_clarification_keys(self, parsed: dict) -> set[str]:
+        answered = set()
+        if any(parsed.get(key) is not None for key in ("budget_min", "budget_max", "budget_currency", "budget_period")):
+            answered.add("budget")
+        if parsed.get("work_format"):
+            answered.add("work_format")
+        if parsed.get("countries_allowed_json"):
+            answered.add("countries")
+        if parsed.get("team_size") is not None:
+            answered.add("team_size")
+        if parsed.get("project_description"):
+            answered.add("project_description")
+        if parsed.get("primary_tech_stack_json"):
+            answered.add("primary_tech_stack")
+        return answered
 
     def _next_follow_up_key(self, questions_context: dict, missing_keys: list[str]) -> Optional[str]:
         follow_up_used = questions_context.get("follow_up_used") or {}
@@ -488,8 +518,8 @@ class VacancyService:
                 return key
         return None
 
-    def _next_missing_clarification_key(self, vacancy) -> Optional[str]:
-        missing_keys = self._missing_clarification_keys(vacancy)
+    def _next_missing_clarification_key(self, vacancy, *, confirmed_fields: set[str] | None = None) -> Optional[str]:
+        missing_keys = self._missing_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
         if not missing_keys:
             return None
         return missing_keys[0]
