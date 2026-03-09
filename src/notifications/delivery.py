@@ -23,16 +23,35 @@ class NotificationDeliveryService:
             raise ValueError(f"Unsupported notification job type: {job.job_type}")
 
         payload = job.payload_json or {}
-        notification = self.notifications.get_by_id(payload["notification_id"])
-        return self.send_notification(notification)
+        return self.send_notification_by_id(payload["notification_id"])
 
-    def send_notification(self, notification) -> dict:
+    def send_notification_by_id(self, notification_id) -> dict:
+        notification = self.notifications.get_by_id(notification_id)
         if notification is None:
             raise ValueError("Notification was not found.")
         if notification.status == "sent":
             return {"status": "already_sent", "notification_id": str(notification.id)}
         if notification.status == "cancelled":
             return {"status": "cancelled", "notification_id": str(notification.id)}
+        claimed_notification = self.notifications.claim_for_send(notification.id)
+        if claimed_notification is None:
+            latest = self.notifications.get_by_id(notification.id)
+            if latest is None:
+                raise ValueError("Notification was not found.")
+            if latest.status == "sent":
+                return {"status": "already_sent", "notification_id": str(latest.id)}
+            if latest.status == "cancelled":
+                return {"status": "cancelled", "notification_id": str(latest.id)}
+            return {
+                "status": "already_claimed",
+                "notification_id": str(latest.id),
+                "notification_status": latest.status,
+            }
+        return self.send_notification(claimed_notification)
+
+    def send_notification(self, notification) -> dict:
+        if notification is None:
+            raise ValueError("Notification was not found.")
         try:
             user = self.users.get_by_id(notification.user_id)
             if user is None or not user.telegram_chat_id:
@@ -78,8 +97,5 @@ class NotificationDeliveryService:
     def deliver_notification_ids(self, notification_ids: list[str]) -> list[dict]:
         results: list[dict] = []
         for notification_id in notification_ids:
-            notification = self.notifications.get_by_id(notification_id)
-            if notification is None:
-                continue
-            results.append(self.send_notification(notification))
+            results.append(self.send_notification_by_id(notification_id))
         return results

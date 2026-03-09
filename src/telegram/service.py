@@ -61,7 +61,6 @@ class TelegramUpdateService:
         self.interview_service = InterviewService(session)
         self.vacancy_service = VacancyService(session)
         self.notification_delivery = NotificationDeliveryService(session)
-        self._created_notification_ids: List[str] = []
         self._safe_immediate_job_types = {
             "file_store_telegram_v1",
             "candidate_cv_extract_v1",
@@ -1569,8 +1568,8 @@ class TelegramUpdateService:
         )
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
-        self._created_notification_ids = []
         self.session.info["created_job_ids"] = []
+        self.session.info["created_notification_ids"] = []
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
             return ProcessedTelegramUpdate(
@@ -1672,16 +1671,13 @@ class TelegramUpdateService:
         return file_row
 
     def _notify(self, user_id, template_key: str, payload: dict) -> str:
-        notification = self.notifications_repo.create(
+        self.notifications_repo.create(
             user_id=user_id,
             entity_type="user",
             entity_id=user_id,
             template_key=template_key,
             payload_json=payload,
         )
-        notification_id = getattr(notification, "id", None)
-        if notification_id is not None:
-            self._created_notification_ids.append(str(notification_id))
         return template_key
 
     def _flush_immediate_jobs(self) -> None:
@@ -1716,15 +1712,7 @@ class TelegramUpdateService:
             )
 
     def _flush_immediate_notifications_for_user(self, user_id) -> None:
-        notification_ids = list(self._created_notification_ids)
-        pending_notifications = self.notifications_repo.list_pending_dispatchable_for_user(
-            user_id=user_id,
-            limit=20,
-        )
-        for notification in pending_notifications:
-            notification_id = str(notification.id)
-            if notification_id not in notification_ids:
-                notification_ids.append(notification_id)
+        notification_ids = list(self.session.info.pop("created_notification_ids", []))
         if not notification_ids:
             return
         try:
@@ -1737,5 +1725,3 @@ class TelegramUpdateService:
                 notification_count=len(notification_ids),
                 error=str(exc),
             )
-        finally:
-            self._created_notification_ids = []

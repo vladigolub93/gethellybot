@@ -40,6 +40,12 @@ class NotificationsRepository:
         )
         self.session.add(notification)
         self.session.flush()
+        session_info = getattr(self.session, "info", None)
+        if session_info is not None:
+            created_notification_ids = session_info.setdefault("created_notification_ids", [])
+            notification_id = str(notification.id)
+            if notification_id not in created_notification_ids:
+                created_notification_ids.append(notification_id)
         return notification
 
     def list_pending_dispatchable(self, *, limit: int = 20) -> list[Notification]:
@@ -71,6 +77,22 @@ class NotificationsRepository:
 
     def mark_queued(self, notification: Notification) -> Notification:
         notification.status = "queued"
+        self.session.flush()
+        return notification
+
+    def claim_for_send(self, notification_id) -> Optional[Notification]:
+        stmt = (
+            select(Notification)
+            .where(
+                Notification.id == notification_id,
+                Notification.status.in_(("pending", "queued")),
+            )
+            .with_for_update(skip_locked=True)
+        )
+        notification = self.session.execute(stmt).scalar_one_or_none()
+        if notification is None:
+            return None
+        notification.status = "sending"
         self.session.flush()
         return notification
 
