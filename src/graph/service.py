@@ -262,7 +262,11 @@ class LangGraphStageAgentService:
             return None
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
         latest_active_vacancy = self.vacancies.get_latest_active_by_manager_user_id(user.id)
-        if latest_active_vacancy is not None and self._has_pending_deletion(latest_active_vacancy):
+        pending_deletion_vacancy = next(
+            (vacancy for vacancy in manager_vacancies if self._has_pending_deletion(vacancy)),
+            None,
+        )
+        if pending_deletion_vacancy is not None:
             return "DELETE_CONFIRMATION"
         manager_review_match = self.matches.get_latest_manager_review_for_manager(
             [vacancy.id for vacancy in manager_vacancies]

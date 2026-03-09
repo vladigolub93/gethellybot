@@ -323,6 +323,7 @@ class TelegramUpdateService:
         *,
         user,
         raw_message_id,
+        latest_user_message: str,
         stage_result,
     ) -> List[str] | None:
         if stage_result is None or stage_result.stage not in {"OPEN", "DELETE_CONFIRMATION"}:
@@ -349,6 +350,7 @@ class TelegramUpdateService:
             user=user,
             raw_message_id=raw_message_id,
             action="delete_vacancy" if stage_result.stage == "OPEN" else stage_result.proposed_action,
+            latest_user_message=latest_user_message,
         )
         if deletion_result is None:
             return None
@@ -1144,6 +1146,7 @@ class TelegramUpdateService:
         deletion_templates = self._handle_manager_delete_stage_action(
             user=user,
             raw_message_id=raw_message_id,
+            latest_user_message=latest_user_message,
             stage_result=stage_result,
         )
         if deletion_templates is not None:

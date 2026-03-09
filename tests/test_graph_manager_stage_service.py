@@ -14,13 +14,25 @@ class FakeConsentsRepository:
 
 class FakeVacanciesRepository:
     def __init__(self, vacancy):
-        self.vacancy = vacancy
+        if isinstance(vacancy, list):
+            self.vacancies = vacancy
+        elif vacancy is None:
+            self.vacancies = []
+        else:
+            self.vacancies = [vacancy]
 
     def get_latest_active_by_manager_user_id(self, manager_user_id):
-        return self.vacancy
+        for vacancy in reversed(self.vacancies):
+            if getattr(vacancy, "manager_user_id", manager_user_id) == manager_user_id:
+                return vacancy
+        return None
 
     def get_by_manager_user_id(self, user_id):
-        return [self.vacancy] if self.vacancy is not None else []
+        return [
+            vacancy
+            for vacancy in self.vacancies
+            if getattr(vacancy, "manager_user_id", user_id) == user_id
+        ]
 
 
 class FakeMatchingRepository:
@@ -216,6 +228,44 @@ def test_graph_manager_stage_handles_vacancy_summary_review_help() -> None:
 
     assert reply is not None
     assert "approve" in reply.lower() or "summary" in reply.lower()
+
+
+def test_graph_manager_stage_prefers_delete_confirmation_when_pending_on_non_latest_vacancy() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        [
+            SimpleNamespace(
+                id="v-old",
+                state="OPEN",
+                manager_user_id="m-del",
+                questions_context_json={"deletion": {"pending": True}},
+            ),
+            SimpleNamespace(
+                id="v-new",
+                state="OPEN",
+                manager_user_id="m-del",
+                questions_context_json={},
+            ),
+        ]
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m-del",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Confirm delete vacancy",
+    )
+
+    assert result is not None
+    assert result.stage == "DELETE_CONFIRMATION"
 
 
 def test_graph_manager_stage_does_not_treat_approval_question_as_summary_edit() -> None:

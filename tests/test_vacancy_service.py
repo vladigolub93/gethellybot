@@ -22,6 +22,7 @@ class FakeSession:
 class FakeVacanciesRepository:
     def __init__(self):
         self.vacancy = None
+        self.vacancies = []
         self.versions = []
 
     def get_latest_incomplete_by_manager_user_id(self, _manager_user_id):
@@ -48,12 +49,30 @@ class FakeVacanciesRepository:
             seniority_normalized=None,
             deleted_at=None,
         )
+        self.vacancies.append(self.vacancy)
         return self.vacancy
 
     def get_latest_active_by_manager_user_id(self, manager_user_id):
-        if self.vacancy and self.vacancy.manager_user_id == manager_user_id and self.vacancy.deleted_at is None:
-            return self.vacancy
+        for vacancy in reversed(self.vacancies):
+            if vacancy.manager_user_id == manager_user_id and vacancy.deleted_at is None:
+                return vacancy
         return None
+
+    def get_by_manager_user_id(self, manager_user_id):
+        return [
+            vacancy
+            for vacancy in self.vacancies
+            if vacancy.manager_user_id == manager_user_id and vacancy.deleted_at is None
+        ]
+
+    def get_open_by_manager_user_id(self, manager_user_id):
+        return [
+            vacancy
+            for vacancy in self.vacancies
+            if vacancy.manager_user_id == manager_user_id
+            and vacancy.deleted_at is None
+            and vacancy.state == VACANCY_STATE_OPEN
+        ]
 
     def next_version_no(self, _vacancy_id):
         return len(self.versions) + 1
@@ -585,3 +604,43 @@ def test_execute_vacancy_deletion_action_confirm_soft_deletes_vacancy() -> None:
     assert vacancy.state == "DELETED"
     assert match.status == "cancelled"
     assert interview.state == "CANCELLED"
+
+
+def test_execute_deletion_action_targets_named_open_vacancy() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    first = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    first.role_title = "Android Developer"
+    second = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    second.role_title = "Node.js Developer"
+
+    confirmation = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="delete_vacancy",
+        latest_user_message="я хочу удалить вакансию андроид",
+    )
+
+    assert confirmation is not None
+    assert confirmation.status == "confirmation_required"
+    assert "Android Developer" in confirmation.notification_text
+
+    deleted = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="confirm_delete",
+        latest_user_message="Confirm delete vacancy",
+    )
+
+    assert deleted is not None
+    assert deleted.status == "deleted"
+    assert first.deleted_at == "now"
+    assert second.deleted_at is None

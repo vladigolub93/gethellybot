@@ -860,12 +860,14 @@ Approved response intent:
 def deletion_confirmation_prompt(
     *,
     entity_type: str,
+    entity_label: str | None,
     has_active_interview: bool,
     has_active_matches: bool,
 ) -> str:
     return f"""Task: draft a safe deletion confirmation message.
 
 Entity type: {entity_type}
+Entity label: {entity_label or ""}
 Has active interview: {has_active_interview}
 Has active matches: {has_active_matches}
 """

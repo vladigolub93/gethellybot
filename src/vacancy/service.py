@@ -15,6 +15,7 @@ from src.llm.service import (
     safe_parse_vacancy_clarifications,
 )
 from src.messaging.service import MessagingService
+from src.shared.text import normalize_command_text
 from src.state.service import StateService
 from src.vacancy.question_prompts import (
     QUESTION_KEYS,
@@ -579,11 +580,13 @@ class VacancyService:
         user,
         raw_message_id,
         action: str | None,
+        latest_user_message: str | None = None,
     ) -> Optional[VacancyDeletionResult]:
-        vacancy = self.repo.get_latest_active_by_manager_user_id(user.id)
+        vacancy = self._resolve_deletion_target_vacancy(user, latest_user_message=latest_user_message)
         if vacancy is None:
             return None
 
+        vacancy_label = self._vacancy_label(vacancy)
         deletion_context = self._ensure_deletion_context(vacancy)
         pending = bool(deletion_context.get("pending"))
 
@@ -593,7 +596,7 @@ class VacancyService:
             return VacancyDeletionResult(
                 status="cancelled",
                 notification_template="vacancy_deletion_cancelled",
-                notification_text=self._copy("Vacancy deletion cancelled. The vacancy remains active."),
+                notification_text=self._copy(f'Got it — keeping "{vacancy_label}" active.'),
             )
 
         active_matches = self.matching.list_active_for_vacancy(vacancy.id)
@@ -615,6 +618,7 @@ class VacancyService:
             confirmation = safe_build_deletion_confirmation(
                 self.session,
                 entity_type="vacancy",
+                entity_label=vacancy_label,
                 has_active_interview=has_active_interview,
                 has_active_matches=bool(active_matches),
             )
@@ -632,6 +636,49 @@ class VacancyService:
         current["deletion"] = deletion
         return current
 
+    def _vacancy_label(self, vacancy, *, index: int | None = None) -> str:
+        label = (vacancy.role_title or "").strip()
+        current_version = self.repo.get_current_version(vacancy)
+        if not label and current_version is not None:
+            summary = (current_version.approval_summary_text or "").strip()
+            if summary:
+                label = summary.split(".")[0].strip()
+        if not label:
+            label = f"Vacancy {index}" if index is not None else "Vacancy"
+        return label
+
+    def _find_pending_deletion_vacancy(self, user):
+        for vacancy in self.repo.get_by_manager_user_id(user.id):
+            if self._ensure_deletion_context(vacancy).get("pending"):
+                return vacancy
+        return None
+
+    def _resolve_deletion_target_vacancy(self, user, *, latest_user_message: str | None):
+        pending_vacancy = self._find_pending_deletion_vacancy(user)
+        if pending_vacancy is not None:
+            return pending_vacancy
+
+        open_vacancies = self.repo.get_open_by_manager_user_id(user.id)
+        if not open_vacancies:
+            return self.repo.get_latest_active_by_manager_user_id(user.id)
+        if len(open_vacancies) == 1:
+            return open_vacancies[0]
+
+        normalized_message = normalize_command_text(latest_user_message)
+        if normalized_message:
+            for index, vacancy in enumerate(open_vacancies, start=1):
+                label = self._vacancy_label(vacancy, index=index)
+                normalized_label = normalize_command_text(label)
+                if normalized_label and normalized_label in normalized_message:
+                    return vacancy
+                short_tokens = [token for token in normalized_label.replace(".", " ").split() if len(token) >= 4]
+                if any(token in normalized_message for token in short_tokens):
+                    return vacancy
+                if f" {index} " in f" {normalized_message} ":
+                    return vacancy
+
+        return open_vacancies[0]
+
     def _format_open_vacancies(self, user) -> str:
         vacancies = self.repo.get_open_by_manager_user_id(user.id)
         if not vacancies:
@@ -639,14 +686,7 @@ class VacancyService:
 
         lines = [f"You have {len(vacancies)} open vacanc{'y' if len(vacancies) == 1 else 'ies'} right now:"]
         for index, vacancy in enumerate(vacancies, start=1):
-            current_version = self.repo.get_current_version(vacancy)
-            label = (vacancy.role_title or "").strip()
-            if not label and current_version is not None:
-                summary = (current_version.approval_summary_text or "").strip()
-                if summary:
-                    label = summary.split(".")[0].strip()
-            if not label:
-                label = f"Vacancy {index}"
+            label = self._vacancy_label(vacancy, index=index)
             lines.append(f"{index}. {label}")
 
         lines.append("If you want, send a new JD now and I’ll open one more.")
@@ -656,6 +696,7 @@ class VacancyService:
         self.repo.update_questions_context(vacancy, context)
 
     def _execute_deletion(self, *, vacancy, raw_message_id, actor_user_id, active_matches) -> VacancyDeletionResult:
+        vacancy_label = self._vacancy_label(vacancy)
         deletion_context = self._ensure_deletion_context(vacancy)
         deletion_context["pending"] = False
         self._update_deletion_context(vacancy, deletion_context)
@@ -720,5 +761,5 @@ class VacancyService:
         return VacancyDeletionResult(
             status="deleted",
             notification_template="vacancy_deleted",
-            notification_text=self._copy(f"Vacancy deleted and removed from active flow.{details_text}"),
+            notification_text=self._copy(f'"{vacancy_label}" deleted and removed from active flow.{details_text}'),
         )

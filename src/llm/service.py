@@ -1635,6 +1635,7 @@ def copywrite_response_with_llm(*, approved_intent: str) -> LLMResult:
 def build_deletion_confirmation_with_llm(
     *,
     entity_type: str,
+    entity_label: str | None,
     has_active_interview: bool,
     has_active_matches: bool,
 ) -> LLMResult:
@@ -1643,6 +1644,7 @@ def build_deletion_confirmation_with_llm(
         system_prompt=build_user_facing_grounded_system_prompt("messaging", "deletion_confirmation"),
         user_prompt=deletion_confirmation_prompt(
             entity_type=entity_type,
+            entity_label=entity_label,
             has_active_interview=has_active_interview,
             has_active_matches=has_active_matches,
         ),
@@ -3547,6 +3549,7 @@ def safe_build_deletion_confirmation(
     session,
     *,
     entity_type: str,
+    entity_label: str | None = None,
     has_active_interview: bool,
     has_active_matches: bool,
 ) -> LLMResult:
@@ -3554,6 +3557,7 @@ def safe_build_deletion_confirmation(
         try:
             return build_deletion_confirmation_with_llm(
                 entity_type=entity_type,
+                entity_label=entity_label,
                 has_active_interview=has_active_interview,
                 has_active_matches=has_active_matches,
             )
@@ -3570,9 +3574,10 @@ def safe_build_deletion_confirmation(
         side_effects_text = " It will also " + " and ".join(side_effects) + "."
     noun = "profile" if entity_type == "candidate_profile" else "vacancy"
     confirm_label = "Confirm delete profile" if noun == "profile" else "Confirm delete vacancy"
+    entity_display = f' "{entity_label}"' if entity_label else ""
     return LLMResult(
         payload={
-            "message": f"Please confirm deletion of this {noun}. Tap '{confirm_label}' to continue or 'Cancel delete' to keep it.{side_effects_text}",
+            "message": f"Please confirm deletion of this {noun}{entity_display}. Tap '{confirm_label}' to continue or 'Cancel delete' to keep it.{side_effects_text}",
             "is_explicit_confirmation_required": True,
         },
         model_name="baseline-deterministic",
