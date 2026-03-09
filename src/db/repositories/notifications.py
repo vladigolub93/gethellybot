@@ -55,6 +55,20 @@ class NotificationsRepository:
         )
         return list(self.session.execute(stmt).scalars())
 
+    def list_pending_dispatchable_for_user(self, *, user_id, limit: int = 20) -> list[Notification]:
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.status == "pending",
+                or_(Notification.send_after.is_(None), Notification.send_after <= now),
+            )
+            .order_by(Notification.created_at.asc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars())
+
     def mark_queued(self, notification: Notification) -> Notification:
         notification.status = "queued"
         self.session.flush()

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from src.candidate_profile.service import CandidateProfileService
 from src.config.logging import get_logger
 from src.db.repositories.files import FilesRepository
+from src.db.repositories.job_execution_logs import JobExecutionLogsRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.db.repositories.users import UsersRepository
@@ -19,6 +20,9 @@ from src.interview.service import InterviewService
 from src.messaging.service import MessagingService
 from src.notifications.delivery import NotificationDeliveryService
 from src.orchestrator.policy import resolve_state_context
+from src.jobs.db_queue import DatabaseQueueClient
+from src.jobs.processor import process_job
+from src.jobs.queue import JobMessage
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
     contact_request_keyboard,
@@ -58,6 +62,14 @@ class TelegramUpdateService:
         self.vacancy_service = VacancyService(session)
         self.notification_delivery = NotificationDeliveryService(session)
         self._created_notification_ids: List[str] = []
+        self._safe_immediate_job_types = {
+            "file_store_telegram_v1",
+            "candidate_cv_extract_v1",
+            "candidate_summary_edit_apply_v1",
+            "candidate_questions_parse_v1",
+            "vacancy_jd_extract_v1",
+            "vacancy_summary_edit_apply_v1",
+        }
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
@@ -1558,6 +1570,7 @@ class TelegramUpdateService:
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         self._created_notification_ids = []
+        self.session.info["created_job_ids"] = []
         existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
         if existing is not None:
             return ProcessedTelegramUpdate(
@@ -1581,7 +1594,8 @@ class TelegramUpdateService:
             file_id=persisted_file.id if persisted_file is not None else None,
         )
         self.session.commit()
-        self._flush_immediate_notifications()
+        self._flush_immediate_jobs()
+        self._flush_immediate_notifications_for_user(user.id)
 
         return self._build_processed_update_result(
             user_id=user.id,
@@ -1643,6 +1657,18 @@ class TelegramUpdateService:
             provider_metadata=normalized_update.file.payload,
         )
         self.raw_messages_repo.attach_file(raw_message, file_row.id)
+        if file_row.status == "received" and file_row.telegram_file_id:
+            queue = DatabaseQueueClient(self.session)
+            queue.enqueue(
+                JobMessage(
+                    job_type="file_store_telegram_v1",
+                    idempotency_key=f"file:{file_row.id}:store",
+                    payload={"file_id": str(file_row.id)},
+                    entity_type="file",
+                    entity_id=file_row.id,
+                )
+            )
+            self.files_repo.mark_storage_queued(file_row)
         return file_row
 
     def _notify(self, user_id, template_key: str, payload: dict) -> str:
@@ -1658,17 +1684,57 @@ class TelegramUpdateService:
             self._created_notification_ids.append(str(notification_id))
         return template_key
 
-    def _flush_immediate_notifications(self) -> None:
-        if not self._created_notification_ids:
+    def _flush_immediate_jobs(self) -> None:
+        created_job_ids = list(self.session.info.pop("created_job_ids", []))
+        if not created_job_ids:
             return
         try:
-            self.notification_delivery.deliver_notification_ids(self._created_notification_ids)
+            repo = JobExecutionLogsRepository(self.session)
+            queue_index = 0
+            while queue_index < len(created_job_ids):
+                job_id = created_job_ids[queue_index]
+                queue_index += 1
+                job = repo.get_by_id(job_id)
+                if job is None or job.status != "queued":
+                    continue
+                if job.job_type not in self._safe_immediate_job_types:
+                    continue
+                repo.mark_started(job)
+                result = process_job(self.session, job)
+                repo.mark_completed(job, result_json=result)
+                more_job_ids = self.session.info.pop("created_job_ids", [])
+                for new_job_id in more_job_ids:
+                    if new_job_id not in created_job_ids:
+                        created_job_ids.append(new_job_id)
+            self.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            self.session.rollback()
+            self.logger.warning(
+                "telegram_immediate_job_flush_failed",
+                job_count=len(created_job_ids),
+                error=str(exc),
+            )
+
+    def _flush_immediate_notifications_for_user(self, user_id) -> None:
+        notification_ids = list(self._created_notification_ids)
+        pending_notifications = self.notifications_repo.list_pending_dispatchable_for_user(
+            user_id=user_id,
+            limit=20,
+        )
+        for notification in pending_notifications:
+            notification_id = str(notification.id)
+            if notification_id not in notification_ids:
+                notification_ids.append(notification_id)
+        if not notification_ids:
+            return
+        try:
+            self.notification_delivery.deliver_notification_ids(notification_ids)
             self.session.commit()
         except Exception as exc:  # noqa: BLE001
             self.session.rollback()
             self.logger.warning(
                 "telegram_immediate_notification_flush_failed",
-                notification_count=len(self._created_notification_ids),
+                notification_count=len(notification_ids),
                 error=str(exc),
             )
         finally:
