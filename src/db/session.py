@@ -2,6 +2,7 @@ from functools import lru_cache
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from src.config.settings import get_settings
 
@@ -11,6 +12,13 @@ def get_engine():
     settings = get_settings()
     if not settings.supabase_db_url:
         raise RuntimeError("SUPABASE_DB_URL is not configured.")
+    if settings.db_use_null_pool:
+        return create_engine(
+            settings.supabase_db_url,
+            pool_pre_ping=True,
+            poolclass=NullPool,
+            future=True,
+        )
     return create_engine(
         settings.supabase_db_url,
         pool_pre_ping=True,

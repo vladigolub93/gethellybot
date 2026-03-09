@@ -18,10 +18,10 @@ The focus is no longer core architecture. The focus is:
 
 1. Run a live Telegram smoke for entry onboarding with a user who has a Telegram `username`.
 2. Run a live Telegram smoke for entry onboarding with a user who does not have a `username` and must share contact.
-3. Run a live Telegram smoke for candidate `SUMMARY_REVIEW` help questions and confirm the stage agent does not misclassify them as correction requests.
-4. Run a live Telegram smoke for candidate `QUESTIONS_PENDING` clarification questions and confirm the stage agent does not misclassify them as final structured answers.
-5. Run a live Telegram smoke for manager `VACANCY_SUMMARY_REVIEW` help, correction, and approve paths.
-6. Validate every live scenario against Supabase snapshots and Railway `graph_stage_executed` logs, then record the results.
+3. Run a live Telegram smoke for candidate `SUMMARY_REVIEW` help questions and confirm the stage agent does not misclassify them as correction requests. Synthetic live-runtime validation completed.
+4. Run a live Telegram smoke for candidate `QUESTIONS_PENDING` clarification questions and confirm the stage agent does not misclassify them as final structured answers. Synthetic live-runtime validation completed.
+5. Run a live Telegram smoke for manager `VACANCY_SUMMARY_REVIEW` help, correction, and approve paths. Synthetic live-runtime validation completed.
+6. Validate every live scenario against Supabase snapshots and Railway `graph_stage_executed` logs, then record the results. Supabase snapshot and local graph-log validation completed; Railway-log validation still needs local Railway credentials.
 7. Export real candidate onboarding conversation snippets from `raw_messages`. Completed.
 8. Export real manager onboarding conversation snippets from `raw_messages`. Completed.
 9. Review those transcripts and identify the top 10 robotic or awkward Helly turns. Completed.

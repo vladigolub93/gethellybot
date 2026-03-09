@@ -501,6 +501,12 @@ Recent stage-ownership progress:
 - repeated-question handling is now covered by graph-stage tests, including a regression that verifies `READY` help replies receive prior user/bot turns so the stage agent can answer follow-up status questions with local conversational memory.
 - high-visibility runtime microcopy has been rewritten across entry, candidate, manager, interview, clarification, verification, and summary-review paths, replacing more robotic phrases like `processing started` / `please answer with...` with shorter, more Telegram-native recruiter copy.
 - live conversation-polish tooling now includes `export_telegram_conversation.py` and `review_conversation_quality.py`, so real Telegram transcripts can be exported from `raw_messages` and quickly scanned for likely robotic Helly turns during Phase F iteration.
+- live conversation review now also has a dedicated findings artifact in `HELLY_V1_CONVERSATION_REVIEW_FINDINGS.md`, so transcript-derived issues are recorded before prompt/runtime polish passes.
+- local validation tooling now supports `DB_USE_NULL_POOL`, which avoids Supabase session-pooler client exhaustion during heavy synthetic/live validation runs.
+- synthetic Phase L validation now has a dedicated runner in `scripts/run_phase_l_synthetic.py`, which replays the highest-risk stage-ownership scenarios directly through live runtime code against live Supabase state.
+- replay tooling now drains only entity-relevant non-notification jobs during synthetic validation, avoiding false failures caused by unrelated queued jobs from the global worker queue.
+- synthetic validation uncovered and fixed a real transport bug where manager `INTAKE_PENDING` text actions could be shadowed by generic graph-help routing before vacancy intake execution.
+- synthetic live-runtime results are now documented in `HELLY_V1_SYNTHETIC_PHASE_L_RESULTS.md`, including validated candidate `SUMMARY_REVIEW`, candidate `QUESTIONS_PENDING`, and manager `VACANCY_SUMMARY_REVIEW` scenarios.
 
 ## 7. Production Readiness Assessment
 

@@ -72,11 +72,12 @@ def _drain_worker_queue(*, max_jobs: int, deliver_notifications: bool) -> list[d
         session = session_factory()
         try:
             repo = JobExecutionLogsRepository(session)
-            job = repo.claim_next_queued()
+            job = (
+                repo.claim_next_queued()
+                if deliver_notifications
+                else repo.claim_next_queued_non_notification()
+            )
             if job is None:
-                session.commit()
-                break
-            if job.job_type.startswith("notification_") and not deliver_notifications:
                 session.commit()
                 break
 

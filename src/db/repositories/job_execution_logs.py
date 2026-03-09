@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import not_, select
 from sqlalchemy.orm import Session
 
 from src.db.models.core import JobExecutionLog
@@ -55,6 +55,19 @@ class JobExecutionLogsRepository:
         stmt = (
             select(JobExecutionLog)
             .where(JobExecutionLog.status == "queued")
+            .order_by(JobExecutionLog.queued_at.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def claim_next_queued_non_notification(self) -> Optional[JobExecutionLog]:
+        stmt = (
+            select(JobExecutionLog)
+            .where(
+                JobExecutionLog.status == "queued",
+                not_(JobExecutionLog.job_type.like("notification_%")),
+            )
             .order_by(JobExecutionLog.queued_at.asc())
             .limit(1)
             .with_for_update(skip_locked=True)

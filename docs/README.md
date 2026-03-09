@@ -34,6 +34,7 @@ This folder contains the working documentation set for Helly v1.
 - [HELLY_V1_VOICE_AND_TONE_GUIDE.md](./HELLY_V1_VOICE_AND_TONE_GUIDE.md): canonical voice rules for making Helly sound like a sharp, warm recruiter from the IT world.
 - [HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md](./HELLY_V1_CONVERSATION_POLISH_TASK_LIST.md): ordered execution list for prompt tuning, message choreography, local conversational memory, and live transcript polish.
 - [HELLY_V1_CONVERSATION_REVIEW_FINDINGS.md](./HELLY_V1_CONVERSATION_REVIEW_FINDINGS.md): transcript-derived top conversational issues, mapped to prompt, stage-agent, or runtime fixes.
+- [HELLY_V1_SYNTHETIC_PHASE_L_RESULTS.md](./HELLY_V1_SYNTHETIC_PHASE_L_RESULTS.md): reproducible synthetic live-runtime results for the remaining high-risk Phase L stage-ownership scenarios.
 - [HELLY_V1_FINAL_STRETCH_TASKS.md](./HELLY_V1_FINAL_STRETCH_TASKS.md): the final ordered checklist from near-complete implementation to a validated v1 release candidate.
 
 ## Delivery Planning

@@ -1342,14 +1342,6 @@ class TelegramUpdateService:
                     ),
                 ),
                 (
-                    {"text"},
-                    lambda: self._maybe_handle_graph_help(
-                        user=user,
-                        latest_user_message=normalized_update.text or "",
-                        user_id=user.id,
-                    ),
-                ),
-                (
                     {"text", "document", "voice", "video"},
                     lambda: self._apply_manager_intake_segment(
                         user=user,

@@ -22,7 +22,8 @@ Before running live smoke checks:
 3. The Telegram webhook must point to the live validation base URL used in step 1, ending with `/telegram/webhook`.
 4. You must know the tester `telegram_user_id` or `telegram_chat_id`.
 5. The tester's old rows should be cleared if you want a clean onboarding run.
-6. Before attempting automated Phase L checks, run:
+6. If Supabase session-pooler starts rejecting local validation scripts with `MaxClientsInSessionMode`, run those scripts with `DB_USE_NULL_POOL=1`.
+7. Before attempting automated Phase L checks, run:
    - `.venv/bin/python scripts/report_phase_l_readiness.py`
 7. Treat Phase L readiness in two modes:
    - `can_validate_after_real_user_input`: live DB/log validation can run after you manually send the Telegram message
@@ -62,9 +63,14 @@ Useful tools:
 - reset a tester to a clean slate:
   - dry-run: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id>`
   - execute: `.venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
+- force local validation tooling to avoid holding pooled DB connections:
+  - `DB_USE_NULL_POOL=1 .venv/bin/python scripts/reset_telegram_user.py --telegram-user-id <id> --execute`
 - replay a synthetic Telegram update directly through the live runtime without the webhook endpoint:
   - `.venv/bin/python scripts/replay_telegram_update.py --telegram-user-id <id> --text "/start" --username <telegram_username>`
   - useful when `TELEGRAM_WEBHOOK_SECRET` is not available locally but you still need to exercise the same stage-agent/runtime path against live Supabase data
+- run the remaining Phase L scenarios synthetically through the live runtime:
+  - `DB_USE_NULL_POOL=1 .venv/bin/python scripts/run_phase_l_synthetic.py --scenario all`
+  - useful when manual Telegram proof is not available yet but you still need a reproducible runtime-level check for the most failure-prone stage-agent scenarios
 
 Conversation review artifact:
 

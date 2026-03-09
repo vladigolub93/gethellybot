@@ -1,4 +1,4 @@
-.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state validate-stage-help-safety validate-no-post-message-transition validate-graph-stage-logs validate-live-stage-checkpoint validate-live-scenario validate-phase-l report-phase-l-readiness reset-telegram-user report-telegram-user watch-telegram-user check-telegram-user-checkpoint export-telegram-conversation review-conversation-quality replay-telegram-update
+.PHONY: run-api run-worker run-scheduler test db-upgrade db-current docker-build docker-test validate-production inspect-telegram-user validate-telegram-user-state validate-stage-help-safety validate-no-post-message-transition validate-graph-stage-logs validate-live-stage-checkpoint validate-live-scenario validate-phase-l report-phase-l-readiness reset-telegram-user report-telegram-user watch-telegram-user check-telegram-user-checkpoint export-telegram-conversation review-conversation-quality replay-telegram-update run-phase-l-synthetic
 
 run-api:
 	uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
@@ -69,6 +69,9 @@ review-conversation-quality:
 
 replay-telegram-update:
 	.venv/bin/python scripts/replay_telegram_update.py --telegram-user-id $(TELEGRAM_USER_ID)
+
+run-phase-l-synthetic:
+	DB_USE_NULL_POOL=1 .venv/bin/python scripts/run_phase_l_synthetic.py --scenario $(SCENARIO)
 
 db-upgrade:
 	alembic upgrade head
