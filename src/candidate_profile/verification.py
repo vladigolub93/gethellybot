@@ -1,28 +1,31 @@
-PHRASE_WORDS_ONE = (
-    "north",
-    "silver",
-    "bright",
-    "rapid",
-    "clear",
-    "steady",
-    "open",
-    "strong",
-)
+from __future__ import annotations
 
-PHRASE_WORDS_TWO = (
-    "signal",
-    "bridge",
-    "planet",
-    "harbor",
-    "rocket",
-    "forest",
-    "anchor",
-    "vector",
+import secrets
+
+VERIFICATION_PHRASES = (
+    "green deploy",
+    "clean merge",
+    "fast commit",
+    "dark mode",
+    "cache hit",
+    "safe rollback",
+    "zero downtime",
+    "hotfix ready",
+    "backend online",
+    "frontend shipped",
+    "cloud sync",
+    "stable build",
+    "async queue",
+    "solid release",
+    "smart webhook",
+    "quick deploy",
+    "clean branch",
+    "prod is green",
+    "tiny hotfix",
+    "sync complete",
 )
 
 
 def build_verification_phrase(*, profile_id, attempt_no: int) -> str:
-    seed = str(profile_id).replace("-", "")
-    first_index = int(seed[:4], 16) % len(PHRASE_WORDS_ONE)
-    second_index = int(seed[-4:], 16) % len(PHRASE_WORDS_TWO)
-    return f"Helly verification {attempt_no}: {PHRASE_WORDS_ONE[first_index]} {PHRASE_WORDS_TWO[second_index]}"
+    del profile_id, attempt_no
+    return f"Helly check: {secrets.choice(VERIFICATION_PHRASES)}"
