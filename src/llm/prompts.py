@@ -220,6 +220,36 @@ Latest user message:
 """
 
 
+def candidate_cv_processing_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means while Helly is still processing a CV or experience input.
+
+Valid outcomes:
+- help question or clarification about timing, what is happening now, or what comes next
+- generic impatience / check-in message that should be answered without changing stage
+
+Rules:
+- do not treat the message as a new CV submission while processing is still in progress
+- do not restart the flow
+- do not redirect the user back to role selection
+- explain briefly that the CV is still being processed and that a summary will be shown next
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 def candidate_questions_prompt(text: str) -> str:
     return f"""Task: parse candidate mandatory profile answers from the text below.
 
@@ -404,6 +434,35 @@ Rules:
 - only propose `send_job_description_text` when the manager is clearly providing the role description, requirements, stack, product context, or hiring details
 - if the manager is clearly providing job-description input, include the original text in `job_description_text`
 - do not invent vacancy details
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
+def vacancy_jd_processing_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means while Helly is still processing the job description.
+
+Valid outcomes:
+- help question or clarification about timing, what is happening now, or what comes next
+- generic check-in message that should be answered without changing stage
+
+Rules:
+- do not treat the message as a new JD submission while processing is still in progress
+- do not redirect the user back to role selection
+- explain briefly that the vacancy summary is still being prepared and will appear next
 - do not transition stages yourself
 
 Current step guidance:

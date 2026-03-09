@@ -112,6 +112,35 @@ def test_graph_manager_stage_allows_passthrough_for_real_jd_text() -> None:
     assert "Senior Python engineer" in result.structured_payload["job_description_text"]
 
 
+def test_graph_manager_stage_handles_jd_processing_question() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v2p", state="JD_PROCESSING")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m2p",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="?",
+    )
+
+    assert result is not None
+    assert result.stage == "JD_PROCESSING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+    assert "summary" in result.reply_text.lower() or "process" in result.reply_text.lower()
+
+
 def test_graph_manager_stage_handles_clarification_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

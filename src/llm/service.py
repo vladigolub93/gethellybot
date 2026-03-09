@@ -16,6 +16,7 @@ from src.llm.prompts import (
     STATE_ASSISTANCE_SYSTEM_PROMPT,
     bot_controller_prompt,
     candidate_cv_decision_prompt,
+    candidate_cv_processing_decision_prompt,
     contact_required_decision_prompt,
     role_selection_decision_prompt,
     candidate_rerank_prompt,
@@ -43,6 +44,7 @@ from src.llm.prompts import (
     small_talk_prompt,
     vacancy_clarification_decision_prompt,
     vacancy_intake_decision_prompt,
+    vacancy_jd_processing_decision_prompt,
     vacancy_open_decision_prompt,
     vacancy_clarifications_prompt,
     vacancy_inconsistency_detect_prompt,
@@ -54,6 +56,7 @@ from src.llm.state_assistance import state_assistance_prompt
 from src.llm.schemas import (
     BotControllerDecisionSchema,
     CandidateCvDecisionSchema,
+    CandidateCvProcessingDecisionSchema,
     CandidateRerankSchema,
     CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
@@ -78,6 +81,7 @@ from src.llm.schemas import (
     VacancyClarificationDecisionSchema,
     VacancyInconsistencySchema,
     VacancyIntakeDecisionSchema,
+    VacancyJdProcessingDecisionSchema,
     VacancyOpenDecisionSchema,
     VacancyClarificationSchema,
     VacancySummaryReviewDecisionSchema,
@@ -507,6 +511,37 @@ def candidate_cv_decision_with_llm(
     )
 
 
+def candidate_cv_processing_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateCvProcessingDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("candidate", "cv_processing_decision"),
+        user_prompt=candidate_cv_processing_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_cv_processing_decision_llm_v1",
+    )
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": None,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def parse_candidate_questions_with_llm(text: str) -> LLMResult:
     result = _client.parse(
         schema=CandidateQuestionParseSchema,
@@ -903,6 +938,37 @@ def vacancy_intake_decision_with_llm(
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
             "job_description_text": job_description_text,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def vacancy_jd_processing_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=VacancyJdProcessingDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("vacancy", "jd_processing_decision"),
+        user_prompt=vacancy_jd_processing_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="vacancy_jd_processing_decision_llm_v1",
+    )
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": None,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -2164,6 +2230,38 @@ def safe_candidate_cv_decision(
     )
 
 
+def safe_candidate_cv_processing_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_cv_processing_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_cv_processing_decision_fallback", error=str(exc))
+
+    return LLMResult(
+        payload={
+            "intent": "processing_wait",
+            "response_text": current_step_guidance
+            or "Still on it. I’m parsing your CV and I’ll send the summary here as soon as it’s ready.",
+            "proposed_action": None,
+            "keep_current_state": True,
+            "needs_follow_up": True,
+            "reason_code": "candidate_cv_processing_wait_fallback",
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_cv_processing_decision_v1",
+    )
+
+
 def safe_vacancy_intake_decision(
     session,
     *,
@@ -2237,6 +2335,38 @@ def safe_vacancy_intake_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_vacancy_intake_decision_v1",
+    )
+
+
+def safe_vacancy_jd_processing_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return vacancy_jd_processing_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("vacancy_jd_processing_decision_fallback", error=str(exc))
+
+    return LLMResult(
+        payload={
+            "intent": "processing_wait",
+            "response_text": current_step_guidance
+            or "Still working on it. I’m turning the job description into a short vacancy summary now.",
+            "proposed_action": None,
+            "keep_current_state": True,
+            "needs_follow_up": True,
+            "reason_code": "vacancy_jd_processing_wait_fallback",
+        },
+        model_name="baseline-deterministic",
+        prompt_version="baseline_vacancy_jd_processing_decision_v1",
     )
 
 

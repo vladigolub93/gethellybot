@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "properties": {
+    "intent": { "type": "string" },
+    "response_text": { "type": ["string", "null"] },
+    "proposed_action": { "type": ["string", "null"] },
+    "keep_current_state": { "type": "boolean" },
+    "needs_follow_up": { "type": "boolean" },
+    "reason_code": { "type": ["string", "null"] }
+  },
+  "required": ["intent", "keep_current_state", "needs_follow_up"]
+}

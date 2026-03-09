@@ -5,6 +5,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_candidate_cv_decision,
+    safe_candidate_cv_processing_decision,
     safe_candidate_ready_decision,
     safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
@@ -65,6 +66,22 @@ def build_candidate_stage_detect_node(session):
                 state.structured_payload = {"cv_text": payload.get("cv_text")}
             else:
                 state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
+        if state.active_stage == "CV_PROCESSING":
+            decision = safe_candidate_cv_processing_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=_combined_recent_context(state),
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            state.parsed_input["intent"] = "help"
             if payload.get("needs_follow_up"):
                 state.follow_up_needed = True
                 state.follow_up_question = payload.get("response_text")
@@ -243,6 +260,10 @@ def build_candidate_stage_detect_node(session):
 def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "CV_PENDING":
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
+    elif state.active_stage == "CV_PROCESSING":
         state.intent = "help"
         state.parsed_input["intent"] = "help"
         return state

@@ -1,0 +1,7 @@
+- name: timing_question
+  input: "How long will this take?"
+  expected_intent: "processing_wait"
+
+- name: impatient_ping
+  input: "?"
+  expected_intent: "processing_wait"

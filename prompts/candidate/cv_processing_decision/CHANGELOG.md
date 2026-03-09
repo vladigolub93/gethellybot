@@ -1,0 +1,1 @@
+- v1: initial prompt family for CV processing stage

@@ -1216,6 +1216,14 @@ class TelegramUpdateService:
             )
             if manager_intake_templates is not None:
                 return manager_intake_templates
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or "",
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
             return None
         return self._handle_manager_intake_message(
             user=user,

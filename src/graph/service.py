@@ -62,6 +62,7 @@ class LangGraphStageAgentService:
     SHARED_STAGES = {"DELETE_CONFIRMATION"}
     CANDIDATE_STAGES = {
         "CV_PENDING",
+        "CV_PROCESSING",
         "SUMMARY_REVIEW",
         "QUESTIONS_PENDING",
         "VERIFICATION_PENDING",
@@ -71,6 +72,7 @@ class LangGraphStageAgentService:
     }
     MANAGER_STAGES = {
         "INTAKE_PENDING",
+        "JD_PROCESSING",
         "VACANCY_SUMMARY_REVIEW",
         "CLARIFICATION_QA",
         "OPEN",

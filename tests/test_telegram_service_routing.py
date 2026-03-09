@@ -3716,3 +3716,73 @@ def test_unsupported_document_input_uses_recovery_for_user_without_active_role_f
     assert templates == ["unsupported_input"]
     assert service.notifications_repo.calls[-1]["template_key"] == "unsupported_input"
     assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Choose your role."
+
+
+def test_candidate_cv_processing_question_uses_processing_help_not_role_recovery() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="CV_PROCESSING",
+            reply_text="Still on it. I’m parsing the CV and I’ll send the summary next.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.candidate_service = FakeCandidateService()
+
+    user = SimpleNamespace(
+        id="u16",
+        phone_number="+123",
+        username="testuser",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw16",
+        build_update(text="?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    text = service.notifications_repo.calls[-1]["payload_json"]["text"].lower()
+    assert "summary" in text
+    assert "hiring manager" not in text
+
+
+def test_manager_jd_processing_question_uses_processing_help_not_role_recovery() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="JD_PROCESSING",
+            reply_text="Still working on it. I’m turning the JD into a vacancy summary now.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.vacancy_service = FakeVacancyService()
+
+    user = SimpleNamespace(
+        id="u17",
+        phone_number="+123",
+        username="testuser",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw17",
+        build_update(text="?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert "vacancy summary" in service.notifications_repo.calls[-1]["payload_json"]["text"].lower()

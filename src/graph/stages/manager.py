@@ -5,6 +5,7 @@ from src.llm.service import (
     safe_manager_review_decision,
     safe_parse_vacancy_clarifications,
     safe_vacancy_clarification_decision,
+    safe_vacancy_jd_processing_decision,
     safe_state_assistance_decision,
     safe_vacancy_intake_decision,
     safe_vacancy_open_decision,
@@ -62,6 +63,22 @@ def build_manager_stage_detect_node(session):
                 state.structured_payload = {"job_description_text": payload.get("job_description_text")}
             else:
                 state.structured_payload = {}
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
+        if state.active_stage == "JD_PROCESSING":
+            decision = safe_vacancy_jd_processing_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=_combined_recent_context(state),
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            state.parsed_input["intent"] = "help"
             if payload.get("needs_follow_up"):
                 state.follow_up_needed = True
                 state.follow_up_question = payload.get("response_text")
@@ -171,6 +188,10 @@ def build_manager_stage_detect_node(session):
 def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
     text = state.latest_user_message or ""
     if state.active_stage == "INTAKE_PENDING":
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
+    if state.active_stage == "JD_PROCESSING":
         state.intent = "help"
         state.parsed_input["intent"] = "help"
         return state
