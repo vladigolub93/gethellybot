@@ -454,6 +454,7 @@ class CandidateProfileService:
         if current_question_key not in QUESTION_KEYS:
             current_question_key = missing_before[0] if missing_before else None
 
+        parsed = self._filter_question_payload(parsed, current_question_key)
         if parsed:
             self.repo.update_question_answers(profile, **parsed)
 
@@ -501,6 +502,18 @@ class CandidateProfileService:
             notification_template="candidate_questions_missing",
             notification_text=question_prompt(next_question_key),
         )
+
+    def _filter_question_payload(self, parsed: dict, current_question_key: str | None) -> dict:
+        if not parsed or current_question_key is None:
+            return dict(parsed or {})
+
+        allowed_by_question = {
+            "salary": {"salary_min", "salary_max", "salary_currency", "salary_period"},
+            "location": {"location_text", "city", "country_code"},
+            "work_format": {"work_format"},
+        }
+        allowed_keys = allowed_by_question.get(current_question_key, set())
+        return {key: value for key, value in parsed.items() if key in allowed_keys}
 
     def _missing_question_keys(self, profile) -> list[str]:
         missing = []

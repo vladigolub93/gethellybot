@@ -402,6 +402,7 @@ class VacancyService:
         if current_question_key not in QUESTION_KEYS:
             current_question_key = missing_before[0] if missing_before else None
 
+        parsed = self._filter_clarification_payload(parsed, current_question_key)
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
             confirmed_fields.update(self._answered_clarification_keys(parsed))
@@ -461,6 +462,21 @@ class VacancyService:
             notification_template="vacancy_clarification_missing",
             notification_text=question_prompt(next_question_key),
         )
+
+    def _filter_clarification_payload(self, parsed: dict, current_question_key: str | None) -> dict:
+        if not parsed or current_question_key is None:
+            return dict(parsed or {})
+
+        allowed_by_question = {
+            "budget": {"budget_min", "budget_max", "budget_currency", "budget_period"},
+            "work_format": {"work_format"},
+            "countries": {"countries_allowed_json"},
+            "team_size": {"team_size"},
+            "project_description": {"project_description"},
+            "primary_tech_stack": {"primary_tech_stack_json"},
+        }
+        allowed_keys = allowed_by_question.get(current_question_key, set())
+        return {key: value for key, value in parsed.items() if key in allowed_keys}
 
     def _missing_clarification_keys(self, vacancy, *, confirmed_fields: set[str] | None = None) -> list[str]:
         if confirmed_fields is not None:

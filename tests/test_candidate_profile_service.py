@@ -428,8 +428,11 @@ def test_questions_answer_completion_moves_profile_to_verification_pending() -> 
     )
 
     assert result is not None
-    assert result.status == "completed"
-    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+    assert result.status == "next_question"
+    assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
+    assert "current location" in result.notification_text.lower()
+    assert profile.salary_min == 5000
+    assert profile.questions_context_json["current_question_key"] == "location"
 
 
 def test_questions_answer_asks_next_question_in_sequence() -> None:
@@ -469,6 +472,48 @@ def test_questions_answer_asks_next_question_in_sequence() -> None:
     assert profile.salary_min == 4500
 
 
+def test_questions_payload_filters_to_current_question_only() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_questions_context(
+        profile,
+        {
+            "follow_up_used": {"salary": False, "location": False, "work_format": False},
+            "current_question_key": "salary",
+        },
+    )
+
+    result = service.handle_questions_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "salary_min": 4500,
+            "salary_currency": "USD",
+            "salary_period": "month",
+            "location_text": "Kyiv, Ukraine",
+            "city": "Kyiv",
+            "country_code": "UA",
+            "work_format": "remote",
+        },
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "current location" in result.notification_text.lower()
+    assert profile.questions_context_json["current_question_key"] == "location"
+    assert profile.salary_min == 4500
+    assert getattr(profile, "location_text", None) is None
+    assert getattr(profile, "work_format", None) is None
+
+
 def test_questions_answer_requests_follow_up_when_partial() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()
@@ -489,9 +534,10 @@ def test_questions_answer_requests_follow_up_when_partial() -> None:
     )
 
     assert result is not None
-    assert result.status == "follow_up"
+    assert result.status == "incomplete"
     assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
-    assert profile.location_text is not None
+    assert "salary" in result.notification_text.lower()
+    assert getattr(profile, "location_text", None) is None
 
 
 def test_parsed_questions_payload_completion_moves_profile_to_verification_pending() -> None:
@@ -522,8 +568,10 @@ def test_parsed_questions_payload_completion_moves_profile_to_verification_pendi
     )
 
     assert result is not None
-    assert result.status == "completed"
-    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+    assert result.status == "next_question"
+    assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
+    assert profile.salary_min == 5000
+    assert profile.questions_context_json["current_question_key"] == "location"
 
 
 def test_questions_voice_answer_enqueues_processing_job() -> None:

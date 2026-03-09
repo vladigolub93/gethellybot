@@ -205,10 +205,13 @@ def test_clarification_completion_opens_vacancy() -> None:
     )
 
     assert result is not None
-    assert result.status == "completed"
-    assert vacancy.state == VACANCY_STATE_OPEN
-    assert vacancy.opened_at == "now"
-    assert len(service.queue.messages) == 1
+    assert result.status == "next_question"
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
+    assert vacancy.budget_min == 7000
+    assert vacancy.questions_context_json["current_question_key"] == "work_format"
+    assert vacancy.opened_at is None
+    assert len(service.queue.messages) == 0
 
 
 def test_vacancy_summary_review_approve_moves_to_clarifications() -> None:
@@ -427,6 +430,51 @@ def test_clarification_still_asks_project_and_stack_when_prefilled_from_summary(
     ]
 
 
+def test_clarification_payload_filters_to_current_question_only() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "countries": False,
+                "work_format": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": ["budget", "work_format", "countries"],
+            "current_question_key": "team_size",
+        },
+    )
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "team_size": 6,
+            "project_description": "Payments platform for SMB clients.",
+            "primary_tech_stack_json": ["nodejs", "redis"],
+        },
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "project" in result.notification_text.lower()
+    assert vacancy.questions_context_json["current_question_key"] == "project_description"
+    assert vacancy.team_size == 6
+    assert vacancy.project_description is None
+    assert vacancy.primary_tech_stack_json == []
+
+
 def test_parsed_clarification_payload_opens_vacancy() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()
@@ -455,8 +503,10 @@ def test_parsed_clarification_payload_opens_vacancy() -> None:
     )
 
     assert result is not None
-    assert result.status == "completed"
-    assert vacancy.state == VACANCY_STATE_OPEN
+    assert result.status == "next_question"
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert vacancy.budget_min == 7000
+    assert vacancy.questions_context_json["current_question_key"] == "work_format"
 
 
 def test_vacancy_deletion_requires_confirmation_then_soft_deletes() -> None:
