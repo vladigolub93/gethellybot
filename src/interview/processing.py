@@ -1,6 +1,6 @@
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
-from src.ingestion.service import ContentIngestionService
+from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.interview.service import InterviewService
 
 
@@ -44,6 +44,19 @@ class InterviewProcessingService:
 
             try:
                 ingestion_result = self.ingestion.ingest_raw_message(raw_message)
+            except ContentQualityError as exc:
+                NotificationsRepository(self.session).create(
+                    user_id=raw_message.user_id,
+                    entity_type="interview_session",
+                    entity_id=session.id,
+                    template_key="candidate_interview_answer_quality_retry",
+                    payload_json={"text": str(exc)},
+                )
+                return {
+                    "status": "quality_retry_required",
+                    "interview_session_id": str(session.id),
+                    "quality_reason": exc.code,
+                }
             except Exception:  # noqa: BLE001
                 NotificationsRepository(self.session).create(
                     user_id=raw_message.user_id,

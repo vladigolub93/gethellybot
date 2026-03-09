@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from src.candidate_profile.processing import CandidateProcessingService
+from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.interview.processing import InterviewProcessingService
 from src.llm.service import LLMResult
 from src.vacancy.processing import VacancyProcessingService
@@ -332,3 +333,148 @@ def test_interview_processing_transcribes_answer_before_handling() -> None:
     assert raw_message.text_content.startswith("I designed the payments")
     assert captured["text"].startswith("I designed the payments")
     assert captured["store_as_transcript"] is True
+
+
+def test_candidate_processing_returns_quality_retry_for_low_quality_document() -> None:
+    profile = SimpleNamespace(id=uuid4(), user_id=uuid4(), state="CV_PROCESSING")
+    version = SimpleNamespace(
+        id=uuid4(),
+        source_type="document_upload",
+        extracted_text=None,
+        transcript_text=None,
+        source_raw_message_id=None,
+        summary_json=None,
+        normalization_json=None,
+        approval_status="draft",
+        model_name=None,
+    )
+    service = CandidateProcessingService(SimpleNamespace())
+    service.repo = FakeCandidateRepo(profile, version)
+    service.raw_messages = FakeRawMessagesRepo(SimpleNamespace(id=uuid4(), text_content=None))
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+    service.ingestion = SimpleNamespace(
+        ingest_candidate_version=lambda _version: (_ for _ in ()).throw(
+            ContentQualityError(
+                code="pdf_low_text_density",
+                user_message="PDF looked too scan-like to trust.",
+                metadata={"quality_reason": "pdf_low_text_density"},
+            )
+        )
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="candidate_cv_extract_v1",
+            payload_json={
+                "candidate_profile_id": str(profile.id),
+                "candidate_profile_version_id": str(version.id),
+            },
+        )
+    )
+
+    assert result["status"] == "quality_retry_required"
+    assert result["quality_reason"] == "pdf_low_text_density"
+    assert version.summary_json["status"] == "quality_retry_required"
+    assert version.normalization_json["quality_reason"] == "pdf_low_text_density"
+    assert service.notifications.rows[0].template_key == "candidate_cv_quality_retry"
+    assert service.notifications.rows[0].payload_json["text"] == "PDF looked too scan-like to trust."
+
+
+def test_vacancy_processing_returns_quality_retry_for_low_quality_jd_document() -> None:
+    vacancy = SimpleNamespace(id=uuid4(), manager_user_id=uuid4(), state="JD_PROCESSING")
+    version = SimpleNamespace(
+        id=uuid4(),
+        source_type="document_upload",
+        extracted_text=None,
+        transcript_text=None,
+        source_raw_message_id=None,
+        summary_json=None,
+        normalization_json=None,
+        model_name=None,
+    )
+    service = VacancyProcessingService(SimpleNamespace())
+    service.repo = FakeVacancyRepo(vacancy, version)
+    service.raw_messages = FakeRawMessagesRepo(SimpleNamespace(id=uuid4(), text_content=None))
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+    service.ingestion = SimpleNamespace(
+        ingest_vacancy_version=lambda _version: (_ for _ in ()).throw(
+            ContentQualityError(
+                code="pdf_no_extractable_text",
+                user_message="PDF looks scanned and text extraction is unreliable.",
+                metadata={"quality_reason": "pdf_no_extractable_text"},
+            )
+        )
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="vacancy_jd_extract_v1",
+            payload_json={"vacancy_id": str(vacancy.id), "vacancy_version_id": str(version.id)},
+        )
+    )
+
+    assert result["status"] == "quality_retry_required"
+    assert result["quality_reason"] == "pdf_no_extractable_text"
+    assert version.summary_json["status"] == "quality_retry_required"
+    assert version.normalization_json["quality_reason"] == "pdf_no_extractable_text"
+    assert service.notifications.rows[0].template_key == "vacancy_jd_quality_retry"
+
+
+def test_interview_processing_returns_quality_retry_for_noisy_voice_answer() -> None:
+    interview_session = SimpleNamespace(id=uuid4(), state="IN_PROGRESS")
+    raw_message = SimpleNamespace(
+        id=uuid4(),
+        user_id=uuid4(),
+        text_content=None,
+        content_type="voice",
+        file_id=uuid4(),
+    )
+    service = InterviewProcessingService(FakeSessionForInterviewProcessing(interview_session))
+    service.raw_messages = FakeRawMessagesRepo(raw_message)
+    service.ingestion = SimpleNamespace(
+        ingest_raw_message=lambda _raw_message: (_ for _ in ()).throw(
+            ContentQualityError(
+                code="transcription_low_confidence",
+                user_message="The transcript came out too noisy to trust.",
+                metadata={"quality_reason": "transcription_low_confidence"},
+            )
+        )
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            job_type="interview_answer_process_v1",
+            payload_json={
+                "interview_session_id": str(interview_session.id),
+                "raw_message_id": str(raw_message.id),
+            },
+        )
+    )
+
+    assert result["status"] == "quality_retry_required"
+    assert result["quality_reason"] == "transcription_low_confidence"
+
+
+def test_transcription_quality_detector_flags_sparse_noisy_transcript() -> None:
+    service = ContentIngestionService(SimpleNamespace())
+    quality = service._assess_transcription_quality(  # noqa: SLF001
+        response=SimpleNamespace(duration=18, segments=[{"avg_logprob": -1.6, "no_speech_prob": 0.62}]),
+        text="Yes sure",
+    )
+
+    assert quality["quality_status"] == "retry_required"
+    assert quality["quality_reason"] in {
+        "transcription_low_density",
+        "transcription_low_confidence",
+        "transcription_high_no_speech",
+    }
+
+
+def test_pdf_low_text_density_heuristic_flags_scanned_like_documents() -> None:
+    assert ContentIngestionService._looks_like_low_text_density_pdf(text_length=0, page_count=2) is True  # noqa: SLF001
+    assert ContentIngestionService._looks_like_low_text_density_pdf(text_length=120, page_count=3) is True  # noqa: SLF001
+    assert ContentIngestionService._looks_like_low_text_density_pdf(text_length=1800, page_count=2) is False  # noqa: SLF001

@@ -216,8 +216,9 @@ Status vs SRS:
 
 ### What is missing
 
-- `Not Implemented`: OCR-style handling for image-only CVs
-- `Not Implemented`: stronger quality controls for noisy or multilingual transcripts
+- `Implemented`: low-confidence or sparse voice/video transcripts now trigger a quality-retry path instead of silently continuing with weak text
+- `Implemented`: scanned or low-text-density CV documents now trigger a quality-retry path instead of silently continuing with weak extraction
+- `Not Implemented`: a full OCR extraction pipeline for image-only CVs
 
 Status vs SRS:
 
@@ -250,11 +251,12 @@ Status vs SRS:
 
 ### What is only partial
 
-- `Partial`: extraction and inconsistency analysis are OpenAI-backed, but transcript/document quality controls are still baseline-level
+- `Partial`: extraction and inconsistency analysis are OpenAI-backed, while a full OCR pipeline for image-only job descriptions is still not implemented
 
 ### What is missing
 
-- `Not Implemented`: OCR-style handling for scanned/image-heavy job descriptions
+- `Implemented`: scanned or low-text-density job description documents now trigger a quality-retry path instead of silently continuing with weak extraction
+- `Not Implemented`: a full OCR extraction pipeline for image-only job descriptions
 
 Status vs SRS:
 
@@ -323,7 +325,7 @@ Status vs SRS:
 
 ### What is missing
 
-- `Not Implemented`: transcript confidence scoring and retry/escalation strategy for low-quality media
+- `Implemented`: low-confidence interview voice/video answers now trigger a quality-retry path instead of being treated as valid answer text
 - `Not Implemented`: richer time-based reminder / expiration-aware wave policy with configurable tuning, delivery variants, and escalation rules
 
 Status vs SRS:
@@ -471,7 +473,7 @@ Current reality:
 - runtime now uses active prompt execution for extraction, parsing, interview planning, interview conducting, reranking, inconsistency detection, deletion confirmation, and evaluation
 - deterministic Python logic still exists as a runtime fallback layer
 
-The largest remaining gap is no longer prompt execution, multimodal ingestion, or basic deletion hygiene. It is stronger quality controls around transcription/document extraction, richer product UX, and production-grade operational hardening.
+The largest remaining gap is no longer prompt execution, multimodal ingestion, or basic deletion hygiene. It is now richer product UX iteration from live conversations and production-grade operational hardening.
 
 Recent stage-ownership progress:
 
@@ -507,6 +509,8 @@ Recent stage-ownership progress:
 - replay tooling now drains only entity-relevant non-notification jobs during synthetic validation, avoiding false failures caused by unrelated queued jobs from the global worker queue.
 - synthetic validation uncovered and fixed a real transport bug where manager `INTAKE_PENDING` text actions could be shadowed by generic graph-help routing before vacancy intake execution.
 - synthetic live-runtime results are now documented in `HELLY_V1_SYNTHETIC_PHASE_L_RESULTS.md`, including validated candidate `SUMMARY_REVIEW`, candidate `QUESTIONS_PENDING`, and manager `VACANCY_SUMMARY_REVIEW` scenarios.
+- ingestion now has an explicit quality-aware contract: low-confidence voice/video transcripts and low-text-density scanned documents are detected early and routed into user-friendly retry paths instead of being processed as if they were trustworthy inputs.
+- candidate, vacancy, and interview processing now treat those quality issues as user-retry scenarios rather than failed background jobs, and persist quality metadata on candidate/vacancy versions when summary extraction cannot proceed safely.
 
 ## 7. Production Readiness Assessment
 
@@ -518,12 +522,13 @@ Recent stage-ownership progress:
 - Supabase schema
 - worker/scheduler orchestration
 - end-to-end AI-assisted baseline flows
+- quality-aware transcript and scanned-document retry handling
 
 ### Not ready yet for full product claims
 
 - richer manager introduction workflow
 - production observability and retention policies
-- stronger transcript/document quality control and cleanup automation
+- final live validation close-out and cleanup automation
 
 ## 8. What Is Truly Done vs Not Done
 
@@ -538,19 +543,20 @@ Recent stage-ownership progress:
 - deletion confirmation and soft-delete flows
 - deletion cleanup jobs for notifications and related files
 - asynchronous notification and file storage pipeline
+- quality-aware transcript/document ingestion gates
 
 ### Still major work
 
 - improve Telegram UX with buttons and richer guidance
-- add stronger transcript/document quality control and OCR handling
 - build production-grade smoke/e2e validation around live user flows
+- continue transcript-driven conversation polish from real user traffic
 
 ## 9. Recommended Next Build Priorities
 
 Recommended order from here:
 
 1. Improve Telegram UX and manager introduction flow.
-2. Add stronger transcript/document quality control and OCR handling.
-3. Add stronger readiness checks, metrics, and operational dashboards.
-4. Expand live smoke/e2e coverage against Railway + Supabase.
+2. Add stronger readiness checks, metrics, and operational dashboards.
+3. Expand live smoke/e2e coverage against Railway + Supabase.
+4. Continue transcript-driven conversation polish from real user traffic.
 5. Add richer retention-window automation beyond immediate delete cleanup.

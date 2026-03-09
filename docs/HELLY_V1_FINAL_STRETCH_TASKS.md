@@ -28,8 +28,8 @@ The focus is no longer core architecture. The focus is:
 10. Map each robotic turn to either a prompt fix, stage-agent decision fix, or runtime microcopy fix. Completed.
 11. Apply one more targeted conversation-polish pass based on those real transcript findings. Completed.
 12. Re-run the live Telegram smoke scenarios after that polish pass.
-13. Add stronger transcript quality controls for noisy or low-confidence voice/video cases.
-14. Add stronger OCR / scanned-document quality handling and then perform the final documentation and production-readiness close-out.
+13. Add stronger transcript quality controls for noisy or low-confidence voice/video cases. Completed.
+14. Add stronger OCR / scanned-document quality handling and then perform the final documentation and production-readiness close-out. Completed for the quality-handling portion; only final production close-out remains.
 
 ## Exit Condition
 

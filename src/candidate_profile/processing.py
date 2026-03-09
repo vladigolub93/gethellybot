@@ -8,7 +8,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.candidate_profile.service import CandidateProfileService
 from src.embeddings.service import EmbeddingService
-from src.ingestion.service import ContentIngestionService
+from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.llm.service import safe_extract_candidate_summary, safe_merge_candidate_summary
 from src.state.service import StateService
 from src.telegram.keyboards import summary_review_keyboard
@@ -47,6 +47,37 @@ class CandidateProcessingService:
         if not source_text:
             try:
                 ingestion_result = self.ingestion.ingest_candidate_version(version)
+            except ContentQualityError as exc:
+                self.repo.update_version_analysis(
+                    version,
+                    summary_json={
+                        "status": "quality_retry_required",
+                        "source_type": version.source_type,
+                        "quality_reason": exc.code,
+                    },
+                    normalization_json={
+                        "processor": "quality_gate_candidate_cv_extract_v1",
+                        "ingestion_ready": False,
+                        "quality_status": "retry_required",
+                        "quality_reason": exc.code,
+                        "quality_metadata": exc.metadata,
+                    },
+                    approval_status="quality_retry_required",
+                    model_name="quality-gate",
+                )
+                self.notifications.create(
+                    user_id=profile.user_id,
+                    entity_type="candidate_profile",
+                    entity_id=profile.id,
+                    template_key="candidate_cv_quality_retry",
+                    payload_json={"text": str(exc)},
+                )
+                return {
+                    "status": "quality_retry_required",
+                    "candidate_profile_id": str(profile.id),
+                    "candidate_profile_version_id": str(version.id),
+                    "quality_reason": exc.code,
+                }
             except Exception:  # noqa: BLE001
                 self.repo.update_version_analysis(
                     version,
@@ -216,6 +247,20 @@ class CandidateProcessingService:
         if not question_text:
             try:
                 ingestion_result = self.ingestion.ingest_raw_message(raw_message)
+            except ContentQualityError as exc:
+                self.notifications.create(
+                    user_id=profile.user_id,
+                    entity_type="candidate_profile",
+                    entity_id=profile.id,
+                    template_key="candidate_questions_quality_retry",
+                    payload_json={"text": str(exc)},
+                )
+                return {
+                    "status": "quality_retry_required",
+                    "candidate_profile_id": str(profile.id),
+                    "raw_message_id": str(raw_message.id),
+                    "quality_reason": exc.code,
+                }
             except Exception:  # noqa: BLE001
                 self.notifications.create(
                     user_id=profile.user_id,

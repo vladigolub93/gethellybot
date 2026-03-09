@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional
+from statistics import mean
+from typing import Any, Optional
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
@@ -27,6 +28,16 @@ class IngestionResult:
     mode: str
     source: str
     metadata: dict
+
+
+@dataclass(frozen=True)
+class ContentQualityError(ValueError):
+    code: str
+    user_message: str
+    metadata: dict
+
+    def __str__(self) -> str:
+        return self.user_message
 
 
 class ContentIngestionService:
@@ -166,21 +177,69 @@ class ContentIngestionService:
                 text=text,
                 mode="document_extract",
                 source="document_text",
-                metadata={**download_metadata, "parser": "plain_text", "extension": extension or None},
+                metadata={
+                    **download_metadata,
+                    "parser": "plain_text",
+                    "extension": extension or None,
+                    "quality_status": "ok",
+                },
             )
 
         if extension == "pdf" or mime_type == "application/pdf":
             from pypdf import PdfReader
 
             reader = PdfReader(BytesIO(content))
-            text = "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+            page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
+            text = "\n\n".join(part for part in page_texts if part).strip()
+            page_count = len(reader.pages)
+            text_length = len(text)
+            avg_chars_per_page = round(text_length / max(page_count, 1), 2)
             if not text:
-                raise ValueError("PDF extraction produced empty text.")
+                raise ContentQualityError(
+                    code="pdf_no_extractable_text",
+                    user_message=(
+                        "I saved the PDF, but it looks like a scanned or image-based file, so I couldn't pull reliable text from it. "
+                        "Best move: send a text-based PDF/DOCX, paste the CV here, or send a short voice note."
+                    ),
+                    metadata={
+                        **download_metadata,
+                        "parser": "pypdf",
+                        "page_count": page_count,
+                        "text_length": text_length,
+                        "avg_chars_per_page": avg_chars_per_page,
+                        "quality_status": "retry_required",
+                        "quality_reason": "pdf_no_extractable_text",
+                    },
+                )
+            if self._looks_like_low_text_density_pdf(text_length=text_length, page_count=page_count):
+                raise ContentQualityError(
+                    code="pdf_low_text_density",
+                    user_message=(
+                        "I pulled only a tiny amount of text from that PDF, so it probably won't give a trustworthy summary. "
+                        "If you can, send a text-based PDF/DOCX, paste the text here, or drop a quick voice note."
+                    ),
+                    metadata={
+                        **download_metadata,
+                        "parser": "pypdf",
+                        "page_count": page_count,
+                        "text_length": text_length,
+                        "avg_chars_per_page": avg_chars_per_page,
+                        "quality_status": "retry_required",
+                        "quality_reason": "pdf_low_text_density",
+                    },
+                )
             return IngestionResult(
                 text=text,
                 mode="document_extract",
                 source="document_pdf",
-                metadata={**download_metadata, "parser": "pypdf", "page_count": len(reader.pages)},
+                metadata={
+                    **download_metadata,
+                    "parser": "pypdf",
+                    "page_count": page_count,
+                    "text_length": text_length,
+                    "avg_chars_per_page": avg_chars_per_page,
+                    "quality_status": "ok",
+                },
             )
 
         if extension == "docx" or mime_type in {
@@ -189,12 +248,29 @@ class ContentIngestionService:
         }:
             text = self._extract_docx_text(content)
             if not text:
-                raise ValueError("DOCX extraction produced empty text.")
+                raise ContentQualityError(
+                    code="docx_no_extractable_text",
+                    user_message=(
+                        "I saved the DOCX, but I couldn't pull readable text from it. "
+                        "Try sending a clean DOCX/PDF, paste the text here, or send a short voice note."
+                    ),
+                    metadata={
+                        **download_metadata,
+                        "parser": "docx-xml",
+                        "quality_status": "retry_required",
+                        "quality_reason": "docx_no_extractable_text",
+                    },
+                )
             return IngestionResult(
                 text=text,
                 mode="document_extract",
                 source="document_docx",
-                metadata={**download_metadata, "parser": "docx-xml"},
+                metadata={
+                    **download_metadata,
+                    "parser": "docx-xml",
+                    "text_length": len(text),
+                    "quality_status": "ok",
+                },
             )
 
         raise ValueError(f"Unsupported document format: extension={extension!r} mime_type={mime_type!r}")
@@ -211,7 +287,39 @@ class ContentIngestionService:
         )
         text = " ".join((getattr(response, "text", "") or "").split()).strip()
         if not text:
-            raise ValueError("OpenAI transcription returned empty text.")
+            raise ContentQualityError(
+                code="transcription_empty",
+                user_message=(
+                    "I saved the voice/video, but the transcript came back empty. "
+                    "Please resend it as a cleaner voice note or just paste the key details in text."
+                ),
+                metadata={
+                    **download_metadata,
+                    "model_name": self.settings.openai_model_transcription,
+                    "file_kind": file_row.kind,
+                    "mime_type": mime_type,
+                    "extension": extension,
+                    "quality_status": "retry_required",
+                    "quality_reason": "transcription_empty",
+                },
+            )
+        quality_metadata = self._assess_transcription_quality(response=response, text=text)
+        if quality_metadata["quality_status"] != "ok":
+            raise ContentQualityError(
+                code=quality_metadata["quality_reason"],
+                user_message=(
+                    "I saved the voice/video, but the transcript looks too noisy to trust. "
+                    "Best move: resend a cleaner recording or paste the same info in text."
+                ),
+                metadata={
+                    **download_metadata,
+                    "model_name": self.settings.openai_model_transcription,
+                    "file_kind": file_row.kind,
+                    "mime_type": mime_type,
+                    "extension": extension,
+                    **quality_metadata,
+                },
+            )
         return IngestionResult(
             text=text,
             mode="transcription",
@@ -222,6 +330,7 @@ class ContentIngestionService:
                 "file_kind": file_row.kind,
                 "mime_type": mime_type,
                 "extension": extension,
+                **quality_metadata,
             },
         )
 
@@ -248,3 +357,85 @@ class ContentIngestionService:
             if text:
                 paragraphs.append(text)
         return "\n".join(paragraphs).strip()
+
+    @staticmethod
+    def _looks_like_low_text_density_pdf(*, text_length: int, page_count: int) -> bool:
+        if page_count <= 0:
+            return True
+        if page_count == 1:
+            return text_length < 80
+        avg_chars_per_page = text_length / page_count
+        return text_length < 200 or avg_chars_per_page < 80
+
+    def _assess_transcription_quality(self, *, response: Any, text: str) -> dict:
+        response_data = self._serialize_response(response)
+        duration = self._coerce_float(response_data.get("duration") or getattr(response, "duration", None))
+        segments = response_data.get("segments") or getattr(response, "segments", None) or []
+        word_count = len(text.split())
+
+        avg_logprob_values = [
+            value
+            for value in (
+                self._coerce_float(self._segment_value(segment, "avg_logprob")) for segment in segments
+            )
+            if value is not None
+        ]
+        no_speech_prob_values = [
+            value
+            for value in (
+                self._coerce_float(self._segment_value(segment, "no_speech_prob")) for segment in segments
+            )
+            if value is not None
+        ]
+
+        mean_avg_logprob = round(mean(avg_logprob_values), 4) if avg_logprob_values else None
+        mean_no_speech_prob = round(mean(no_speech_prob_values), 4) if no_speech_prob_values else None
+
+        quality_reason = None
+        if duration is not None and duration >= 12 and word_count < 5:
+            quality_reason = "transcription_low_density"
+        elif duration is not None and duration >= 8 and len(text) < 20:
+            quality_reason = "transcription_low_density"
+        elif mean_avg_logprob is not None and mean_avg_logprob <= -1.35 and word_count < 20:
+            quality_reason = "transcription_low_confidence"
+        elif mean_no_speech_prob is not None and mean_no_speech_prob >= 0.55 and word_count < 20:
+            quality_reason = "transcription_high_no_speech"
+
+        return {
+            "duration_seconds": duration,
+            "word_count": word_count,
+            "segment_count": len(segments),
+            "mean_avg_logprob": mean_avg_logprob,
+            "mean_no_speech_prob": mean_no_speech_prob,
+            "quality_status": "retry_required" if quality_reason else "ok",
+            "quality_reason": quality_reason,
+        }
+
+    @staticmethod
+    def _serialize_response(response: Any) -> dict:
+        if hasattr(response, "model_dump"):
+            try:
+                return response.model_dump()
+            except Exception:  # noqa: BLE001
+                return {}
+        if hasattr(response, "to_dict"):
+            try:
+                return response.to_dict()
+            except Exception:  # noqa: BLE001
+                return {}
+        return {}
+
+    @staticmethod
+    def _segment_value(segment: Any, key: str):
+        if isinstance(segment, dict):
+            return segment.get(key)
+        return getattr(segment, key, None)
+
+    @staticmethod
+    def _coerce_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
