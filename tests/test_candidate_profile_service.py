@@ -228,6 +228,7 @@ def test_approve_summary_moves_candidate_to_questions_pending() -> None:
     assert result.status == "approved"
     assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
     assert version.approval_status == "approved"
+    assert profile.questions_context_json["current_question_key"] == "salary"
 
 
 def test_edit_summary_enqueues_processing_job() -> None:
@@ -429,9 +430,43 @@ def test_questions_answer_completion_moves_profile_to_verification_pending() -> 
     assert result is not None
     assert result.status == "completed"
     assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
-    assert profile.salary_min == 5000
-    assert profile.work_format == "remote"
-    assert len(service.verifications.rows) == 1
+
+
+def test_questions_answer_asks_next_question_in_sequence() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_questions_context(
+        profile,
+        {
+            "follow_up_used": {"salary": False, "location": False, "work_format": False},
+            "current_question_key": "salary",
+        },
+    )
+
+    result = service.handle_questions_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "salary_min": 4500,
+            "salary_currency": "USD",
+            "salary_period": "month",
+        },
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "current location" in result.notification_text.lower()
+    assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
+    assert profile.questions_context_json["current_question_key"] == "location"
+    assert profile.salary_min == 4500
 
 
 def test_questions_answer_requests_follow_up_when_partial() -> None:

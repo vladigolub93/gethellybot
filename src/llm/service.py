@@ -1787,7 +1787,7 @@ def safe_candidate_questions_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Share your salary expectations, current location, and preferred work format. If anything is unclear, ask me and I will clarify.",
+        or "Answer the current question. I collect salary expectations, location, and work format one by one, and if anything is unclear you can ask me.",
         "proposed_action": None,
         "answer_text": None,
         "keep_current_state": True,
@@ -2438,7 +2438,7 @@ def safe_vacancy_clarification_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Share the missing vacancy details like budget, hiring countries, work format, team size, project context, and primary stack.",
+        or "Answer the current vacancy question. I collect budget, work format, countries, team size, project context, and stack one by one.",
         "proposed_action": None,
         "answer_text": None,
         "keep_current_state": True,

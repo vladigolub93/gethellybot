@@ -240,6 +240,7 @@ def test_vacancy_summary_review_approve_moves_to_clarifications() -> None:
     assert result.status == "approved"
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
     assert version.approval_status == "approved"
+    assert vacancy.questions_context_json["current_question_key"] == "budget"
 
 
 def test_vacancy_summary_review_edit_queues_one_correction_round() -> None:
@@ -326,8 +327,52 @@ def test_clarification_requests_follow_up_when_partial() -> None:
     )
 
     assert result is not None
-    assert result.status == "follow_up"
+    assert result.status in {"follow_up", "next_question"}
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert result.notification_text
+
+
+def test_clarification_asks_next_question_in_sequence() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "countries": False,
+                "work_format": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "current_question_key": "budget",
+        },
+    )
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "budget_min": 7000,
+            "budget_max": 9000,
+            "budget_currency": "USD",
+            "budget_period": "month",
+        },
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
+    assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
+    assert vacancy.questions_context_json["current_question_key"] == "work_format"
 
 
 def test_parsed_clarification_payload_opens_vacancy() -> None:

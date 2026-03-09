@@ -135,7 +135,7 @@ def build_candidate_stage_detect_node(session):
                     state.follow_up_needed = True
                     state.follow_up_question = (
                         payload.get("response_text")
-                        or "Please include your salary expectations, current location, and preferred work format."
+                        or "Answer the current question first and I’ll move to the next one."
                     )
             else:
                 state.parsed_input["intent"] = "help"

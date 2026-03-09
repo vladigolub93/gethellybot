@@ -11,6 +11,7 @@ from src.candidate_profile.question_prompts import (
     follow_up_prompt,
     initial_questions_prompt,
     missing_questions_prompt,
+    question_prompt,
 )
 from src.candidate_profile.verification import build_verification_phrase
 from src.candidate_profile.states import (
@@ -243,7 +244,9 @@ class CandidateProfileService:
                 )
 
             self.repo.mark_version_approved(current_version)
-            self.repo.update_questions_context(profile, self._ensure_questions_context(profile))
+            questions_context = self._ensure_questions_context(profile)
+            questions_context["current_question_key"] = self._next_missing_question_key(profile)
+            self.repo.update_questions_context(profile, questions_context)
             self.state_service.transition(
                 entity_type="candidate_profile",
                 entity=profile,
@@ -445,6 +448,12 @@ class CandidateProfileService:
         actor_user_id=None,
         trigger_type: str,
     ) -> CandidateQuestionsResult:
+        missing_before = self._missing_question_keys(profile)
+        questions_context = self._ensure_questions_context(profile)
+        current_question_key = questions_context.get("current_question_key")
+        if current_question_key not in QUESTION_KEYS:
+            current_question_key = missing_before[0] if missing_before else None
+
         if parsed:
             self.repo.update_question_answers(profile, **parsed)
 
@@ -469,21 +478,28 @@ class CandidateProfileService:
                 ),
             )
 
-        questions_context = self._ensure_questions_context(profile)
-        question_key = self._next_follow_up_key(questions_context, missing_keys)
-        if question_key is not None:
-            questions_context["follow_up_used"][question_key] = True
-            self.repo.update_questions_context(profile, questions_context)
+        next_question_key = missing_keys[0]
+        questions_context["current_question_key"] = next_question_key
+        self.repo.update_questions_context(profile, questions_context)
+
+        if current_question_key is not None and current_question_key in missing_before and current_question_key not in missing_keys:
+            return CandidateQuestionsResult(
+                status="next_question",
+                notification_template="candidate_questions_follow_up",
+                notification_text=question_prompt(next_question_key),
+            )
+
+        if parsed:
             return CandidateQuestionsResult(
                 status="follow_up",
                 notification_template="candidate_questions_follow_up",
-                notification_text=follow_up_prompt(question_key),
+                notification_text=follow_up_prompt(current_question_key),
             )
 
         return CandidateQuestionsResult(
             status="incomplete",
             notification_template="candidate_questions_missing",
-            notification_text=missing_questions_prompt(missing_keys),
+            notification_text=question_prompt(next_question_key),
         )
 
     def _missing_question_keys(self, profile) -> list[str]:
@@ -514,6 +530,12 @@ class CandidateProfileService:
             if not follow_up_used.get(key, False):
                 return key
         return None
+
+    def _next_missing_question_key(self, profile) -> Optional[str]:
+        missing_keys = self._missing_question_keys(profile)
+        if not missing_keys:
+            return None
+        return missing_keys[0]
 
     def execute_deletion_action(
         self,

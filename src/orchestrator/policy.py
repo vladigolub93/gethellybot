@@ -94,12 +94,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["send_salary_location_work_format"],
         assistance_prompt_slug="candidate_questions_pending",
         guidance_text=(
-            "Send your salary expectations, current location, and preferred work format "
-            "(remote, hybrid, or office). You can answer in one message."
+            "Answer the current question about your salary expectations, location, or preferred work format."
         ),
         help_text=(
-            "I need your salary expectations, current location, and preferred work format "
-            "to match you with relevant roles correctly. You can answer in one message."
+            "I collect salary expectations, location, and preferred work format one by one so matching stays clean."
         ),
         missing_requirements=["salary", "location", "work_format"],
     ),
@@ -167,12 +165,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["send_vacancy_clarifications"],
         assistance_prompt_slug="vacancy_clarification_qa",
         guidance_text=(
-            "Please provide the missing vacancy details such as budget, countries, work format, "
-            "team context, project description, and main stack."
+            "Answer the current vacancy clarification question so I can keep moving."
         ),
         help_text=(
-            "I need the missing vacancy details so Helly can match correctly. "
-            "That usually includes budget, countries, work format, team context, project description, and main stack."
+            "I collect the vacancy basics one by one before opening it: budget, work format, countries, team size, project context, and main stack."
         ),
         missing_requirements=["vacancy_clarifications"],
     ),

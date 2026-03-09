@@ -5,7 +5,7 @@ State objective:
 
 Valid ways to complete this state:
 - provide the missing vacancy details in plain text
-- answer the clarification questions in one message if convenient
+- answer the current clarification question the bot asked
 
 Typical fields still needed:
 - budget range

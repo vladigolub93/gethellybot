@@ -9,10 +9,16 @@ QUESTION_LABELS = {
 
 
 def initial_questions_prompt() -> str:
-    return (
-        "Nice. Now send me three quick things: your salary expectations, current location, "
-        "and preferred work setup (remote, hybrid, or office). One message is perfect."
-    )
+    return question_prompt("salary")
+
+
+def question_prompt(question_key: str) -> str:
+    prompts = {
+        "salary": "Nice. First, what are your salary expectations?",
+        "location": "Got it. Now tell me your current location.",
+        "work_format": "And one more thing: are you looking only for remote, or also hybrid / office?",
+    }
+    return prompts[question_key]
 
 
 def follow_up_prompt(question_key: str) -> str:
@@ -25,5 +31,6 @@ def follow_up_prompt(question_key: str) -> str:
 
 
 def missing_questions_prompt(missing_keys) -> str:
-    labels = [QUESTION_LABELS[key] for key in missing_keys]
-    return f"Still missing: {', '.join(labels)}."
+    if not missing_keys:
+        return "I have everything I need here."
+    return question_prompt(missing_keys[0])

@@ -1,7 +1,7 @@
 QUESTION_KEYS = (
     "budget",
-    "countries",
     "work_format",
+    "countries",
     "team_size",
     "project_description",
     "primary_tech_stack",
@@ -19,10 +19,19 @@ QUESTION_LABELS = {
 
 
 def initial_clarification_prompt() -> str:
-    return (
-        "Send the vacancy clarifications: budget range, countries allowed for hiring, "
-        "work format, team size, project description, and primary tech stack."
-    )
+    return question_prompt("budget")
+
+
+def question_prompt(question_key: str) -> str:
+    prompts = {
+        "budget": "Nice. First, what budget are you hiring with for this role?",
+        "work_format": "Got it. Is this remote, office, or hybrid?",
+        "countries": "Which countries are you open to hiring from?",
+        "team_size": "What is the size of the team this person would join?",
+        "project_description": "What is the project about? One or two clear sentences is enough.",
+        "primary_tech_stack": "And what is the main stack? What should I prioritize first when matching?",
+    }
+    return prompts[question_key]
 
 
 def follow_up_prompt(question_key: str) -> str:
@@ -38,5 +47,6 @@ def follow_up_prompt(question_key: str) -> str:
 
 
 def missing_questions_prompt(missing_keys) -> str:
-    labels = [QUESTION_LABELS[key] for key in missing_keys]
-    return f"Still missing: {', '.join(labels)}."
+    if not missing_keys:
+        return "I have the basics I need."
+    return question_prompt(missing_keys[0])

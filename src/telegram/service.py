@@ -498,7 +498,7 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "candidate_summary_approved": "Nice. One quick step left before matching: send your salary expectations, current location, and whether you want remote, hybrid, or office.",
+            "candidate_summary_approved": "Nice. First, what are your salary expectations?",
             "candidate_summary_edit_processing": "Got it. I’m tightening the summary now.",
             "candidate_summary_edit_limit_reached": "You’ve used the one edit pass here. Check the latest version and approve it if it looks right.",
             "candidate_summary_edit_empty": "Tell me exactly what looks off in the summary and I’ll fix it once.",
@@ -624,7 +624,7 @@ class TelegramUpdateService:
         if summary_review_result is None:
             return None
         message_map = {
-            "vacancy_summary_approved": "Nice. Next send the hiring basics in one message if you want: budget, allowed countries, work format, team size, project context, and main stack.",
+            "vacancy_summary_approved": "Nice. First, what budget are you hiring with for this role?",
             "vacancy_summary_edit_processing": "Got it. I’m updating the vacancy summary now.",
             "vacancy_summary_edit_limit_reached": "You’ve used the one edit pass here. Check the latest version and approve it if it looks right.",
             "vacancy_summary_edit_empty": "Tell me exactly what looks off in the vacancy summary and I’ll fix it once.",

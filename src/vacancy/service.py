@@ -21,6 +21,7 @@ from src.vacancy.question_prompts import (
     follow_up_prompt,
     initial_clarification_prompt,
     missing_questions_prompt,
+    question_prompt,
 )
 from src.vacancy.states import (
     VACANCY_STATE_CLARIFICATION_QA,
@@ -279,6 +280,9 @@ class VacancyService:
 
         if action == "approve_summary":
             self.repo.mark_version_approved(current_version)
+            questions_context = self._ensure_questions_context(vacancy)
+            questions_context["current_question_key"] = self._next_missing_clarification_key(vacancy)
+            self.repo.update_questions_context(vacancy, questions_context)
             self.state_service.transition(
                 entity_type="vacancy",
                 entity=vacancy,
@@ -390,6 +394,12 @@ class VacancyService:
         trigger_type: str,
         actor_user_id=None,
     ) -> VacancyClarificationResult:
+        missing_before = self._missing_clarification_keys(vacancy)
+        questions_context = self._ensure_questions_context(vacancy)
+        current_question_key = questions_context.get("current_question_key")
+        if current_question_key not in QUESTION_KEYS:
+            current_question_key = missing_before[0] if missing_before else None
+
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
 
@@ -423,31 +433,38 @@ class VacancyService:
                 notification_text=self._copy("Vacancy is now open and ready for matching."),
             )
 
-        questions_context = self._ensure_questions_context(vacancy)
-        question_key = self._next_follow_up_key(questions_context, missing_keys)
-        if question_key is not None:
-            questions_context["follow_up_used"][question_key] = True
-            self.repo.update_questions_context(vacancy, questions_context)
+        next_question_key = missing_keys[0]
+        questions_context["current_question_key"] = next_question_key
+        self.repo.update_questions_context(vacancy, questions_context)
+
+        if current_question_key is not None and current_question_key in missing_before and current_question_key not in missing_keys:
+            return VacancyClarificationResult(
+                status="next_question",
+                notification_template="vacancy_clarification_follow_up",
+                notification_text=question_prompt(next_question_key),
+            )
+
+        if parsed:
             return VacancyClarificationResult(
                 status="follow_up",
                 notification_template="vacancy_clarification_follow_up",
-                notification_text=follow_up_prompt(question_key),
+                notification_text=follow_up_prompt(current_question_key),
             )
 
         return VacancyClarificationResult(
             status="incomplete",
             notification_template="vacancy_clarification_missing",
-            notification_text=missing_questions_prompt(missing_keys),
+            notification_text=question_prompt(next_question_key),
         )
 
     def _missing_clarification_keys(self, vacancy) -> list[str]:
         missing = []
         if vacancy.budget_min is None and vacancy.budget_max is None:
             missing.append("budget")
-        if not vacancy.countries_allowed_json:
-            missing.append("countries")
         if not vacancy.work_format:
             missing.append("work_format")
+        if not vacancy.countries_allowed_json:
+            missing.append("countries")
         if vacancy.team_size is None:
             missing.append("team_size")
         if not vacancy.project_description:
@@ -470,6 +487,12 @@ class VacancyService:
             if not follow_up_used.get(key, False):
                 return key
         return None
+
+    def _next_missing_clarification_key(self, vacancy) -> Optional[str]:
+        missing_keys = self._missing_clarification_keys(vacancy)
+        if not missing_keys:
+            return None
+        return missing_keys[0]
 
     def execute_deletion_action(
         self,

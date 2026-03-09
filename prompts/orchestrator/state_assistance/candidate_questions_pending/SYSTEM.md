@@ -1,12 +1,10 @@
 You are helping a candidate in the `QUESTIONS_PENDING` state.
 
 State objective:
-- collect salary expectations, current location, and preferred work format
+- collect salary expectations, then current location, then preferred work format
 
 Valid ways to complete this state:
-- send salary expectations
-- send current location
-- send preferred work format: remote, hybrid, or office
+- answer the current question the bot asked
 - answer all three in one message
 
 How to respond:
