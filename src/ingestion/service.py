@@ -280,15 +280,22 @@ class ContentIngestionService:
         extension = (file_row.extension or "").strip().lower() or ("ogg" if file_row.kind == "voice" else "mp4")
         mime_type = file_row.mime_type or "application/octet-stream"
         filename = f"{file_row.kind or 'media'}.{extension}"
+        model_name = self.settings.openai_model_transcription
+        response_format = self._transcription_response_format(model_name)
         request_kwargs = {
             "file": (filename, content, mime_type),
-            "model": self.settings.openai_model_transcription,
-            "response_format": "verbose_json",
+            "model": model_name,
+            "response_format": response_format,
         }
+        if self._supports_transcription_logprobs(model_name, response_format):
+            request_kwargs["include"] = ["logprobs"]
         if prompt_text:
             request_kwargs["prompt"] = prompt_text
         response = self.openai.audio.transcriptions.create(**request_kwargs)
-        text = " ".join((getattr(response, "text", "") or "").split()).strip()
+        response_data = self._serialize_response(response)
+        text = " ".join(
+            (getattr(response, "text", None) or response_data.get("text") or "").split()
+        ).strip()
         if not text:
             raise ContentQualityError(
                 code="transcription_empty",
@@ -298,15 +305,21 @@ class ContentIngestionService:
                 ),
                 metadata={
                     **download_metadata,
-                    "model_name": self.settings.openai_model_transcription,
+                    "model_name": model_name,
                     "file_kind": file_row.kind,
                     "mime_type": mime_type,
                     "extension": extension,
+                    "response_format": response_format,
                     "quality_status": "retry_required",
                     "quality_reason": "transcription_empty",
                 },
             )
-        quality_metadata = self._assess_transcription_quality(response=response, text=text)
+        quality_metadata = self._assess_transcription_quality(
+            response=response,
+            response_data=response_data,
+            text=text,
+            file_row=file_row,
+        )
         if quality_metadata["quality_status"] != "ok":
             raise ContentQualityError(
                 code=quality_metadata["quality_reason"],
@@ -316,10 +329,11 @@ class ContentIngestionService:
                 ),
                 metadata={
                     **download_metadata,
-                    "model_name": self.settings.openai_model_transcription,
+                    "model_name": model_name,
                     "file_kind": file_row.kind,
                     "mime_type": mime_type,
                     "extension": extension,
+                    "response_format": response_format,
                     "transcript_text": text,
                     **quality_metadata,
                 },
@@ -330,10 +344,11 @@ class ContentIngestionService:
             source="openai_audio",
             metadata={
                 **download_metadata,
-                "model_name": self.settings.openai_model_transcription,
+                "model_name": model_name,
                 "file_kind": file_row.kind,
                 "mime_type": mime_type,
                 "extension": extension,
+                "response_format": response_format,
                 **quality_metadata,
             },
         )
@@ -371,10 +386,14 @@ class ContentIngestionService:
         avg_chars_per_page = text_length / page_count
         return text_length < 200 or avg_chars_per_page < 80
 
-    def _assess_transcription_quality(self, *, response: Any, text: str) -> dict:
-        response_data = self._serialize_response(response)
-        duration = self._coerce_float(response_data.get("duration") or getattr(response, "duration", None))
+    def _assess_transcription_quality(self, *, response: Any, response_data: dict, text: str, file_row) -> dict:
+        duration = self._coerce_float(
+            response_data.get("duration")
+            or getattr(response, "duration", None)
+            or ((getattr(file_row, "provider_metadata", None) or {}).get("duration"))
+        )
         segments = response_data.get("segments") or getattr(response, "segments", None) or []
+        logprobs = response_data.get("logprobs") or getattr(response, "logprobs", None) or []
         word_count = len(text.split())
 
         avg_logprob_values = [
@@ -391,9 +410,11 @@ class ContentIngestionService:
             )
             if value is not None
         ]
+        token_logprob_values = self._extract_logprob_values(logprobs)
 
         mean_avg_logprob = round(mean(avg_logprob_values), 4) if avg_logprob_values else None
         mean_no_speech_prob = round(mean(no_speech_prob_values), 4) if no_speech_prob_values else None
+        mean_token_logprob = round(mean(token_logprob_values), 4) if token_logprob_values else None
 
         quality_reason = None
         if duration is not None and duration >= 12 and word_count < 5:
@@ -404,6 +425,8 @@ class ContentIngestionService:
             quality_reason = "transcription_low_confidence"
         elif mean_no_speech_prob is not None and mean_no_speech_prob >= 0.55 and word_count < 20:
             quality_reason = "transcription_high_no_speech"
+        elif mean_token_logprob is not None and mean_token_logprob <= -1.35 and word_count < 20:
+            quality_reason = "transcription_low_confidence"
 
         return {
             "duration_seconds": duration,
@@ -411,9 +434,42 @@ class ContentIngestionService:
             "segment_count": len(segments),
             "mean_avg_logprob": mean_avg_logprob,
             "mean_no_speech_prob": mean_no_speech_prob,
+            "mean_token_logprob": mean_token_logprob,
             "quality_status": "retry_required" if quality_reason else "ok",
             "quality_reason": quality_reason,
         }
+
+    @staticmethod
+    def _transcription_response_format(model_name: str) -> str:
+        normalized = (model_name or "").strip().lower()
+        if normalized.startswith("gpt-4o") and "transcribe" in normalized:
+            return "json"
+        return "verbose_json"
+
+    @staticmethod
+    def _supports_transcription_logprobs(model_name: str, response_format: str) -> bool:
+        normalized = (model_name or "").strip().lower()
+        return response_format == "json" and normalized.startswith("gpt-4o") and "transcribe" in normalized
+
+    @classmethod
+    def _extract_logprob_values(cls, payload: Any) -> list[float]:
+        values: list[float] = []
+
+        def _walk(node: Any) -> None:
+            if isinstance(node, dict):
+                if "logprob" in node:
+                    value = cls._coerce_float(node.get("logprob"))
+                    if value is not None:
+                        values.append(value)
+                for item in node.values():
+                    _walk(item)
+                return
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item)
+
+        _walk(payload)
+        return values
 
     @staticmethod
     def _serialize_response(response: Any) -> dict:
