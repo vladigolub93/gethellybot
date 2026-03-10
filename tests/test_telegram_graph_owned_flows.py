@@ -62,6 +62,7 @@ class FakeCandidateService:
         self.summary_calls = []
         self.verification_calls = []
         self.deletion_calls = []
+        self.ready_action_calls = []
         self.cv_result = SimpleNamespace(
             notification_template="candidate_cv_received_processing",
             status="accepted",
@@ -106,6 +107,10 @@ class FakeCandidateService:
 
     def execute_deletion_action(self, **kwargs):
         self.deletion_calls.append(kwargs)
+        return None
+
+    def execute_ready_action(self, **kwargs):
+        self.ready_action_calls.append(kwargs)
         return None
 
 

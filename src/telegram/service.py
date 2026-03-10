@@ -287,9 +287,25 @@ class TelegramUpdateService:
         if stage_result.stage == "READY":
             if not (
                 stage_result.action_accepted
-                and stage_result.proposed_action == "delete_profile"
+                and stage_result.proposed_action in {"delete_profile", "find_matching_vacancies"}
             ):
                 return None
+            if stage_result.proposed_action == "find_matching_vacancies":
+                ready_result = self.candidate_service.execute_ready_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    action=stage_result.proposed_action,
+                )
+                if ready_result is None:
+                    return None
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key=ready_result.notification_template,
+                        text=ready_result.notification_text,
+                        allow_duplicate=True,
+                    )
+                ]
             deletion_text = "delete profile"
         else:
             if not (
@@ -410,7 +426,11 @@ class TelegramUpdateService:
             stage_result is not None
             and stage_result.stage == "OPEN"
             and stage_result.action_accepted
-            and stage_result.proposed_action in {"create_new_vacancy", "list_open_vacancies"}
+            and stage_result.proposed_action in {
+                "create_new_vacancy",
+                "list_open_vacancies",
+                "find_matching_candidates",
+            }
         ):
             return None
         open_result = self.vacancy_service.execute_open_action(
@@ -428,6 +448,7 @@ class TelegramUpdateService:
                 reply_markup=remove_keyboard()
                 if stage_result.proposed_action == "create_new_vacancy"
                 else None,
+                allow_duplicate=stage_result.proposed_action == "find_matching_candidates",
             )
         ]
 

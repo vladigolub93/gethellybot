@@ -113,6 +113,33 @@ class VacancyService:
                 notification_text=self._format_open_vacancies(user),
             )
 
+        if action == "find_matching_candidates":
+            open_vacancies = self.repo.get_open_by_manager_user_id(user.id)
+            vacancy = open_vacancies[0] if open_vacancies else None
+            if vacancy is None:
+                return VacancyOpenActionResult(
+                    status="no_open_vacancy",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy("I couldn’t find an open vacancy to refresh right now."),
+                )
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="matching_run_for_vacancy_v1",
+                    payload={
+                        "vacancy_id": str(vacancy.id),
+                        "trigger_type": "manager_manual_request",
+                    },
+                    idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:manual:{raw_message_id}",
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                )
+            )
+            return VacancyOpenActionResult(
+                status="matching_requested",
+                notification_template="vacancy_open",
+                notification_text=self._copy("Got it. I’m refreshing matching for this vacancy now."),
+            )
+
         return None
 
     def ensure_active_intake_vacancy_for_manager(self, user) -> object:

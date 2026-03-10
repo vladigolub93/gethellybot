@@ -738,7 +738,7 @@ def candidate_ready_decision_with_llm(
         prompt_version="candidate_ready_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "delete_profile"}:
+    if proposed_action not in {None, "delete_profile", "find_matching_vacancies"}:
         proposed_action = None
     return LLMResult(
         payload={
@@ -1082,6 +1082,7 @@ def vacancy_open_decision_with_llm(
     proposed_action = result.payload.get("proposed_action")
     if proposed_action not in {
         None,
+        "find_matching_candidates",
         "create_new_vacancy",
         "list_open_vacancies",
         "delete_vacancy",
@@ -2542,6 +2543,40 @@ def safe_candidate_ready_decision(
     elif any(
         token in lowered
         for token in [
+            "find me a vacancy",
+            "find a vacancy for me",
+            "find me a job",
+            "find vacancies",
+            "find jobs",
+            "check vacancies",
+            "check open roles",
+            "check matching again",
+            "run matching",
+            "any vacancy for me",
+            "any vacancies for me",
+            "is there a vacancy for me",
+            "найди вакансию",
+            "найди мне вакансию",
+            "поищи вакансию",
+            "есть ли вакансия",
+            "есть ли вакансии",
+            "есть что-то для меня",
+            "запусти мэтчинг",
+            "обнови мэтчинг",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "find_matching_vacancies",
+                "response_text": "Got it. I can check current open roles for your profile now.",
+                "proposed_action": "find_matching_vacancies",
+                "needs_follow_up": False,
+                "reason_code": "candidate_ready_find_matching_vacancies",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
             "what happens now",
             "what do i do next",
             "what should i do next",
@@ -2914,6 +2949,34 @@ def safe_vacancy_open_decision(
                 "proposed_action": "delete_vacancy",
                 "needs_follow_up": False,
                 "reason_code": "vacancy_open_delete_request",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
+            "find candidates",
+            "find me candidates",
+            "look for candidates",
+            "search candidates",
+            "refresh matching",
+            "run matching",
+            "check candidates again",
+            "any candidates",
+            "are there candidates",
+            "найди кандидатов",
+            "поищи кандидатов",
+            "есть ли кандидаты",
+            "обнови мэтчинг",
+            "запусти мэтчинг",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "find_matching_candidates",
+                "response_text": "Got it. I can refresh matching for this vacancy now.",
+                "proposed_action": "find_matching_candidates",
+                "needs_follow_up": False,
+                "reason_code": "vacancy_open_find_matching_candidates",
             }
         )
     elif any(

@@ -32,6 +32,7 @@ from src.db.repositories.candidate_verifications import CandidateVerificationsRe
 from src.db.repositories.files import FilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
+from src.db.repositories.vacancies import VacanciesRepository
 from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
@@ -73,6 +74,13 @@ class CandidateDeletionResult:
     notification_text: str
 
 
+@dataclass(frozen=True)
+class CandidateReadyActionResult:
+    status: str
+    notification_template: str
+    notification_text: str
+
+
 class CandidateProfileService:
     def __init__(self, session: Session):
         self.session = session
@@ -81,6 +89,7 @@ class CandidateProfileService:
         self.files = FilesRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
+        self.vacancies = VacanciesRepository(session)
         self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
@@ -606,6 +615,51 @@ class CandidateProfileService:
                 notification_text=confirmation.payload["message"],
             )
         return None
+
+    def execute_ready_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        action: str | None,
+    ) -> Optional[CandidateReadyActionResult]:
+        profile = self.repo.get_active_by_user_id(user.id)
+        if profile is None:
+            return None
+
+        if action != "find_matching_vacancies":
+            return None
+
+        open_vacancies = self.vacancies.get_open_vacancies()
+        if not open_vacancies:
+            return CandidateReadyActionResult(
+                status="no_open_vacancies",
+                notification_template="candidate_ready",
+                notification_text=self._copy(
+                    "I checked current open roles. Nothing is open right now, but I’ll keep watching and message you when a strong match appears."
+                ),
+            )
+
+        for vacancy in open_vacancies:
+            self.queue.enqueue(
+                JobMessage(
+                    job_type="matching_run_for_vacancy_v1",
+                    payload={
+                        "vacancy_id": str(vacancy.id),
+                        "trigger_type": "candidate_manual_request",
+                        "trigger_candidate_profile_id": str(profile.id),
+                    },
+                    idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:candidate:{profile.id}:manual:{raw_message_id}",
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                )
+            )
+
+        return CandidateReadyActionResult(
+            status="matching_requested",
+            notification_template="candidate_ready",
+            notification_text=self._copy("Got it. I’m checking current open roles for your profile now."),
+        )
 
     def _ensure_deletion_context(self, profile) -> dict:
         current = dict(profile.questions_context_json or {})

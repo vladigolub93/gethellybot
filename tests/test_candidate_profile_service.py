@@ -119,6 +119,14 @@ class FakeMatchingRepository:
         return [match for match in self.active_matches if match.candidate_profile_id == candidate_profile_id]
 
 
+class FakeVacanciesRepository:
+    def __init__(self):
+        self.open_vacancies = []
+
+    def get_open_vacancies(self):
+        return list(self.open_vacancies)
+
+
 class FakeInterviewsRepository:
     def __init__(self):
         self.sessions_by_match_id = {}
@@ -687,6 +695,58 @@ def test_candidate_deletion_requires_confirmation_then_soft_deletes() -> None:
     assert interview.state == "CANCELLED"
     assert len(service.queue.messages) == 1
     assert service.queue.messages[0].job_type == "cleanup_candidate_deletion_v1"
+
+
+def test_execute_ready_action_enqueues_matching_for_open_vacancies() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+    vacancy_a = SimpleNamespace(id=uuid4())
+    vacancy_b = SimpleNamespace(id=uuid4())
+    service.vacancies.open_vacancies = [vacancy_a, vacancy_b]
+
+    result = service.execute_ready_action(
+        user=user,
+        raw_message_id="raw-ready-1",
+        action="find_matching_vacancies",
+    )
+
+    assert result is not None
+    assert result.status == "matching_requested"
+    assert len(service.queue.messages) == 2
+    assert service.queue.messages[0].job_type == "matching_run_for_vacancy_v1"
+    assert service.queue.messages[0].payload["trigger_candidate_profile_id"] == str(profile.id)
+    assert service.queue.messages[0].payload["trigger_type"] == "candidate_manual_request"
+    assert service.queue.messages[0].idempotency_key.endswith(":manual:raw-ready-1")
+    assert service.queue.messages[1].job_type == "matching_run_for_vacancy_v1"
+
+
+def test_execute_ready_action_handles_no_open_vacancies() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+
+    result = service.execute_ready_action(
+        user=user,
+        raw_message_id="raw-ready-2",
+        action="find_matching_vacancies",
+    )
+
+    assert result is not None
+    assert result.status == "no_open_vacancies"
+    assert service.queue.messages == []
 
 
 def test_verification_instruction_is_returned_for_non_video_input() -> None:

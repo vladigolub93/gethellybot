@@ -308,10 +308,12 @@ def candidate_ready_decision_prompt(
 
 Valid outcomes:
 - help question or status question
+- explicit find-vacancies intent
 - explicit delete-profile intent
 
 Rules:
 - treat questions like "what happens now?", "what should I do next?", "when will I hear back?", "when will I get opportunities?", and "do I need to do anything else?" as help, not as delete intent
+- propose `find_matching_vacancies` when the candidate is clearly asking to check current vacancies, look for jobs now, or see whether there is anything suitable right now
 - only propose `delete_profile` when the candidate is clearly asking to remove their profile
 - do not invent matching outcomes or timelines
 - do not transition stages yourself
@@ -518,12 +520,14 @@ def vacancy_open_decision_prompt(
 
 Valid outcomes:
 - help question or status question
+- explicit find-candidates intent
 - explicit create-another-vacancy intent
 - explicit list-open-vacancies intent
 - explicit delete-vacancy intent
 
 Rules:
 - treat questions like "what happens now?", "when will I see candidates?", "how does matching work?", and "do I need to do anything else?" as help, not as delete intent
+- propose `find_matching_candidates` when the manager is clearly asking to search for candidates now, refresh matching, or check whether suitable candidates are available right now
 - propose `create_new_vacancy` when the manager is clearly asking to open another vacancy, add one more role, or create a second vacancy
 - propose `list_open_vacancies` when the manager is clearly asking to see, list, or review their active/open vacancies
 - only propose `delete_vacancy` when the manager is clearly asking to remove the vacancy

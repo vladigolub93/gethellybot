@@ -214,9 +214,11 @@ class FakeCandidateService:
         self.question_calls = []
         self.summary_calls = []
         self.deletion_calls = []
+        self.ready_action_calls = []
         self.start_calls = []
         self.summary_result = None
         self.deletion_result = None
+        self.ready_action_result = None
         self.question_result = None
         self.verification_result = SimpleNamespace(
             notification_template="candidate_verification_instructions",
@@ -235,6 +237,10 @@ class FakeCandidateService:
     def execute_deletion_action(self, **kwargs):
         self.deletion_calls.append(kwargs)
         return self.deletion_result
+
+    def execute_ready_action(self, **kwargs):
+        self.ready_action_calls.append(kwargs)
+        return self.ready_action_result
 
     def start_onboarding(self, user, trigger_ref_id):
         self.start_calls.append({"user": user, "trigger_ref_id": trigger_ref_id})
@@ -1705,6 +1711,49 @@ def test_graph_ready_stage_can_own_delete_profile_intent() -> None:
     assert templates == ["candidate_deletion_confirmation_required"]
     assert service.candidate_service.deletion_calls
     assert service.candidate_service.deletion_calls[-1]["action"] == "delete_profile"
+
+
+def test_graph_ready_stage_can_request_manual_matching() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="READY",
+            reply_text=None,
+            stage_status="ready_for_transition",
+            proposed_action="find_matching_vacancies",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "find_matching_vacancies"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.ready_action_result = SimpleNamespace(
+        status="matching_requested",
+        notification_template="candidate_ready",
+        notification_text="Got it. I’m checking current open roles for your profile now.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5b",
+        build_update(text="Is there a vacancy for me right now?"),
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.ready_action_calls
+    assert service.candidate_service.ready_action_calls[-1]["action"] == "find_matching_vacancies"
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:
@@ -3633,6 +3682,50 @@ def test_graph_open_stage_can_list_open_vacancies() -> None:
     assert templates == ["manager_open_vacancies_list"]
     assert service.vacancy_service.open_action_calls
     assert service.vacancy_service.open_action_calls[-1]["action"] == "list_open_vacancies"
+
+
+def test_graph_open_stage_can_request_manual_matching() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text=None,
+            stage_status="ready_for_transition",
+            proposed_action="find_matching_candidates",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "find_matching_candidates"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="matching_requested",
+        notification_template="vacancy_open",
+        notification_text="Got it. I’m refreshing matching for this vacancy now.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12openmatch",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12openmatch",
+        build_update(text="Find candidates for this vacancy"),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "find_matching_candidates"
 
 
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:

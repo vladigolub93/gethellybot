@@ -682,6 +682,36 @@ def test_graph_candidate_stage_accepts_ready_delete_intent() -> None:
     assert result.stage_status == "ready_for_transition"
 
 
+def test_graph_candidate_stage_accepts_find_matching_vacancies_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8b", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u11b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Is there a vacancy for me right now?",
+    )
+
+    assert result is not None
+    assert result.stage == "READY"
+    assert result.action_accepted is True
+    assert result.proposed_action == "find_matching_vacancies"
+    assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
+
+
 def test_graph_candidate_stage_handles_interview_invited_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

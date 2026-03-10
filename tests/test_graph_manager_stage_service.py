@@ -521,6 +521,35 @@ def test_graph_manager_stage_accepts_open_list_vacancies_intent() -> None:
     assert result.reply_text is None
 
 
+def test_graph_manager_stage_accepts_find_matching_candidates_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6m", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m6m",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Find candidates for this vacancy",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "find_matching_candidates"
+    assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
+
+
 def test_graph_manager_stage_handles_manager_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

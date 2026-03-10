@@ -404,7 +404,9 @@ def build_candidate_stage_reply_node(session):
 
         if state.active_stage == "READY" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
-            state.reply_text = "I can help you remove the profile if you want to stop using Helly."
+            # Let the downstream candidate service produce the user-facing reply for
+            # READY-stage actions so we don't emit a duplicate transport message.
+            state.reply_text = None
             state.confidence = 0.9
             return state
 

@@ -116,10 +116,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "READY": StatePolicyDefinition(
         state="READY",
         goal="Keep the candidate profile ready for matching.",
-        allowed_actions=["wait_for_match", "delete_profile"],
+        allowed_actions=["wait_for_match", "find_matching_vacancies", "delete_profile"],
         assistance_prompt_slug="candidate_ready",
-        guidance_text="Your profile is ready. Helly will contact you when a strong match is found.",
-        help_text="Your profile is ready. Helly will contact you only when a strong match is found.",
+        guidance_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again now.",
+        help_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again right now.",
     ),
     "INTAKE_PENDING": StatePolicyDefinition(
         state="INTAKE_PENDING",
@@ -177,6 +177,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Keep the vacancy active for matching and candidate review.",
         allowed_actions=[
             "wait_for_matches",
+            "find_matching_candidates",
             "create_new_vacancy",
             "list_open_vacancies",
             "delete_vacancy",
@@ -184,11 +185,11 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         assistance_prompt_slug="vacancy_open",
         guidance_text=(
             "The vacancy is open. Helly is matching candidates. You can ask what happens next, "
-            "start another vacancy, or ask to see your active vacancies."
+            "ask me to look for candidates again, start another vacancy, or ask to see your active vacancies."
         ),
         help_text=(
             "The vacancy is open. Helly is matching candidates and will only send qualified profiles. "
-            "You can also start another vacancy or ask to see your active vacancies."
+            "You can also ask me to look for candidates again, start another vacancy, or ask to see your active vacancies."
         ),
     ),
     "INTERVIEW_INVITED": StatePolicyDefinition(

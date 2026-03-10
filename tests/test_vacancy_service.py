@@ -177,6 +177,31 @@ def test_start_onboarding_moves_manager_to_intake_pending() -> None:
     assert vacancy.state == VACANCY_STATE_INTAKE_PENDING
 
 
+def test_execute_open_action_enqueues_matching_refresh() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    service.repo = fake_repo
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+
+    result = service.execute_open_action(
+        user=user,
+        raw_message_id="raw-open-1",
+        action="find_matching_candidates",
+    )
+
+    assert result is not None
+    assert result.status == "matching_requested"
+    assert len(service.queue.messages) == 1
+    assert service.queue.messages[0].job_type == "matching_run_for_vacancy_v1"
+    assert service.queue.messages[0].payload["vacancy_id"] == str(vacancy.id)
+    assert service.queue.messages[0].payload["trigger_type"] == "manager_manual_request"
+    assert service.queue.messages[0].idempotency_key.endswith(":manual:raw-open-1")
+
+
 def test_handle_jd_intake_transitions_to_processing() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()
