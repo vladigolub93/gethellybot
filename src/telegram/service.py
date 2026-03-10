@@ -1766,8 +1766,8 @@ class TelegramUpdateService:
             while queue_index < len(created_job_ids):
                 job_id = created_job_ids[queue_index]
                 queue_index += 1
-                job = repo.get_by_id(job_id)
-                if job is None or job.status != "queued":
+                job = repo.claim_by_id_if_queued(job_id)
+                if job is None:
                     continue
                 if job.job_type not in self._safe_immediate_job_types:
                     continue

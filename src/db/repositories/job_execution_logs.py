@@ -51,6 +51,17 @@ class JobExecutionLogsRepository:
         self.session.flush()
         return row
 
+    def claim_by_id_if_queued(self, job_id) -> Optional[JobExecutionLog]:
+        stmt = (
+            select(JobExecutionLog)
+            .where(
+                JobExecutionLog.id == job_id,
+                JobExecutionLog.status == "queued",
+            )
+            .with_for_update(skip_locked=True)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
     def claim_next_queued(self) -> Optional[JobExecutionLog]:
         stmt = (
             select(JobExecutionLog)
