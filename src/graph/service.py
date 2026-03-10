@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.candidate_profile.states import normalize_candidate_operational_state
 from src.config.logging import get_logger
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
@@ -85,6 +87,7 @@ class LangGraphStageAgentService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
+        self.evaluations = EvaluationsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matches = MatchingRepository(session)
         self.raw_messages = RawMessagesRepository(session)
@@ -241,8 +244,9 @@ class LangGraphStageAgentService:
             candidate_review_match = getter(candidate.id)
         if candidate_review_match is not None:
             return "VACANCY_REVIEW"
-        if candidate.state in self.CANDIDATE_STAGES:
-            return candidate.state
+        normalized_state = normalize_candidate_operational_state(candidate.state)
+        if normalized_state in self.CANDIDATE_STAGES:
+            return normalized_state
         return None
 
     def _resolve_supported_stage(self, user) -> str | None:
@@ -433,6 +437,7 @@ class LangGraphStageAgentService:
             vacancies=self.vacancies,
             matches=self.matches,
             interviews=self.interviews,
+            evaluations=self.evaluations,
         )
         combined: list[str] = []
         for item in [*recent_turns, *memory]:

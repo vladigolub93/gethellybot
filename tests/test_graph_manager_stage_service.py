@@ -58,6 +58,16 @@ class FakeMatchingRepository:
         return None
 
 
+class FakeEvaluationsRepository:
+    def __init__(self, evaluation=None):
+        self.evaluation = evaluation
+
+    def get_by_match_id(self, match_id):
+        if self.evaluation is None:
+            return None
+        return self.evaluation if getattr(self.evaluation, "match_id", None) == match_id else None
+
+
 def test_graph_manager_stage_help_receives_saved_vacancy_memory(monkeypatch) -> None:
     captured = {}
 
@@ -667,6 +677,74 @@ def test_graph_manager_stage_handles_manager_review_help() -> None:
 
     assert reply is not None
     assert "approve" in reply.lower() or "candidate" in reply.lower()
+
+
+def test_graph_manager_stage_help_receives_saved_evaluation_memory(monkeypatch) -> None:
+    captured = {}
+
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_manager_review_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "Let me pull up the saved interview report.",
+                "reason_code": "help",
+            }
+        ),
+    )
+
+    def _fake_assistance(_session, *, context, latest_user_message, recent_context=None):
+        captured["context"] = context
+        captured["latest_user_message"] = latest_user_message
+        captured["recent_context"] = list(recent_context or [])
+        return SimpleNamespace(payload={"response_text": "Here is the saved interview report.", "suggested_action": None})
+
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_state_assistance_decision",
+        _fake_assistance,
+    )
+
+    review_match = SimpleNamespace(id="m-eval", status="manager_review")
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(SimpleNamespace(id="v-eval", state="OPEN"))
+    service.matches = FakeMatchingRepository(manager_review_match=review_match)
+    service.evaluations = FakeEvaluationsRepository(
+        SimpleNamespace(
+            match_id="m-eval",
+            final_score=0.41,
+            recommendation="reject",
+            report_json={
+                "interview_summary": "The candidate was experienced but missed several role-critical specifics.",
+                "strengths": ["Good communication."],
+                "risks": ["Weak role fit."],
+                "recommendation": "reject",
+                "final_score": 0.41,
+            },
+        )
+    )
+
+    user = SimpleNamespace(
+        id="m-eval",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Show me the interview summary and risks again.",
+    )
+
+    assert reply == "Here is the saved interview report."
+    combined_context = " ".join(captured["recent_context"])
+    assert "saved interview summary" in combined_context.lower()
+    assert "role-critical specifics" in combined_context
+    assert "saved evaluation risks" in combined_context.lower()
+    assert "weak role fit" in combined_context.lower()
+    assert "final score 0.41" in combined_context.lower()
 
 
 def test_graph_manager_stage_does_not_treat_review_question_as_decision() -> None:

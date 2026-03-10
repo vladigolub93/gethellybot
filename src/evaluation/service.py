@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from src.candidate_profile.states import CANDIDATE_STATE_READY
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.db.repositories.evaluations import EvaluationsRepository
@@ -38,6 +39,27 @@ class EvaluationService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    def _restore_candidate_to_ready(
+        self,
+        *,
+        candidate,
+        trigger_type: str,
+        trigger_ref_id=None,
+        actor_user_id=None,
+        metadata_json=None,
+    ) -> None:
+        if candidate is None or getattr(candidate, "state", None) == CANDIDATE_STATE_READY:
+            return
+        self.state_service.transition(
+            entity_type="candidate_profile",
+            entity=candidate,
+            to_state=CANDIDATE_STATE_READY,
+            trigger_type=trigger_type,
+            trigger_ref_id=trigger_ref_id,
+            actor_user_id=actor_user_id,
+            metadata_json=metadata_json,
+        )
 
     def evaluate_interview(self, *, interview_session_id) -> dict:
         session = self.interviews.get_by_id(interview_session_id)
@@ -90,14 +112,13 @@ class EvaluationService:
                 "recommendation": evaluation.get("recommendation"),
             },
         )
-        self.state_service.transition(
-            entity_type="candidate_profile",
-            entity=candidate,
-            to_state="UNDER_MANAGER_REVIEW",
+        self._restore_candidate_to_ready(
+            candidate=candidate,
             trigger_type="job",
             metadata_json={
                 "evaluation_result_id": str(row.id),
                 "recommendation": evaluation.get("recommendation"),
+                "reason": "candidate_kept_matchable_while_manager_reviews",
             },
         )
         manager = self.users.get_by_id(vacancy.manager_user_id)
@@ -173,13 +194,12 @@ class EvaluationService:
             trigger_ref_id=raw_message_id,
             actor_user_id=user.id,
         )
-        self.state_service.transition(
-            entity_type="candidate_profile",
-            entity=candidate,
-            to_state="APPROVED",
+        self._restore_candidate_to_ready(
+            candidate=candidate,
             trigger_type="user_action",
             trigger_ref_id=raw_message_id,
             actor_user_id=user.id,
+            metadata_json={"reason": "manager_approved_specific_match"},
         )
         self.evaluations.create_introduction_event(
             match_id=match.id,
@@ -218,6 +238,7 @@ class EvaluationService:
 
     def _reject_candidate(self, *, user, match, raw_message_id):
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
+        vacancy = self.vacancies.get_by_id(match.vacancy_id)
         self.matches.mark_manager_decision(match, status="rejected")
         self.state_service.record_transition(
             entity_type="match",
@@ -228,13 +249,23 @@ class EvaluationService:
             trigger_ref_id=raw_message_id,
             actor_user_id=user.id,
         )
-        self.state_service.transition(
-            entity_type="candidate_profile",
-            entity=candidate,
-            to_state="REJECTED",
+        self._restore_candidate_to_ready(
+            candidate=candidate,
             trigger_type="user_action",
             trigger_ref_id=raw_message_id,
             actor_user_id=user.id,
+            metadata_json={"reason": "manager_rejected_specific_match"},
+        )
+        self.notifications.create(
+            user_id=candidate.user_id,
+            entity_type="match",
+            entity_id=match.id,
+            template_key="candidate_manager_rejected",
+            payload_json={
+                "text": self._copy(
+                    f"{getattr(vacancy, 'role_title', None) or 'This opportunity'} did not move forward after the hiring manager review."
+                ),
+            },
         )
         self.notifications.create(
             user_id=user.id,

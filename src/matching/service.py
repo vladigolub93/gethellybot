@@ -1,3 +1,4 @@
+from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -40,7 +41,11 @@ class MatchingService:
         if trigger_candidate_profile_id is not None:
             candidate_profiles = []
             candidate = self.candidates.get_by_id(trigger_candidate_profile_id)
-            if candidate is not None and candidate.state == "READY" and candidate.deleted_at is None:
+            if (
+                candidate is not None
+                and candidate.state in CANDIDATE_READY_LIKE_STATES
+                and candidate.deleted_at is None
+            ):
                 candidate_profiles.append(candidate)
             preloaded_candidates = None
         else:

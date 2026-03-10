@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.db.models.candidates import CandidateProfile, CandidateProfileVersion
 
 
@@ -26,7 +27,7 @@ class CandidateProfilesRepository:
 
     def get_ready_profiles(self) -> list[CandidateProfile]:
         stmt = select(CandidateProfile).where(
-            CandidateProfile.state == "READY",
+            CandidateProfile.state.in_(tuple(CANDIDATE_READY_LIKE_STATES)),
             CandidateProfile.deleted_at.is_(None),
         )
         return list(self.session.execute(stmt).scalars().all())
@@ -44,7 +45,7 @@ class CandidateProfilesRepository:
                 CandidateProfile.current_version_id == CandidateProfileVersion.id,
             )
             .where(
-                CandidateProfile.state == "READY",
+                CandidateProfile.state.in_(tuple(CANDIDATE_READY_LIKE_STATES)),
                 CandidateProfile.deleted_at.is_(None),
                 CandidateProfileVersion.semantic_embedding.is_not(None),
             )

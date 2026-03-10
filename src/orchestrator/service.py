@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 
+from src.candidate_profile.states import normalize_candidate_operational_state
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -18,6 +20,7 @@ class BotControllerService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
+        self.evaluations = EvaluationsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
         self.vacancies = VacanciesRepository(session)
@@ -133,7 +136,10 @@ class BotControllerService:
                     candidate_review_match = getter(candidate.id)
                     if candidate_review_match is not None:
                         return resolve_state_context(role=role, state="VACANCY_REVIEW")
-                return resolve_state_context(role=role, state=candidate.state)
+                return resolve_state_context(
+                    role=role,
+                    state=normalize_candidate_operational_state(candidate.state),
+                )
             return resolve_state_context(role=role, state="CV_PENDING")
 
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
@@ -177,6 +183,7 @@ class BotControllerService:
             vacancies=self.vacancies,
             matches=self.matching,
             interviews=self.interviews,
+            evaluations=self.evaluations,
         )
 
     def _validate_action_from_result(self, *, context: ResolvedStateContext, source: str, action: str | None) -> None:

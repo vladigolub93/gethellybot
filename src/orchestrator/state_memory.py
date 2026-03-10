@@ -164,6 +164,36 @@ def _vacancy_project_line(vacancy) -> str | None:
     return f"Saved project description: {project}"
 
 
+def _evaluation_memory(evaluation) -> list[str]:
+    if evaluation is None:
+        return []
+    report = getattr(evaluation, "report_json", None) or {}
+    snippets: list[str] = []
+    interview_summary = _truncate(report.get("interview_summary"), limit=260)
+    if interview_summary:
+        snippets.append(f"Saved interview summary: {interview_summary}")
+    strengths = _clean_list(report.get("strengths") or getattr(evaluation, "strengths_json", None), limit=4)
+    if strengths:
+        snippets.append("Saved evaluation strengths: " + "; ".join(str(item) for item in strengths))
+    risks = _clean_list(report.get("risks") or getattr(evaluation, "risks_json", None), limit=4)
+    if risks:
+        snippets.append("Saved evaluation risks: " + "; ".join(str(item) for item in risks))
+    recommendation = report.get("recommendation")
+    if recommendation is None:
+        recommendation = getattr(evaluation, "recommendation", None)
+    final_score = report.get("final_score")
+    if final_score is None:
+        final_score = getattr(evaluation, "final_score", None)
+    if recommendation or final_score is not None:
+        parts = []
+        if recommendation:
+            parts.append(f"recommendation {recommendation}")
+        if final_score is not None:
+            parts.append(f"final score {final_score}")
+        snippets.append("Saved evaluation outcome: " + "; ".join(parts) + ".")
+    return snippets
+
+
 def _format_candidate_brief(*, slot: int, candidate, version) -> str | None:
     summary = _candidate_summary_text(version)
     preferences = _candidate_preferences_line(candidate)
@@ -253,7 +283,7 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
     return _dedupe(snippets)
 
 
-def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancies) -> list[str]:
+def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancies, evaluations) -> list[str]:
     vacancy = _call_optional(vacancies, "get_latest_active_by_manager_user_id", user_id)
     if vacancy is None:
         vacancy = _call_optional(vacancies, "get_latest_incomplete_by_manager_user_id", user_id)
@@ -311,6 +341,8 @@ def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancie
                     "Current candidate under final manager review: "
                     + _strip_slot_prefix(brief).strip()
                 )
+            evaluation = _call_optional(evaluations, "get_by_match_id", getattr(review_match, "id", None))
+            snippets.extend(_evaluation_memory(evaluation))
 
     return _dedupe(snippets)
 
@@ -324,6 +356,7 @@ def build_state_memory(
     vacancies,
     matches,
     interviews,
+    evaluations,
 ) -> list[str]:
     if role == "candidate":
         return _candidate_memory(
@@ -341,5 +374,6 @@ def build_state_memory(
             candidates=candidates,
             matches=matches,
             vacancies=vacancies,
+            evaluations=evaluations,
         )
     return []

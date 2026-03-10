@@ -161,7 +161,7 @@ def test_evaluate_interview_routes_candidate_to_manager_review() -> None:
 
     assert result["status"] == "manager_review"
     assert match.status == "manager_review"
-    assert candidate.state == "UNDER_MANAGER_REVIEW"
+    assert candidate.state == "READY"
     assert len(service.notifications.rows) == 1
     assert service.notifications.rows[0].user_id == manager.id
     candidate_package = service.notifications.rows[0].payload_json["candidate_package"]
@@ -191,12 +191,13 @@ def test_evaluate_interview_with_reject_recommendation_still_routes_to_manager_r
 
     assert result["status"] == "manager_review"
     assert match.status == "manager_review"
-    assert candidate.state == "UNDER_MANAGER_REVIEW"
+    assert candidate.state == "READY"
     assert len(service.notifications.rows) == 1
     assert service.notifications.rows[0].user_id == manager.id
     candidate_package = service.notifications.rows[0].payload_json["candidate_package"]
     assert candidate_package["recommendation"] == "reject"
     assert candidate_package["interview_summary"].startswith("Candidate has relevant experience")
+    assert candidate.state == "READY"
 
 
 def test_manager_approve_creates_introduction_event() -> None:
@@ -213,7 +214,7 @@ def test_manager_approve_creates_introduction_event() -> None:
     assert result is not None
     assert result.status == "approved"
     assert match.status == "approved"
-    assert candidate.state == "APPROVED"
+    assert candidate.state == "READY"
     assert len(service.evaluations.introductions) == 1
     assert len(service.notifications.rows) == 2
     candidate_notification = service.notifications.rows[0]
@@ -236,7 +237,11 @@ def test_manager_reject_updates_match_and_candidate() -> None:
     assert result is not None
     assert result.status == "rejected"
     assert match.status == "rejected"
-    assert candidate.state == "REJECTED"
+    assert candidate.state == "READY"
+    assert len(service.notifications.rows) == 2
+    assert service.notifications.rows[0].user_id == candidate.user_id
+    assert "did not move forward" in service.notifications.rows[0].payload_json["text"].lower()
+    assert service.notifications.rows[1].user_id == manager.id
 
 
 def test_execute_manager_review_action_approves_without_raw_text_parsing() -> None:
@@ -253,4 +258,4 @@ def test_execute_manager_review_action_approves_without_raw_text_parsing() -> No
     assert result is not None
     assert result.status == "approved"
     assert match.status == "approved"
-    assert candidate.state == "APPROVED"
+    assert candidate.state == "READY"
