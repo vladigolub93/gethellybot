@@ -775,7 +775,7 @@ def candidate_verification_decision_with_llm(
         payload={
             "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
-            "proposed_action": None,
+            "proposed_action": _clean_text(result.payload.get("proposed_action"), limit=80),
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -2603,6 +2603,31 @@ def safe_candidate_verification_decision(
     if any(
         token in lowered
         for token in [
+            "what did you hear",
+            "what did you transcribe",
+            "what transcript",
+            "what did it hear",
+            "show transcript",
+            "show me the transcript",
+            "как ты транскриб",
+            "что ты услыш",
+            "что ты распознал",
+            "что ты расшифровал",
+            "какая расшифровка",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "transcript_debug",
+                "response_text": "I can show what I heard from the last verification video.",
+                "proposed_action": "show_last_verification_transcript",
+                "needs_follow_up": False,
+                "reason_code": "candidate_verification_show_transcript",
+            }
+        )
+    elif any(
+        token in lowered
+        for token in [
             "why",
             "how",
             "help",
@@ -3318,7 +3343,7 @@ def safe_delete_confirmation_decision(
         "confirm delete vacancy",
         "delete profile",
         "delete vacancy",
-    }:
+    } or command in {"yes", "да", "подтверждаю", "подтвердить"}:
         return LLMResult(
             payload={
                 "intent": "confirm",
@@ -3331,7 +3356,7 @@ def safe_delete_confirmation_decision(
             model_name="baseline-deterministic",
             prompt_version="baseline_delete_confirmation_decision_v1",
         )
-    if command in {"cancel delete", "keep profile", "keep vacancy", "don't delete", "dont delete"}:
+    if command in {"cancel delete", "keep profile", "keep vacancy", "don't delete", "dont delete", "нет", "no"}:
         return LLMResult(
             payload={
                 "intent": "cancel",
@@ -3553,17 +3578,6 @@ def safe_build_deletion_confirmation(
     has_active_interview: bool,
     has_active_matches: bool,
 ) -> LLMResult:
-    if should_use_llm_runtime(session):
-        try:
-            return build_deletion_confirmation_with_llm(
-                entity_type=entity_type,
-                entity_label=entity_label,
-                has_active_interview=has_active_interview,
-                has_active_matches=has_active_matches,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("deletion_confirmation_fallback_to_baseline", error=str(exc))
-
     side_effects = []
     if has_active_matches:
         side_effects.append("remove you from active matching")
@@ -3575,7 +3589,7 @@ def safe_build_deletion_confirmation(
     noun = "profile" if entity_type == "candidate_profile" else "vacancy"
     confirm_label = "Confirm delete profile" if noun == "profile" else "Confirm delete vacancy"
     entity_display = f' "{entity_label}"' if entity_label else ""
-    return LLMResult(
+    baseline = LLMResult(
         payload={
             "message": f"Please confirm deletion of this {noun}{entity_display}. Tap '{confirm_label}' to continue or 'Cancel delete' to keep it.{side_effects_text}",
             "is_explicit_confirmation_required": True,
@@ -3583,6 +3597,21 @@ def safe_build_deletion_confirmation(
         model_name="baseline-deterministic",
         prompt_version="baseline_deletion_confirmation_v1",
     )
+    if should_use_llm_runtime(session):
+        try:
+            result = build_deletion_confirmation_with_llm(
+                entity_type=entity_type,
+                entity_label=entity_label,
+                has_active_interview=has_active_interview,
+                has_active_matches=has_active_matches,
+            )
+            message = str((result.payload or {}).get("message") or "")
+            if entity_label and entity_label.lower() not in message.lower():
+                return baseline
+            return result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("deletion_confirmation_fallback_to_baseline", error=str(exc))
+    return baseline
 
 
 def safe_build_small_talk_reply(session, *, latest_user_message: str, current_step_guidance: str | None) -> LLMResult:

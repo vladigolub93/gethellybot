@@ -338,9 +338,11 @@ def candidate_verification_decision_prompt(
 Valid outcomes:
 - help question or clarification
 - unsupported text that should stay in the verification step
+- transcript debug request when the candidate asks what you actually heard in the last verification video
 
 Rules:
 - treat questions like "why do I need a video?", "what phrase should I say?", "can I do this later?", "I am on desktop", and "what happens after this?" as help
+- treat questions like "what did you hear?", "what did you transcribe?", "what transcript did you get?", and similar wording as transcript debug requests
 - do not claim verification is complete from text alone
 - do not invent alternative completion methods unless they are already part of the current step guidance
 - do not transition stages yourself

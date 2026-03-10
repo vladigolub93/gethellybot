@@ -96,12 +96,12 @@ class ContentIngestionService:
             source_type=version.source_type,
         )
 
-    def ingest_file(self, file_row) -> IngestionResult:
+    def ingest_file(self, file_row, *, prompt_text: str | None = None) -> IngestionResult:
         kind = (file_row.kind or "").strip().lower()
         if kind == "document":
             return self._extract_document_text(file_row)
         if kind in {"voice", "video"}:
-            return self._transcribe_media(file_row)
+            return self._transcribe_media(file_row, prompt_text=prompt_text)
         raise ValueError(f"Unsupported file kind for ingestion: {file_row.kind}")
 
     def _ingest_version_source(self, *, source_file_id, source_raw_message_id, source_type: str) -> IngestionResult:
@@ -275,16 +275,19 @@ class ContentIngestionService:
 
         raise ValueError(f"Unsupported document format: extension={extension!r} mime_type={mime_type!r}")
 
-    def _transcribe_media(self, file_row) -> IngestionResult:
+    def _transcribe_media(self, file_row, *, prompt_text: str | None = None) -> IngestionResult:
         content, download_metadata = self._download_file_bytes(file_row)
         extension = (file_row.extension or "").strip().lower() or ("ogg" if file_row.kind == "voice" else "mp4")
         mime_type = file_row.mime_type or "application/octet-stream"
         filename = f"{file_row.kind or 'media'}.{extension}"
-        response = self.openai.audio.transcriptions.create(
-            file=(filename, content, mime_type),
-            model=self.settings.openai_model_transcription,
-            response_format="verbose_json",
-        )
+        request_kwargs = {
+            "file": (filename, content, mime_type),
+            "model": self.settings.openai_model_transcription,
+            "response_format": "verbose_json",
+        }
+        if prompt_text:
+            request_kwargs["prompt"] = prompt_text
+        response = self.openai.audio.transcriptions.create(**request_kwargs)
         text = " ".join((getattr(response, "text", "") or "").split()).strip()
         if not text:
             raise ContentQualityError(
@@ -317,6 +320,7 @@ class ContentIngestionService:
                     "file_kind": file_row.kind,
                     "mime_type": mime_type,
                     "extension": extension,
+                    "transcript_text": text,
                     **quality_metadata,
                 },
             )

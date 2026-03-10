@@ -644,3 +644,43 @@ def test_execute_deletion_action_targets_named_open_vacancy() -> None:
     assert deleted.status == "deleted"
     assert first.deleted_at == "now"
     assert second.deleted_at is None
+
+
+def test_execute_deletion_action_can_delete_second_named_open_vacancy() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.interviews = FakeInterviewsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    first = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    first.role_title = "Node.js Developer"
+    second = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    second.role_title = "Android Developer"
+
+    confirmation = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="delete_vacancy",
+        latest_user_message="я хочу удалить вакансию андроид",
+    )
+
+    assert confirmation is not None
+    assert confirmation.status == "confirmation_required"
+    assert "Android Developer" in confirmation.notification_text
+
+    deleted = service.execute_deletion_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="confirm_delete",
+        latest_user_message="Delete vacancy",
+    )
+
+    assert deleted is not None
+    assert deleted.status == "deleted"
+    assert first.deleted_at is None
+    assert second.deleted_at == "now"

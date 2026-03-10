@@ -33,6 +33,15 @@ from src.vacancy.states import (
     VACANCY_STATE_SUMMARY_REVIEW,
 )
 
+_VACANCY_LABEL_ALIASES = {
+    "android": {"андроид"},
+    "node": {"нода", "нод", "node"},
+    "react": {"реакт"},
+    "python": {"питон"},
+    "java": {"джава", "ява"},
+    "kotlin": {"котлин"},
+}
+
 
 @dataclass(frozen=True)
 class VacancyIntakeResult:
@@ -588,10 +597,10 @@ class VacancyService:
 
         vacancy_label = self._vacancy_label(vacancy)
         deletion_context = self._ensure_deletion_context(vacancy)
-        pending = bool(deletion_context.get("pending"))
+        pending = bool((deletion_context.get("deletion") or {}).get("pending"))
 
         if action == "cancel_delete" and pending:
-            deletion_context["pending"] = False
+            deletion_context["deletion"]["pending"] = False
             self._update_deletion_context(vacancy, deletion_context)
             return VacancyDeletionResult(
                 status="cancelled",
@@ -613,7 +622,7 @@ class VacancyService:
             )
 
         if action == "delete_vacancy":
-            deletion_context["pending"] = True
+            deletion_context["deletion"]["pending"] = True
             self._update_deletion_context(vacancy, deletion_context)
             confirmation = safe_build_deletion_confirmation(
                 self.session,
@@ -649,7 +658,8 @@ class VacancyService:
 
     def _find_pending_deletion_vacancy(self, user):
         for vacancy in self.repo.get_by_manager_user_id(user.id):
-            if self._ensure_deletion_context(vacancy).get("pending"):
+            deletion = (self._ensure_deletion_context(vacancy).get("deletion") or {})
+            if deletion.get("pending"):
                 return vacancy
         return None
 
@@ -674,10 +684,20 @@ class VacancyService:
                 short_tokens = [token for token in normalized_label.replace(".", " ").split() if len(token) >= 4]
                 if any(token in normalized_message for token in short_tokens):
                     return vacancy
+                if self._message_matches_vacancy_alias(normalized_message, normalized_label):
+                    return vacancy
                 if f" {index} " in f" {normalized_message} ":
                     return vacancy
 
         return open_vacancies[0]
+
+    def _message_matches_vacancy_alias(self, normalized_message: str, normalized_label: str) -> bool:
+        label_tokens = {token for token in normalized_label.replace(".", " ").split() if token}
+        for token in label_tokens:
+            aliases = _VACANCY_LABEL_ALIASES.get(token, set())
+            if any(alias in normalized_message for alias in aliases):
+                return True
+        return False
 
     def _format_open_vacancies(self, user) -> str:
         vacancies = self.repo.get_open_by_manager_user_id(user.id)
@@ -698,7 +718,7 @@ class VacancyService:
     def _execute_deletion(self, *, vacancy, raw_message_id, actor_user_id, active_matches) -> VacancyDeletionResult:
         vacancy_label = self._vacancy_label(vacancy)
         deletion_context = self._ensure_deletion_context(vacancy)
-        deletion_context["pending"] = False
+        deletion_context["deletion"]["pending"] = False
         self._update_deletion_context(vacancy, deletion_context)
 
         cancelled_matches = 0

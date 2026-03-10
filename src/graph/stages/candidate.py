@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.graph.state import HellyGraphState
@@ -160,7 +161,32 @@ def build_candidate_stage_detect_node(session):
             state.intent = payload.get("intent") or "help"
             state.reply_text = payload.get("response_text")
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
-            state.parsed_input["intent"] = "help"
+            if payload.get("proposed_action") == "show_last_verification_transcript":
+                profiles = CandidateProfilesRepository(session)
+                verifications = CandidateVerificationsRepository(session)
+                profile = profiles.get_active_by_user_id(state.user_id)
+                transcript_text = None
+                if profile is not None:
+                    verification = verifications.get_pending_by_profile_id(profile.id)
+                    if verification is not None:
+                        transcript_text = (
+                            (verification.review_notes_json or {}).get("transcript_text")
+                            if verification.review_notes_json
+                            else None
+                        )
+                if transcript_text:
+                    state.reply_text = (
+                        f'What I heard from the last video: "{transcript_text}". '
+                        "If that looks wrong, resend the selfie video a bit slower and in a quieter place."
+                    )
+                else:
+                    state.reply_text = (
+                        "I do not have a usable transcript saved from the last video. "
+                        "Please resend a short selfie video and say the phrase slowly in one take."
+                    )
+                state.parsed_input["intent"] = "help"
+            else:
+                state.parsed_input["intent"] = "help"
             if payload.get("needs_follow_up"):
                 state.follow_up_needed = True
                 state.follow_up_question = payload.get("response_text")

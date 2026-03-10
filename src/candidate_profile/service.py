@@ -14,6 +14,7 @@ from src.candidate_profile.question_prompts import (
     question_prompt,
 )
 from src.candidate_profile.verification import build_verification_phrase
+from src.candidate_profile.verification import format_verification_transcript_hint
 from src.candidate_profile.verification import phrase_matches_verification
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CONSENTED,
@@ -566,10 +567,10 @@ class CandidateProfileService:
             return None
 
         deletion_context = self._ensure_deletion_context(profile)
-        pending = bool(deletion_context.get("pending"))
+        pending = bool((deletion_context.get("deletion") or {}).get("pending"))
 
         if action == "cancel_delete" and pending:
-            deletion_context["pending"] = False
+            deletion_context["deletion"]["pending"] = False
             self._update_deletion_context(profile, deletion_context)
             return CandidateDeletionResult(
                 status="cancelled",
@@ -591,7 +592,7 @@ class CandidateProfileService:
             )
 
         if action == "delete_profile":
-            deletion_context["pending"] = True
+            deletion_context["deletion"]["pending"] = True
             self._update_deletion_context(profile, deletion_context)
             confirmation = safe_build_deletion_confirmation(
                 self.session,
@@ -618,7 +619,7 @@ class CandidateProfileService:
 
     def _execute_deletion(self, *, profile, raw_message_id, actor_user_id, active_matches) -> CandidateDeletionResult:
         deletion_context = self._ensure_deletion_context(profile)
-        deletion_context["pending"] = False
+        deletion_context["deletion"]["pending"] = False
         self._update_deletion_context(profile, deletion_context)
 
         cancelled_matches = 0
@@ -730,14 +731,23 @@ class CandidateProfileService:
 
         try:
             ingestion = ContentIngestionService(self.session)
-            transcript_result = ingestion.ingest_file(file_row)
+            transcript_result = ingestion.ingest_file(file_row, prompt_text=verification.phrase_text)
             spoken_text = transcript_result.text
-        except ContentQualityError:
+        except ContentQualityError as exc:
+            spoken_text = str((exc.metadata or {}).get("transcript_text") or "").strip()
+            verification.review_notes_json = {
+                "transcript_text": spoken_text,
+                "phrase_matched": False,
+                "quality_error_code": exc.code,
+            }
+            self.session.flush()
+            transcript_hint = format_verification_transcript_hint(spoken_text)
             return CandidateVerificationResult(
                 status="retry_required",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
                     "I saved the video, but the audio was too noisy to verify the phrase. "
+                    f"{transcript_hint}. "
                     f"Please resend a clearer selfie video and say: '{verification.phrase_text}'."
                 ),
             )
@@ -761,11 +771,13 @@ class CandidateProfileService:
         self.session.flush()
 
         if not verification.review_notes_json["phrase_matched"]:
+            transcript_hint = format_verification_transcript_hint(spoken_text)
             return CandidateVerificationResult(
                 status="phrase_mismatch",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
                     "Video received, but the phrase didn’t match yet. "
+                    f"{transcript_hint}. "
                     f"Please record one more short selfie video and say exactly: '{verification.phrase_text}'."
                 ),
             )

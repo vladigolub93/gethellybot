@@ -460,6 +460,7 @@ def test_graph_manager_stage_accepts_open_delete_intent() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "delete_vacancy"
     assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
 
 
 def test_graph_manager_stage_accepts_open_create_new_vacancy_intent() -> None:
@@ -488,6 +489,7 @@ def test_graph_manager_stage_accepts_open_create_new_vacancy_intent() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "create_new_vacancy"
     assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
 
 
 def test_graph_manager_stage_accepts_open_list_vacancies_intent() -> None:
@@ -516,6 +518,7 @@ def test_graph_manager_stage_accepts_open_list_vacancies_intent() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "list_open_vacancies"
     assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
 
 
 def test_graph_manager_stage_handles_manager_review_help() -> None:

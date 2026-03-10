@@ -614,7 +614,8 @@ def test_verification_submission_moves_candidate_to_ready() -> None:
         def __init__(self, _session):
             return None
 
-        def ingest_file(self, _file_row):
+        def ingest_file(self, _file_row, *, prompt_text=None):
+            assert prompt_text == "Helly check: sync complete"
             return SimpleNamespace(text="Helly check sync complete")
 
     import src.candidate_profile.service as candidate_service_module
@@ -729,7 +730,8 @@ def test_verification_rejects_video_with_wrong_phrase() -> None:
         def __init__(self, _session):
             return None
 
-        def ingest_file(self, _file_row):
+        def ingest_file(self, _file_row, *, prompt_text=None):
+            assert prompt_text == "Helly check: sync complete"
             return SimpleNamespace(text="Helly check green deploy")
 
     import src.candidate_profile.service as candidate_service_module
@@ -760,4 +762,5 @@ def test_verification_rejects_video_with_wrong_phrase() -> None:
     assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
     assert verification.status == "issued"
     assert verification.review_notes_json["phrase_matched"] is False
+    assert 'What I heard: "Helly check green deploy"' in result.notification_text
     assert service.queue.messages == []

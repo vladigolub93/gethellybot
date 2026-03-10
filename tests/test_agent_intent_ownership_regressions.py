@@ -221,6 +221,30 @@ def test_delete_confirmation_explicit_confirm_short_circuits_before_llm(monkeypa
     assert result.payload["reason_code"] == "delete_confirmation_explicit_command"
 
 
+def test_delete_confirmation_yes_alias_short_circuits_before_llm(monkeypatch) -> None:
+    monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: True)
+    monkeypatch.setattr(
+        "src.llm.service.delete_confirmation_decision_with_llm",
+        lambda **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "This should not be used.",
+                "proposed_action": None,
+            }
+        ),
+    )
+
+    result = safe_delete_confirmation_decision(
+        session=object(),
+        latest_user_message="да",
+        entity_label="vacancy",
+        current_step_guidance="Confirm or cancel.",
+    )
+
+    assert result.payload["proposed_action"] == "confirm_delete"
+    assert result.payload["reason_code"] == "delete_confirmation_explicit_command"
+
+
 def test_deletion_confirmation_copy_matches_vacancy_button_label(monkeypatch) -> None:
     monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: False)
 
