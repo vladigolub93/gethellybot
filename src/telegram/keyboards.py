@@ -51,6 +51,28 @@ def manager_review_keyboard() -> dict:
     }
 
 
+def manager_pre_interview_review_keyboard(candidate_count: int) -> dict:
+    keyboard = []
+    for index in range(1, max(candidate_count, 0) + 1):
+        keyboard.append([f"Interview {index}", f"Skip {index}"])
+    return {
+        "keyboard": keyboard,
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+    }
+
+
+def candidate_vacancy_review_keyboard(vacancy_count: int) -> dict:
+    keyboard = []
+    for index in range(1, max(vacancy_count, 0) + 1):
+        keyboard.append([f"Apply {index}", f"Skip {index}"])
+    return {
+        "keyboard": keyboard,
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+    }
+
+
 def deletion_confirmation_keyboard(entity_type: str) -> dict:
     confirm_text = "Confirm delete profile" if entity_type == "candidate" else "Confirm delete vacancy"
     return {

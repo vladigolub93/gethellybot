@@ -112,6 +112,39 @@ Latest user message:
 """
 
 
+def pre_interview_review_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the hiring manager means in the pre-interview candidate review step.
+
+Valid outcomes:
+- help question or clarification
+- explicit interview-candidate intent for one numbered candidate
+- explicit skip-candidate intent for one numbered candidate
+
+Rules:
+- numbered buttons look like `Interview 1`, `Skip 2`, `Interview 3`
+- only propose `interview_candidate` when the manager is clearly sending that numbered candidate to interview
+- only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
+- extract the numbered candidate slot into `candidate_slot`
+- treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after interview?" as help
+- do not invent a slot number if the manager did not specify one
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
 STATE_ASSISTANCE_SYSTEM_PROMPT = """You are the state-aware assistance layer for Helly.
 
 Purpose:
@@ -316,6 +349,39 @@ Rules:
 - propose `find_matching_vacancies` when the candidate is clearly asking to check current vacancies, look for jobs now, or see whether there is anything suitable right now
 - only propose `delete_profile` when the candidate is clearly asking to remove their profile
 - do not invent matching outcomes or timelines
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
+
+Latest user message:
+{latest_user_message}
+"""
+
+
+def candidate_vacancy_review_decision_prompt(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> str:
+    return f"""Task: decide what the candidate means in the matched-vacancy review step.
+
+Valid outcomes:
+- help question or clarification
+- explicit apply intent for one numbered vacancy
+- explicit skip intent for one numbered vacancy
+
+Rules:
+- numbered buttons look like `Apply 1`, `Skip 2`, `Apply 3`
+- only propose `apply_to_vacancy` when the candidate is clearly applying to that numbered vacancy
+- only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
+- extract the numbered vacancy slot into `vacancy_slot`
+- treat questions like "what does this mean?", "what happens after I apply?", and "how does this work?" as help
+- do not invent a slot number if the candidate did not specify one
 - do not transition stages yourself
 
 Current step guidance:
@@ -690,10 +756,14 @@ def interview_in_progress_decision_prompt(
 Valid outcomes:
 - help question or clarification about the current interview question
 - real answer to the current interview question
+- explicit accept/skip decision for another pending interview invitation
+- explicit cancel request for the current interview
 
 Rules:
 - treat clarification requests, repeat requests, timing questions, and "how should I answer" questions as help, not as interview answers
 - treat "can I answer by voice/video" questions as help, not as interview answers
+- only propose `accept_interview` or `skip_opportunity` when the candidate is explicitly responding to another interview invitation while this interview is active
+- only propose `cancel_interview` when the candidate is explicitly asking to stop the current interview
 - only propose `answer_current_question` when the message is actually answering the current interview question
 - if the candidate is clearly answering, include the answer in `answer_text`
 - do not invent interview content or rewrite the answer

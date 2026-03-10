@@ -67,6 +67,7 @@ class LangGraphStageAgentService:
         "QUESTIONS_PENDING",
         "VERIFICATION_PENDING",
         "READY",
+        "VACANCY_REVIEW",
         "INTERVIEW_INVITED",
         "INTERVIEW_IN_PROGRESS",
     }
@@ -76,6 +77,7 @@ class LangGraphStageAgentService:
         "VACANCY_SUMMARY_REVIEW",
         "CLARIFICATION_QA",
         "OPEN",
+        "PRE_INTERVIEW_REVIEW",
         "MANAGER_REVIEW",
     }
 
@@ -232,6 +234,12 @@ class LangGraphStageAgentService:
         invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
         if invited_match is not None:
             return "INTERVIEW_INVITED"
+        candidate_review_match = None
+        getter = getattr(self.matches, "get_latest_pre_interview_review_for_candidate", None)
+        if callable(getter):
+            candidate_review_match = getter(candidate.id)
+        if candidate_review_match is not None:
+            return "VACANCY_REVIEW"
         if candidate.state in self.CANDIDATE_STAGES:
             return candidate.state
         return None
@@ -273,6 +281,12 @@ class LangGraphStageAgentService:
         )
         if manager_review_match is not None:
             return "MANAGER_REVIEW"
+        pre_interview_match = None
+        getter = getattr(self.matches, "get_latest_pre_interview_review_for_manager", None)
+        if callable(getter):
+            pre_interview_match = getter([vacancy.id for vacancy in manager_vacancies])
+        if pre_interview_match is not None:
+            return "PRE_INTERVIEW_REVIEW"
         vacancy = latest_active_vacancy
         if vacancy is None:
             return None

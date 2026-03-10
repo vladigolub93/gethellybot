@@ -25,21 +25,37 @@ class FakeCandidateRepository:
         return self.candidate_version if self.candidate_version.id == version_id else None
 
 
+class FakeUsersRepository:
+    def __init__(self, users):
+        self.users = users
+
+    def get_by_id(self, user_id):
+        return self.users.get(user_id)
+
+
 class FakeMatchingRepository:
-    def __init__(self, match, matching_run):
+    def __init__(self, match, matching_run, extra_matches=None):
         self.match = match
+        self.matches = [match] + list(extra_matches or [])
         self.matching_run = matching_run
         self.invite_waves = []
 
     def list_shortlisted_for_vacancy(self, vacancy_id, *, limit=3):
-        if self.match.vacancy_id == vacancy_id and self.match.status == "shortlisted":
-            return [self.match]
-        return []
+        rows = [
+            match
+            for match in self.matches
+            if match.vacancy_id == vacancy_id and match.status == "shortlisted"
+        ]
+        return rows[:limit]
 
     def count_shortlisted_for_vacancy(self, vacancy_id):
-        if self.match.vacancy_id == vacancy_id and self.match.status == "shortlisted":
-            return 1
-        return 0
+        return len(
+            [
+                match
+                for match in self.matches
+                if match.vacancy_id == vacancy_id and match.status == "shortlisted"
+            ]
+        )
 
     def mark_invited(self, match):
         match.status = "invited"
@@ -47,8 +63,15 @@ class FakeMatchingRepository:
         return match
 
     def get_latest_invited_for_candidate(self, candidate_profile_id):
-        if self.match.candidate_profile_id == candidate_profile_id and self.match.status == "invited":
-            return self.match
+        for match in reversed(self.matches):
+            if match.candidate_profile_id == candidate_profile_id and match.status == "invited":
+                return match
+        return None
+
+    def get_next_queued_for_candidate(self, candidate_profile_id):
+        for match in self.matches:
+            if match.candidate_profile_id == candidate_profile_id and match.status == "interview_queued":
+                return match
         return None
 
     def mark_candidate_responded(self, match, *, status):
@@ -57,7 +80,10 @@ class FakeMatchingRepository:
         return match
 
     def get_by_id(self, match_id):
-        return self.match if self.match.id == match_id else None
+        for match in self.matches:
+            if match.id == match_id:
+                return match
+        return None
 
     def get_run_by_id(self, matching_run_id):
         return self.matching_run if self.matching_run.id == matching_run_id else None
@@ -96,21 +122,27 @@ class FakeVacancyRepository:
 class FakeInterviewsRepository:
     def __init__(self):
         self.session = None
+        self.sessions = {}
         self.questions = []
         self.answers = []
 
     def get_session_by_match_id(self, match_id):
+        if match_id in self.sessions:
+            return self.sessions[match_id]
         if self.session and self.session.match_id == match_id:
             return self.session
         return None
 
     def get_active_session_for_candidate(self, candidate_profile_id):
+        for session in reversed(list(self.sessions.values())):
+            if session.candidate_profile_id == candidate_profile_id and session.state in {"INVITED", "ACCEPTED", "IN_PROGRESS"}:
+                return session
         if self.session and self.session.candidate_profile_id == candidate_profile_id and self.session.state in {"INVITED", "ACCEPTED", "IN_PROGRESS"}:
             return self.session
         return None
 
     def create_session(self, **kwargs):
-        self.session = SimpleNamespace(
+        created = SimpleNamespace(
             id=uuid4(),
             current_question_order=1,
             total_questions=0,
@@ -120,7 +152,9 @@ class FakeInterviewsRepository:
             completed_at=None,
             **kwargs,
         )
-        return self.session
+        self.session = created
+        self.sessions[created.match_id] = created
+        return created
 
     def create_question(self, **kwargs):
         question = SimpleNamespace(id=uuid4(), asked_at=None, answered_at=None, **kwargs)
@@ -206,10 +240,20 @@ class FakeQueue:
         self.messages.append(message)
 
 
+class FakeReviewService:
+    def __init__(self, *, result=None):
+        self.calls = []
+        self.result = result or {"status": "dispatched", "batch_count": 1, "notified": True}
+
+    def dispatch_manager_batch_for_vacancy(self, **kwargs):
+        self.calls.append(kwargs)
+        return dict(self.result)
+
+
 def _build_service():
     candidate = SimpleNamespace(id=uuid4(), user_id=uuid4())
     candidate_version = SimpleNamespace(id=uuid4(), summary_json={"years_experience": 6, "skills": ["python", "postgresql"]})
-    vacancy = SimpleNamespace(id=uuid4(), role_title="Senior Python Engineer", primary_tech_stack_json=["python", "postgresql"])
+    vacancy = SimpleNamespace(id=uuid4(), role_title="Senior Python Engineer", primary_tech_stack_json=["python", "postgresql"], manager_user_id=None)
     matching_run = SimpleNamespace(id=uuid4(), vacancy_id=vacancy.id, status="completed")
     match = SimpleNamespace(
         id=uuid4(),
@@ -227,27 +271,33 @@ def _build_service():
     service.vacancies = FakeVacancyRepository(vacancy)
     service.interviews = FakeInterviewsRepository()
     service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Test Candidate")}
+    )
+    service.review_service = FakeReviewService()
     service.state_service = FakeStateService()
     service.queue = FakeQueue()
     return service, candidate, match, vacancy, matching_run
 
 
-def test_dispatch_invites_for_vacancy_marks_match_invited() -> None:
-    service, candidate, match, vacancy, matching_run = _build_service()
+def test_dispatch_invites_for_vacancy_routes_legacy_job_to_manager_review() -> None:
+    service, _candidate, match, vacancy, matching_run = _build_service()
 
     result = service.dispatch_invites_for_vacancy(vacancy_id=vacancy.id, matching_run_id=matching_run.id)
 
-    assert result["invited_count"] == 1
-    assert result["wave_no"] == 1
-    assert result["remaining_shortlisted_count"] == 0
-    assert result["shortlist_exhausted"] is True
-    assert match.status == "invited"
-    assert service.matches.invite_waves[0].invited_count == 1
-    assert service.matches.invite_waves[0].matching_run_id == matching_run.id
-    assert service.matches.invite_waves[0].status == "running"
-    assert "reminder_due_at" in service.matches.invite_waves[0].payload_json
-    assert "expires_at" in service.matches.invite_waves[0].payload_json
-    assert service.notifications.rows[0].user_id == candidate.user_id
+    assert result["invited_count"] == 0
+    assert result["invite_wave_id"] is None
+    assert result["wave_no"] is None
+    assert result["remaining_shortlisted_count"] == 1
+    assert result["shortlist_exhausted"] is False
+    assert result["routed_to_manager_review"] is True
+    assert result["manager_review_status"] == "dispatched"
+    assert match.status == "shortlisted"
+    assert service.matches.invite_waves == []
+    assert service.review_service.calls == [
+        {"vacancy_id": vacancy.id, "force": True, "trigger_type": "job"}
+    ]
+    assert service.notifications.rows == []
 
 
 def test_dispatch_invites_for_vacancy_returns_without_wave_when_shortlist_empty() -> None:
@@ -261,6 +311,7 @@ def test_dispatch_invites_for_vacancy_returns_without_wave_when_shortlist_empty(
     assert result["wave_no"] is None
     assert result["remaining_shortlisted_count"] == 0
     assert result["shortlist_exhausted"] is True
+    assert result["routed_to_manager_review"] is False
     assert service.matches.invite_waves == []
 
 
@@ -281,6 +332,28 @@ def test_accept_invitation_starts_interview() -> None:
     assert service.interviews.session is not None
     assert service.interviews.session.state == "IN_PROGRESS"
     assert len(service.interviews.questions) == 4
+
+
+def test_accept_invitation_notifies_manager() -> None:
+    service, candidate, match, vacancy, _matching_run = _build_service()
+    vacancy.manager_user_id = uuid4()
+    service.users.users[vacancy.manager_user_id] = SimpleNamespace(
+        id=vacancy.manager_user_id,
+        display_name="Hiring Manager",
+    )
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert service.notifications.rows[-1].user_id == vacancy.manager_user_id
+    assert "accepted the interview invitation" in service.notifications.rows[-1].payload_json["text"].lower()
 
 
 def test_accept_invitation_builds_questions_from_persisted_cv_text(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -318,6 +391,67 @@ def test_accept_invitation_builds_questions_from_persisted_cv_text(monkeypatch: 
     assert captured["cv_text"] == "Senior backend engineer with 7 years using Python, PostgreSQL, and AWS on fintech APIs."
 
 
+def test_skip_opportunity_notifies_manager_and_marks_declined() -> None:
+    service, candidate, match, vacancy, _matching_run = _build_service()
+    vacancy.manager_user_id = uuid4()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="skip_opportunity",
+    )
+
+    assert result is not None
+    assert result.status == "skipped"
+    assert match.status == "candidate_declined_interview"
+    assert service.notifications.rows[-1].user_id == vacancy.manager_user_id
+    assert "declined the interview invitation" in service.notifications.rows[-1].payload_json["text"].lower()
+
+
+def test_accept_invitation_queues_when_another_interview_is_active() -> None:
+    service, candidate, match, vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    active_match = SimpleNamespace(
+        id=uuid4(),
+        vacancy_id=uuid4(),
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id=service.candidates.candidate_version.id,
+        status="accepted",
+        candidate_response_at="earlier",
+    )
+    active_session = SimpleNamespace(
+        id=uuid4(),
+        match_id=active_match.id,
+        candidate_profile_id=candidate.id,
+        vacancy_id=active_match.vacancy_id,
+        state="IN_PROGRESS",
+        current_question_order=1,
+        total_questions=1,
+    )
+    service.matches.matches.append(active_match)
+    service.interviews.sessions[active_match.id] = active_session
+    service.interviews.session = active_session
+    vacancy.manager_user_id = uuid4()
+    user = SimpleNamespace(id=candidate.user_id)
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    assert result is not None
+    assert result.status == "queued"
+    assert match.status == "interview_queued"
+    queued_session = service.interviews.get_session_by_match_id(match.id)
+    assert queued_session is not None
+    assert queued_session.state == "CREATED"
+    assert service.notifications.rows[-1].user_id == vacancy.manager_user_id
+    assert "queued until the current one finishes" in service.notifications.rows[-1].payload_json["text"].lower()
+
+
 def test_interview_answers_complete_session() -> None:
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
@@ -342,6 +476,88 @@ def test_interview_answers_complete_session() -> None:
     assert service.interviews.session.state == "COMPLETED"
     assert match.status == "interview_completed"
     assert len(service.interviews.answers) == 4
+
+
+def test_completing_interview_starts_next_queued_interview() -> None:
+    service, candidate, match, vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+    service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    queued_vacancy = SimpleNamespace(
+        id=uuid4(),
+        role_title="Queued Platform Role",
+        primary_tech_stack_json=["python"],
+        manager_user_id=uuid4(),
+    )
+    queued_match = SimpleNamespace(
+        id=uuid4(),
+        matching_run_id=uuid4(),
+        vacancy_id=queued_vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id=service.candidates.candidate_version.id,
+        status="invited",
+        invitation_sent_at="now",
+        candidate_response_at=None,
+    )
+    service.matches.matches.append(queued_match)
+    service.vacancies.vacancy = vacancy
+    original_get_by_id = service.vacancies.get_by_id
+    service.vacancies.get_by_id = lambda vacancy_id: queued_vacancy if vacancy_id == queued_vacancy.id else original_get_by_id(vacancy_id)
+    service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    for index in range(4):
+        result = service.execute_active_interview_action(
+            user=user,
+            raw_message_id=uuid4(),
+            action="answer_current_question",
+            content_type="text",
+            text=f"Answer {index + 1}",
+        )
+
+    assert result is not None
+    assert result.status == "completed"
+    queued_session = service.interviews.get_session_by_match_id(queued_match.id)
+    assert queued_session is not None
+    assert queued_match.status == "accepted"
+    assert queued_session.state == "IN_PROGRESS"
+    assert service.notifications.rows[-1].user_id == candidate.user_id
+    assert "next queued interview is starting now" in service.notifications.rows[-1].payload_json["messages"][0].lower()
+
+
+def test_cancel_active_interview_marks_declined() -> None:
+    service, candidate, match, vacancy, _matching_run = _build_service()
+    vacancy.manager_user_id = uuid4()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+    service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    result = service.execute_active_interview_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="cancel_interview",
+        content_type="text",
+        text="Cancel interview",
+    )
+
+    assert result is not None
+    assert result.status == "cancelled"
+    assert match.status == "candidate_declined_interview"
+    assert service.interviews.session.state == "CANCELLED"
+    assert service.notifications.rows[-1].user_id == vacancy.manager_user_id
+    assert "cancelled the interview" in service.notifications.rows[-1].payload_json["text"].lower()
 
 
 def test_execute_active_interview_action_answers_current_question() -> None:

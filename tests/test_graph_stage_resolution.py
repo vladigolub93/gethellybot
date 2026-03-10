@@ -40,9 +40,10 @@ class FakeVacanciesRepository:
 
 
 class FakeMatchesRepository:
-    def __init__(self, invited_match=None, manager_review_match=None):
+    def __init__(self, invited_match=None, manager_review_match=None, candidate_review_match=None):
         self.invited_match = invited_match
         self.manager_review_match = manager_review_match
+        self.candidate_review_match = candidate_review_match
 
     def get_latest_invited_for_candidate(self, candidate_profile_id):
         return self.invited_match
@@ -50,13 +51,19 @@ class FakeMatchesRepository:
     def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
         return self.manager_review_match
 
+    def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
+        return self.candidate_review_match
 
-def _build_candidate_graph_service(*, candidate, active_session=None, invited_match=None):
+
+def _build_candidate_graph_service(*, candidate, active_session=None, invited_match=None, candidate_review_match=None):
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(candidate)
     service.interviews = FakeInterviewsRepository(active_session=active_session)
-    service.matches = FakeMatchesRepository(invited_match=invited_match)
+    service.matches = FakeMatchesRepository(
+        invited_match=invited_match,
+        candidate_review_match=candidate_review_match,
+    )
     return service
 
 
@@ -103,6 +110,25 @@ def test_candidate_stage_resolution_prefers_invited_over_ready() -> None:
 
     assert result is not None
     assert result.stage == "INTERVIEW_INVITED"
+
+
+def test_candidate_stage_resolution_prefers_vacancy_review_over_ready() -> None:
+    service = _build_candidate_graph_service(
+        candidate=SimpleNamespace(id="cp2b", state="READY", questions_context_json={}),
+        candidate_review_match=SimpleNamespace(id="m1b", status="candidate_decision_pending"),
+    )
+    user = SimpleNamespace(
+        id="u2b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(user=user, latest_user_message="What happens after I apply?")
+
+    assert result is not None
+    assert result.stage == "VACANCY_REVIEW"
 
 
 def test_candidate_stage_resolution_prefers_active_interview_over_invited() -> None:

@@ -366,6 +366,30 @@ class FakeInterviewService:
         return self.result
 
 
+class FakeMatchingReviewService:
+    def __init__(self):
+        self.manager_calls = []
+        self.candidate_calls = []
+        self.manager_batch_size = 2
+        self.candidate_batch_size = 2
+        self.manager_result = SimpleNamespace(status="invited")
+        self.candidate_result = SimpleNamespace(status="applied")
+
+    def execute_manager_pre_interview_action(self, **kwargs):
+        self.manager_calls.append(kwargs)
+        return self.manager_result
+
+    def current_batch_size_for_manager(self, **kwargs):
+        return self.manager_batch_size
+
+    def execute_candidate_pre_interview_action(self, **kwargs):
+        self.candidate_calls.append(kwargs)
+        return self.candidate_result
+
+    def current_batch_size_for_candidate(self, **kwargs):
+        return self.candidate_batch_size
+
+
 class FakeIdentityService:
     def __init__(self, *, consent: bool = False):
         self.consent = consent
@@ -417,6 +441,7 @@ def build_service() -> TelegramUpdateService:
     service.notifications_repo = FakeNotificationsRepository()
     service.messaging = FakeMessagingService()
     service.stage_agents = FakeStageAgentService(None)
+    service.matching_review_service = FakeMatchingReviewService()
     return service
 
 
@@ -441,6 +466,18 @@ def make_manager_review_stage_result(action: str) -> StageAgentExecutionResult:
         proposed_action=action,
         action_accepted=True,
         structured_payload={},
+        validation_result={"accepted": True, "normalized_action": action},
+    )
+
+
+def make_candidate_vacancy_review_stage_result(action: str, *, vacancy_slot: int = 1) -> StageAgentExecutionResult:
+    return StageAgentExecutionResult(
+        stage="VACANCY_REVIEW",
+        reply_text="graph vacancy review stage",
+        stage_status="ready_for_transition",
+        proposed_action=action,
+        action_accepted=True,
+        structured_payload={"vacancy_slot": vacancy_slot},
         validation_result={"accepted": True, "normalized_action": action},
     )
 
@@ -1756,6 +1793,76 @@ def test_graph_ready_stage_can_request_manual_matching() -> None:
     assert service.candidate_service.ready_action_calls[-1]["action"] == "find_matching_vacancies"
 
 
+def test_graph_candidate_vacancy_review_stage_can_apply_to_vacancy() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=make_candidate_vacancy_review_stage_result("apply_to_vacancy", vacancy_slot=2),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5c",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5c",
+        build_update(text="Apply 2"),
+    )
+
+    assert templates == []
+    assert service.matching_review_service.candidate_calls
+    assert service.matching_review_service.candidate_calls[-1]["action"] == "apply_to_vacancy"
+    assert service.matching_review_service.candidate_calls[-1]["vacancy_slot"] == 2
+
+
+def test_candidate_vacancy_review_help_keeps_candidate_keyboard() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VACANCY_REVIEW",
+            reply_text="Review the vacancy batch and use the numbered Apply or Skip buttons.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.bot_controller = FakeBotController("Old vacancy review fallback should not be used.")
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+    service.matching_review_service.candidate_batch_size = 3
+
+    user = SimpleNamespace(
+        id="u5d",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5d",
+        build_update(text="What happens after I apply?"),
+    )
+
+    assert templates == ["state_aware_help"]
+    reply_markup = service.notifications_repo.calls[-1]["payload_json"]["reply_markup"]
+    assert reply_markup["keyboard"][0] == ["Apply 1", "Skip 1"]
+
+
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -2525,6 +2632,49 @@ def test_graph_interview_in_progress_stage_can_own_text_answer() -> None:
         service.interview_service.calls[-1]["text"]
         == "In that project I designed the API boundary and owned the background job pipeline."
     )
+
+
+def test_graph_interview_in_progress_stage_can_cancel_interview() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="INTERVIEW_IN_PROGRESS",
+            reply_text=None,
+            stage_status="ready_for_transition",
+            proposed_action="cancel_interview",
+            action_accepted=True,
+            structured_payload={},
+            validation_result={"accepted": True, "normalized_action": "cancel_interview"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="cancelled",
+        notification_template="candidate_interview_cancelled",
+        notification_text="Interview cancelled.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u10cy",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw10cy",
+        build_update(text="Cancel interview"),
+    )
+
+    assert templates == ["candidate_interview_cancelled"]
+    assert service.interview_service.calls
+    assert service.interview_service.calls[-1]["action"] == "cancel_interview"
 
 
 def test_interview_voice_answer_passthrough_reaches_interview_handler() -> None:

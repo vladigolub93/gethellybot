@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.graph.state import HellyGraphState
 from src.llm.service import (
+    safe_pre_interview_review_decision,
     safe_manager_review_decision,
     safe_parse_vacancy_clarifications,
     safe_vacancy_clarification_decision,
@@ -182,6 +183,28 @@ def build_manager_stage_detect_node(session):
                 state.follow_up_needed = True
                 state.follow_up_question = payload.get("response_text")
             return state
+        if state.active_stage == "PRE_INTERVIEW_REVIEW":
+            decision = safe_pre_interview_review_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question
+                or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=_combined_recent_context(state),
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
+                state.structured_payload = {"candidate_slot": payload.get("candidate_slot")}
+                state.parsed_input["intent"] = "stage_completion_input"
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
         else:
             is_help = False
         state.parsed_input["intent"] = "help" if is_help else "manager_input"
@@ -213,6 +236,10 @@ def detect_manager_stage_intent_node(state: HellyGraphState) -> HellyGraphState:
         state.parsed_input["intent"] = "help"
         return state
     if state.active_stage == "MANAGER_REVIEW":
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
+    if state.active_stage == "PRE_INTERVIEW_REVIEW":
         state.intent = "help"
         state.parsed_input["intent"] = "help"
         return state
@@ -298,6 +325,12 @@ def build_manager_stage_reply_node(session):
                 state.reply_text = "Understood. I will approve the candidate and prepare the handoff."
             else:
                 state.reply_text = "Understood. I will reject the candidate."
+            state.confidence = 0.9
+            return state
+
+        if state.active_stage == "PRE_INTERVIEW_REVIEW" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = None
             state.confidence = 0.9
             return state
 

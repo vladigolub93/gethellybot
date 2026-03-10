@@ -9,6 +9,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
+from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.interview.question_plan import build_question_plan
 from src.interview.states import (
@@ -26,7 +27,12 @@ from src.llm.service import (
     safe_parse_interview_answer,
 )
 from src.messaging.service import MessagingService
-from src.matching.waves import InviteWaveService
+from src.matching.review import MatchingReviewService
+from src.matching.policy import (
+    MATCH_BATCH_SIZE,
+    MATCH_STATUS_CANDIDATE_DECLINED_INTERVIEW,
+    MATCH_STATUS_INTERVIEW_QUEUED,
+)
 from src.state.service import StateService
 from src.telegram.keyboards import interview_invitation_keyboard
 
@@ -47,8 +53,9 @@ class InterviewService:
         self.interviews = InterviewsRepository(session)
         self.notifications = NotificationsRepository(session)
         self.raw_messages = RawMessagesRepository(session)
+        self.users = UsersRepository(session)
         self.messaging = MessagingService(session)
-        self.wave_service = InviteWaveService(session)
+        self.review_service = MatchingReviewService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
 
@@ -108,10 +115,186 @@ class InterviewService:
         )
         return conductor.payload.get("utterance") or self._question_prompt_text(current_question)
 
-    def dispatch_invites_for_vacancy(self, *, vacancy_id, matching_run_id=None, limit: int = 3) -> dict:
-        vacancy = self.vacancies.get_by_id(vacancy_id)
+    def _candidate_label(self, candidate_profile) -> str:
+        candidate_user = self.users.get_by_id(candidate_profile.user_id)
+        if candidate_user is None:
+            return "The candidate"
+        return (
+            getattr(candidate_user, "display_name", None)
+            or getattr(candidate_user, "username", None)
+            or "The candidate"
+        )
+
+    def _notify_manager_candidate_response(
+        self,
+        *,
+        candidate_profile,
+        vacancy,
+        match,
+        message: str,
+    ) -> None:
+        manager_user_id = getattr(vacancy, "manager_user_id", None)
+        if manager_user_id is None:
+            return
+        self.notifications.create(
+            user_id=manager_user_id,
+            entity_type="match",
+            entity_id=match.id,
+            template_key="manager_pre_interview_review_ready",
+            payload_json={"text": self._copy(message)},
+            allow_duplicate=True,
+        )
+
+    def _ensure_session(self, *, match, vacancy, candidate_version):
+        session = self.interviews.get_session_by_match_id(match.id)
+        if session is not None:
+            return session
+
+        cv_text = (
+            getattr(candidate_version, "extracted_text", None)
+            or getattr(candidate_version, "transcript_text", None)
+            or None
+        )
+        llm_result = safe_build_interview_question_plan(
+            self.session,
+            vacancy=vacancy,
+            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+            cv_text=cv_text,
+        )
+        plan = llm_result.payload["questions"] or build_question_plan(
+            vacancy=vacancy,
+            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+        )
+        session = self.interviews.create_session(
+            match_id=match.id,
+            candidate_profile_id=match.candidate_profile_id,
+            vacancy_id=match.vacancy_id,
+            state=INTERVIEW_SESSION_CREATED,
+            plan_json={"questions": plan},
+        )
+        self.state_service.record_transition(
+            entity_type="interview_session",
+            entity_id=session.id,
+            from_state=None,
+            to_state=INTERVIEW_SESSION_CREATED,
+            trigger_type="system",
+            metadata_json={"match_id": str(match.id)},
+        )
+        for order_no, plan_item in enumerate(plan, start=1):
+            if isinstance(plan_item, dict):
+                question_text = plan_item.get("question")
+                question_kind = plan_item.get("type") or "primary"
+            else:
+                question_text = str(plan_item)
+                question_kind = "primary"
+            self.interviews.create_question(
+                session_id=session.id,
+                order_no=order_no,
+                question_text=question_text,
+                question_kind=question_kind,
+            )
+        self.interviews.set_total_questions(session, len(plan))
+        return session
+
+    def _start_session(
+        self,
+        *,
+        session,
+        match,
+        candidate,
+        raw_message_id,
+        vacancy,
+        candidate_version,
+        match_from_state: str | None = None,
+        trigger_type: str,
+    ) -> str:
+        if match_from_state is not None:
+            self.state_service.transition(
+                entity_type="match",
+                entity=match,
+                to_state="accepted",
+                trigger_type=trigger_type,
+                trigger_ref_id=raw_message_id,
+                actor_user_id=candidate.user_id,
+                state_field="status",
+            )
+        self.state_service.transition(
+            entity_type="interview_session",
+            entity=session,
+            to_state=INTERVIEW_SESSION_ACCEPTED,
+            trigger_type=trigger_type,
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+        self.interviews.mark_accepted(session)
+
+        self.state_service.transition(
+            entity_type="interview_session",
+            entity=session,
+            to_state=INTERVIEW_SESSION_IN_PROGRESS,
+            trigger_type="system",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+        self.interviews.mark_started(session)
+        first_question = self.interviews.get_question_by_order(session.id, session.current_question_order)
+        if first_question is not None and first_question.asked_at is None:
+            self.interviews.mark_question_asked(first_question)
+        return self._render_interview_utterance(
+            mode="opening",
+            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+            vacancy=vacancy,
+            session=session,
+            current_question=first_question,
+        )
+
+    def _start_next_queued_interview_for_candidate(
+        self,
+        *,
+        candidate_profile_id,
+        actor_user_id,
+        raw_message_id,
+    ) -> None:
+        queued_match = self.matches.get_next_queued_for_candidate(candidate_profile_id)
+        if queued_match is None:
+            return
+        candidate = self.candidates.get_by_id(candidate_profile_id)
+        if candidate is None:
+            return
+        vacancy = self.vacancies.get_by_id(queued_match.vacancy_id)
+        candidate_version = self.candidates.get_version_by_id(queued_match.candidate_profile_version_id)
+        session = self._ensure_session(
+            match=queued_match,
+            vacancy=vacancy,
+            candidate_version=candidate_version,
+        )
+        opening_text = self._start_session(
+            session=session,
+            match=queued_match,
+            candidate=candidate,
+            raw_message_id=raw_message_id,
+            vacancy=vacancy,
+            candidate_version=candidate_version,
+            match_from_state=MATCH_STATUS_INTERVIEW_QUEUED,
+            trigger_type="system",
+        )
+        self.notifications.create(
+            user_id=actor_user_id,
+            entity_type="interview_session",
+            entity_id=session.id,
+            template_key="candidate_interview_started",
+            payload_json={
+                "text": self._copy("Your next queued interview is starting now."),
+                "messages": [
+                    self._copy("Your next queued interview is starting now."),
+                    opening_text,
+                ],
+            },
+            allow_duplicate=True,
+        )
+
+    def dispatch_invites_for_vacancy(self, *, vacancy_id, matching_run_id=None, limit: int = MATCH_BATCH_SIZE) -> dict:
         matching_run = None
-        now = datetime.now(timezone.utc)
         if matching_run_id is not None:
             matching_run = self.matches.get_run_by_id(matching_run_id)
         if matching_run is None:
@@ -129,75 +312,24 @@ class InterviewService:
                 "invited_count": 0,
                 "remaining_shortlisted_count": remaining_shortlisted_count,
                 "shortlist_exhausted": True,
+                "routed_to_manager_review": False,
             }
-        wave = self.matches.create_invite_wave(
+        review_result = self.review_service.dispatch_manager_batch_for_vacancy(
             vacancy_id=vacancy_id,
-            matching_run_id=matching_run.id,
-            wave_no=self.matches.get_next_wave_no(matching_run.id),
-            status="running",
-            target_invites_count=limit,
-            payload_json=self.wave_service.build_wave_timing_payload(
-                matching_run_id=matching_run.id,
-                limit=limit,
-                now=now,
-            ),
-        )
-        invited_count = 0
-        invited_match_ids = []
-        for match in matches:
-            candidate = self.candidates.get_by_id(match.candidate_profile_id)
-            if candidate is None:
-                continue
-            self.matches.mark_invited(match)
-            self.state_service.record_transition(
-                entity_type="match",
-                entity_id=match.id,
-                from_state="shortlisted",
-                to_state="invited",
-                trigger_type="job",
-                metadata_json={"vacancy_id": str(vacancy_id)},
-            )
-            self.notifications.create(
-                user_id=candidate.user_id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="candidate_interview_invitation",
-                payload_json={
-                    "text": self.messaging.compose_interview_invitation(
-                        role_title=getattr(vacancy, "role_title", None)
-                    ),
-                    "messages": [
-                        self.messaging.compose_interview_invitation(
-                            role_title=getattr(vacancy, "role_title", None)
-                        ),
-                        "If you want, we can do it right here in chat.",
-                    ],
-                    "reply_markup": interview_invitation_keyboard(),
-                },
-            )
-            invited_count += 1
-            invited_match_ids.append(str(match.id))
-        self.matches.complete_invite_wave(
-            wave,
-            invited_count=invited_count,
-            status="running",
-            payload_json={
-                **self.wave_service.build_wave_timing_payload(
-                    matching_run_id=matching_run.id,
-                    limit=limit,
-                    now=now,
-                ),
-                "invited_match_ids": invited_match_ids,
-            },
+            force=True,
+            trigger_type="job",
         )
         return {
             "vacancy_id": str(vacancy_id),
             "matching_run_id": str(matching_run.id),
-            "invite_wave_id": str(wave.id),
-            "wave_no": wave.wave_no,
-            "invited_count": invited_count,
-            "remaining_shortlisted_count": max(remaining_shortlisted_count - invited_count, 0),
-            "shortlist_exhausted": remaining_shortlisted_count <= invited_count,
+            "invite_wave_id": None,
+            "wave_no": None,
+            "invited_count": 0,
+            "remaining_shortlisted_count": remaining_shortlisted_count,
+            "shortlist_exhausted": remaining_shortlisted_count == 0,
+            "routed_to_manager_review": True,
+            "manager_review_status": review_result.get("status"),
+            "manager_batch_count": review_result.get("batch_count", 0),
         }
 
     def execute_active_interview_action(
@@ -218,11 +350,38 @@ class InterviewService:
         if session is None:
             return None
 
+        if action in {"accept_interview", "skip_opportunity"}:
+            invitation_result = self.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action=action,
+            )
+            if invitation_result is not None:
+                return invitation_result
+            return InterviewUserResult(
+                status="help",
+                notification_template="candidate_interview_answer_help",
+                notification_text=self._copy(
+                    "There is no other pending interview invitation right now. "
+                    "Answer the current question or say 'Cancel interview' if you want to stop."
+                ),
+            )
+
+        if action == "cancel_interview":
+            return self._cancel_active_interview(
+                candidate=candidate,
+                session=session,
+                raw_message_id=raw_message_id,
+            )
+
         if action != "answer_current_question":
             return InterviewUserResult(
                 status="help",
                 notification_template="candidate_interview_answer_help",
-                notification_text=self._copy("Answer the current question in text, voice, or video."),
+                notification_text=self._copy(
+                    "Answer the current question in text, voice, or video. "
+                    "If you need to stop, say 'Cancel interview'."
+                ),
             )
 
         return self._handle_interview_answer(
@@ -256,16 +415,31 @@ class InterviewService:
                 raw_message_id=raw_message_id,
             )
         if action == "skip_opportunity":
-            self.matches.mark_candidate_responded(invited_match, status="skipped")
+            vacancy = self.vacancies.get_by_id(invited_match.vacancy_id)
+            candidate_name = self._candidate_label(candidate)
+            self.matches.mark_candidate_responded(
+                invited_match,
+                status=MATCH_STATUS_CANDIDATE_DECLINED_INTERVIEW,
+            )
             self.state_service.record_transition(
                 entity_type="match",
                 entity_id=invited_match.id,
                 from_state="invited",
-                to_state="skipped",
+                to_state=MATCH_STATUS_CANDIDATE_DECLINED_INTERVIEW,
                 trigger_type="user_action",
                 trigger_ref_id=raw_message_id,
                 actor_user_id=user.id,
             )
+            if vacancy is not None:
+                self._notify_manager_candidate_response(
+                    candidate_profile=candidate,
+                    vacancy=vacancy,
+                    match=invited_match,
+                    message=(
+                        f"{candidate_name} declined the interview invitation for "
+                        f"{getattr(vacancy, 'role_title', None) or 'this vacancy'}."
+                    ),
+                )
             return InterviewUserResult(
                 status="skipped",
                 notification_template="candidate_interview_skipped",
@@ -279,6 +453,46 @@ class InterviewService:
         )
 
     def _accept_invitation(self, *, candidate, match, raw_message_id):
+        vacancy = self.vacancies.get_by_id(match.vacancy_id)
+        candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
+        candidate_name = self._candidate_label(candidate)
+        active_session = self.interviews.get_active_session_for_candidate(candidate.id)
+
+        if active_session is not None and getattr(active_session, "match_id", None) != match.id:
+            self.matches.mark_candidate_responded(match, status=MATCH_STATUS_INTERVIEW_QUEUED)
+            self.state_service.record_transition(
+                entity_type="match",
+                entity_id=match.id,
+                from_state="invited",
+                to_state=MATCH_STATUS_INTERVIEW_QUEUED,
+                trigger_type="user_action",
+                trigger_ref_id=raw_message_id,
+                actor_user_id=candidate.user_id,
+            )
+            self._ensure_session(
+                match=match,
+                vacancy=vacancy,
+                candidate_version=candidate_version,
+            )
+            if vacancy is not None:
+                self._notify_manager_candidate_response(
+                    candidate_profile=candidate,
+                    vacancy=vacancy,
+                    match=match,
+                    message=(
+                        f"{candidate_name} accepted the interview invitation for "
+                        f"{getattr(vacancy, 'role_title', None) or 'this vacancy'}. "
+                        "The interview is queued until the current one finishes."
+                    ),
+                )
+            return InterviewUserResult(
+                status="queued",
+                notification_template="candidate_interview_queued",
+                notification_text=self._copy(
+                    "Interview accepted. I queued it and will start it as soon as you finish the current one."
+                ),
+            )
+
         self.matches.mark_candidate_responded(match, status="accepted")
         self.state_service.record_transition(
             entity_type="match",
@@ -290,89 +504,87 @@ class InterviewService:
             actor_user_id=candidate.user_id,
         )
 
-        session = self.interviews.get_session_by_match_id(match.id)
-        vacancy = self.vacancies.get_by_id(match.vacancy_id)
-        candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
-        if session is None:
-            cv_text = (
-                getattr(candidate_version, "extracted_text", None)
-                or getattr(candidate_version, "transcript_text", None)
-                or None
-            )
-            llm_result = safe_build_interview_question_plan(
-                self.session,
-                vacancy=vacancy,
-                candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
-                cv_text=cv_text,
-            )
-            plan = llm_result.payload["questions"] or build_question_plan(
-                vacancy=vacancy,
-                candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
-            )
-            session = self.interviews.create_session(
-                match_id=match.id,
-                candidate_profile_id=match.candidate_profile_id,
-                vacancy_id=match.vacancy_id,
-                state=INTERVIEW_SESSION_CREATED,
-                plan_json={"questions": plan},
-            )
-            self.state_service.record_transition(
-                entity_type="interview_session",
-                entity_id=session.id,
-                from_state=None,
-                to_state=INTERVIEW_SESSION_CREATED,
-                trigger_type="system",
-                metadata_json={"match_id": str(match.id)},
-            )
-            for order_no, plan_item in enumerate(plan, start=1):
-                if isinstance(plan_item, dict):
-                    question_text = plan_item.get("question")
-                    question_kind = plan_item.get("type") or "primary"
-                else:
-                    question_text = str(plan_item)
-                    question_kind = "primary"
-                self.interviews.create_question(
-                    session_id=session.id,
-                    order_no=order_no,
-                    question_text=question_text,
-                    question_kind=question_kind,
-                )
-            self.interviews.set_total_questions(session, len(plan))
-
-        self.state_service.transition(
-            entity_type="interview_session",
-            entity=session,
-            to_state=INTERVIEW_SESSION_ACCEPTED,
-            trigger_type="user_action",
-            trigger_ref_id=raw_message_id,
-            actor_user_id=candidate.user_id,
-        )
-        self.interviews.mark_accepted(session)
-
-        self.state_service.transition(
-            entity_type="interview_session",
-            entity=session,
-            to_state=INTERVIEW_SESSION_IN_PROGRESS,
-            trigger_type="system",
-            trigger_ref_id=raw_message_id,
-            actor_user_id=candidate.user_id,
-        )
-        self.interviews.mark_started(session)
-        first_question = self.interviews.get_question_by_order(session.id, session.current_question_order)
-        if first_question is not None and first_question.asked_at is None:
-            self.interviews.mark_question_asked(first_question)
-        opening_text = self._render_interview_utterance(
-            mode="opening",
-            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+        session = self._ensure_session(
+            match=match,
             vacancy=vacancy,
-            session=session,
-            current_question=first_question,
+            candidate_version=candidate_version,
         )
+        opening_text = self._start_session(
+            session=session,
+            match=match,
+            candidate=candidate,
+            raw_message_id=raw_message_id,
+            vacancy=vacancy,
+            candidate_version=candidate_version,
+            trigger_type="user_action",
+        )
+        if vacancy is not None:
+            self._notify_manager_candidate_response(
+                candidate_profile=candidate,
+                vacancy=vacancy,
+                match=match,
+                message=(
+                    f"{candidate_name} accepted the interview invitation for "
+                    f"{getattr(vacancy, 'role_title', None) or 'this vacancy'}. "
+                    "The interview is starting now."
+                ),
+            )
 
         return InterviewUserResult(
             status="accepted",
             notification_template="candidate_interview_started",
-            notification_text=opening_text if first_question is not None else "Interview started.",
+            notification_text=opening_text or "Interview started.",
+        )
+
+    def _cancel_active_interview(self, *, candidate, session, raw_message_id):
+        match = self.matches.get_by_id(session.match_id)
+        if match is None:
+            return InterviewUserResult(
+                status="cancelled",
+                notification_template="candidate_interview_cancelled",
+                notification_text=self._copy("Interview cancelled."),
+            )
+        vacancy = self.vacancies.get_by_id(session.vacancy_id)
+        candidate_name = self._candidate_label(candidate)
+        self.state_service.transition(
+            entity_type="interview_session",
+            entity=session,
+            to_state="CANCELLED",
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+        )
+        self.state_service.transition(
+            entity_type="match",
+            entity=match,
+            to_state=MATCH_STATUS_CANDIDATE_DECLINED_INTERVIEW,
+            trigger_type="user_action",
+            trigger_ref_id=raw_message_id,
+            actor_user_id=candidate.user_id,
+            state_field="status",
+        )
+        if vacancy is not None:
+            self._notify_manager_candidate_response(
+                candidate_profile=candidate,
+                vacancy=vacancy,
+                match=match,
+                message=(
+                    f"{candidate_name} cancelled the interview for "
+                    f"{getattr(vacancy, 'role_title', None) or 'this vacancy'} "
+                    "and the opportunity is now marked as declined."
+                ),
+            )
+        self._start_next_queued_interview_for_candidate(
+            candidate_profile_id=session.candidate_profile_id,
+            actor_user_id=candidate.user_id,
+            raw_message_id=raw_message_id,
+        )
+        return InterviewUserResult(
+            status="cancelled",
+            notification_template="candidate_interview_cancelled",
+            notification_text=self._copy(
+                "Interview cancelled. I marked this opportunity as declined."
+            ),
         )
 
     def _handle_interview_answer(
@@ -551,6 +763,11 @@ class InterviewService:
                 answer_quality=followup_decision.payload.get("answer_quality"),
                 follow_up_used=question.question_kind == "follow_up",
                 follow_up_reason=followup_decision.payload.get("followup_reason"),
+            )
+            self._start_next_queued_interview_for_candidate(
+                candidate_profile_id=session.candidate_profile_id,
+                actor_user_id=candidate.user_id,
+                raw_message_id=raw_message_id,
             )
             return InterviewUserResult(
                 status="completed",

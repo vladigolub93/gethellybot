@@ -121,6 +121,18 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         guidance_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again now.",
         help_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again right now.",
     ),
+    "VACANCY_REVIEW": StatePolicyDefinition(
+        state="VACANCY_REVIEW",
+        goal="Review the current matched-vacancy batch and decide where to apply.",
+        allowed_actions=["apply_to_vacancy", "skip_vacancy"],
+        assistance_prompt_slug="candidate_vacancy_review",
+        guidance_text="Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+        help_text=(
+            "You are reviewing matched vacancies. "
+            "Use the numbered Apply or Skip buttons for the vacancies in the current batch."
+        ),
+        missing_requirements=["candidate_vacancy_decision"],
+    ),
     "INTAKE_PENDING": StatePolicyDefinition(
         state="INTAKE_PENDING",
         goal="Collect a usable job description source.",
@@ -204,10 +216,13 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "INTERVIEW_IN_PROGRESS": StatePolicyDefinition(
         state="INTERVIEW_IN_PROGRESS",
         goal="Complete the active interview one question at a time.",
-        allowed_actions=["answer_current_question"],
+        allowed_actions=["answer_current_question", "accept_interview", "skip_opportunity", "cancel_interview"],
         assistance_prompt_slug="interview_in_progress",
         guidance_text="Please answer the current interview question. You can reply in text, voice, or video.",
-        help_text="Please answer the current interview question. You can reply in text, voice, or video.",
+        help_text=(
+            "Please answer the current interview question. "
+            "You can reply in text, voice, or video, or say 'Cancel interview' if you want to stop."
+        ),
         missing_requirements=["current_interview_answer"],
     ),
     "MANAGER_REVIEW": StatePolicyDefinition(
@@ -221,6 +236,18 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "You can also ask what the evaluation means before deciding."
         ),
         missing_requirements=["manager_decision"],
+    ),
+    "PRE_INTERVIEW_REVIEW": StatePolicyDefinition(
+        state="PRE_INTERVIEW_REVIEW",
+        goal="Review matched candidates before interview and decide who should receive an interview invitation.",
+        allowed_actions=["interview_candidate", "skip_candidate"],
+        assistance_prompt_slug="pre_interview_review",
+        guidance_text="Review the current candidate batch and use the numbered Interview or Skip buttons.",
+        help_text=(
+            "You are reviewing matched candidates before interview. "
+            "Use the numbered Interview or Skip buttons for the candidates in the current batch."
+        ),
+        missing_requirements=["pre_interview_manager_decision"],
     ),
     "DELETE_CONFIRMATION": StatePolicyDefinition(
         state="DELETE_CONFIRMATION",

@@ -11,6 +11,7 @@ from src.llm.service import (
     safe_candidate_ready_decision,
     safe_candidate_questions_decision,
     safe_candidate_summary_review_decision,
+    safe_candidate_vacancy_review_decision,
     safe_candidate_verification_decision,
     safe_interview_invitation_decision,
     safe_interview_in_progress_decision,
@@ -220,6 +221,27 @@ def build_candidate_stage_detect_node(session):
                 state.follow_up_needed = True
                 state.follow_up_question = payload.get("response_text")
             return state
+        elif state.active_stage == "VACANCY_REVIEW":
+            decision = safe_candidate_vacancy_review_decision(
+                session,
+                latest_user_message=text,
+                current_step_guidance=state.follow_up_question or (state.recent_context[-1] if state.recent_context else None),
+                recent_context=_combined_recent_context(state),
+            )
+            payload = dict(decision.payload or {})
+            state.intent = payload.get("intent") or "help"
+            state.reply_text = payload.get("response_text")
+            state.parsed_input["agent_reason_code"] = payload.get("reason_code")
+            if payload.get("proposed_action") is not None:
+                state.proposed_action = payload.get("proposed_action")
+                state.structured_payload = {"vacancy_slot": payload.get("vacancy_slot")}
+                state.parsed_input["intent"] = "stage_completion_input"
+            else:
+                state.parsed_input["intent"] = "help"
+            if payload.get("needs_follow_up"):
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text")
+            return state
         elif state.active_stage == "INTERVIEW_INVITED":
             decision = safe_interview_invitation_decision(
                 session,
@@ -323,6 +345,10 @@ def detect_candidate_stage_intent_node(state: HellyGraphState) -> HellyGraphStat
         state.intent = "help"
         state.parsed_input["intent"] = "help"
         return state
+    elif state.active_stage == "VACANCY_REVIEW":
+        state.intent = "help"
+        state.parsed_input["intent"] = "help"
+        return state
     elif state.active_stage == "INTERVIEW_INVITED":
         state.intent = "help"
         state.parsed_input["intent"] = "help"
@@ -410,6 +436,12 @@ def build_candidate_stage_reply_node(session):
             state.confidence = 0.9
             return state
 
+        if state.active_stage == "VACANCY_REVIEW" and state.parsed_input.get("intent") == "stage_completion_input":
+            state.stage_status = "ready_for_transition"
+            state.reply_text = None
+            state.confidence = 0.9
+            return state
+
         if state.active_stage == "INTERVIEW_INVITED" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
             if state.proposed_action == "accept_interview":
@@ -421,7 +453,10 @@ def build_candidate_stage_reply_node(session):
 
         if state.active_stage == "INTERVIEW_IN_PROGRESS" and state.parsed_input.get("intent") == "stage_completion_input":
             state.stage_status = "ready_for_transition"
-            state.reply_text = "Thanks. I will use this answer and continue the interview."
+            if state.proposed_action == "answer_current_question":
+                state.reply_text = "Thanks. I will use this answer and continue the interview."
+            else:
+                state.reply_text = None
             state.confidence = 0.9
             return state
 

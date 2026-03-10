@@ -68,7 +68,9 @@ class BotControllerService:
             "VERIFICATION_PENDING",
             "CLARIFICATION_QA",
             "READY",
+            "VACANCY_REVIEW",
             "OPEN",
+            "PRE_INTERVIEW_REVIEW",
             "INTERVIEW_INVITED",
             "INTERVIEW_IN_PROGRESS",
             "MANAGER_REVIEW",
@@ -124,6 +126,11 @@ class BotControllerService:
                 invited_match = self.matching.get_latest_invited_for_candidate(candidate.id)
                 if invited_match is not None:
                     return resolve_state_context(role=role, state="INTERVIEW_INVITED")
+                getter = getattr(self.matching, "get_latest_pre_interview_review_for_candidate", None)
+                if callable(getter):
+                    candidate_review_match = getter(candidate.id)
+                    if candidate_review_match is not None:
+                        return resolve_state_context(role=role, state="VACANCY_REVIEW")
                 return resolve_state_context(role=role, state=candidate.state)
             return resolve_state_context(role=role, state="CV_PENDING")
 
@@ -136,6 +143,12 @@ class BotControllerService:
         )
         if review_match is not None:
             return resolve_state_context(role=role, state="MANAGER_REVIEW")
+        pre_interview_match = None
+        getter = getattr(self.matching, "get_latest_pre_interview_review_for_manager", None)
+        if callable(getter):
+            pre_interview_match = getter([vacancy.id for vacancy in manager_vacancies])
+        if pre_interview_match is not None:
+            return resolve_state_context(role=role, state="PRE_INTERVIEW_REVIEW")
 
         vacancy = self.vacancies.get_latest_incomplete_by_manager_user_id(user.id)
         if vacancy is not None:
@@ -270,6 +283,16 @@ class BotControllerService:
                 r"\bopportunit(y|ies)\b",
                 r"\bdelete\b",
             ],
+            "VACANCY_REVIEW": [
+                r"\bwhat\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhy\b",
+                r"\bapply\b",
+                r"\bskip\b",
+                r"\bvacanc(?:y|ies)\b",
+                r"\brole\b",
+            ],
             "OPEN": [
                 r"\bwhat happens now\b",
                 r"\bwhat now\b",
@@ -302,6 +325,10 @@ class BotControllerService:
                 r"\bvoice\b",
                 r"\bvideo\b",
                 r"\boff topic\b",
+                r"\bcancel\b",
+                r"\bstop\b",
+                r"\baccept interview\b",
+                r"\bskip opportunity\b",
             ],
             "MANAGER_REVIEW": [
                 r"\bwhat does this mean\b",
@@ -313,6 +340,15 @@ class BotControllerService:
                 r"\breject\b",
                 r"\bstrengths?\b",
                 r"\brisks?\b",
+            ],
+            "PRE_INTERVIEW_REVIEW": [
+                r"\bwhat does this mean\b",
+                r"\bhow\b",
+                r"\bhelp\b",
+                r"\bwhy\b",
+                r"\bwhat happens after\b",
+                r"\binterview\b",
+                r"\bskip\b",
             ],
             "DELETE_CONFIRMATION": [
                 r"\bwhat\b",

@@ -3,20 +3,21 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from src.db.models.matching import InviteWave, Match, MatchingRun
+from src.matching.policy import (
+    ACTIVE_MATCH_STATUSES as MATCH_ACTIVE_STATUSES,
+    MATCH_STATUS_CANDIDATE_APPLIED,
+    MATCH_STATUS_INTERVIEW_QUEUED,
+    PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES,
+    PRE_INTERVIEW_MANAGER_REVIEW_STATUSES,
+)
 
 
 class MatchingRepository:
-    ACTIVE_MATCH_STATUSES = (
-        "shortlisted",
-        "invited",
-        "accepted",
-        "interview_completed",
-        "manager_review",
-    )
+    ACTIVE_MATCH_STATUSES = MATCH_ACTIVE_STATUSES
 
     def __init__(self, session: Session):
         self.session = session
@@ -122,6 +123,82 @@ class MatchingRepository:
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def list_pre_interview_review_for_vacancy(self, vacancy_id, *, limit: int = 3) -> list[Match]:
+        applied_first = case((Match.status == MATCH_STATUS_CANDIDATE_APPLIED, 0), else_=1)
+        stmt = (
+            select(Match)
+            .where(
+                Match.vacancy_id == vacancy_id,
+                Match.status.in_(PRE_INTERVIEW_MANAGER_REVIEW_STATUSES),
+            )
+            .order_by(
+                applied_first,
+                Match.llm_rank_position.asc().nulls_last(),
+                Match.deterministic_score.desc().nulls_last(),
+                Match.updated_at.desc(),
+            )
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def get_latest_pre_interview_review_for_manager(self, vacancy_ids: list) -> Optional[Match]:
+        if not vacancy_ids:
+            return None
+        stmt = (
+            select(Match)
+            .where(
+                Match.vacancy_id.in_(vacancy_ids),
+                Match.status.in_(PRE_INTERVIEW_MANAGER_REVIEW_STATUSES),
+            )
+            .order_by(Match.updated_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_shortlisted_for_candidate(self, candidate_profile_id, *, limit: int = 3) -> list[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status == "shortlisted",
+            )
+            .order_by(
+                Match.llm_rank_score.desc().nulls_last(),
+                Match.deterministic_score.desc().nulls_last(),
+                Match.updated_at.desc(),
+            )
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_pre_interview_review_for_candidate(self, candidate_profile_id, *, limit: int = 3) -> list[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status.in_(PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES),
+            )
+            .order_by(
+                Match.llm_rank_score.desc().nulls_last(),
+                Match.deterministic_score.desc().nulls_last(),
+                Match.updated_at.desc(),
+            )
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id) -> Optional[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status.in_(PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES),
+            )
+            .order_by(Match.updated_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def count_shortlisted_for_vacancy(self, vacancy_id) -> int:
         stmt = select(Match).where(
@@ -259,6 +336,18 @@ class MatchingRepository:
                 Match.status == "invited",
             )
             .order_by(Match.updated_at.desc())
+            .limit(1)
+        )
+        return self.session.execute(stmt).scalar_one_or_none()
+
+    def get_next_queued_for_candidate(self, candidate_profile_id) -> Optional[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status == MATCH_STATUS_INTERVIEW_QUEUED,
+            )
+            .order_by(Match.candidate_response_at.asc().nulls_last(), Match.updated_at.asc())
             .limit(1)
         )
         return self.session.execute(stmt).scalar_one_or_none()

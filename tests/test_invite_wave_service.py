@@ -60,6 +60,16 @@ class FakeQueue:
         self.messages.append(message)
 
 
+class FakeReviewService:
+    def __init__(self, *, result=None):
+        self.calls = []
+        self.result = result or {"status": "dispatched", "batch_count": 2, "notified": True}
+
+    def dispatch_manager_batch_for_vacancy(self, **kwargs):
+        self.calls.append(kwargs)
+        return dict(self.result)
+
+
 class FakeCandidateRepository:
     def __init__(self, candidate):
         self.candidate = candidate
@@ -106,6 +116,7 @@ def test_evaluate_wave_completes_wave_without_expansion_if_threshold_met() -> No
     service.matching.remaining_shortlisted_count = 4
     service.interviews = FakeInterviewsRepository(completed_count=2)
     service.queue = FakeQueue()
+    service.review_service = FakeReviewService()
 
     result = service.evaluate_wave(wave_id=wave.id)
 
@@ -113,11 +124,12 @@ def test_evaluate_wave_completes_wave_without_expansion_if_threshold_met() -> No
     assert result["remaining_shortlisted_count"] == 4
     assert result["shortlist_exhausted"] is False
     assert result["expansion_enqueued"] is False
+    assert result["manager_review_dispatched"] is False
     assert wave.status == "completed"
     assert not service.queue.messages
 
 
-def test_evaluate_wave_enqueues_expansion_when_threshold_not_met() -> None:
+def test_evaluate_wave_routes_remaining_shortlist_to_manager_review_when_threshold_not_met() -> None:
     wave = SimpleNamespace(
         id=uuid4(),
         vacancy_id=uuid4(),
@@ -133,19 +145,19 @@ def test_evaluate_wave_enqueues_expansion_when_threshold_not_met() -> None:
     service.matching.remaining_shortlisted_count = 3
     service.interviews = FakeInterviewsRepository(completed_count=1)
     service.queue = FakeQueue()
+    service.review_service = FakeReviewService()
 
     result = service.evaluate_wave(wave_id=wave.id)
 
     assert result["completed_interviews_count"] == 1
     assert result["remaining_shortlisted_count"] == 3
     assert result["shortlist_exhausted"] is False
-    assert result["expansion_enqueued"] is True
-    assert len(service.queue.messages) == 1
-    queued = service.queue.messages[0]
-    assert queued.job_type == "interview_dispatch_invites_v1"
-    assert queued.payload["vacancy_id"] == str(wave.vacancy_id)
-    assert queued.payload["matching_run_id"] == str(wave.matching_run_id)
-    assert queued.payload["limit"] == 2
+    assert result["expansion_enqueued"] is False
+    assert result["manager_review_dispatched"] is True
+    assert not service.queue.messages
+    assert service.review_service.calls == [
+        {"vacancy_id": wave.vacancy_id, "force": True, "trigger_type": "job"}
+    ]
 
 
 def test_evaluate_wave_does_not_enqueue_expansion_when_shortlist_exhausted() -> None:
@@ -164,6 +176,7 @@ def test_evaluate_wave_does_not_enqueue_expansion_when_shortlist_exhausted() -> 
     service.matching.remaining_shortlisted_count = 0
     service.interviews = FakeInterviewsRepository(completed_count=1)
     service.queue = FakeQueue()
+    service.review_service = FakeReviewService()
 
     result = service.evaluate_wave(wave_id=wave.id)
 
@@ -171,6 +184,7 @@ def test_evaluate_wave_does_not_enqueue_expansion_when_shortlist_exhausted() -> 
     assert result["remaining_shortlisted_count"] == 0
     assert result["shortlist_exhausted"] is True
     assert result["expansion_enqueued"] is False
+    assert result["manager_review_dispatched"] is False
     assert not service.queue.messages
 
 
@@ -225,6 +239,7 @@ def test_evaluate_wave_expires_still_invited_matches() -> None:
     service.matching.remaining_shortlisted_count = 0
     service.interviews = FakeInterviewsRepository(completed_count=1)
     service.queue = FakeQueue()
+    service.review_service = FakeReviewService()
 
     result = service.evaluate_wave(wave_id=wave.id)
 

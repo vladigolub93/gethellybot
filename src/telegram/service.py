@@ -17,6 +17,7 @@ from src.graph.service import LangGraphStageAgentService
 from src.identity.rules import has_primary_contact_channel
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
+from src.matching.review import MatchingReviewService
 from src.messaging.service import MessagingService
 from src.notifications.delivery import NotificationDeliveryService
 from src.orchestrator.policy import resolve_state_context
@@ -25,9 +26,11 @@ from src.jobs.processor import process_job
 from src.jobs.queue import JobMessage
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
+    candidate_vacancy_review_keyboard,
     contact_request_keyboard,
     deletion_confirmation_keyboard,
     interview_invitation_keyboard,
+    manager_pre_interview_review_keyboard,
     manager_review_keyboard,
     remove_keyboard,
     role_selection_keyboard,
@@ -59,6 +62,7 @@ class TelegramUpdateService:
         self.candidate_service = CandidateProfileService(session)
         self.evaluation_service = EvaluationService(session)
         self.interview_service = InterviewService(session)
+        self.matching_review_service = MatchingReviewService(session)
         self.vacancy_service = VacancyService(session)
         self.notification_delivery = NotificationDeliveryService(session)
         self._safe_immediate_job_types = {
@@ -336,6 +340,30 @@ class TelegramUpdateService:
             )
         ]
 
+    def _handle_candidate_vacancy_review_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "VACANCY_REVIEW"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"apply_to_vacancy", "skip_vacancy"}
+        ):
+            return None
+        result = self.matching_review_service.execute_candidate_pre_interview_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=stage_result.proposed_action,
+            vacancy_slot=(stage_result.structured_payload or {}).get("vacancy_slot"),
+        )
+        if result is None:
+            return None
+        return []
+
     def _handle_manager_delete_stage_action(
         self,
         *,
@@ -415,6 +443,30 @@ class TelegramUpdateService:
             )
         ]
 
+    def _handle_manager_pre_interview_stage_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        stage_result,
+    ) -> List[str] | None:
+        if not (
+            stage_result is not None
+            and stage_result.stage == "PRE_INTERVIEW_REVIEW"
+            and stage_result.action_accepted
+            and stage_result.proposed_action in {"interview_candidate", "skip_candidate"}
+        ):
+            return None
+        result = self.matching_review_service.execute_manager_pre_interview_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=stage_result.proposed_action,
+            candidate_slot=(stage_result.structured_payload or {}).get("candidate_slot"),
+        )
+        if result is None:
+            return None
+        return []
+
     def _handle_manager_open_stage_action(
         self,
         *,
@@ -492,12 +544,17 @@ class TelegramUpdateService:
             )
         elif (
             stage_result.stage == "INTERVIEW_IN_PROGRESS"
-            and stage_result.proposed_action == "answer_current_question"
+            and stage_result.proposed_action in {
+                "answer_current_question",
+                "accept_interview",
+                "skip_opportunity",
+                "cancel_interview",
+            }
         ):
             interview_result = self.interview_service.execute_active_interview_action(
                 user=user,
                 raw_message_id=raw_message_id,
-                action="answer_current_question",
+                action=stage_result.proposed_action,
                 content_type=normalized_update.content_type,
                 text=(stage_result.structured_payload or {}).get("answer_text") or normalized_update.text,
                 file_id=file_id,
@@ -514,10 +571,7 @@ class TelegramUpdateService:
                     else remove_keyboard(),
                 )
             ]
-        elif (
-            stage_result.stage != "INTERVIEW_IN_PROGRESS"
-            or stage_result.proposed_action != "answer_current_question"
-        ):
+        elif stage_result.stage != "INTERVIEW_IN_PROGRESS":
             return None
         return None
 
@@ -996,14 +1050,15 @@ class TelegramUpdateService:
             )
             if candidate_interaction_templates is not None:
                 return candidate_interaction_templates
-            assistance_templates = self._maybe_handle_graph_help(
-                user=user,
-                latest_user_message=normalized_update.text or "",
-                user_id=user.id,
-                stage_result=stage_result,
-            )
-            if assistance_templates is not None:
-                return assistance_templates
+            if stage_result is not None and stage_result.stage in {"INTERVIEW_INVITED", "INTERVIEW_IN_PROGRESS"}:
+                assistance_templates = self._maybe_handle_graph_help(
+                    user=user,
+                    latest_user_message=normalized_update.text or "",
+                    user_id=user.id,
+                    stage_result=stage_result,
+                )
+                if assistance_templates is not None:
+                    return assistance_templates
             return None
         return self._handle_candidate_interview_message(
             user=user,
@@ -1011,6 +1066,36 @@ class TelegramUpdateService:
             normalized_update=normalized_update,
             file_id=file_id,
         )
+
+    def _apply_candidate_vacancy_review_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        templates = self._handle_candidate_vacancy_review_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if templates is not None:
+            return templates
+        if stage_result is not None and stage_result.stage == "VACANCY_REVIEW":
+            batch_size = self.matching_review_service.current_batch_size_for_candidate(
+                candidate_user_id=user.id,
+            )
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=latest_user_message,
+                user_id=user.id,
+                stage_result=stage_result,
+                reply_markup=candidate_vacancy_review_keyboard(batch_size) if batch_size else None,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return None
 
     def _apply_candidate_summary_segment(
         self,
@@ -1213,6 +1298,36 @@ class TelegramUpdateService:
             return assistance_templates
         return None
 
+    def _apply_manager_pre_interview_segment(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+        stage_result,
+    ) -> List[str] | None:
+        templates = self._handle_manager_pre_interview_stage_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            stage_result=stage_result,
+        )
+        if templates is not None:
+            return templates
+        if stage_result is not None and stage_result.stage == "PRE_INTERVIEW_REVIEW":
+            batch_size = self.matching_review_service.current_batch_size_for_manager(
+                manager_user_id=user.id,
+            )
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=latest_user_message,
+                user_id=user.id,
+                stage_result=stage_result,
+                reply_markup=manager_pre_interview_review_keyboard(batch_size) if batch_size else None,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+        return None
+
     def _apply_manager_clarification_segment(
         self,
         *,
@@ -1343,6 +1458,15 @@ class TelegramUpdateService:
                 ),
                 (
                     {"text"},
+                    lambda: self._apply_candidate_vacancy_review_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
                     lambda: self._apply_candidate_summary_segment(
                         user=user,
                         raw_message_id=raw_message_id,
@@ -1398,6 +1522,15 @@ class TelegramUpdateService:
                 (
                     {"text"},
                     lambda: self._apply_manager_delete_segment(
+                        user=user,
+                        raw_message_id=raw_message_id,
+                        latest_user_message=normalized_update.text or "",
+                        stage_result=stage_result,
+                    ),
+                ),
+                (
+                    {"text"},
+                    lambda: self._apply_manager_pre_interview_segment(
                         user=user,
                         raw_message_id=raw_message_id,
                         latest_user_message=normalized_update.text or "",

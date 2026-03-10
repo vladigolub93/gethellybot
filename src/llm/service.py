@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Optional, TypeVar
 
 from pydantic import BaseModel
@@ -23,12 +24,14 @@ from src.llm.prompts import (
     candidate_cv_prompt,
     candidate_questions_decision_prompt,
     candidate_ready_decision_prompt,
+    candidate_vacancy_review_decision_prompt,
     candidate_verification_decision_prompt,
     candidate_questions_prompt,
     delete_confirmation_decision_prompt,
     interview_invitation_decision_prompt,
     interview_in_progress_decision_prompt,
     manager_review_decision_prompt,
+    pre_interview_review_decision_prompt,
     candidate_summary_review_decision_prompt,
     candidate_summary_edit_prompt,
     deletion_confirmation_prompt,
@@ -61,6 +64,7 @@ from src.llm.schemas import (
     CandidateQuestionsDecisionSchema,
     CandidateQuestionParseSchema,
     CandidateReadyDecisionSchema,
+    CandidateVacancyReviewDecisionSchema,
     CandidateVerificationDecisionSchema,
     ContactRequiredDecisionSchema,
     RoleSelectionDecisionSchema,
@@ -74,6 +78,7 @@ from src.llm.schemas import (
     InterviewInvitationDecisionSchema,
     InterviewInProgressDecisionSchema,
     ManagerReviewDecisionSchema,
+    PreInterviewReviewDecisionSchema,
     InterviewQuestionPlanSchema,
     InterviewSessionConductorTurnSchema,
     ResponseCopywriterSchema,
@@ -754,6 +759,44 @@ def candidate_ready_decision_with_llm(
     )
 
 
+def candidate_vacancy_review_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=CandidateVacancyReviewDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("candidate", "ready_decision"),
+        user_prompt=candidate_vacancy_review_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_vacancy_review_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "apply_to_vacancy", "skip_vacancy"}:
+        proposed_action = None
+    vacancy_slot = result.payload.get("vacancy_slot")
+    if not isinstance(vacancy_slot, int) or vacancy_slot < 1:
+        vacancy_slot = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
+            "vacancy_slot": vacancy_slot,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
 def candidate_verification_decision_with_llm(
     *,
     latest_user_message: str,
@@ -810,6 +853,44 @@ def manager_review_decision_with_llm(
             "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
+            "keep_current_state": bool(result.payload.get("keep_current_state", True)),
+            "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
+            "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
+        },
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def pre_interview_review_decision_with_llm(
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=PreInterviewReviewDecisionSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("manager", "review_decision"),
+        user_prompt=pre_interview_review_decision_prompt(
+            latest_user_message=latest_user_message,
+            current_step_guidance=current_step_guidance,
+            recent_context=recent_context,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="pre_interview_review_decision_llm_v1",
+    )
+    proposed_action = result.payload.get("proposed_action")
+    if proposed_action not in {None, "interview_candidate", "skip_candidate"}:
+        proposed_action = None
+    candidate_slot = result.payload.get("candidate_slot")
+    if not isinstance(candidate_slot, int) or candidate_slot < 1:
+        candidate_slot = None
+    return LLMResult(
+        payload={
+            "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
+            "response_text": _clean_text(result.payload.get("response_text"), limit=400),
+            "proposed_action": proposed_action,
+            "candidate_slot": candidate_slot,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
             "reason_code": _clean_text(result.payload.get("reason_code"), limit=120),
@@ -1333,7 +1414,7 @@ def interview_in_progress_decision_with_llm(
         prompt_version="interview_in_progress_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "answer_current_question"}:
+    if proposed_action not in {None, "answer_current_question", "accept_interview", "skip_opportunity", "cancel_interview"}:
         proposed_action = None
     intent = _clean_text(result.payload.get("intent"), limit=80) or "help"
     response_text = _clean_text(result.payload.get("response_text"), limit=400)
@@ -2072,6 +2153,7 @@ def safe_interview_in_progress_decision(
             logger.warning("interview_in_progress_decision_fallback", error=str(exc))
 
     normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
     lowered = normalized_text.lower()
     payload = {
         "intent": "help",
@@ -2083,6 +2165,45 @@ def safe_interview_in_progress_decision(
         "needs_follow_up": True,
         "reason_code": "interview_in_progress_help_fallback",
     }
+    if command in {"accept interview", "accept"}:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "accept",
+                "response_text": "Understood. I will handle that interview invitation.",
+                "proposed_action": "accept_interview",
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_accept_other_invitation",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
+    if command in {"skip opportunity", "skip"}:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "skip",
+                "response_text": "Understood. I will skip that opportunity.",
+                "proposed_action": "skip_opportunity",
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_skip_other_invitation",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
+    if command in {"cancel interview", "stop interview", "end interview", "abort interview", "quit interview"}:
+        return LLMResult(
+            payload={
+                **payload,
+                "intent": "cancel_interview",
+                "response_text": "Understood. I will cancel this interview.",
+                "proposed_action": "cancel_interview",
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_cancel_interview",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
     if any(
         token in lowered
         for token in [
@@ -2607,6 +2728,91 @@ def safe_candidate_ready_decision(
     )
 
 
+def safe_candidate_vacancy_review_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return candidate_vacancy_review_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_vacancy_review_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+        "proposed_action": None,
+        "vacancy_slot": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "candidate_vacancy_review_help_fallback",
+    }
+
+    match = re.search(r"\b(apply|skip)(?:\s+vacancy)?\s+(\d+)\b", command)
+    if match is not None:
+        verb = match.group(1)
+        slot = int(match.group(2))
+        if verb == "apply":
+            payload.update(
+                {
+                    "intent": "apply_to_vacancy",
+                    "response_text": f"Understood. I will apply to vacancy {slot}.",
+                    "proposed_action": "apply_to_vacancy",
+                    "vacancy_slot": slot,
+                    "needs_follow_up": False,
+                    "reason_code": "candidate_vacancy_review_apply_to_vacancy",
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "intent": "skip_vacancy",
+                    "response_text": f"Understood. I will skip vacancy {slot}.",
+                    "proposed_action": "skip_vacancy",
+                    "vacancy_slot": slot,
+                    "needs_follow_up": False,
+                    "reason_code": "candidate_vacancy_review_skip_vacancy",
+                }
+            )
+    elif any(
+        token in lowered
+        for token in [
+            "what does this mean",
+            "how does this work",
+            "what happens after",
+            "what if i apply",
+            "what if i skip",
+            "explain",
+            "?",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance
+                or "Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+                "needs_follow_up": True,
+                "reason_code": "candidate_vacancy_review_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_vacancy_review_decision_v1",
+    )
+
+
 def safe_candidate_verification_decision(
     session,
     *,
@@ -2771,6 +2977,91 @@ def safe_manager_review_decision(
         payload=payload,
         model_name="baseline-deterministic",
         prompt_version="baseline_manager_review_decision_v1",
+    )
+
+
+def safe_pre_interview_review_decision(
+    session,
+    *,
+    latest_user_message: str,
+    current_step_guidance: str | None = None,
+    recent_context: list[str] | None = None,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            return pre_interview_review_decision_with_llm(
+                latest_user_message=latest_user_message,
+                current_step_guidance=current_step_guidance,
+                recent_context=recent_context,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("pre_interview_review_decision_fallback", error=str(exc))
+
+    normalized_text = (latest_user_message or "").strip()
+    command = normalize_command_text(normalized_text)
+    lowered = normalized_text.lower()
+    payload = {
+        "intent": "help",
+        "response_text": current_step_guidance
+        or "Review the current candidate batch and use the numbered Interview or Skip buttons.",
+        "proposed_action": None,
+        "candidate_slot": None,
+        "keep_current_state": True,
+        "needs_follow_up": True,
+        "reason_code": "pre_interview_review_help_fallback",
+    }
+
+    match = re.search(r"\b(interview|skip)(?:\s+candidate)?\s+(\d+)\b", command)
+    if match is not None:
+        verb = match.group(1)
+        slot = int(match.group(2))
+        if verb == "interview":
+            payload.update(
+                {
+                    "intent": "interview_candidate",
+                    "response_text": f"Understood. I will invite candidate {slot} to interview.",
+                    "proposed_action": "interview_candidate",
+                    "candidate_slot": slot,
+                    "needs_follow_up": False,
+                    "reason_code": "pre_interview_review_interview_candidate",
+                }
+            )
+        else:
+            payload.update(
+                {
+                    "intent": "skip_candidate",
+                    "response_text": f"Understood. I will skip candidate {slot}.",
+                    "proposed_action": "skip_candidate",
+                    "candidate_slot": slot,
+                    "needs_follow_up": False,
+                    "reason_code": "pre_interview_review_skip_candidate",
+                }
+            )
+    elif any(
+        token in lowered
+        for token in [
+            "what does this mean",
+            "how should i read",
+            "why was candidate",
+            "what happens after interview",
+            "how does this work",
+            "explain",
+            "?",
+        ]
+    ):
+        payload.update(
+            {
+                "intent": "help",
+                "response_text": current_step_guidance
+                or "Review the current candidate batch and use the numbered Interview or Skip buttons.",
+                "needs_follow_up": True,
+                "reason_code": "pre_interview_review_help_question",
+            }
+        )
+    return LLMResult(
+        payload=payload,
+        model_name="baseline-deterministic",
+        prompt_version="baseline_pre_interview_review_decision_v1",
     )
 
 

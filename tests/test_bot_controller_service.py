@@ -45,15 +45,19 @@ class FakeVacanciesRepository:
 
 
 class FakeMatchingRepository:
-    def __init__(self, invited_match=None, manager_review_match=None):
+    def __init__(self, invited_match=None, manager_review_match=None, candidate_review_match=None):
         self.invited_match = invited_match
         self.manager_review_match = manager_review_match
+        self.candidate_review_match = candidate_review_match
 
     def get_latest_invited_for_candidate(self, candidate_profile_id):
         return self.invited_match
 
     def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
         return self.manager_review_match
+
+    def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
+        return self.candidate_review_match
 
 
 def test_build_recovery_message_for_candidate_summary_review() -> None:
@@ -329,6 +333,27 @@ def test_maybe_build_in_state_assistance_for_candidate_ready_question() -> None:
 
     assert message is not None
     assert "match" in message.lower() or "profile is ready" in message.lower() or "strong match" in message.lower()
+
+
+def test_maybe_build_in_state_assistance_for_candidate_vacancy_review_question() -> None:
+    user = SimpleNamespace(id="u1b", phone_number="+123", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="c1b", state="READY", questions_context_json={})
+    service = BotControllerService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateRepository(candidate)
+    service.interviews = FakeInterviewRepository()
+    service.matching = FakeMatchingRepository(
+        candidate_review_match=SimpleNamespace(id="m1b", status="candidate_decision_pending")
+    )
+    service.vacancies = FakeVacanciesRepository()
+
+    message = service.maybe_build_in_state_assistance(
+        user=user,
+        latest_user_message="What happens after I apply to one of these roles?",
+    )
+
+    assert message is not None
+    assert "apply" in message.lower() or "skip" in message.lower() or "vacanc" in message.lower()
 
 
 def test_maybe_build_in_state_assistance_for_vacancy_open_question() -> None:

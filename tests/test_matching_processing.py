@@ -47,6 +47,22 @@ class FakeNotificationsRepository:
         return self.rows[-1]
 
 
+class FakeReviewService:
+    def __init__(self, *, manager_result=None, candidate_result=None):
+        self.manager_calls = []
+        self.candidate_calls = []
+        self.manager_result = manager_result or {"status": "dispatched", "batch_count": 2, "notified": True}
+        self.candidate_result = candidate_result or {"status": "dispatched", "batch_count": 2, "notified": True}
+
+    def dispatch_manager_batch_for_vacancy(self, **kwargs):
+        self.manager_calls.append(kwargs)
+        return dict(self.manager_result)
+
+    def dispatch_candidate_batch_for_profile(self, **kwargs):
+        self.candidate_calls.append(kwargs)
+        return dict(self.candidate_result)
+
+
 class FakeMatchingService:
     def __init__(self, result=None):
         self.result = result or {
@@ -75,13 +91,14 @@ class FakeInviteWaveService:
         }
 
 
-def test_matching_processing_enqueues_invite_dispatch_with_matching_run_id() -> None:
+def test_matching_processing_dispatches_manager_pre_interview_batch_for_vacancy_open() -> None:
     service = MatchingProcessingService(FakeSession())
     service.queue = FakeQueue()
     service.vacancies = FakeVacanciesRepository()
     service.matching = FakeMatchingRepository()
     service.notifications = FakeNotificationsRepository()
     service.matching_service = FakeMatchingService()
+    service.review_service = FakeReviewService()
 
     result = service.process_job(
         SimpleNamespace(
@@ -91,12 +108,43 @@ def test_matching_processing_enqueues_invite_dispatch_with_matching_run_id() -> 
     )
 
     assert result["matching_run_id"] == "run-1"
-    assert len(service.queue.messages) == 1
-    queued = service.queue.messages[0]
-    assert queued.job_type == "interview_dispatch_invites_v1"
-    assert queued.payload["vacancy_id"] == "vacancy-1"
-    assert queued.payload["matching_run_id"] == "run-1"
-    assert queued.payload["limit"] == 3
+    assert service.queue.messages == []
+    assert len(service.review_service.manager_calls) == 1
+    queued = service.review_service.manager_calls[0]
+    assert queued["vacancy_id"] == "vacancy-1"
+    assert queued["force"] is False
+    assert queued["trigger_type"] == "job"
+    assert service.review_service.candidate_calls == []
+
+
+def test_matching_processing_dispatches_candidate_vacancy_batch_for_candidate_ready() -> None:
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.vacancies = FakeVacanciesRepository()
+    service.matching = FakeMatchingRepository()
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService()
+    service.review_service = FakeReviewService()
+
+    result = service.process_job(
+        SimpleNamespace(
+            job_type="matching_run_for_vacancy_v1",
+            payload_json={
+                "vacancy_id": "vacancy-1",
+                "trigger_type": "candidate_ready",
+                "trigger_candidate_profile_id": "candidate-1",
+            },
+        )
+    )
+
+    assert result["matching_run_id"] == "run-1"
+    assert service.queue.messages == []
+    assert service.review_service.manager_calls == []
+    assert len(service.review_service.candidate_calls) == 1
+    queued = service.review_service.candidate_calls[0]
+    assert queued["candidate_profile_id"] == "candidate-1"
+    assert queued["force"] is False
+    assert queued["trigger_type"] == "job"
 
 
 def test_matching_processing_routes_invite_wave_evaluation_job() -> None:
@@ -106,6 +154,7 @@ def test_matching_processing_routes_invite_wave_evaluation_job() -> None:
     service.matching = FakeMatchingRepository()
     service.notifications = FakeNotificationsRepository()
     service.matching_service = FakeMatchingService()
+    service.review_service = FakeReviewService()
     service.wave_service = FakeInviteWaveService()
 
     result = service.process_job(
@@ -126,6 +175,7 @@ def test_matching_processing_routes_invite_wave_reminder_job() -> None:
     service.matching = FakeMatchingRepository()
     service.notifications = FakeNotificationsRepository()
     service.matching_service = FakeMatchingService()
+    service.review_service = FakeReviewService()
     service.wave_service = FakeInviteWaveService()
 
     result = service.process_job(
@@ -155,6 +205,7 @@ def test_matching_processing_notifies_manager_after_manual_refresh_with_new_cand
             "shortlisted_count": 2,
         }
     )
+    service.review_service = FakeReviewService()
 
     service.process_job(
         SimpleNamespace(
@@ -169,7 +220,10 @@ def test_matching_processing_notifies_manager_after_manual_refresh_with_new_cand
     assert notification.template_key == "vacancy_open"
     assert notification.allow_duplicate is True
     assert "found 2 strong candidates" in notification.payload_json["text"].lower()
-    assert "inviting the top 2" in notification.payload_json["text"].lower()
+    assert "first batch" in notification.payload_json["text"].lower()
+    assert len(service.review_service.manager_calls) == 1
+    assert service.review_service.manager_calls[0]["force"] is True
+    assert service.review_service.candidate_calls == []
 
 
 def test_matching_processing_notifies_manager_when_no_new_candidates_but_active_pipeline_exists() -> None:
@@ -190,6 +244,7 @@ def test_matching_processing_notifies_manager_when_no_new_candidates_but_active_
             "shortlisted_count": 0,
         }
     )
+    service.review_service = FakeReviewService()
 
     service.process_job(
         SimpleNamespace(
@@ -201,4 +256,40 @@ def test_matching_processing_notifies_manager_when_no_new_candidates_but_active_
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
     assert "didn't find new strong candidates" in text
-    assert "there are 2 candidates already in progress" in text
+    assert "there are 2 candidates already active in the current review pipeline" in text
+    assert service.review_service.manager_calls == []
+    assert service.review_service.candidate_calls == []
+
+
+def test_matching_processing_notifies_manager_when_vacancy_cap_blocks_new_batch() -> None:
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(id="vacancy-1", manager_user_id="manager-1")
+    )
+    service.matching = FakeMatchingRepository()
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService(
+        result={
+            "matching_run_id": "run-4",
+            "candidate_pool_count": 12,
+            "hard_filtered_count": 6,
+            "shortlisted_count": 4,
+        }
+    )
+    service.review_service = FakeReviewService(
+        manager_result={"status": "vacancy_cap_reached", "batch_count": 0, "notified": True}
+    )
+
+    service.process_job(
+        SimpleNamespace(
+            job_type="matching_run_for_vacancy_v1",
+            payload_json={"vacancy_id": "vacancy-1", "trigger_type": "manager_manual_request"},
+        )
+    )
+
+    assert len(service.notifications.rows) == 1
+    text = service.notifications.rows[0].payload_json["text"].lower()
+    assert "found strong candidates" in text
+    assert "active interview pipeline" in text
+    assert "wait until one finishes or drops out" in text

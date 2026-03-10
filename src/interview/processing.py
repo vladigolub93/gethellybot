@@ -2,6 +2,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.raw_messages import RawMessagesRepository
 from src.ingestion.service import ContentIngestionService, ContentQualityError
 from src.interview.service import InterviewService
+from src.matching.policy import MATCH_BATCH_SIZE
 
 
 class InterviewProcessingService:
@@ -18,7 +19,7 @@ class InterviewProcessingService:
             return self.service.dispatch_invites_for_vacancy(
                 vacancy_id=payload["vacancy_id"],
                 matching_run_id=payload.get("matching_run_id"),
-                limit=payload.get("limit", 3),
+                limit=payload.get("limit", MATCH_BATCH_SIZE),
             )
         if job.job_type == "interview_answer_process_v1":
             return self._process_answer(job)

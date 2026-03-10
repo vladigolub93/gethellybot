@@ -8,15 +8,15 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.vacancies import VacanciesRepository
-from src.jobs.db_queue import DatabaseQueueClient
-from src.jobs.queue import JobMessage
 from src.messaging.service import MessagingService
+from src.matching.policy import MATCH_BATCH_SIZE
+from src.matching.review import MatchingReviewService
 
 
 @dataclass(frozen=True)
 class WavePolicy:
     target_completed_interviews: int = 2
-    default_wave_size: int = 3
+    default_wave_size: int = MATCH_BATCH_SIZE
     expansion_wave_size: int = 2
     reminder_after_hours: int = 24
     expires_after_hours: int = 72
@@ -31,8 +31,8 @@ class InviteWaveService:
         self.interviews = InterviewsRepository(session)
         self.notifications = NotificationsRepository(session)
         self.vacancies = VacanciesRepository(session)
-        self.queue = DatabaseQueueClient(session)
         self.messaging = MessagingService(session)
+        self.review_service = MatchingReviewService(session)
 
     def build_wave_timing_payload(self, *, matching_run_id, limit: int, now: datetime | None = None) -> dict:
         now = now or datetime.now(timezone.utc)
@@ -124,21 +124,14 @@ class InviteWaveService:
         )
 
         expansion_enqueued = False
+        manager_review_dispatched = False
         if completed_count < self.policy.target_completed_interviews and not shortlist_exhausted:
-            self.queue.enqueue(
-                JobMessage(
-                    job_type="interview_dispatch_invites_v1",
-                    payload={
-                        "vacancy_id": str(wave.vacancy_id),
-                        "matching_run_id": str(wave.matching_run_id),
-                        "limit": self.policy.expansion_wave_size,
-                    },
-                    idempotency_key=f"interview_dispatch_invites_v1:{wave.vacancy_id}:{wave.matching_run_id}:wave:{wave.wave_no + 1}",
-                    entity_type="invite_wave",
-                    entity_id=wave.id,
-                )
+            review_result = self.review_service.dispatch_manager_batch_for_vacancy(
+                vacancy_id=wave.vacancy_id,
+                force=True,
+                trigger_type="job",
             )
-            expansion_enqueued = True
+            manager_review_dispatched = bool(review_result.get("notified")) or bool(review_result.get("batch_count"))
 
         return {
             "invite_wave_id": str(wave.id),
@@ -151,4 +144,5 @@ class InviteWaveService:
             "shortlist_exhausted": shortlist_exhausted,
             "expired_match_ids": expired_match_ids,
             "expansion_enqueued": expansion_enqueued,
+            "manager_review_dispatched": manager_review_dispatched,
         }

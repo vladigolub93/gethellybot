@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
+from src.matching.policy import MATCH_BATCH_SIZE, MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY
+from src.matching.review import MatchingReviewService
 from src.matching.service import MatchingService
 from src.matching.waves import InviteWaveService
 
@@ -15,6 +19,7 @@ class MatchingProcessingService:
         self.matching = MatchingRepository(session)
         self.notifications = NotificationsRepository(session)
         self.matching_service = MatchingService(session)
+        self.review_service = MatchingReviewService(session)
         self.wave_service = InviteWaveService(session)
 
     def process_job(self, job) -> dict:
@@ -58,40 +63,59 @@ class MatchingProcessingService:
             trigger_type=payload.get("trigger_type", "vacancy_open"),
             trigger_candidate_profile_id=payload.get("trigger_candidate_profile_id"),
         )
-        if result["shortlisted_count"] > 0:
-            self.queue.enqueue(
-                JobMessage(
-                    job_type="interview_dispatch_invites_v1",
-                    payload={
-                        "vacancy_id": result["vacancy_id"],
-                        "matching_run_id": result["matching_run_id"],
-                        "limit": 3,
-                    },
-                    idempotency_key=f"interview_dispatch_invites_v1:{result['vacancy_id']}:{result['matching_run_id']}",
-                    entity_type="vacancy",
-                    entity_id=payload["vacancy_id"],
-                )
+        trigger_type = payload.get("trigger_type", "vacancy_open")
+        manager_review_triggers = {"vacancy_open", "manager_manual_request"}
+        candidate_review_triggers = {"candidate_ready", "candidate_manual_request"}
+        review_dispatch_result = None
+        if result["shortlisted_count"] > 0 and trigger_type in manager_review_triggers:
+            review_dispatch_result = self.review_service.dispatch_manager_batch_for_vacancy(
+                vacancy_id=result["vacancy_id"],
+                force=trigger_type == "manager_manual_request",
+                trigger_type="job",
             )
-        if payload.get("trigger_type") == "manager_manual_request":
+        elif result["shortlisted_count"] > 0 and trigger_type in candidate_review_triggers:
+            self.review_service.dispatch_candidate_batch_for_profile(
+                candidate_profile_id=payload.get("trigger_candidate_profile_id"),
+                force=trigger_type == "candidate_manual_request",
+                trigger_type="job",
+            )
+        elif result["shortlisted_count"] > 0:
+            review_dispatch_result = self.review_service.dispatch_manager_batch_for_vacancy(
+                vacancy_id=result["vacancy_id"],
+                force=False,
+                trigger_type="job",
+            )
+        if trigger_type == "manager_manual_request":
             self._notify_manager_manual_refresh_result(
                 vacancy_id=payload["vacancy_id"],
                 shortlisted_count=result["shortlisted_count"],
+                review_dispatch_result=review_dispatch_result,
             )
         return result
 
-    def _notify_manager_manual_refresh_result(self, *, vacancy_id, shortlisted_count: int) -> None:
+    def _notify_manager_manual_refresh_result(
+        self,
+        *,
+        vacancy_id,
+        shortlisted_count: int,
+        review_dispatch_result: dict | None = None,
+    ) -> None:
         vacancy = self.vacancies.get_by_id(vacancy_id)
         manager_user_id = getattr(vacancy, "manager_user_id", None)
         if vacancy is None or manager_user_id is None:
             return
 
-        if shortlisted_count > 0:
-            invited_now = min(shortlisted_count, 3)
+        if review_dispatch_result and review_dispatch_result.get("status") == "vacancy_cap_reached":
+            text = (
+                "Matching refresh complete. I found strong candidates for this vacancy, "
+                f"but you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates in the active interview pipeline. "
+                "Wait until one finishes or drops out before I send more profiles."
+            )
+        elif shortlisted_count > 0:
             text = (
                 f"Matching refresh complete. I found {shortlisted_count} strong "
-                f"{self._pluralize_candidates(shortlisted_count)} for this vacancy and started "
-                f"inviting the top {invited_now} to the AI interview. "
-                "I'll send you candidate profiles here once they complete it."
+                f"{self._pluralize_candidates(shortlisted_count)} for this vacancy and sent you "
+                f"the first batch of up to {MATCH_BATCH_SIZE} for pre-interview review."
             )
         else:
             active_match_count = len(self.matching.list_active_for_vacancy(vacancy.id))
@@ -100,14 +124,13 @@ class MatchingProcessingService:
                 text = (
                     "Matching refresh complete. I didn't find new strong candidates right now, "
                     f"but there {verb} {active_match_count} "
-                    f"{self._pluralize_candidates(active_match_count)} already in progress "
-                    "for this vacancy. I'll send profiles here once the interview and evaluation are done."
+                    f"{self._pluralize_candidates(active_match_count)} already active in the current review pipeline "
+                    "for this vacancy. I'll send the next candidates as soon as this queue moves."
                 )
             else:
                 text = (
                     "Matching refresh complete. I didn't find any strong candidates for this vacancy yet. "
-                    "I'll keep looking and send profiles here once someone passes the interview "
-                    "and evaluation."
+                    "I'll keep looking and send strong profiles here as soon as matching finds them."
                 )
 
         self.notifications.create(

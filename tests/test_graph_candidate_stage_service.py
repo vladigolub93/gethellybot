@@ -37,11 +37,15 @@ class FakeInterviewsRepository:
 
 
 class FakeMatchesRepository:
-    def __init__(self, invited_match=None):
+    def __init__(self, invited_match=None, candidate_review_match=None):
         self.invited_match = invited_match
+        self.candidate_review_match = candidate_review_match
 
     def get_latest_invited_for_candidate(self, candidate_profile_id):
         return self.invited_match
+
+    def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
+        return self.candidate_review_match
 
 
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:
@@ -712,6 +716,66 @@ def test_graph_candidate_stage_accepts_find_matching_vacancies_intent() -> None:
     assert result.reply_text is None
 
 
+def test_graph_candidate_stage_handles_vacancy_review_help() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8c", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(candidate_review_match=SimpleNamespace(id="m8c"))
+
+    user = SimpleNamespace(
+        id="u11c",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="What happens after I apply?",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_REVIEW"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
+def test_graph_candidate_stage_accepts_apply_to_vacancy_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8d", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(candidate_review_match=SimpleNamespace(id="m8d"))
+
+    user = SimpleNamespace(
+        id="u11d",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Apply 2",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "apply_to_vacancy"
+    assert result.structured_payload == {"vacancy_slot": 2}
+    assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
+
+
 def test_graph_candidate_stage_handles_interview_invited_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
@@ -877,4 +941,33 @@ def test_graph_candidate_stage_accepts_interview_in_progress_answer() -> None:
     assert result.stage == "INTERVIEW_IN_PROGRESS"
     assert result.action_accepted is True
     assert result.proposed_action == "answer_current_question"
+    assert result.stage_status == "ready_for_transition"
+
+
+def test_graph_candidate_stage_accepts_cancel_interview_while_in_progress() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp12b", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s2b"))
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u15b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Cancel interview",
+    )
+
+    assert result is not None
+    assert result.stage == "INTERVIEW_IN_PROGRESS"
+    assert result.action_accepted is True
+    assert result.proposed_action == "cancel_interview"
     assert result.stage_status == "ready_for_transition"
