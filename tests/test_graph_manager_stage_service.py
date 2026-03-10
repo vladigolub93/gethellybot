@@ -13,13 +13,14 @@ class FakeConsentsRepository:
 
 
 class FakeVacanciesRepository:
-    def __init__(self, vacancy):
+    def __init__(self, vacancy, *, current_version=None):
         if isinstance(vacancy, list):
             self.vacancies = vacancy
         elif vacancy is None:
             self.vacancies = []
         else:
             self.vacancies = [vacancy]
+        self.current_version = current_version
 
     def get_latest_active_by_manager_user_id(self, manager_user_id):
         for vacancy in reversed(self.vacancies):
@@ -34,6 +35,17 @@ class FakeVacanciesRepository:
             if getattr(vacancy, "manager_user_id", user_id) == user_id
         ]
 
+    def get_latest_incomplete_by_manager_user_id(self, manager_user_id):
+        return self.get_latest_active_by_manager_user_id(manager_user_id)
+
+    def get_open_by_manager_user_id(self, manager_user_id):
+        return self.get_by_manager_user_id(manager_user_id)
+
+    def get_current_version(self, vacancy):
+        if self.current_version is None or vacancy is None:
+            return None
+        return self.current_version
+
 
 class FakeMatchingRepository:
     def __init__(self, manager_review_match=None):
@@ -41,6 +53,86 @@ class FakeMatchingRepository:
 
     def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
         return self.manager_review_match
+
+    def get_latest_pre_interview_review_for_manager(self, vacancy_ids):
+        return None
+
+
+def test_graph_manager_stage_help_receives_saved_vacancy_memory(monkeypatch) -> None:
+    captured = {}
+
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_open_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "Let me pull up the vacancy.",
+                "reason_code": "help",
+            }
+        ),
+    )
+
+    def _fake_assistance(_session, *, context, latest_user_message, recent_context=None):
+        captured["context"] = context
+        captured["latest_user_message"] = latest_user_message
+        captured["recent_context"] = list(recent_context or [])
+        return SimpleNamespace(payload={"response_text": "Here is the saved vacancy summary.", "suggested_action": None})
+
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_state_assistance_decision",
+        _fake_assistance,
+    )
+
+    vacancy = SimpleNamespace(
+        id="vac-memory",
+        state="OPEN",
+        manager_user_id="m-memory",
+        current_version_id="vv-memory",
+        role_title="Senior Python Engineer",
+        seniority_normalized="senior",
+        budget_min=6000,
+        budget_max=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL", "UA"],
+        primary_tech_stack_json=["python", "postgresql"],
+        project_description="Build backend APIs and platform services for a hiring product.",
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        vacancy,
+        current_version=SimpleNamespace(
+            id="vv-memory",
+            approval_summary_text="This vacancy is for a senior Python engineer building backend platform services.",
+            summary_json={
+                "approval_summary_text": "This vacancy is for a senior Python engineer building backend platform services."
+            },
+        ),
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m-memory",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Can you show me the vacancy summary again?",
+    )
+
+    assert reply == "Here is the saved vacancy summary."
+    combined_context = " ".join(captured["recent_context"])
+    assert "senior Python engineer building backend platform services" in combined_context
+    assert "budget 6000-7000 USD per month" in combined_context
+    assert "work format remote" in combined_context
+    assert "stack python, postgresql" in combined_context
 
 
 def test_graph_manager_stage_handles_intake_pending_help() -> None:

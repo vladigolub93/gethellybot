@@ -10,6 +10,7 @@ from src.identity.rules import has_primary_contact_channel
 from src.llm.service import safe_bot_controller_decision, safe_state_assistance_decision
 from src.messaging.service import MessagingService
 from src.orchestrator.policy import ResolvedStateContext, resolve_state_context
+from src.orchestrator.state_memory import build_state_memory
 from src.orchestrator.validation import validate_action_proposal
 
 
@@ -24,6 +25,7 @@ class BotControllerService:
 
     def build_recovery_message(self, *, user, latest_user_message: str) -> str:
         context = self._resolve_context(user)
+        memory = self._build_state_memory(user=user, context=context)
         result = safe_bot_controller_decision(
             self.session,
             role=context.role,
@@ -34,7 +36,7 @@ class BotControllerService:
             missing_requirements=context.missing_requirements,
             current_step_guidance=context.guidance_text,
             latest_user_message=latest_user_message,
-            recent_context=[],
+            recent_context=memory,
         )
         default_response = self._default_response(context)
         if context.state in {"CONTACT_REQUIRED", "ROLE_SELECTION"}:
@@ -87,7 +89,7 @@ class BotControllerService:
             self.session,
             context=context,
             latest_user_message=latest_user_message,
-            recent_context=[],
+            recent_context=self._build_state_memory(user=user, context=context),
         )
         self._validate_action_from_result(
             context=context,
@@ -165,6 +167,17 @@ class BotControllerService:
         if context.allowed_actions:
             return f"Please continue with the current step. Expected actions: {', '.join(context.allowed_actions)}."
         return "Please continue with the current step."
+
+    def _build_state_memory(self, *, user, context: ResolvedStateContext) -> list[str]:
+        return build_state_memory(
+            role=context.role,
+            stage=context.state,
+            user_id=getattr(user, "id", None),
+            candidates=self.candidates,
+            vacancies=self.vacancies,
+            matches=self.matching,
+            interviews=self.interviews,
+        )
 
     def _validate_action_from_result(self, *, context: ResolvedStateContext, source: str, action: str | None) -> None:
         validate_action_proposal(

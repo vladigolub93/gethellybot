@@ -41,6 +41,7 @@ from src.graph.stages.manager import (
     load_manager_stage_knowledge_node,
 )
 from src.orchestrator.policy import resolve_state_context
+from src.orchestrator.state_memory import build_state_memory
 
 
 logger = get_logger(__name__)
@@ -403,7 +404,7 @@ class LangGraphStageAgentService:
             latest_message_type=latest_message_type,
             allowed_actions=context.allowed_actions,
             missing_requirements=context.missing_requirements,
-            recent_context=self._load_recent_turn_context(user),
+            recent_context=self._build_recent_context_with_memory(user=user, stage=stage),
         )
         return compiled.invoke(state_input.as_dict())
 
@@ -421,3 +422,21 @@ class LangGraphStageAgentService:
             return self.raw_messages.list_recent_text_context(user_id=user_id, limit=6)
         except Exception:
             return []
+
+    def _build_recent_context_with_memory(self, *, user, stage: str) -> list[str]:
+        recent_turns = list(self._load_recent_turn_context(user))
+        memory = build_state_memory(
+            role=self._resolve_role(user),
+            stage=stage,
+            user_id=getattr(user, "id", None),
+            candidates=self.candidates,
+            vacancies=self.vacancies,
+            matches=self.matches,
+            interviews=self.interviews,
+        )
+        combined: list[str] = []
+        for item in [*recent_turns, *memory]:
+            text = " ".join(str(item or "").split()).strip()
+            if text and text not in combined:
+                combined.append(text)
+        return combined

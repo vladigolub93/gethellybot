@@ -21,11 +21,27 @@ class FakeConsentsRepository:
 
 
 class FakeCandidateProfilesRepository:
-    def __init__(self, candidate):
+    def __init__(self, candidate, *, current_version=None, candidates_by_id=None):
         self.candidate = candidate
+        self.current_version = current_version
+        if candidates_by_id is None:
+            candidates_by_id = {}
+            if candidate is not None and getattr(candidate, "id", None) is not None:
+                candidates_by_id[candidate.id] = candidate
+        self.candidates_by_id = candidates_by_id
 
     def get_active_by_user_id(self, user_id):
         return self.candidate
+
+    def get_by_id(self, profile_id):
+        return self.candidates_by_id.get(profile_id)
+
+    def get_current_version(self, profile):
+        if self.current_version is None or profile is None:
+            return None
+        if getattr(profile, "id", None) != getattr(self.candidate, "id", None):
+            return None
+        return self.current_version
 
 
 class FakeInterviewsRepository:
@@ -46,6 +62,78 @@ class FakeMatchesRepository:
 
     def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
         return self.candidate_review_match
+
+
+def test_graph_candidate_stage_help_receives_saved_profile_memory(monkeypatch) -> None:
+    captured = {}
+
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_ready_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "Let me check your saved profile.",
+                "reason_code": "help",
+            }
+        ),
+    )
+
+    def _fake_assistance(_session, *, context, latest_user_message, recent_context=None):
+        captured["context"] = context
+        captured["latest_user_message"] = latest_user_message
+        captured["recent_context"] = list(recent_context or [])
+        return SimpleNamespace(payload={"response_text": "Here is your saved profile data.", "suggested_action": None})
+
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_state_assistance_decision",
+        _fake_assistance,
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.raw_messages = FakeRawMessagesRepository(rows=[])
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp-memory",
+            state="READY",
+            current_version_id="cpv-memory",
+            salary_min=5500,
+            salary_currency="USD",
+            salary_period="month",
+            location_text="Warsaw, Poland",
+            work_format="remote",
+        ),
+        current_version=SimpleNamespace(
+            id="cpv-memory",
+            summary_json={
+                "approval_summary_text": "You are a senior Python engineer with strong backend product experience.",
+                "years_experience": 7,
+                "skills": ["python", "postgresql"],
+            },
+        ),
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u-memory",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Can you remind me what salary expectations I already gave you?",
+    )
+
+    assert reply == "Here is your saved profile data."
+    combined_context = " ".join(captured["recent_context"])
+    assert "senior Python engineer" in combined_context
+    assert "salary expectation 5500 USD per month" in combined_context
+    assert "location Warsaw, Poland" in combined_context
+    assert "work format remote" in combined_context
 
 
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:
