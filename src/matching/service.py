@@ -7,6 +7,7 @@ from src.matching.scoring import (
     compute_deterministic_score,
     compute_embedding_score,
     compute_vector_similarity,
+    has_embedding_values,
 )
 
 
@@ -34,6 +35,7 @@ class MatchingService:
         vacancy_version = self.vacancies.get_current_version(vacancy)
         if vacancy_version is None:
             raise ValueError("Vacancy current version not found for matching.")
+        vacancy_embedding = getattr(vacancy_version, "semantic_embedding", None)
 
         if trigger_candidate_profile_id is not None:
             candidate_profiles = []
@@ -43,9 +45,9 @@ class MatchingService:
             preloaded_candidates = None
         else:
             preloaded_candidates = None
-            if getattr(vacancy_version, "semantic_embedding", None):
+            if has_embedding_values(vacancy_embedding):
                 preloaded_candidates = self.candidates.list_top_similar_ready_profiles(
-                    embedding=list(vacancy_version.semantic_embedding),
+                    embedding=list(vacancy_embedding),
                     limit=self.VECTOR_RETRIEVAL_LIMIT,
                 )
                 candidate_profiles = [item["candidate"] for item in preloaded_candidates]
@@ -105,7 +107,7 @@ class MatchingService:
             else:
                 embedding_score = compute_vector_similarity(
                     getattr(candidate_version, "semantic_embedding", None),
-                    getattr(vacancy_version, "semantic_embedding", None),
+                    vacancy_embedding,
                 )
                 if embedding_score is None:
                     embedding_score = compute_embedding_score(candidate_skills, vacancy_skills)

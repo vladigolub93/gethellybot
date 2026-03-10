@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from math import sqrt
 
+
 def _as_set(values) -> set[str]:
     return {str(value).lower() for value in (values or []) if value}
+
+
+def has_embedding_values(embedding) -> bool:
+    if embedding is None:
+        return False
+    try:
+        return len(embedding) > 0
+    except TypeError:
+        return False
 
 
 def compute_embedding_score(candidate_skills, vacancy_skills) -> float:
@@ -17,7 +27,7 @@ def compute_embedding_score(candidate_skills, vacancy_skills) -> float:
 
 
 def compute_vector_similarity(candidate_embedding, vacancy_embedding) -> float | None:
-    if not candidate_embedding or not vacancy_embedding:
+    if not has_embedding_values(candidate_embedding) or not has_embedding_values(vacancy_embedding):
         return None
     if len(candidate_embedding) != len(vacancy_embedding):
         return None

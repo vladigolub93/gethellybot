@@ -5,6 +5,20 @@ from src.matching.scoring import (
 )
 
 
+class AmbiguousEmbedding:
+    def __init__(self, *values: float) -> None:
+        self.values = list(values)
+
+    def __iter__(self):
+        return iter(self.values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    def __bool__(self) -> bool:
+        raise ValueError("The truth value of an array with more than one element is ambiguous.")
+
+
 def test_compute_embedding_score() -> None:
     score = compute_embedding_score(
         ["python", "fastapi", "postgresql"],
@@ -31,6 +45,16 @@ def test_compute_vector_similarity() -> None:
     score = compute_vector_similarity(
         [1.0, 0.0, 0.0],
         [0.9, 0.1, 0.0],
+    )
+
+    assert score is not None
+    assert score > 0.9
+
+
+def test_compute_vector_similarity_handles_embeddings_without_bool_support() -> None:
+    score = compute_vector_similarity(
+        AmbiguousEmbedding(1.0, 0.0, 0.0),
+        AmbiguousEmbedding(0.9, 0.1, 0.0),
     )
 
     assert score is not None

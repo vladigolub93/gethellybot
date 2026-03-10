@@ -10,6 +10,20 @@ class FakeSession:
     pass
 
 
+class AmbiguousEmbedding:
+    def __init__(self, *values: float) -> None:
+        self.values = list(values)
+
+    def __iter__(self):
+        return iter(self.values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    def __bool__(self) -> bool:
+        raise ValueError("The truth value of an array with more than one element is ambiguous.")
+
+
 class FakeCandidateRepository:
     def __init__(self, candidates, versions):
         self.candidates = {candidate.id: candidate for candidate in candidates}
@@ -214,7 +228,7 @@ def test_execute_for_vacancy_uses_vector_retrieval_pool(monkeypatch: pytest.Monk
         budget_max=6000,
         seniority_normalized="senior",
     )
-    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=[0.1, 0.2, 0.3])
+    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=AmbiguousEmbedding(0.1, 0.2, 0.3))
 
     candidate_a = SimpleNamespace(
         id=uuid4(),
