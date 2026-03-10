@@ -168,6 +168,35 @@ def test_evaluate_interview_routes_candidate_to_manager_review() -> None:
     assert candidate_package["candidate_name"] == "Candidate User"
     assert candidate_package["verification_status"] == "verification_submitted"
     assert candidate_package["recommendation"] == "advance"
+    assert "final decision is yours" in service.notifications.rows[0].payload_json["text"].lower()
+
+
+def test_evaluate_interview_with_reject_recommendation_still_routes_to_manager_review(monkeypatch) -> None:
+    service, candidate, _candidate_user, manager, match, session_row = _build_service()
+
+    monkeypatch.setattr(
+        "src.evaluation.service.safe_evaluate_candidate",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            payload={
+                "final_score": 0.22,
+                "strengths": ["Candidate answered the questions."],
+                "risks": ["Stack fit is weak."],
+                "recommendation": "reject",
+                "interview_summary": "Candidate has relevant experience, but the role fit looks weak overall.",
+            }
+        ),
+    )
+
+    result = service.evaluate_interview(interview_session_id=session_row.id)
+
+    assert result["status"] == "manager_review"
+    assert match.status == "manager_review"
+    assert candidate.state == "UNDER_MANAGER_REVIEW"
+    assert len(service.notifications.rows) == 1
+    assert service.notifications.rows[0].user_id == manager.id
+    candidate_package = service.notifications.rows[0].payload_json["candidate_package"]
+    assert candidate_package["recommendation"] == "reject"
+    assert candidate_package["interview_summary"].startswith("Candidate has relevant experience")
 
 
 def test_manager_approve_creates_introduction_event() -> None:

@@ -59,7 +59,7 @@ class EvaluationService:
             answer_texts=answer_texts,
         )
         evaluation = llm_result.payload
-        status = "auto_rejected" if evaluation["recommendation"] == "reject" else "manager_review"
+        status = "manager_review"
         row = self.evaluations.create(
             match_id=match.id,
             interview_session_id=session.id,
@@ -79,68 +79,56 @@ class EvaluationService:
             metadata_json={"evaluation_result_id": str(row.id)},
         )
 
-        if status == "auto_rejected":
-            self.state_service.transition(
-                entity_type="match",
-                entity=match,
-                to_state="auto_rejected",
-                trigger_type="job",
-                state_field="status",
-                metadata_json={"evaluation_result_id": str(row.id)},
-            )
-            self.state_service.transition(
-                entity_type="candidate_profile",
-                entity=candidate,
-                to_state="READY",
-                trigger_type="job",
-                metadata_json={"reason": "auto_rejected_below_threshold"},
-            )
-            self.notifications.create(
-                user_id=candidate.user_id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="candidate_auto_rejected",
-                payload_json={"text": self._copy("This opportunity did not move forward after evaluation.")},
-            )
-        else:
-            self.state_service.transition(
-                entity_type="match",
-                entity=match,
-                to_state="manager_review",
-                trigger_type="job",
-                state_field="status",
-                metadata_json={"evaluation_result_id": str(row.id)},
-            )
-            self.state_service.transition(
-                entity_type="candidate_profile",
-                entity=candidate,
-                to_state="UNDER_MANAGER_REVIEW",
-                trigger_type="job",
-                metadata_json={"evaluation_result_id": str(row.id)},
-            )
-            manager = self.users.get_by_id(vacancy.manager_user_id)
-            self.notifications.create(
-                user_id=manager.id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="manager_candidate_review_ready",
-                payload_json={
-                    "text": self._copy("A qualified candidate is ready for review. Use the buttons below to approve or reject."),
-                    "messages": [
-                        self._copy("A qualified candidate is ready for review."),
-                        self._copy("I put the candidate package below. When you're ready, use the buttons to approve or reject."),
-                    ],
-                    "candidate_package": build_candidate_package(
-                        candidate_user=candidate_user,
-                        candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
-                        candidate_profile=candidate,
-                        vacancy=vacancy,
-                        evaluation=evaluation,
-                        verification=verification,
+        self.state_service.transition(
+            entity_type="match",
+            entity=match,
+            to_state="manager_review",
+            trigger_type="job",
+            state_field="status",
+            metadata_json={
+                "evaluation_result_id": str(row.id),
+                "recommendation": evaluation.get("recommendation"),
+            },
+        )
+        self.state_service.transition(
+            entity_type="candidate_profile",
+            entity=candidate,
+            to_state="UNDER_MANAGER_REVIEW",
+            trigger_type="job",
+            metadata_json={
+                "evaluation_result_id": str(row.id),
+                "recommendation": evaluation.get("recommendation"),
+            },
+        )
+        manager = self.users.get_by_id(vacancy.manager_user_id)
+        self.notifications.create(
+            user_id=manager.id,
+            entity_type="match",
+            entity_id=match.id,
+            template_key="manager_candidate_review_ready",
+            payload_json={
+                "text": self._copy(
+                    "An interviewed candidate is ready for review. "
+                    "I included the interview summary and AI recommendation, and the final decision is yours."
+                ),
+                "messages": [
+                    self._copy("An interviewed candidate is ready for review."),
+                    self._copy(
+                        "I put the candidate package below, including the interview summary, risks, and recommendation. "
+                        "When you're ready, use the buttons to approve or reject."
                     ),
-                    "reply_markup": manager_review_keyboard(),
-                },
-            )
+                ],
+                "candidate_package": build_candidate_package(
+                    candidate_user=candidate_user,
+                    candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+                    candidate_profile=candidate,
+                    vacancy=vacancy,
+                    evaluation=evaluation,
+                    verification=verification,
+                ),
+                "reply_markup": manager_review_keyboard(),
+            },
+        )
 
         return {
             "evaluation_result_id": str(row.id),
