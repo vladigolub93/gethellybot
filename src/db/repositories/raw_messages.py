@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
 from src.db.models.core import RawMessage
@@ -30,6 +30,7 @@ class RawMessagesRepository:
         payload_json: dict,
         text_content: Optional[str],
         file_id: Optional[UUID] = None,
+        correlation_id: Optional[UUID] = None,
     ) -> RawMessage:
         raw_message = RawMessage(
             user_id=user_id,
@@ -41,10 +42,31 @@ class RawMessagesRepository:
             payload_json=payload_json,
             text_content=text_content,
             file_id=file_id,
+            correlation_id=correlation_id,
         )
         self.session.add(raw_message)
         self.session.flush()
         return raw_message
+
+    def list_outbound_by_correlation(self, *, correlation_id: UUID) -> List[RawMessage]:
+        stmt = (
+            select(RawMessage)
+            .where(
+                RawMessage.direction == "outbound",
+                RawMessage.correlation_id == correlation_id,
+            )
+            .order_by(RawMessage.created_at.asc())
+        )
+        return list(self.session.execute(stmt).scalars())
+
+    def has_outbound_for_correlation(self, *, correlation_id: UUID) -> bool:
+        stmt = select(
+            exists().where(
+                RawMessage.direction == "outbound",
+                RawMessage.correlation_id == correlation_id,
+            )
+        )
+        return bool(self.session.execute(stmt).scalar())
 
     def attach_file(self, raw_message: RawMessage, file_id: UUID) -> RawMessage:
         raw_message.file_id = file_id

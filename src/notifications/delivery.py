@@ -33,6 +33,9 @@ class NotificationDeliveryService:
             return {"status": "already_sent", "notification_id": str(notification.id)}
         if notification.status == "cancelled":
             return {"status": "cancelled", "notification_id": str(notification.id)}
+        if self.raw_messages.has_outbound_for_correlation(correlation_id=notification.id):
+            self.notifications.mark_sent(notification)
+            return {"status": "already_delivered", "notification_id": str(notification.id)}
         claimed_notification = self.notifications.claim_for_send(notification.id)
         if claimed_notification is None:
             latest = self.notifications.get_by_id(notification.id)
@@ -42,6 +45,9 @@ class NotificationDeliveryService:
                 return {"status": "already_sent", "notification_id": str(latest.id)}
             if latest.status == "cancelled":
                 return {"status": "cancelled", "notification_id": str(latest.id)}
+            if self.raw_messages.has_outbound_for_correlation(correlation_id=latest.id):
+                self.notifications.mark_sent(latest)
+                return {"status": "already_delivered", "notification_id": str(latest.id)}
             return {
                 "status": "already_claimed",
                 "notification_id": str(latest.id),
@@ -56,6 +62,12 @@ class NotificationDeliveryService:
             user = self.users.get_by_id(notification.user_id)
             if user is None or not user.telegram_chat_id:
                 raise ValueError("Notification user or telegram_chat_id is not available.")
+            if self.raw_messages.has_outbound_for_correlation(correlation_id=notification.id):
+                self.notifications.mark_sent(notification)
+                return {
+                    "status": "already_delivered",
+                    "notification_id": str(notification.id),
+                }
 
             messages = render_notification_messages(
                 template_key=notification.template_key,
@@ -82,6 +94,7 @@ class NotificationDeliveryService:
                     content_type="text",
                     payload_json=telegram_result,
                     text_content=text,
+                    correlation_id=notification.id,
                 )
             self.notifications.mark_sent(notification)
             return {

@@ -40,10 +40,17 @@ class FakeUsersRepository:
 class FakeRawMessagesRepository:
     def __init__(self):
         self.created = []
+        self.outbound_correlation_ids = set()
 
     def create(self, **kwargs):
         self.created.append(kwargs)
+        correlation_id = kwargs.get("correlation_id")
+        if correlation_id is not None and kwargs.get("direction") == "outbound":
+            self.outbound_correlation_ids.add(str(correlation_id))
         return SimpleNamespace(**kwargs)
+
+    def has_outbound_for_correlation(self, *, correlation_id):
+        return str(correlation_id) in self.outbound_correlation_ids
 
 
 class FakeTelegramBotClient:
@@ -107,3 +114,40 @@ def test_send_notification_by_id_skips_when_already_claimed() -> None:
     assert result["status"] == "already_claimed"
     assert result["notification_status"] == "sending"
     assert service.telegram.calls == []
+
+
+def test_send_notification_by_id_skips_when_already_delivered_via_raw_message() -> None:
+    service = _build_service()
+    notification = SimpleNamespace(
+        id="notification-3",
+        user_id="user-1",
+        template_key="request_role",
+        payload_json={"text": "Choose your role."},
+        status="pending",
+    )
+    service.notifications.rows[str(notification.id)] = notification
+    service.raw_messages.outbound_correlation_ids.add(str(notification.id))
+
+    result = service.send_notification_by_id(notification.id)
+
+    assert result["status"] == "already_delivered"
+    assert notification.status == "sent"
+    assert service.telegram.calls == []
+
+
+def test_send_notification_records_correlation_id_on_outbound_raw_messages() -> None:
+    service = _build_service()
+    notification = SimpleNamespace(
+        id="notification-4",
+        user_id="user-1",
+        template_key="request_role",
+        payload_json={"text": "Choose your role."},
+        status="pending",
+    )
+    service.notifications.rows[str(notification.id)] = notification
+
+    result = service.send_notification_by_id(notification.id)
+
+    assert result["status"] == "sent"
+    assert len(service.raw_messages.created) == 1
+    assert service.raw_messages.created[0]["correlation_id"] == notification.id
