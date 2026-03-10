@@ -14,7 +14,7 @@ from src.candidate_profile.question_prompts import (
     question_prompt,
 )
 from src.candidate_profile.verification import build_verification_phrase
-from src.candidate_profile.verification import format_verification_transcript_hint
+from src.candidate_profile.verification import format_verification_phrase_feedback
 from src.candidate_profile.verification import phrase_matches_verification
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CONSENTED,
@@ -739,25 +739,39 @@ class CandidateProfileService:
                 "transcript_text": spoken_text,
                 "phrase_matched": False,
                 "quality_error_code": exc.code,
+                "raw_message_id": str(raw_message_id) if raw_message_id is not None else None,
+                "video_file_id": str(file_id) if file_id is not None else None,
             }
             self.session.flush()
-            transcript_hint = format_verification_transcript_hint(spoken_text)
+            phrase_feedback = format_verification_phrase_feedback(
+                expected_phrase=verification.phrase_text,
+                spoken_text=spoken_text,
+            )
             return CandidateVerificationResult(
                 status="retry_required",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
-                    "I saved the video, but the audio was too noisy to verify the phrase. "
-                    f"{transcript_hint}. "
-                    f"Please resend a clearer selfie video and say: '{verification.phrase_text}'."
+                    "I couldn't verify the phrase from that video because the audio was too noisy. "
+                    f"{phrase_feedback} "
+                    "Please resend a clearer selfie video and say it in one take."
                 ),
             )
         except Exception:
+            verification.review_notes_json = {
+                "transcript_text": None,
+                "phrase_matched": False,
+                "processing_error_code": "verification_transcription_failed",
+                "raw_message_id": str(raw_message_id) if raw_message_id is not None else None,
+                "video_file_id": str(file_id) if file_id is not None else None,
+            }
+            self.session.flush()
             return CandidateVerificationResult(
                 status="retry_required",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
-                    "I couldn't verify the phrase from that video. "
-                    f"Please resend a short selfie video and clearly say: '{verification.phrase_text}'."
+                    "I couldn't transcribe that video well enough to compare the phrase. "
+                    f'You were supposed to say: "{verification.phrase_text}". '
+                    "Please resend a short selfie video and say it clearly in one take."
                 ),
             )
 
@@ -767,18 +781,22 @@ class CandidateProfileService:
                 expected_phrase=verification.phrase_text,
                 spoken_text=spoken_text,
             ),
+            "raw_message_id": str(raw_message_id) if raw_message_id is not None else None,
+            "video_file_id": str(file_id) if file_id is not None else None,
         }
         self.session.flush()
 
         if not verification.review_notes_json["phrase_matched"]:
-            transcript_hint = format_verification_transcript_hint(spoken_text)
+            phrase_feedback = format_verification_phrase_feedback(
+                expected_phrase=verification.phrase_text,
+                spoken_text=spoken_text,
+            )
             return CandidateVerificationResult(
                 status="phrase_mismatch",
                 notification_template="candidate_verification_instructions",
                 notification_text=(
-                    "Video received, but the phrase didn’t match yet. "
-                    f"{transcript_hint}. "
-                    f"Please record one more short selfie video and say exactly: '{verification.phrase_text}'."
+                    f"{phrase_feedback} "
+                    "Please record one more short selfie video and say it exactly in one take."
                 ),
             )
 

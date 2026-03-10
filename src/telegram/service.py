@@ -224,6 +224,7 @@ class TelegramUpdateService:
         template_key: str,
         text: str,
         reply_markup=None,
+        allow_duplicate: bool = False,
     ) -> str:
         return self._notify(
             user_id,
@@ -232,6 +233,7 @@ class TelegramUpdateService:
                 "text": text,
                 "reply_markup": reply_markup,
             },
+            allow_duplicate=allow_duplicate,
         )
 
     def _dispatch_segment_chain(
@@ -592,6 +594,7 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=verification_result.notification_template,
                 text=verification_result.notification_text,
+                allow_duplicate=True,
             )
         ]
 
@@ -816,6 +819,7 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=verification_result.notification_template,
                 text=verification_result.notification_text,
+                allow_duplicate=True,
             )
         ]
 
@@ -1746,13 +1750,14 @@ class TelegramUpdateService:
             self.files_repo.mark_storage_queued(file_row)
         return file_row
 
-    def _notify(self, user_id, template_key: str, payload: dict) -> str:
+    def _notify(self, user_id, template_key: str, payload: dict, *, allow_duplicate: bool = False) -> str:
         self.notifications_repo.create(
             user_id=user_id,
             entity_type="user",
             entity_id=user_id,
             template_key=template_key,
             payload_json=payload,
+            allow_duplicate=allow_duplicate,
         )
         return template_key
 

@@ -112,3 +112,10 @@ def format_verification_transcript_hint(spoken_text: str) -> str:
     if not normalized:
         return "What I heard: [empty transcript]"
     return f'What I heard: "{normalized}"'
+
+
+def format_verification_phrase_feedback(*, expected_phrase: str, spoken_text: str) -> str:
+    normalized_spoken = " ".join((spoken_text or "").split()).strip()
+    normalized_expected = " ".join((expected_phrase or "").split()).strip()
+    heard_text = f'"{normalized_spoken}"' if normalized_spoken else "[empty transcript]"
+    return f'I heard on the video: {heard_text}. You were supposed to say: "{normalized_expected}".'

@@ -1,5 +1,6 @@
 from src.candidate_profile.verification import (
     build_verification_phrase,
+    format_verification_phrase_feedback,
     format_verification_transcript_hint,
     phrase_matches_verification,
 )
@@ -47,4 +48,14 @@ def test_phrase_matches_verification_accepts_fuzzy_short_phrase() -> None:
 def test_format_verification_transcript_hint_returns_user_facing_text() -> None:
     assert format_verification_transcript_hint("helly check prod is green") == (
         'What I heard: "helly check prod is green"'
+    )
+
+
+def test_format_verification_phrase_feedback_compares_heard_and_expected() -> None:
+    assert format_verification_phrase_feedback(
+        expected_phrase="Helly check: async queue",
+        spoken_text="helly check sync queue",
+    ) == (
+        'I heard on the video: "helly check sync queue". '
+        'You were supposed to say: "Helly check: async queue".'
     )

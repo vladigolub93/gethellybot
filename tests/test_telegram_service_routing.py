@@ -2681,6 +2681,7 @@ def test_candidate_verification_video_passthrough_reaches_verification_handler()
 
     assert templates == ["candidate_ready"]
     assert service.candidate_service.verification_calls
+    assert service.notifications_repo.calls[-1]["allow_duplicate"] is True
 
 
 def test_candidate_verification_voice_passthrough_reaches_verification_handler() -> None:
@@ -2709,6 +2710,7 @@ def test_candidate_verification_voice_passthrough_reaches_verification_handler()
     assert templates == ["candidate_verification_instructions"]
     assert service.candidate_service.verification_calls
     assert service.candidate_service.verification_calls[-1]["content_type"] == "voice"
+    assert service.notifications_repo.calls[-1]["allow_duplicate"] is True
 
 
 def test_graph_verification_stage_can_own_video_submission() -> None:
@@ -2754,6 +2756,7 @@ def test_graph_verification_stage_can_own_video_submission() -> None:
     assert templates == ["candidate_ready"]
     assert service.candidate_service.verification_calls
     assert service.candidate_service.verification_calls[-1]["content_type"] == "video"
+    assert service.notifications_repo.calls[-1]["allow_duplicate"] is True
 
 
 def test_candidate_delete_confirm_passthrough_reaches_deletion_handler() -> None:

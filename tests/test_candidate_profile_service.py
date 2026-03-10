@@ -762,5 +762,6 @@ def test_verification_rejects_video_with_wrong_phrase() -> None:
     assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
     assert verification.status == "issued"
     assert verification.review_notes_json["phrase_matched"] is False
-    assert 'What I heard: "Helly check green deploy"' in result.notification_text
+    assert 'I heard on the video: "Helly check green deploy".' in result.notification_text
+    assert 'You were supposed to say: "Helly check: sync complete".' in result.notification_text
     assert service.queue.messages == []

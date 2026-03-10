@@ -28,32 +28,34 @@ class NotificationsRepository:
         payload_json: dict,
         channel: str = "telegram",
         status: str = "pending",
+        allow_duplicate: bool = False,
     ) -> Notification:
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
-        existing_stmt = (
-            select(Notification)
-            .where(
-                Notification.user_id == user_id,
-                Notification.entity_type == entity_type,
-                Notification.entity_id == entity_id,
-                Notification.channel == channel,
-                Notification.template_key == template_key,
-                Notification.payload_json == payload_json,
-                Notification.created_at >= recent_cutoff,
-                Notification.status.in_(("pending", "queued", "sending", "sent")),
+        if not allow_duplicate:
+            recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=2)
+            existing_stmt = (
+                select(Notification)
+                .where(
+                    Notification.user_id == user_id,
+                    Notification.entity_type == entity_type,
+                    Notification.entity_id == entity_id,
+                    Notification.channel == channel,
+                    Notification.template_key == template_key,
+                    Notification.payload_json == payload_json,
+                    Notification.created_at >= recent_cutoff,
+                    Notification.status.in_(("pending", "queued", "sending", "sent")),
+                )
+                .order_by(Notification.created_at.desc())
+                .limit(1)
             )
-            .order_by(Notification.created_at.desc())
-            .limit(1)
-        )
-        existing = self.session.execute(existing_stmt).scalar_one_or_none()
-        if existing is not None:
-            session_info = getattr(self.session, "info", None)
-            if session_info is not None:
-                created_notification_ids = session_info.setdefault("created_notification_ids", [])
-                existing_id = str(existing.id)
-                if existing_id not in created_notification_ids:
-                    created_notification_ids.append(existing_id)
-            return existing
+            existing = self.session.execute(existing_stmt).scalar_one_or_none()
+            if existing is not None:
+                session_info = getattr(self.session, "info", None)
+                if session_info is not None:
+                    created_notification_ids = session_info.setdefault("created_notification_ids", [])
+                    existing_id = str(existing.id)
+                    if existing_id not in created_notification_ids:
+                        created_notification_ids.append(existing_id)
+                return existing
 
         notification = Notification(
             user_id=user_id,

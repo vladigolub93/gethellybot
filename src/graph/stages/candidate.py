@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.candidate_profile.verification import format_verification_phrase_feedback
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.interviews import InterviewsRepository
@@ -166,6 +167,7 @@ def build_candidate_stage_detect_node(session):
                 verifications = CandidateVerificationsRepository(session)
                 profile = profiles.get_active_by_user_id(state.user_id)
                 transcript_text = None
+                verification = None
                 if profile is not None:
                     verification = verifications.get_pending_by_profile_id(profile.id)
                     if verification is not None:
@@ -174,10 +176,16 @@ def build_candidate_stage_detect_node(session):
                             if verification.review_notes_json
                             else None
                         )
-                if transcript_text:
+                if transcript_text and verification is not None:
                     state.reply_text = (
-                        f'What I heard from the last video: "{transcript_text}". '
+                        f"{format_verification_phrase_feedback(expected_phrase=verification.phrase_text, spoken_text=transcript_text)} "
                         "If that looks wrong, resend the selfie video a bit slower and in a quieter place."
+                    )
+                elif verification is not None:
+                    state.reply_text = (
+                        "I do not have a usable transcript saved from the last video. "
+                        f'You were supposed to say: "{verification.phrase_text}". '
+                        "Please resend a short selfie video and say the phrase slowly in one take."
                     )
                 else:
                     state.reply_text = (
