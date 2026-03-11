@@ -172,6 +172,42 @@
     });
   }
 
+  function isTerminalTheme() {
+    return state.theme === TERMINAL_THEME;
+  }
+
+  function terminalToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "value";
+  }
+
+  function renderTerminalConsole(title, rows) {
+    if (!isTerminalTheme()) return "";
+    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
+    if (!visibleRows.length) return "";
+    return `
+      <section class="terminal-console">
+        <div class="terminal-console-head">
+          <span class="terminal-led"></span>
+          <span class="terminal-led"></span>
+          <span class="terminal-led"></span>
+          <span class="terminal-title">${escapeHtml(title)}</span>
+        </div>
+        <div class="terminal-console-body">
+          ${visibleRows.map((row) => `
+            <div class="terminal-line">
+              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}</span>
+              <span class="terminal-separator">::</span>
+              <span class="terminal-value">${escapeHtml(row.value)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function tapFeedback(kind) {
     try {
       if (!tg || !tg.HapticFeedback) return;
@@ -204,10 +240,14 @@
   function renderLoading(title, body) {
     appEl.innerHTML = `
       <section class="screen-card">
-        <p class="eyebrow">Loading</p>
+        <p class="eyebrow">${isTerminalTheme() ? "boot_sequence" : "Loading"}</p>
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
+        ${renderTerminalConsole("cv.challenge.boot", [
+          { label: "runtime", value: "telegram_webapp" },
+          { label: "profile_sync", value: "pending" },
+        ])}
       </section>
     `;
   }
@@ -215,13 +255,17 @@
   function renderLocked(title, body) {
     appEl.innerHTML = `
       <section class="locked-card">
-        <p class="eyebrow">Challenge locked</p>
+        <p class="eyebrow">${isTerminalTheme() ? "access_denied" : "Challenge locked"}</p>
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
+        ${renderTerminalConsole("cv.challenge.guard", [
+          { label: "status", value: "locked" },
+          { label: "hint", value: "return_to_dashboard" },
+        ])}
         <div class="action-row">
-          <button id="open-dashboard" class="ghost-button" type="button">Open dashboard</button>
-          <button id="close-app" class="button" type="button">Close</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
+          <button id="close-app" class="button" type="button">${isTerminalTheme() ? "exit" : "Close"}</button>
         </div>
       </section>
     `;
@@ -239,26 +283,32 @@
     const challenge = state.bootstrap.challenge;
     appEl.innerHTML = `
       <section class="screen-card">
-        <p class="eyebrow">CV Challenge</p>
+        <p class="eyebrow">${isTerminalTheme() ? "cv_challenge_runtime" : "CV Challenge"}</p>
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(challenge.subtitle)}</p>
+        ${renderTerminalConsole("cv.challenge.bootstrap", [
+          { label: "correct skills", value: String(challenge.correctSkills.length) },
+          { label: "distractors", value: String(challenge.distractorSkills.length) },
+          { label: "stages", value: String(challenge.stages.length) },
+          { label: "lives", value: String(challenge.totalLives) },
+        ])}
         <div class="meta-strip">
           <article class="meta-card">
             <span class="meta-value">${escapeHtml(challenge.correctSkills.length)}</span>
-            <span class="meta-label">CV skills</span>
+            <span class="meta-label">${isTerminalTheme() ? "cv_skills" : "CV skills"}</span>
           </article>
           <article class="meta-card">
             <span class="meta-value">${escapeHtml(challenge.totalLives)}</span>
-            <span class="meta-label">Lives</span>
+            <span class="meta-label">${isTerminalTheme() ? "lives" : "Lives"}</span>
           </article>
           <article class="meta-card">
             <span class="meta-value">${escapeHtml(challenge.stages.length)}</span>
-            <span class="meta-label">Stages</span>
+            <span class="meta-label">${isTerminalTheme() ? "stages" : "Stages"}</span>
           </article>
         </div>
         <div class="action-row">
-          <button id="start-challenge" class="button" type="button">Start challenge</button>
-          <button id="open-dashboard" class="ghost-button" type="button">Back to dashboard</button>
+          <button id="start-challenge" class="button" type="button">${isTerminalTheme() ? "run challenge" : "Start challenge"}</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Back to dashboard"}</button>
         </div>
       </section>
     `;
@@ -271,25 +321,29 @@
   function renderGameShell() {
     appEl.innerHTML = `
       <section class="game-shell">
+        ${renderTerminalConsole("cv.challenge.runtime", [
+          { label: "mode", value: "live" },
+          { label: "rule", value: "tap_valid_tokens_only" },
+        ])}
         <header class="hud">
           <article class="hud-card">
             <span id="hud-score" class="hud-value">0</span>
-            <span class="hud-label">Score</span>
+            <span class="hud-label">${isTerminalTheme() ? "score" : "Score"}</span>
           </article>
           <article class="hud-card">
             <span id="hud-lives" class="hud-value">3</span>
-            <span class="hud-label">Lives</span>
+            <span class="hud-label">${isTerminalTheme() ? "lives" : "Lives"}</span>
           </article>
           <article class="hud-card">
             <span id="hud-stage" class="hud-value">1 / 3</span>
-            <span class="hud-label">Stage</span>
+            <span class="hud-label">${isTerminalTheme() ? "stage" : "Stage"}</span>
           </article>
         </header>
         <section class="canvas-wrap">
-          <div id="stage-banner" class="stage-banner">Stage 1</div>
+          <div id="stage-banner" class="stage-banner">${isTerminalTheme() ? "[ stage_01 ]" : "Stage 1"}</div>
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
-        <p class="canvas-hint">Tap only the technologies that truly appear in your CV. Missing a real one also costs a life.</p>
+        <p class="canvas-hint">${isTerminalTheme() ? "tap tokens from your real cv. ignore foreign tokens. missing a valid one costs 1 life." : "Tap only the technologies that truly appear in your CV. Missing a real one also costs a life."}</p>
       </section>
     `;
     state.canvas = document.getElementById("game-canvas");
@@ -307,35 +361,41 @@
     const missed = Array.from(state.missedCorrect).slice(0, 12);
     appEl.innerHTML = `
       <section class="result-card">
-        <p class="eyebrow">${won ? "Challenge complete" : "Game over"}</p>
+        <p class="eyebrow">${won ? (isTerminalTheme() ? "run_complete" : "Challenge complete") : (isTerminalTheme() ? "run_failed" : "Game over")}</p>
         <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
         <p class="result-copy">${won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."}</p>
+        ${renderTerminalConsole("cv.challenge.result", [
+          { label: "score", value: String(state.score) },
+          { label: "stage reached", value: String(state.stageIndex + 1) },
+          { label: "mistakes", value: String(state.totalMistakes) },
+          { label: "status", value: won ? "complete" : "failed" },
+        ])}
         <div class="result-meta">
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.score)}</span>
-            <span class="result-meta-label">Score</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "score" : "Score"}</span>
           </article>
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.stageIndex + 1)}</span>
-            <span class="result-meta-label">Stage reached</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "stage_reached" : "Stage reached"}</span>
           </article>
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.correctTapCount)}</span>
-            <span class="result-meta-label">Correct taps</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "correct_taps" : "Correct taps"}</span>
           </article>
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.totalMistakes)}</span>
-            <span class="result-meta-label">Mistakes</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
           </article>
         </div>
         ${missed.length ? `
           <div class="missed-list">
-            ${missed.map((skill) => `<span class="missed-item">${escapeHtml(skill)}</span>`).join("")}
+            ${missed.map((skill) => `<span class="missed-item">${escapeHtml(isTerminalTheme() ? `[ ${skill} ]` : skill)}</span>`).join("")}
           </div>
         ` : ""}
         <div class="action-row">
-          <button id="try-again" class="button" type="button">Try again</button>
-          <button id="open-dashboard" class="ghost-button" type="button">Open dashboard</button>
+          <button id="try-again" class="button" type="button">${isTerminalTheme() ? "rerun" : "Try again"}</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
         </div>
       </section>
     `;
@@ -413,13 +473,15 @@
     const text = pickRandom(correct ? challenge.correctSkills : challenge.distractorSkills);
     if (!text) return;
     state.ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
-    const textWidth = state.ctx.measureText(text).width;
+    const displayText = isTerminalTheme() ? `[ ${text} ]` : text;
+    const textWidth = state.ctx.measureText(displayText).width;
     const width = Math.min(state.canvas.clientWidth - 24, textWidth + 28);
     const height = 46;
     const maxX = Math.max(state.canvas.clientWidth - width - 12, 12);
     state.objects.push({
       id: state.nextId++,
       text,
+      displayText,
       correct,
       width,
       height,
@@ -431,12 +493,16 @@
 
   function updateHud() {
     if (state.hudScoreEl) state.hudScoreEl.textContent = String(state.score);
-    if (state.hudLivesEl) state.hudLivesEl.textContent = String(state.livesLeft);
+    if (state.hudLivesEl) state.hudLivesEl.textContent = isTerminalTheme() ? "■".repeat(state.livesLeft) : String(state.livesLeft);
     if (state.hudStageEl) {
-      state.hudStageEl.textContent = `${state.stageIndex + 1} / ${state.bootstrap.challenge.stages.length}`;
+      state.hudStageEl.textContent = isTerminalTheme()
+        ? `stage_${String(state.stageIndex + 1).padStart(2, "0")}`
+        : `${state.stageIndex + 1} / ${state.bootstrap.challenge.stages.length}`;
     }
     if (state.stageBannerEl) {
-      state.stageBannerEl.textContent = currentStageConfig().label;
+      state.stageBannerEl.textContent = isTerminalTheme()
+        ? `[ stage_${String(state.stageIndex + 1).padStart(2, "0")} ]`
+        : currentStageConfig().label;
     }
   }
 
@@ -495,7 +561,7 @@
       ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
       ctx.fillStyle = cssVar("--token-text", "#f8f8fb");
       ctx.textBaseline = "middle";
-      ctx.fillText(item.text, item.x + 14, item.y + item.height / 2);
+      ctx.fillText(item.displayText || item.text, item.x + 14, item.y + item.height / 2);
     });
   }
 
