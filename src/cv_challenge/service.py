@@ -12,6 +12,14 @@ from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.cv_challenge import CandidateCvChallengeAttemptsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.users import UsersRepository
+from src.matching.policy import (
+    MATCH_STATUS_ACCEPTED,
+    MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+    MATCH_STATUS_INTERVIEW_QUEUED,
+    MATCH_STATUS_INVITED,
+    MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+    MATCH_STATUS_SHORTLISTED,
+)
 
 
 MIN_CV_CHALLENGE_SKILL_COUNT = 3
@@ -55,6 +63,17 @@ CV_CHALLENGE_DISTRACTOR_POOL = (
     "Joomla",
     "Perl",
     "Hadoop",
+)
+
+CV_CHALLENGE_BLOCKING_MATCH_STATUSES = frozenset(
+    {
+        MATCH_STATUS_SHORTLISTED,
+        MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+        MATCH_STATUS_INTERVIEW_QUEUED,
+        MATCH_STATUS_INVITED,
+        MATCH_STATUS_ACCEPTED,
+    }
 )
 
 
@@ -174,7 +193,12 @@ class CandidateCvChallengeService:
             )
 
         active_matches = self.matches.list_active_for_candidate(profile.id)
-        if active_matches:
+        blocking_matches = [
+            match
+            for match in active_matches
+            if getattr(match, "status", None) in CV_CHALLENGE_BLOCKING_MATCH_STATUSES
+        ]
+        if blocking_matches:
             return CandidateCvChallengeEligibility(
                 eligible=False,
                 reason_code="candidate_has_active_matches",
@@ -183,7 +207,7 @@ class CandidateCvChallengeService:
                 launch_url=None,
                 candidate_profile_id=str(profile.id),
                 candidate_profile_version_id=str(profile.current_version_id) if profile.current_version_id else None,
-                active_match_count=len(active_matches),
+                active_match_count=len(blocking_matches),
                 correct_skills=[],
                 distractor_skills=[],
             )

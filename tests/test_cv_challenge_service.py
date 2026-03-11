@@ -119,13 +119,25 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["lastResult"] is None
 
 
-def test_cv_challenge_service_rejects_candidate_with_active_matches() -> None:
-    service, profile = _build_service(active_matches=[SimpleNamespace(id="match-1")])
+def test_cv_challenge_service_rejects_candidate_with_blocking_active_matches() -> None:
+    service, profile = _build_service(
+        active_matches=[SimpleNamespace(id="match-1", status="candidate_decision_pending")]
+    )
 
     eligibility = service.build_eligibility_for_user_id(profile.user_id)
 
     assert eligibility.eligible is False
     assert eligibility.reason_code == "candidate_has_active_matches"
+
+
+def test_cv_challenge_service_allows_passive_waiting_matches() -> None:
+    service, profile = _build_service(
+        active_matches=[SimpleNamespace(id="match-1", status="manager_review")]
+    )
+
+    eligibility = service.build_eligibility_for_user_id(profile.user_id)
+
+    assert eligibility.eligible is True
 
 
 def test_cv_challenge_service_finishes_own_attempt_only() -> None:

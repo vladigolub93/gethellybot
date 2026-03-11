@@ -723,6 +723,7 @@ def test_execute_ready_action_enqueues_matching_for_open_vacancies() -> None:
     assert service.queue.messages[0].job_type == "matching_run_for_vacancy_v1"
     assert service.queue.messages[0].payload["trigger_candidate_profile_id"] == str(profile.id)
     assert service.queue.messages[0].payload["trigger_type"] == "candidate_manual_request"
+    assert service.queue.messages[0].payload["candidate_manual_request_id"] == "raw-ready-1"
     assert service.queue.messages[0].idempotency_key.endswith(":manual:raw-ready-1")
     assert service.queue.messages[1].job_type == "matching_run_for_vacancy_v1"
 
@@ -752,6 +753,7 @@ def test_execute_ready_action_handles_no_open_vacancies() -> None:
     assert result is not None
     assert result.status == "no_open_vacancies"
     assert service.queue.messages == []
+    assert "helly cv challenge" in result.notification_text.lower()
     assert result.reply_markup["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
 
 

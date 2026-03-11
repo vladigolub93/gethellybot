@@ -32,11 +32,15 @@ class FakeVacanciesRepository:
 
 
 class FakeMatchingRepository:
-    def __init__(self, active_matches=None):
+    def __init__(self, active_matches=None, active_candidate_matches=None):
         self.active_matches = list(active_matches or [])
+        self.active_candidate_matches = list(active_candidate_matches or [])
 
     def list_active_for_vacancy(self, vacancy_id):
         return list(self.active_matches)
+
+    def list_active_for_candidate(self, candidate_profile_id):
+        return list(self.active_candidate_matches)
 
 
 class FakeNotificationsRepository:
@@ -66,6 +70,19 @@ class FakeCvChallengeService:
 
     def build_invitation_payload(self, user_id):
         return self.invitation
+
+
+class FakeJobExecutionLogsRepository:
+    def __init__(self, rows=None):
+        self.rows = list(rows or [])
+
+    def list_candidate_manual_request_jobs(self, *, candidate_profile_id, request_id):
+        return [
+            row
+            for row in self.rows
+            if (row.payload_json or {}).get("trigger_candidate_profile_id") == str(candidate_profile_id)
+            and (row.payload_json or {}).get("candidate_manual_request_id") == str(request_id)
+        ]
 
 
 class FakeReviewService:
@@ -346,3 +363,108 @@ def test_matching_processing_notifies_manager_when_vacancy_cap_blocks_new_batch(
     assert "found strong candidates" in text
     assert "active interview pipeline" in text
     assert "wait until one finishes or drops out" in text
+
+
+def test_matching_processing_notifies_candidate_after_manual_refresh_when_no_new_roles() -> None:
+    profile_id = uuid4()
+    current_job = SimpleNamespace(
+        id="job-1",
+        job_type="matching_run_for_vacancy_v1",
+        status="running",
+        payload_json={
+            "vacancy_id": "vacancy-1",
+            "trigger_type": "candidate_manual_request",
+            "trigger_candidate_profile_id": str(profile_id),
+            "candidate_manual_request_id": "req-1",
+        },
+        result_json=None,
+    )
+
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(id=profile_id, user_id="candidate-user-1")
+    )
+    service.job_logs = FakeJobExecutionLogsRepository(rows=[current_job])
+    service.vacancies = FakeVacanciesRepository()
+    service.matching = FakeMatchingRepository(active_candidate_matches=[SimpleNamespace(id="match-1")])
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService(
+        result={
+            "matching_run_id": "run-5",
+            "candidate_pool_count": 0,
+            "hard_filtered_count": 0,
+            "shortlisted_count": 0,
+        }
+    )
+    service.review_service = FakeReviewService()
+    service.cv_challenge = FakeCvChallengeService(
+        invitation={
+            "launchUrl": "https://helly.test/webapp/cv-challenge",
+        }
+    )
+
+    service.process_job(current_job)
+
+    assert len(service.notifications.rows) == 1
+    notification = service.notifications.rows[0]
+    assert notification.user_id == "candidate-user-1"
+    assert notification.template_key == "candidate_ready"
+    assert notification.allow_duplicate is True
+    text = notification.payload_json["text"].lower()
+    assert "didn't find any new matches" in text
+    assert "already 1 active opportunity in progress" in text
+    assert "helly cv challenge" in text
+    assert notification.payload_json["reply_markup"]["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
+
+
+def test_matching_processing_waits_for_last_candidate_manual_refresh_job_before_notifying() -> None:
+    profile_id = uuid4()
+    current_job = SimpleNamespace(
+        id="job-1",
+        job_type="matching_run_for_vacancy_v1",
+        status="running",
+        payload_json={
+            "vacancy_id": "vacancy-1",
+            "trigger_type": "candidate_manual_request",
+            "trigger_candidate_profile_id": str(profile_id),
+            "candidate_manual_request_id": "req-2",
+        },
+        result_json=None,
+    )
+    sibling_job = SimpleNamespace(
+        id="job-2",
+        job_type="matching_run_for_vacancy_v1",
+        status="queued",
+        payload_json={
+            "vacancy_id": "vacancy-2",
+            "trigger_type": "candidate_manual_request",
+            "trigger_candidate_profile_id": str(profile_id),
+            "candidate_manual_request_id": "req-2",
+        },
+        result_json=None,
+    )
+
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(id=profile_id, user_id="candidate-user-2")
+    )
+    service.job_logs = FakeJobExecutionLogsRepository(rows=[current_job, sibling_job])
+    service.vacancies = FakeVacanciesRepository()
+    service.matching = FakeMatchingRepository()
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService(
+        result={
+            "matching_run_id": "run-6",
+            "candidate_pool_count": 0,
+            "hard_filtered_count": 0,
+            "shortlisted_count": 0,
+        }
+    )
+    service.review_service = FakeReviewService()
+    service.cv_challenge = FakeCvChallengeService(invitation=None)
+
+    service.process_job(current_job)
+
+    assert service.notifications.rows == []

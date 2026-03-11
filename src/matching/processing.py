@@ -3,6 +3,7 @@ from uuid import UUID
 
 from src.cv_challenge.service import CandidateCvChallengeService
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.job_execution_logs import JobExecutionLogsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -20,6 +21,7 @@ class MatchingProcessingService:
         self.session = session
         self.queue = DatabaseQueueClient(session)
         self.candidate_profiles = CandidateProfilesRepository(session)
+        self.job_logs = JobExecutionLogsRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.matching = MatchingRepository(session)
         self.notifications = NotificationsRepository(session)
@@ -121,7 +123,54 @@ class MatchingProcessingService:
                 shortlisted_count=result["shortlisted_count"],
                 review_dispatch_result=review_dispatch_result,
             )
+        if trigger_type == "candidate_manual_request":
+            self._maybe_notify_candidate_manual_refresh_result(
+                job=job,
+                candidate_profile_id=payload.get("trigger_candidate_profile_id"),
+                request_id=payload.get("candidate_manual_request_id"),
+                shortlisted_count=result["shortlisted_count"],
+            )
         return result
+
+    def _maybe_notify_candidate_manual_refresh_result(
+        self,
+        *,
+        job,
+        candidate_profile_id: str | None,
+        request_id: str | None,
+        shortlisted_count: int,
+    ) -> None:
+        if not candidate_profile_id or not request_id:
+            return
+
+        related_jobs = self.job_logs.list_candidate_manual_request_jobs(
+            candidate_profile_id=str(candidate_profile_id),
+            request_id=str(request_id),
+        )
+        current_job_id = str(getattr(job, "id", ""))
+        if any(
+            str(getattr(row, "id", "")) != current_job_id and getattr(row, "status", None) in {"queued", "running"}
+            for row in related_jobs
+        ):
+            return
+
+        total_shortlisted = max(int(shortlisted_count or 0), 0)
+        had_failed_jobs = False
+        for related_job in related_jobs:
+            if str(getattr(related_job, "id", "")) == current_job_id:
+                continue
+            if getattr(related_job, "status", None) == "completed":
+                total_shortlisted += max(int((getattr(related_job, "result_json", None) or {}).get("shortlisted_count") or 0), 0)
+            elif getattr(related_job, "status", None) == "failed":
+                had_failed_jobs = True
+
+        if total_shortlisted > 0:
+            return
+
+        self._notify_candidate_manual_refresh_result(
+            candidate_profile_id=str(candidate_profile_id),
+            had_failed_jobs=had_failed_jobs,
+        )
 
     def _notify_manager_manual_refresh_result(
         self,
@@ -169,6 +218,62 @@ class MatchingProcessingService:
             entity_id=vacancy.id,
             template_key="vacancy_open",
             payload_json={"text": text},
+            allow_duplicate=True,
+        )
+
+    def _notify_candidate_manual_refresh_result(
+        self,
+        *,
+        candidate_profile_id: str,
+        had_failed_jobs: bool,
+    ) -> None:
+        try:
+            profile_id = UUID(str(candidate_profile_id))
+        except (TypeError, ValueError):
+            return
+
+        profile = self.candidate_profiles.get_by_id(profile_id)
+        if profile is None:
+            return
+
+        active_match_count = len(self.matching.list_active_for_candidate(profile.id))
+        challenge_payload = self.cv_challenge.build_invitation_payload(profile.user_id)
+
+        if had_failed_jobs:
+            text = (
+                "I rechecked current open roles for your profile, but I couldn't complete every search cleanly just now. "
+                "Nothing new is ready yet."
+            )
+        elif active_match_count > 0:
+            verb = "is" if active_match_count == 1 else "are"
+            noun = "opportunity" if active_match_count == 1 else "opportunities"
+            text = (
+                "I checked current open roles again. I didn't find any new matches for you right now, "
+                f"but there {verb} already {active_match_count} active {noun} in progress."
+            )
+        else:
+            text = (
+                "I checked current open roles again. I didn't find any new matches for your profile right now."
+            )
+
+        if challenge_payload is not None:
+            text += " While you wait, you can open Helly CV Challenge and play a quick round."
+        else:
+            text += " I'll keep watching and message you as soon as something strong appears."
+
+        self.notifications.create(
+            user_id=profile.user_id,
+            entity_type="candidate_profile",
+            entity_id=profile.id,
+            template_key="candidate_ready",
+            payload_json={
+                "text": text,
+                "reply_markup": (
+                    candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
+                    if challenge_payload is not None
+                    else None
+                ),
+            },
             allow_duplicate=True,
         )
 

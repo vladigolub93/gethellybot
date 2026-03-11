@@ -642,6 +642,11 @@ class CandidateProfileService:
                 notification_template="candidate_ready",
                 notification_text=self._copy(
                     "I checked current open roles. Nothing is open right now, but I’ll keep watching and message you when a strong match appears."
+                    + (
+                        " While you wait, you can also open Helly CV Challenge and play a quick round."
+                        if challenge_payload is not None
+                        else ""
+                    )
                 ),
                 reply_markup=(
                     candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
@@ -658,6 +663,7 @@ class CandidateProfileService:
                         "vacancy_id": str(vacancy.id),
                         "trigger_type": "candidate_manual_request",
                         "trigger_candidate_profile_id": str(profile.id),
+                        "candidate_manual_request_id": str(raw_message_id),
                     },
                     idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:candidate:{profile.id}:manual:{raw_message_id}",
                     entity_type="vacancy",

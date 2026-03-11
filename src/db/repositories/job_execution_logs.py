@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -14,6 +16,24 @@ class JobExecutionLogsRepository:
     def get_by_id(self, job_id) -> Optional[JobExecutionLog]:
         stmt = select(JobExecutionLog).where(JobExecutionLog.id == job_id)
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_candidate_manual_request_jobs(
+        self,
+        *,
+        candidate_profile_id: str,
+        request_id: str,
+    ) -> list[JobExecutionLog]:
+        stmt = (
+            select(JobExecutionLog)
+            .where(
+                JobExecutionLog.job_type == "matching_run_for_vacancy_v1",
+                JobExecutionLog.payload_json["trigger_type"].astext == "candidate_manual_request",
+                JobExecutionLog.payload_json["trigger_candidate_profile_id"].astext == str(candidate_profile_id),
+                JobExecutionLog.payload_json["candidate_manual_request_id"].astext == str(request_id),
+            )
+            .order_by(JobExecutionLog.queued_at.asc())
+        )
+        return list(self.session.execute(stmt).scalars().all())
 
     def get_by_idempotency_key(self, *, job_type: str, idempotency_key: str) -> Optional[JobExecutionLog]:
         stmt = select(JobExecutionLog).where(
