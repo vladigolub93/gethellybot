@@ -529,88 +529,6 @@ html[data-theme="terminal"] .result-copy::before {
   color: var(--accent-soft);
 }
 
-.terminal-console {
-  position: relative;
-  overflow: hidden;
-  margin-top: 18px;
-  border: 1px solid rgba(87, 255, 158, 0.18);
-  border-radius: 12px;
-  background: rgba(4, 9, 7, 0.92);
-  box-shadow: 0 0 0 1px rgba(87, 255, 158, 0.04);
-}
-
-.terminal-console-head {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  min-height: 34px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(87, 255, 158, 0.14);
-  background: rgba(87, 255, 158, 0.04);
-}
-
-.terminal-led {
-  display: none;
-}
-
-.terminal-title {
-  flex: 1;
-  min-width: 0;
-  margin-left: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.terminal-console-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-}
-
-.terminal-line {
-  display: grid;
-  grid-template-columns: minmax(72px, 96px) 16px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  font-family:
-    ui-monospace,
-    "SF Mono",
-    "SFMono-Regular",
-    Menlo,
-    Monaco,
-    Consolas,
-    "Liberation Mono",
-    monospace;
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
-.terminal-key {
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: lowercase;
-}
-
-.terminal-separator {
-  color: var(--accent-soft);
-}
-
-.terminal-value {
-  color: var(--text);
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
 .result-card h2 {
   margin-top: 10px;
   font-size: 1.8rem;
@@ -767,8 +685,7 @@ html[data-theme="terminal"] .locked-card::before {
 html[data-theme="terminal"] .eyebrow,
 html[data-theme="terminal"] .meta-label,
 html[data-theme="terminal"] .result-meta-label,
-html[data-theme="terminal"] .hud-label,
-html[data-theme="terminal"] .terminal-title {
+html[data-theme="terminal"] .hud-label {
   letter-spacing: 0;
   text-transform: none;
 }
@@ -827,57 +744,9 @@ html[data-theme="terminal"] .stage-banner {
 
 html[data-theme="terminal"] .screen-card .copy::before,
 html[data-theme="terminal"] .locked-card .copy::before,
-html[data-theme="terminal"] .result-copy::before,
-html[data-theme="terminal"] .canvas-hint::before {
+html[data-theme="terminal"] .result-copy::before {
   content: "% ";
   color: #8e8e93;
-}
-
-html[data-theme="terminal"] .terminal-console {
-  border-radius: 12px;
-  border-color: rgba(255, 255, 255, 0.08);
-  background: #1b1b1d;
-  box-shadow: none;
-}
-
-html[data-theme="terminal"] .terminal-console-head {
-  min-height: 34px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-html[data-theme="terminal"] .terminal-led {
-  display: none;
-}
-
-html[data-theme="terminal"] .terminal-title {
-  color: #d1d1d6;
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "SF Pro Text",
-    "Segoe UI",
-    sans-serif;
-  font-size: 0.8rem;
-}
-
-html[data-theme="terminal"] .terminal-console-body {
-  background: #1b1b1d;
-}
-
-html[data-theme="terminal"] .terminal-line {
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
-html[data-theme="terminal"] .terminal-key,
-html[data-theme="terminal"] .terminal-separator {
-  color: #8e8e93;
-}
-
-html[data-theme="terminal"] .game-shell > .terminal-console {
-  margin-top: 0;
 }
 
 html[data-theme="terminal"] .app-mode-game .game-shell {
@@ -922,11 +791,6 @@ html[data-theme="terminal"] .app-mode-game .game-canvas {
 
   .hud-label {
     font-size: 0.68rem;
-  }
-
-  .terminal-line {
-    grid-template-columns: minmax(62px, 78px) 14px minmax(0, 1fr);
-    gap: 5px;
   }
 
   .canvas-wrap {

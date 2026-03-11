@@ -130,35 +130,6 @@
     return state.theme === TERMINAL_THEME;
   }
 
-  function terminalToken(value) {
-    return String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "") || "value";
-  }
-
-  function renderTerminalConsole(title, rows) {
-    if (!isTerminalTheme()) return "";
-    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
-    if (!visibleRows.length) return "";
-    return `
-      <section class="terminal-console">
-        <div class="terminal-console-head">
-          <span class="terminal-title">${escapeHtml(title)}</span>
-        </div>
-        <div class="terminal-console-body">
-          ${visibleRows.map((row) => `
-            <div class="terminal-line">
-              <span class="terminal-key">${escapeHtml(terminalToken(row.key || row.label))}</span>
-              <span class="terminal-separator">::</span>
-              <span class="terminal-value">${escapeHtml(row.value)}</span>
-            </div>
-          `).join("")}
-        </div>
-      </section>
-    `;
-  }
-
   function tapFeedback(kind) {
     try {
       if (!tg || !tg.HapticFeedback) return;
@@ -232,10 +203,6 @@
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
-        ${renderTerminalConsole("helly@cv-challenge:~ % boot", [
-          { label: "runtime", key: "runtime", value: "telegram_webapp" },
-          { label: "profile_sync", key: "profile", value: "pending" },
-        ])}
       </section>
     `;
   }
@@ -248,10 +215,6 @@
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
-        ${renderTerminalConsole("helly@cv-challenge:~ % access", [
-          { label: "status", key: "status", value: "locked" },
-          { label: "hint", key: "hint", value: "return_to_dashboard" },
-        ])}
         <div class="action-row">
           <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
           <button id="close-app" class="button" type="button">${isTerminalTheme() ? "exit" : "Close"}</button>
@@ -277,12 +240,6 @@
         <p class="eyebrow">${isTerminalTheme() ? "cv_challenge_runtime" : "CV Challenge"}</p>
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(challenge.subtitle)}</p>
-        ${renderTerminalConsole("helly@cv-challenge:~ % cat challenge.txt", [
-          { label: "correct skills", key: "correct", value: String(challenge.correctSkills.length) },
-          { label: "distractors", key: "wrong_pool", value: String(challenge.distractorSkills.length) },
-          { label: "stages", key: "stages", value: String(challenge.stages.length) },
-          { label: "lives", key: "lives", value: String(challenge.totalLives) },
-        ])}
         <div class="meta-strip">
           <article class="meta-card">
             <span class="meta-value">${escapeHtml(challenge.correctSkills.length)}</span>
