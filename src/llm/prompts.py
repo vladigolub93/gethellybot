@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 EXTRACTION_SYSTEM_PROMPT = """You are the structured extraction layer for Helly, a Telegram-first recruiting system.
 
 Rules:
@@ -725,23 +727,37 @@ def interview_evaluation_prompt(
     vacancy_context: dict,
     answer_texts: list[str],
 ) -> str:
-    return f"""Task: evaluate this interviewed candidate for the vacancy.
+    candidate_summary_json = json.dumps(candidate_summary or {}, ensure_ascii=False, indent=2)
+    vacancy_context_json = json.dumps(vacancy_context or {}, ensure_ascii=False, indent=2)
+    answer_texts_json = json.dumps(answer_texts or [], ensure_ascii=False, indent=2)
+    return f"""Evaluate this interviewed candidate for the vacancy.
+
+Use the available project inputs exactly as provided:
+- `candidate_summary`: structured resume context derived from the CV/profile
+- `vacancy_context`: role and hiring context
+- `interview_answers`: ordered transcript-like answers from the interview
 
 Return:
 - final_score from 0.0 to 1.0
 - strengths: short evidence-based bullets
 - risks: short evidence-based bullets
 - recommendation: advance or reject
-- interview_summary: concise synthesis of the interview
+- interview_summary: recruiter-style 2-paragraph note
 
 Candidate summary:
-{candidate_summary}
+```json
+{candidate_summary_json}
+```
 
 Vacancy context:
-{vacancy_context}
+```json
+{vacancy_context_json}
+```
 
 Interview answers:
-{answer_texts}
+```json
+{answer_texts_json}
+```
 """
 
 
