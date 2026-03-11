@@ -578,12 +578,6 @@
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
         <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
-      ${renderTerminalConsole("helly@candidate:~ % cat match.txt", [
-        { label: "match id", key: "match", value: payload.match.id || matchId },
-        { label: "status", key: "status", value: payload.match.statusLabel || "unknown" },
-        { label: "interview", key: "interview", value: payload.interview.stateLabel || "not_started" },
-        { label: "score", key: "score", value: formatScore(payload.evaluation.finalScore) }
-      ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Interview", value: payload.interview.stateLabel || "Not started" },
