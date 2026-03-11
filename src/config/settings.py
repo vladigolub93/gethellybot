@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Set
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +27,22 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_webhook_secret: str = Field(default="", alias="TELEGRAM_WEBHOOK_SECRET")
     telegram_error_chat_id: Optional[int] = Field(default=None, alias="TELEGRAM_ERROR_CHAT_ID")
+    telegram_webapp_session_secret: str = Field(
+        default="",
+        alias="TELEGRAM_WEBAPP_SESSION_SECRET",
+    )
+    telegram_webapp_admin_user_ids: str = Field(
+        default="",
+        alias="TELEGRAM_WEBAPP_ADMIN_USER_IDS",
+    )
+    telegram_webapp_auth_max_age_seconds: int = Field(
+        default=86400,
+        alias="TELEGRAM_WEBAPP_AUTH_MAX_AGE_SECONDS",
+    )
+    telegram_webapp_session_ttl_seconds: int = Field(
+        default=86400,
+        alias="TELEGRAM_WEBAPP_SESSION_TTL_SECONDS",
+    )
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model_extraction: str = Field(
@@ -71,6 +87,22 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         return self.app_env in {"development", "local", "test"}
+
+    @property
+    def webapp_session_secret(self) -> str:
+        return self.telegram_webapp_session_secret or self.telegram_bot_token
+
+    @property
+    def webapp_admin_telegram_user_ids(self) -> Set[int]:
+        values = set()
+        for raw_value in (self.telegram_webapp_admin_user_ids or "").replace(" ", "").split(","):
+            if not raw_value:
+                continue
+            try:
+                values.add(int(raw_value))
+            except ValueError:
+                continue
+        return values
 
 
 @lru_cache(maxsize=1)
