@@ -128,7 +128,7 @@ Valid outcomes:
 - explicit skip-candidate intent for one numbered candidate
 
 Rules:
-- numbered buttons look like `Interview 1`, `Skip 2`, `Interview 3`
+- if the manager uses text instead of tapping buttons, they may still write things like `Interview 1`, `Skip 2`, or `Interview candidate 3`
 - only propose `interview_candidate` when the manager is clearly sending that numbered candidate to interview
 - only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
 - extract the numbered candidate slot into `candidate_slot`

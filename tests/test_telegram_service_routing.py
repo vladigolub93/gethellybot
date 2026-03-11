@@ -419,6 +419,7 @@ def build_update(
     text: Optional[str] = None,
     content_type: str = "text",
     contact_phone_number: Optional[str] = None,
+    callback_data: Optional[str] = None,
 ) -> NormalizedTelegramUpdate:
     return NormalizedTelegramUpdate(
         update_id=1,
@@ -433,6 +434,8 @@ def build_update(
         language_code="en",
         file=None,
         payload={},
+        callback_query_id="cb-1" if content_type == "callback" else None,
+        callback_data=callback_data,
     )
 
 
@@ -1861,6 +1864,34 @@ def test_candidate_vacancy_review_help_keeps_candidate_keyboard() -> None:
     assert templates == ["state_aware_help"]
     reply_markup = service.notifications_repo.calls[-1]["payload_json"]["reply_markup"]
     assert reply_markup["keyboard"][0] == ["Apply 1", "Skip 1"]
+
+
+def test_manager_pre_interview_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5m",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5m",
+        build_update(content_type="callback", callback_data="mgr_pre:int:match-42"),
+    )
+
+    assert templates == []
+    assert service.matching_review_service.manager_calls
+    assert service.matching_review_service.manager_calls[-1]["action"] == "interview_candidate"
+    assert service.matching_review_service.manager_calls[-1]["candidate_slot"] is None
+    assert service.matching_review_service.manager_calls[-1]["match_id"] == "match-42"
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:

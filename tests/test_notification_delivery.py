@@ -169,3 +169,32 @@ def test_send_notification_uses_payload_telegram_chat_id_override() -> None:
     assert result["status"] == "sent"
     assert service.telegram.calls[0]["chat_id"] == -100123
     assert service.raw_messages.created[0]["telegram_chat_id"] == -100123
+
+
+def test_send_notification_supports_per_message_reply_markup_entries() -> None:
+    service = _build_service()
+    notification = SimpleNamespace(
+        id="notification-6",
+        user_id="user-1",
+        template_key="manager_pre_interview_review_ready",
+        payload_json={
+            "message_entries": [
+                {"text": "Intro."},
+                {
+                    "text": "Candidate card.",
+                    "reply_markup": {
+                        "inline_keyboard": [[{"text": "Interview", "callback_data": "mgr_pre:int:match-1"}]]
+                    },
+                },
+            ]
+        },
+        status="pending",
+    )
+    service.notifications.rows[str(notification.id)] = notification
+
+    result = service.send_notification_by_id(notification.id)
+
+    assert result["status"] == "sent"
+    assert len(service.telegram.calls) == 2
+    assert service.telegram.calls[0]["reply_markup"] is None
+    assert service.telegram.calls[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"

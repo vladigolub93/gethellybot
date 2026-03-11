@@ -106,3 +106,32 @@ def test_normalize_voice_message() -> None:
     assert normalized.file.kind == "voice"
     assert normalized.file.telegram_file_id == "voice-1"
     assert normalized.file.extension == "ogg"
+
+
+def test_normalize_callback_query() -> None:
+    update = {
+        "update_id": 127,
+        "callback_query": {
+            "id": "cb-1",
+            "from": {
+                "id": 1003,
+                "first_name": "Manager",
+                "username": "mgr",
+            },
+            "data": "mgr_pre:int:match-1",
+            "message": {
+                "message_id": 81,
+                "chat": {"id": 559, "type": "private"},
+            },
+        },
+    }
+
+    normalized = normalize_telegram_update(update)
+
+    assert normalized.content_type == "callback"
+    assert normalized.telegram_user_id == 1003
+    assert normalized.telegram_chat_id == 559
+    assert normalized.message_id == 81
+    assert normalized.callback_query_id == "cb-1"
+    assert normalized.callback_data == "mgr_pre:int:match-1"
+    assert normalized.text is None

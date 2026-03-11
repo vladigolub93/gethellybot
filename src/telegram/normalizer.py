@@ -44,11 +44,24 @@ def _build_file_payload(kind: str, payload: Dict[str, Any]) -> NormalizedTelegra
 
 
 def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdate:
-    message = update.get("message")
-    if not isinstance(message, dict):
-        raise TelegramUpdateNormalizationError("Only message updates are supported in the current baseline.")
+    callback_query = update.get("callback_query")
+    callback_query_id = None
+    callback_data = None
+    sender = None
 
-    sender = message.get("from")
+    if isinstance(callback_query, dict):
+        callback_query_id = callback_query.get("id")
+        callback_data = callback_query.get("data")
+        message = callback_query.get("message")
+        sender = callback_query.get("from")
+    else:
+        message = update.get("message")
+
+    if not isinstance(message, dict):
+        raise TelegramUpdateNormalizationError("Only message and callback_query updates are supported.")
+
+    if sender is None:
+        sender = message.get("from")
     if not isinstance(sender, dict) or not sender.get("id"):
         raise TelegramUpdateNormalizationError("Telegram message sender is required.")
 
@@ -56,7 +69,7 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
     if not isinstance(chat, dict) or not chat.get("id"):
         raise TelegramUpdateNormalizationError("Telegram chat is required.")
 
-    content_type = "text"
+    content_type = "callback" if callback_query_id else "text"
     text = message.get("text") or message.get("caption")
     contact_payload = message.get("contact")
     document_payload = message.get("document")
@@ -65,7 +78,9 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
     contact_phone_number = None
     file = None
 
-    if isinstance(contact_payload, dict):
+    if callback_query_id:
+        pass
+    elif isinstance(contact_payload, dict):
         content_type = "contact"
         contact_phone_number = contact_payload.get("phone_number")
     elif isinstance(document_payload, dict):
@@ -99,4 +114,6 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
         payload=update,
         chat_type=chat.get("type"),
         chat_title=chat.get("title"),
+        callback_query_id=callback_query_id,
+        callback_data=callback_data,
     )

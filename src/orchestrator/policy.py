@@ -242,10 +242,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Review matched candidates before interview and decide who should receive an interview invitation.",
         allowed_actions=["interview_candidate", "skip_candidate"],
         assistance_prompt_slug="pre_interview_review",
-        guidance_text="Review the current candidate batch and use the numbered Interview or Skip buttons.",
+        guidance_text="Review the current candidate cards and use the Interview or Skip buttons under each profile.",
         help_text=(
             "You are reviewing matched candidates before interview. "
-            "Use the numbered Interview or Skip buttons for the candidates in the current batch."
+            "Use the Interview or Skip buttons under the candidate cards in the current batch."
         ),
         missing_requirements=["pre_interview_manager_decision"],
     ),

@@ -16,7 +16,7 @@ from src.state.service import StateService
 from src.telegram.keyboards import (
     candidate_vacancy_review_keyboard,
     interview_invitation_keyboard,
-    manager_pre_interview_review_keyboard,
+    manager_pre_interview_inline_keyboard,
 )
 from src.matching.policy import (
     CANDIDATE_ACTIVE_APPLICATION_STATUSES,
@@ -70,9 +70,11 @@ class MatchingReviewService:
             or "Candidate"
         )
 
-    def _render_candidate_package_message(self, *, match, vacancy, slot_no: int) -> str:
+    def _render_candidate_package_message(self, *, match, vacancy, slot_no: int | None = None) -> str:
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
         if candidate is None:
+            if slot_no is None:
+                return "Candidate data is unavailable."
             return f"{slot_no}. Candidate data is unavailable."
         candidate_user = self.users.get_by_id(candidate.user_id)
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
@@ -89,6 +91,8 @@ class MatchingReviewService:
             template_key="manager_candidate_review_ready",
             payload={"candidate_package": package},
         )
+        if slot_no is None:
+            return body
         return f"{slot_no}.\n{body}"
 
     @staticmethod
@@ -145,29 +149,28 @@ class MatchingReviewService:
             lines.append(project)
         return "\n".join(lines)
 
-    def _build_manager_batch_messages(self, *, vacancy, batch: list) -> list[str]:
+    def _build_manager_batch_entries(self, *, vacancy, batch: list) -> list[dict]:
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
-        messages = [
-            self._copy(
-                f"I found {len(batch)} candidate matches for {role_title}. "
-                "Review this batch and use the numbered buttons below to interview or skip each candidate."
-            )
+        entries = [
+            {
+                "text": self._copy(
+                    f"I found {len(batch)} candidate matches for {role_title}. "
+                    "Review the candidate cards below and use the buttons under each profile to invite or skip."
+                )
+            }
         ]
-        for index, match in enumerate(batch, start=1):
-            messages.append(
-                self._render_candidate_package_message(
+        for match in batch:
+            entries.append(
+                {
+                    "text": self._render_candidate_package_message(
                     match=match,
                     vacancy=vacancy,
-                    slot_no=index,
-                )
+                        slot_no=None,
+                    ),
+                    "reply_markup": manager_pre_interview_inline_keyboard(match_id=str(match.id)),
+                }
             )
-        messages.append(
-            self._copy(
-                "Use the buttons below for the numbered candidates in this batch. "
-                "I will send the next batch after you review someone from the current one."
-            )
-        )
-        return messages
+        return entries
 
     def _build_candidate_batch_messages(self, *, batch: list) -> list[str]:
         messages = [
@@ -303,8 +306,7 @@ class MatchingReviewService:
             entity_id=vacancy.id,
             template_key="manager_pre_interview_review_ready",
             payload_json={
-                "messages": self._build_manager_batch_messages(vacancy=vacancy, batch=current_batch),
-                "reply_markup": manager_pre_interview_review_keyboard(len(current_batch)),
+                "message_entries": self._build_manager_batch_entries(vacancy=vacancy, batch=current_batch),
             },
             allow_duplicate=True,
         )
@@ -579,37 +581,61 @@ class MatchingReviewService:
         raw_message_id,
         action: str,
         candidate_slot: Optional[int],
+        match_id: Optional[str] = None,
     ) -> Optional[ManagerPreInterviewActionResult]:
         if not getattr(user, "is_hiring_manager", False):
             return None
 
         vacancy_ids = [vacancy.id for vacancy in self.vacancies.get_by_manager_user_id(user.id)]
         latest = self.matches.get_latest_pre_interview_review_for_manager(vacancy_ids)
-        if latest is None:
+        if latest is None and not match_id:
             return None
-        vacancy = self.vacancies.get_by_id(latest.vacancy_id)
+
+        match = self.matches.get_by_id(match_id) if match_id else None
+        vacancy = self.vacancies.get_by_id(match.vacancy_id) if match is not None else None
+        if vacancy is None and latest is not None:
+            vacancy = self.vacancies.get_by_id(latest.vacancy_id)
         if vacancy is None:
+            return None
+        if vacancy.id not in vacancy_ids:
             return None
 
         batch = self.matches.list_pre_interview_review_for_vacancy(
             vacancy.id,
             limit=MATCH_BATCH_SIZE,
         )
-        if not batch or candidate_slot is None or candidate_slot < 1 or candidate_slot > len(batch):
+        if match is not None:
+            if not batch or all(candidate_match.id != match.id for candidate_match in batch):
+                self.notifications.create(
+                    user_id=user.id,
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                    template_key="manager_pre_interview_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            "That candidate card is no longer active. Use the latest buttons under the current candidate cards."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
+                return ManagerPreInterviewActionResult(status="invalid_match")
+        elif not batch or candidate_slot is None or candidate_slot < 1 or candidate_slot > len(batch):
             self.notifications.create(
                 user_id=user.id,
                 entity_type="vacancy",
                 entity_id=vacancy.id,
                 template_key="manager_pre_interview_review_ready",
                 payload_json={
-                    "text": self._copy("That option is no longer valid. Use the latest numbered buttons from the current batch."),
-                    "reply_markup": manager_pre_interview_review_keyboard(len(batch)),
+                    "text": self._copy(
+                        "That option is no longer valid. Use the latest buttons under the current candidate cards."
+                    ),
                 },
                 allow_duplicate=True,
             )
             return ManagerPreInterviewActionResult(status="invalid_slot")
 
-        match = batch[candidate_slot - 1]
+        if match is None:
+            match = batch[candidate_slot - 1]
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
         if candidate is None:
             return None
@@ -631,7 +657,6 @@ class MatchingReviewService:
                             "in the active interview pipeline for this vacancy. "
                             "Wait until one finishes or drops out before inviting another candidate."
                         ),
-                        "reply_markup": manager_pre_interview_review_keyboard(len(batch)),
                     },
                     allow_duplicate=True,
                 )

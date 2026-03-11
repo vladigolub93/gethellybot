@@ -30,3 +30,5 @@ class NormalizedTelegramUpdate:
     payload: dict
     chat_type: Optional[str] = None
     chat_title: Optional[str] = None
+    callback_query_id: Optional[str] = None
+    callback_data: Optional[str] = None

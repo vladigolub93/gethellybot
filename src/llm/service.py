@@ -3003,7 +3003,7 @@ def safe_pre_interview_review_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Review the current candidate batch and use the numbered Interview or Skip buttons.",
+        or "Review the current candidate cards and use the Interview or Skip buttons under each profile.",
         "proposed_action": None,
         "candidate_slot": None,
         "keep_current_state": True,
@@ -3053,7 +3053,7 @@ def safe_pre_interview_review_decision(
             {
                 "intent": "help",
                 "response_text": current_step_guidance
-                or "Review the current candidate batch and use the numbered Interview or Skip buttons.",
+                or "Review the current candidate cards and use the Interview or Skip buttons under each profile.",
                 "needs_follow_up": True,
                 "reason_code": "pre_interview_review_help_question",
             }

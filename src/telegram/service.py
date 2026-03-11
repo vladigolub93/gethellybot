@@ -17,6 +17,7 @@ from src.graph.service import LangGraphStageAgentService
 from src.identity.rules import has_primary_contact_channel
 from src.identity.service import IdentityService
 from src.interview.service import InterviewService
+from src.integrations.telegram_bot import TelegramBotClient
 from src.matching.review import MatchingReviewService
 from src.messaging.service import MessagingService
 from src.notifications.delivery import NotificationDeliveryService
@@ -31,7 +32,6 @@ from src.telegram.keyboards import (
     contact_request_keyboard,
     deletion_confirmation_keyboard,
     interview_invitation_keyboard,
-    manager_pre_interview_review_keyboard,
     manager_review_keyboard,
     remove_keyboard,
     role_selection_keyboard,
@@ -308,7 +308,7 @@ class TelegramUpdateService:
                         user_id=user.id,
                         template_key=ready_result.notification_template,
                         text=ready_result.notification_text,
-                        reply_markup=ready_result.reply_markup,
+                        reply_markup=getattr(ready_result, "reply_markup", None),
                         allow_duplicate=True,
                     )
                 ]
@@ -467,6 +467,44 @@ class TelegramUpdateService:
         )
         if result is None:
             return None
+        return []
+
+    def _handle_callback_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        normalized_update: NormalizedTelegramUpdate,
+    ) -> List[str] | None:
+        if normalized_update.content_type != "callback":
+            return None
+
+        callback_data = (normalized_update.callback_data or "").strip()
+        if not callback_data:
+            return []
+
+        if callback_data.startswith("mgr_pre:int:"):
+            match_id = callback_data[len("mgr_pre:int:") :]
+            result = self.matching_review_service.execute_manager_pre_interview_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="interview_candidate",
+                candidate_slot=None,
+                match_id=match_id,
+            )
+            return [] if result is not None else None
+
+        if callback_data.startswith("mgr_pre:skip:"):
+            match_id = callback_data[len("mgr_pre:skip:") :]
+            result = self.matching_review_service.execute_manager_pre_interview_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="skip_candidate",
+                candidate_slot=None,
+                match_id=match_id,
+            )
+            return [] if result is not None else None
+
         return []
 
     def _handle_manager_open_stage_action(
@@ -1316,15 +1354,11 @@ class TelegramUpdateService:
         if templates is not None:
             return templates
         if stage_result is not None and stage_result.stage == "PRE_INTERVIEW_REVIEW":
-            batch_size = self.matching_review_service.current_batch_size_for_manager(
-                manager_user_id=user.id,
-            )
             assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=latest_user_message,
                 user_id=user.id,
                 stage_result=stage_result,
-                reply_markup=manager_pre_interview_review_keyboard(batch_size) if batch_size else None,
             )
             if assistance_templates is not None:
                 return assistance_templates
@@ -1792,7 +1826,7 @@ class TelegramUpdateService:
             direction="inbound",
             content_type=normalized_update.content_type,
             payload_json=normalized_update.payload,
-            text_content=normalized_update.text,
+            text_content=normalized_update.text if normalized_update.content_type != "callback" else None,
         )
 
     def _build_processed_update_result(self, *, user_id, notification_templates: List[str]) -> ProcessedTelegramUpdate:
@@ -1802,6 +1836,15 @@ class TelegramUpdateService:
             notification_templates=notification_templates,
             user_id=str(user_id),
         )
+
+    def _acknowledge_callback_query(self, normalized_update: NormalizedTelegramUpdate) -> None:
+        callback_query_id = getattr(normalized_update, "callback_query_id", None)
+        if not callback_query_id:
+            return
+        try:
+            TelegramBotClient().answer_callback_query(callback_query_id=callback_query_id)
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("telegram_callback_query_ack_failed", error=str(exc))
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         session_info = getattr(self.session, "info", None)
@@ -1835,6 +1878,7 @@ class TelegramUpdateService:
             self.session.commit()
             self._flush_immediate_jobs()
             self._flush_immediate_notifications_for_user(user.id)
+            self._acknowledge_callback_query(normalized_update)
 
             return self._build_processed_update_result(
                 user_id=user.id,
@@ -1852,6 +1896,14 @@ class TelegramUpdateService:
         *,
         file_id=None,
     ) -> List[str]:
+        callback_templates = self._handle_callback_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            normalized_update=normalized_update,
+        )
+        if callback_templates is not None:
+            return callback_templates
+
         text_value = normalize_command_text(normalized_update.text)
 
         entry_templates = self._apply_entry_flow(

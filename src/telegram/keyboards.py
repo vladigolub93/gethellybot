@@ -62,6 +62,23 @@ def manager_pre_interview_review_keyboard(candidate_count: int) -> dict:
     }
 
 
+def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Interview",
+                    "callback_data": f"mgr_pre:int:{match_id}",
+                },
+                {
+                    "text": "Skip",
+                    "callback_data": f"mgr_pre:skip:{match_id}",
+                },
+            ]
+        ]
+    }
+
+
 def candidate_vacancy_review_keyboard(vacancy_count: int) -> dict:
     keyboard = []
     for index in range(1, max(vacancy_count, 0) + 1):

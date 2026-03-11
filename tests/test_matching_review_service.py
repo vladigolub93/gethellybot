@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from src.matching.policy import (
     MATCH_STATUS_CANDIDATE_APPLIED,
     MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+    MATCH_STATUS_INVITED,
     MATCH_STATUS_MANAGER_DECISION_PENDING,
     MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
 )
@@ -85,6 +86,20 @@ class FakeMatchingRepository:
 
     def list_active_for_vacancy(self, vacancy_id):
         return [match for match in self.active_vacancy if match.vacancy_id == vacancy_id]
+
+    def get_by_id(self, match_id):
+        for collection in (
+            self.shortlisted_for_vacancy,
+            self.shortlisted_for_candidate,
+            self.pre_vacancy,
+            self.pre_candidate,
+            self.active_candidate,
+            self.active_vacancy,
+        ):
+            for match in collection:
+                if match.id == match_id:
+                    return match
+        return None
 
 
 class FakeNotificationsRepository:
@@ -187,7 +202,10 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
     notification = service.notifications.rows[0]
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
-    assert notification.payload_json["reply_markup"]["keyboard"][0] == ["Interview 1", "Skip 1"]
+    assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 candidate matches")
+    assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Interview"
+    assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
+    assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
 
 
 def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies() -> None:
@@ -327,6 +345,51 @@ def test_execute_candidate_pre_interview_action_applies_and_notifies_manager() -
     ]
     assert len(service.notifications.rows) == 2
     assert "Applied to Staff Engineer" in service.notifications.rows[0].payload_json["text"]
+
+
+def test_execute_manager_pre_interview_action_accepts_match_id_from_inline_button() -> None:
+    manager_user = SimpleNamespace(id="manager-inline", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(id="candidate-inline", user_id="candidate-user-inline")
+    vacancy = SimpleNamespace(id="vacancy-inline", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-inline",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-inline",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-inline": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match], active_vacancy=[])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Inline Candidate"),
+            manager_user.id: SimpleNamespace(id=manager_user.id),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_manager_pre_interview_action(
+        user=manager_user,
+        raw_message_id="raw-inline",
+        action="interview_candidate",
+        candidate_slot=None,
+        match_id=match.id,
+    )
+
+    assert result.status == "invited"
+    assert match.status == MATCH_STATUS_INVITED
 
 
 def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> None:

@@ -71,20 +71,39 @@ class NotificationDeliveryService:
                     "notification_id": str(notification.id),
                 }
 
-            messages = render_notification_messages(
-                template_key=notification.template_key,
-                payload=payload,
-            )
-            reply_markup = render_notification_reply_markup(
-                template_key=notification.template_key,
-                payload=payload,
-            )
+            message_entries = payload.get("message_entries") or []
+            if message_entries:
+                messages_to_send = [
+                    {
+                        "text": str(entry.get("text") or "").strip(),
+                        "reply_markup": entry.get("reply_markup"),
+                    }
+                    for entry in message_entries
+                    if str(entry.get("text") or "").strip()
+                ]
+            else:
+                messages = render_notification_messages(
+                    template_key=notification.template_key,
+                    payload=payload,
+                )
+                reply_markup = render_notification_reply_markup(
+                    template_key=notification.template_key,
+                    payload=payload,
+                )
+                messages_to_send = [
+                    {
+                        "text": text,
+                        "reply_markup": reply_markup if index == len(messages) - 1 else None,
+                    }
+                    for index, text in enumerate(messages)
+                ]
             telegram_results = []
-            for index, text in enumerate(messages):
+            for entry in messages_to_send:
+                text = entry["text"]
                 telegram_result = self.telegram.send_text_message(
                     chat_id=target_chat_id,
                     text=text,
-                    reply_markup=reply_markup if index == len(messages) - 1 else None,
+                    reply_markup=entry.get("reply_markup"),
                 )
                 telegram_results.append(telegram_result)
                 self.raw_messages.create(
