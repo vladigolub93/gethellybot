@@ -464,7 +464,7 @@
           <h2>My Opportunities</h2>
           <p>${isTerminalTheme() ? "Read-only shell over your current match queue, interview state and saved profile context." : "Your current matches, interview progress and saved profile context."}</p>
         </section>
-        ${renderTerminalConsole("candidate.runtime", [
+        ${renderTerminalConsole("helly@candidate:~ % tail -f opportunities.log", [
           { label: "profile state", value: payload.profile.state || "unknown" },
           { label: "records loaded", value: String(items.length) },
           { label: "active interviews", value: String(activeInterviewCount) },
@@ -528,7 +528,7 @@
           <h2>My Vacancies</h2>
           <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate pipeline depth and interview throughput." : "One clean view of your live candidate pipeline and interview progress."}</p>
         </section>
-        ${renderTerminalConsole("manager.runtime", [
+        ${renderTerminalConsole("helly@manager:~ % tail -f vacancies.log", [
           { label: "vacancies", value: String(items.length) },
           { label: "candidate records", value: String(totalCandidateCount) },
           { label: "pipeline active", value: String(totalActivePipelineCount) },
@@ -581,7 +581,7 @@
           <h2>All Vacancies</h2>
           <p>${isTerminalTheme() ? "Production-wide read-only shell across all live vacancy records." : "Read-only visibility across the full Helly production pipeline."}</p>
         </section>
-        ${renderTerminalConsole("admin.runtime", [
+        ${renderTerminalConsole("helly@admin:~ % tail -f production.log", [
           { label: "vacancies", value: String(items.length) },
           { label: "candidate records", value: String(totalCandidateCount) },
           { label: "interviews completed", value: String(totalCompletedInterviewCount) }
@@ -629,7 +629,7 @@
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
         <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
-      ${renderTerminalConsole("match.inspect", [
+      ${renderTerminalConsole("helly@candidate:~ % cat match.txt", [
         { label: "match id", value: payload.match.id || matchId },
         { label: "status", value: payload.match.statusLabel || "unknown" },
         { label: "interview", value: payload.interview.stateLabel || "not_started" },
@@ -688,7 +688,7 @@
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
         <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
       </section>
-      ${renderTerminalConsole(`${rolePrefix}.vacancy.inspect`, [
+      ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat vacancy.txt`, [
         { label: "vacancy id", value: vacancy.id || vacancyId },
         { label: "state", value: vacancy.state || "unknown" },
         { label: "candidates", value: String(stats.candidateCount) },
@@ -757,7 +757,7 @@
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
         <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
-      ${renderTerminalConsole(`${rolePrefix}.match.inspect`, [
+      ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat candidate.txt`, [
         { label: "match id", value: payload.match.id || matchId },
         { label: "candidate", value: payload.candidate.name || "candidate" },
         { label: "recommendation", value: payload.evaluation.recommendation || "n_a" },

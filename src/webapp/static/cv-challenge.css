@@ -627,3 +627,264 @@ html[data-theme="terminal"] .canvas-hint::before {
     flex-direction: row;
   }
 }
+
+html[data-theme="terminal"] {
+  --bg: #141415;
+  --panel: #1c1c1e;
+  --panel-strong: #232326;
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --accent: #d1d1d6;
+  --accent-soft: #f5f5f7;
+  --good: #34c759;
+  --bad: #ff3b30;
+  --warn: #ffcc00;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  --radius-xl: 16px;
+  --radius-lg: 12px;
+  --radius-md: 10px;
+  --canvas-bg-start: #1b1b1d;
+  --canvas-bg-end: #151517;
+  --canvas-glow: rgba(255, 255, 255, 0.03);
+  --canvas-grid: rgba(255, 255, 255, 0.05);
+  --canvas-font:
+    600 16px "SF Mono",
+    "SFMono-Regular",
+    ui-monospace,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  --token-fill-correct: rgba(40, 40, 44, 0.98);
+  --token-fill-wrong: rgba(52, 42, 42, 0.98);
+  --token-stroke-correct: rgba(255, 255, 255, 0.08);
+  --token-stroke-wrong: rgba(255, 59, 48, 0.22);
+  --token-text: #f5f5f7;
+}
+
+html[data-theme="terminal"] body {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 26%),
+    linear-gradient(180deg, #111214, #161619 100%);
+  font-family:
+    "SF Mono",
+    "SFMono-Regular",
+    ui-monospace,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+html[data-theme="terminal"] body::before {
+  display: none;
+}
+
+html[data-theme="terminal"] .challenge-shell {
+  width: min(100%, 820px);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+html[data-theme="terminal"] .challenge-utility {
+  position: relative;
+  justify-content: flex-end;
+  margin-bottom: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(180deg, #3a3a3d, #2f2f32);
+}
+
+html[data-theme="terminal"] .challenge-utility::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 16px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #ff5f57;
+  box-shadow:
+    20px 0 0 #febc2e,
+    40px 0 0 #28c840;
+}
+
+html[data-theme="terminal"] .challenge-shell > #app {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  background: #1c1c1e;
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="terminal"] .theme-toggle {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="terminal"] .screen-card,
+html[data-theme="terminal"] .game-shell,
+html[data-theme="terminal"] .result-card,
+html[data-theme="terminal"] .locked-card {
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #232326;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .screen-card::before,
+html[data-theme="terminal"] .game-shell::before,
+html[data-theme="terminal"] .result-card::before,
+html[data-theme="terminal"] .locked-card::before {
+  display: none;
+}
+
+html[data-theme="terminal"] .eyebrow,
+html[data-theme="terminal"] .meta-label,
+html[data-theme="terminal"] .result-meta-label,
+html[data-theme="terminal"] .hud-label,
+html[data-theme="terminal"] .terminal-title {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-theme="terminal"] .screen-card h1,
+html[data-theme="terminal"] .locked-card h1,
+html[data-theme="terminal"] .result-card h1,
+html[data-theme="terminal"] .result-card h2 {
+  letter-spacing: 0;
+  font-size: clamp(1.35rem, 6vw, 1.8rem);
+}
+
+html[data-theme="terminal"] .brand-angle,
+html[data-theme="terminal"] .brand-tail {
+  color: #d1d1d6;
+  text-shadow: none;
+}
+
+html[data-theme="terminal"] .button {
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(10, 132, 255, 0.2);
+  background: #0a84ff;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .ghost-button {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="terminal"] .meta-card,
+html[data-theme="terminal"] .result-meta-card,
+html[data-theme="terminal"] .hud-card,
+html[data-theme="terminal"] .missed-item {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .canvas-wrap {
+  border-radius: 10px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)),
+    #18181a;
+}
+
+html[data-theme="terminal"] .stage-banner {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(36, 36, 38, 0.92);
+  backdrop-filter: none;
+}
+
+html[data-theme="terminal"] .screen-card .copy::before,
+html[data-theme="terminal"] .locked-card .copy::before,
+html[data-theme="terminal"] .result-copy::before,
+html[data-theme="terminal"] .canvas-hint::before {
+  content: "% ";
+  color: #8e8e93;
+}
+
+html[data-theme="terminal"] .terminal-console {
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #1b1b1d;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .terminal-console-head {
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #3a3a3d, #2f2f32);
+}
+
+html[data-theme="terminal"] .terminal-led {
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(1) {
+  background: #ff5f57;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(2) {
+  background: #febc2e;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(3) {
+  background: #28c840;
+}
+
+html[data-theme="terminal"] .terminal-title {
+  color: #d1d1d6;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  font-size: 0.8rem;
+}
+
+html[data-theme="terminal"] .terminal-console-body {
+  background: #1b1b1d;
+}
+
+html[data-theme="terminal"] .terminal-line {
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+html[data-theme="terminal"] .terminal-key,
+html[data-theme="terminal"] .terminal-separator {
+  color: #8e8e93;
+}

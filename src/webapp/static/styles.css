@@ -980,3 +980,345 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
     grid-column: 1 / -1;
   }
 }
+
+html[data-theme="terminal"] {
+  --bg: #141415;
+  --bg-soft: #18181a;
+  --panel: #1c1c1e;
+  --panel-strong: #232326;
+  --text: #f5f5f7;
+  --muted: #a1a1a6;
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #d1d1d6;
+  --accent-soft: #f5f5f7;
+  --good: #34c759;
+  --warn: #ffcc00;
+  --bad: #ff3b30;
+  --radius-xl: 16px;
+  --radius-lg: 12px;
+  --radius-md: 10px;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="terminal"] body {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 26%),
+    linear-gradient(180deg, #111214, #161619 100%);
+  font-family:
+    "SF Mono",
+    "SFMono-Regular",
+    ui-monospace,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+html[data-theme="terminal"] body::before {
+  display: none;
+}
+
+html[data-theme="terminal"] .app-shell {
+  width: min(100%, 820px);
+}
+
+html[data-theme="terminal"] .topbar {
+  position: relative;
+  margin-bottom: 0;
+  padding: 52px 18px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background:
+    linear-gradient(180deg, #3a3a3d 0, #2f2f32 40px, #1c1c1e 40px, #1c1c1e 100%);
+}
+
+html[data-theme="terminal"] .topbar::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #ff5f57;
+  box-shadow:
+    20px 0 0 #febc2e,
+    40px 0 0 #28c840;
+}
+
+html[data-theme="terminal"] .topbar-copy {
+  gap: 10px;
+}
+
+html[data-theme="terminal"] .topbar-kicker {
+  position: absolute;
+  top: 13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  font-size: 0.81rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #d1d1d6;
+}
+
+html[data-theme="terminal"] .brand-lockup {
+  gap: 0.12em;
+  font-size: clamp(1.45rem, 6vw, 2rem);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+html[data-theme="terminal"] .brand-angle,
+html[data-theme="terminal"] .brand-tail {
+  color: #d1d1d6;
+  text-shadow: none;
+}
+
+html[data-theme="terminal"] .brand-word {
+  color: #f5f5f7;
+}
+
+html[data-theme="terminal"] .topbar-divider {
+  display: none;
+}
+
+html[data-theme="terminal"] .topbar-note {
+  max-width: none;
+  color: #c7c7cc;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+html[data-theme="terminal"] .topbar-note::before {
+  content: "% ";
+  color: #8e8e93;
+}
+
+html[data-theme="terminal"] .topbar-actions {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  margin: 0;
+}
+
+html[data-theme="terminal"] .theme-toggle {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="terminal"] .app-root {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  background: #1c1c1e;
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="terminal"] .stats-strip {
+  gap: 8px;
+}
+
+html[data-theme="terminal"] .stat-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #232326;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .stat-card::before,
+html[data-theme="terminal"] .state-card::before,
+html[data-theme="terminal"] .card::before,
+html[data-theme="terminal"] .detail-panel::before {
+  display: none;
+}
+
+html[data-theme="terminal"] .state-card,
+html[data-theme="terminal"] .card,
+html[data-theme="terminal"] .detail-panel {
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #232326;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .card:hover,
+html[data-theme="terminal"] .card:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: #2a2a2d;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .screen-header-terminal h2::before {
+  content: "$ ";
+  color: #8e8e93;
+}
+
+html[data-theme="terminal"] .screen-header-terminal p:last-child::before,
+html[data-theme="terminal"] .footer-note::before,
+html[data-theme="terminal"] .card-note-terminal::before {
+  content: "";
+}
+
+html[data-theme="terminal"] .eyebrow,
+html[data-theme="terminal"] .stat-label,
+html[data-theme="terminal"] .metric-label,
+html[data-theme="terminal"] .detail-grid dt,
+html[data-theme="terminal"] .chip,
+html[data-theme="terminal"] .badge,
+html[data-theme="terminal"] .terminal-title {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+html[data-theme="terminal"] .badge,
+html[data-theme="terminal"] .chip,
+html[data-theme="terminal"] .metric {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .badge[data-tone="accent"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html[data-theme="terminal"] .badge[data-tone="good"] {
+  background: rgba(52, 199, 89, 0.14);
+  border-color: rgba(52, 199, 89, 0.2);
+}
+
+html[data-theme="terminal"] .badge[data-tone="warn"] {
+  background: rgba(255, 204, 0, 0.12);
+  border-color: rgba(255, 204, 0, 0.2);
+}
+
+html[data-theme="terminal"] .badge[data-tone="bad"] {
+  background: rgba(255, 59, 48, 0.12);
+  border-color: rgba(255, 59, 48, 0.2);
+}
+
+html[data-theme="terminal"] .action-button {
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(10, 132, 255, 0.2);
+  background: #0a84ff;
+  color: white;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .empty-state {
+  border-radius: 10px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #c7c7cc;
+}
+
+html[data-theme="terminal"] .terminal-console {
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #1b1b1d;
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .terminal-console-head {
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #3a3a3d, #2f2f32);
+}
+
+html[data-theme="terminal"] .terminal-led {
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(1) {
+  background: #ff5f57;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(2) {
+  background: #febc2e;
+}
+
+html[data-theme="terminal"] .terminal-led:nth-child(3) {
+  background: #28c840;
+}
+
+html[data-theme="terminal"] .terminal-title {
+  color: #d1d1d6;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  font-size: 0.8rem;
+}
+
+html[data-theme="terminal"] .terminal-console-body {
+  background: #1b1b1d;
+}
+
+html[data-theme="terminal"] .terminal-line,
+html[data-theme="terminal"] .terminal-command-row,
+html[data-theme="terminal"] .terminal-metric {
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+html[data-theme="terminal"] .terminal-key,
+html[data-theme="terminal"] .terminal-metric-key {
+  color: #8e8e93;
+}
+
+html[data-theme="terminal"] .terminal-separator,
+html[data-theme="terminal"] .terminal-prompt {
+  color: #8e8e93;
+}
+
+html[data-theme="terminal"] .terminal-command-row-card,
+html[data-theme="terminal"] .detail-grid-terminal div {
+  border-top-style: solid;
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="terminal"] .terminal-metric {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #1f1f21;
+}
+
+html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
+  border-bottom-style: solid;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+  color: #c7c7cc;
+}

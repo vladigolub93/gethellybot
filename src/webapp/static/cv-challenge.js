@@ -244,7 +244,7 @@
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
-        ${renderTerminalConsole("cv.challenge.boot", [
+        ${renderTerminalConsole("helly@cv-challenge:~ % boot", [
           { label: "runtime", value: "telegram_webapp" },
           { label: "profile_sync", value: "pending" },
         ])}
@@ -259,7 +259,7 @@
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
-        ${renderTerminalConsole("cv.challenge.guard", [
+        ${renderTerminalConsole("helly@cv-challenge:~ % access", [
           { label: "status", value: "locked" },
           { label: "hint", value: "return_to_dashboard" },
         ])}
@@ -286,7 +286,7 @@
         <p class="eyebrow">${isTerminalTheme() ? "cv_challenge_runtime" : "CV Challenge"}</p>
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(challenge.subtitle)}</p>
-        ${renderTerminalConsole("cv.challenge.bootstrap", [
+        ${renderTerminalConsole("helly@cv-challenge:~ % cat challenge.txt", [
           { label: "correct skills", value: String(challenge.correctSkills.length) },
           { label: "distractors", value: String(challenge.distractorSkills.length) },
           { label: "stages", value: String(challenge.stages.length) },
@@ -321,7 +321,7 @@
   function renderGameShell() {
     appEl.innerHTML = `
       <section class="game-shell">
-        ${renderTerminalConsole("cv.challenge.runtime", [
+        ${renderTerminalConsole("helly@cv-challenge:~ % ./run", [
           { label: "mode", value: "live" },
           { label: "rule", value: "tap_valid_tokens_only" },
         ])}
@@ -364,7 +364,7 @@
         <p class="eyebrow">${won ? (isTerminalTheme() ? "run_complete" : "Challenge complete") : (isTerminalTheme() ? "run_failed" : "Game over")}</p>
         <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
         <p class="result-copy">${won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."}</p>
-        ${renderTerminalConsole("cv.challenge.result", [
+        ${renderTerminalConsole("helly@cv-challenge:~ % cat result.txt", [
           { label: "score", value: String(state.score) },
           { label: "stage reached", value: String(state.stageIndex + 1) },
           { label: "mistakes", value: String(state.totalMistakes) },
