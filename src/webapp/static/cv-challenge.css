@@ -152,6 +152,13 @@ html[data-theme="terminal"] body::before {
   min-height: 0;
 }
 
+.challenge-shell > #app.app-mode-game {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .challenge-utility {
   display: none;
 }
@@ -595,8 +602,8 @@ html[data-theme="terminal"] .canvas-hint::before {
 
 .canvas-hint {
   color: var(--muted);
-  font-size: 0.94rem;
-  line-height: 1.5;
+  font-size: 0.86rem;
+  line-height: 1.4;
   text-align: left;
   padding: 0 2px 2px;
 }
@@ -728,6 +735,13 @@ html[data-theme="terminal"] .challenge-shell > #app {
   border-radius: 16px;
   background: #1c1c1e;
   box-shadow: var(--shadow);
+}
+
+html[data-theme="terminal"] .challenge-shell > #app.app-mode-game {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="terminal"] .screen-card,
@@ -863,6 +877,20 @@ html[data-theme="terminal"] .game-shell > .terminal-console {
   margin-top: 0;
 }
 
+html[data-theme="terminal"] .app-mode-game .game-shell {
+  min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 32px);
+  gap: 10px;
+}
+
+html[data-theme="terminal"] .app-mode-game .canvas-wrap {
+  min-height: clamp(380px, 62dvh, 620px);
+}
+
+html[data-theme="terminal"] .app-mode-game .game-canvas {
+  height: clamp(380px, 62dvh, 620px);
+  min-height: 380px;
+}
+
 @media (max-width: 420px) {
   .challenge-shell {
     padding-inline:
@@ -915,5 +943,24 @@ html[data-theme="terminal"] .game-shell > .terminal-console {
 
   html[data-theme="terminal"] .challenge-shell > #app {
     padding: 14px;
+  }
+
+  html[data-theme="terminal"] .challenge-shell > #app.app-mode-game {
+    padding: 0;
+  }
+
+  html[data-theme="terminal"] .app-mode-game .game-shell {
+    min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 20px);
+    gap: 8px;
+    padding: 12px;
+  }
+
+  html[data-theme="terminal"] .app-mode-game .canvas-wrap {
+    min-height: clamp(360px, 56dvh, 500px);
+  }
+
+  html[data-theme="terminal"] .app-mode-game .game-canvas {
+    height: clamp(360px, 56dvh, 500px);
+    min-height: 360px;
   }
 }

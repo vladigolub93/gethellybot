@@ -30,6 +30,10 @@
   };
   const TERMINAL_THEME = "terminal";
 
+  function setAppMode(mode) {
+    appEl.className = mode ? `app-mode-${mode}` : "";
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -183,6 +187,7 @@
   }
 
   function renderLoading(title, body) {
+    setAppMode("panel");
     appEl.innerHTML = `
       <section class="screen-card">
         <p class="eyebrow">${isTerminalTheme() ? "boot_sequence" : "Loading"}</p>
@@ -198,6 +203,7 @@
   }
 
   function renderLocked(title, body) {
+    setAppMode("panel");
     appEl.innerHTML = `
       <section class="locked-card">
         <p class="eyebrow">${isTerminalTheme() ? "access_denied" : "Challenge locked"}</p>
@@ -225,6 +231,7 @@
   }
 
   function renderStartScreen() {
+    setAppMode("panel");
     const challenge = state.bootstrap.challenge;
     appEl.innerHTML = `
       <section class="screen-card">
@@ -264,12 +271,9 @@
   }
 
   function renderGameShell() {
+    setAppMode("game");
     appEl.innerHTML = `
       <section class="game-shell">
-        ${renderTerminalConsole("helly@cv-challenge:~ % ./run", [
-          { label: "mode", key: "mode", value: "live" },
-          { label: "rule", key: "rule", value: "tap_valid_tokens_only" },
-        ])}
         <header class="hud">
           <article class="hud-card">
             <span id="hud-score" class="hud-value">0</span>
@@ -285,7 +289,6 @@
           </article>
         </header>
         <section class="canvas-wrap">
-          <div id="stage-banner" class="stage-banner">${isTerminalTheme() ? "[ stage_01 ]" : "Stage 1"}</div>
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
         <p class="canvas-hint">${isTerminalTheme() ? "tap tokens from your real cv. ignore foreign tokens. missing a valid one costs 1 life." : "Tap only the technologies that truly appear in your CV. Missing a real one also costs a life."}</p>
@@ -293,7 +296,7 @@
     `;
     state.canvas = document.getElementById("game-canvas");
     state.ctx = state.canvas.getContext("2d");
-    state.stageBannerEl = document.getElementById("stage-banner");
+    state.stageBannerEl = null;
     state.hudScoreEl = document.getElementById("hud-score");
     state.hudLivesEl = document.getElementById("hud-lives");
     state.hudStageEl = document.getElementById("hud-stage");
@@ -303,6 +306,7 @@
   }
 
   function renderResult(won) {
+    setAppMode("panel");
     const missed = Array.from(state.missedCorrect).slice(0, 12);
     appEl.innerHTML = `
       <section class="result-card">
