@@ -216,11 +216,6 @@
     }, 0);
   }
 
-  function formatScore(value) {
-    if (value === null || value === undefined || value === "") return "N/A";
-    return String(value);
-  }
-
   function isTerminalTheme() {
     return state.theme === TERMINAL_THEME;
   }
