@@ -4,6 +4,7 @@
   const state = {
     sessionToken: null,
     bootstrap: null,
+    theme: "default",
     running: false,
     finishSubmitted: false,
     frameId: null,
@@ -27,6 +28,10 @@
     hudLivesEl: null,
     hudStageEl: null,
   };
+  const THEME_STORAGE_KEY = "helly-webapp-theme";
+  const DEFAULT_THEME = "default";
+  const TERMINAL_THEME = "terminal";
+  const themeToggleEl = document.getElementById("theme-toggle");
 
   function escapeHtml(value) {
     return String(value || "")
@@ -53,8 +58,11 @@
   }
 
   function applyTelegramChrome() {
-    const backgroundColor = "#030304";
-    const surfaceColor = "#0d0d11";
+    const themeColors = state.theme === TERMINAL_THEME
+      ? { background: "#020503", surface: "#07110b" }
+      : { background: "#030304", surface: "#0d0d11" };
+    const backgroundColor = themeColors.background;
+    const surfaceColor = themeColors.surface;
     updateThemeColorMeta(backgroundColor);
     if (!tg) return;
     try {
@@ -86,6 +94,82 @@
     tg.onEvent("viewportChanged", applyViewportMetrics);
     tg.onEvent("safeAreaChanged", applyViewportMetrics);
     tg.onEvent("contentSafeAreaChanged", applyViewportMetrics);
+  }
+
+  function normalizeTheme(value) {
+    return value === TERMINAL_THEME ? TERMINAL_THEME : DEFAULT_THEME;
+  }
+
+  function readStoredTheme() {
+    try {
+      return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+    } catch (_) {
+      return DEFAULT_THEME;
+    }
+  }
+
+  function persistTheme(theme) {
+    try {
+      if (theme === DEFAULT_THEME) {
+        window.localStorage.removeItem(THEME_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      }
+    } catch (_) {}
+  }
+
+  function syncThemeInUrl() {
+    const currentUrl = new URL(window.location.href);
+    if (state.theme === DEFAULT_THEME) {
+      currentUrl.searchParams.delete("theme");
+    } else {
+      currentUrl.searchParams.set("theme", state.theme);
+    }
+    window.history.replaceState(window.history.state || {}, "", `${currentUrl.pathname}${currentUrl.search}`);
+  }
+
+  function withCurrentTheme(url) {
+    const nextUrl = new URL(url, window.location.origin);
+    if (state.theme === DEFAULT_THEME) {
+      nextUrl.searchParams.delete("theme");
+    } else {
+      nextUrl.searchParams.set("theme", state.theme);
+    }
+    return nextUrl.toString();
+  }
+
+  function updateThemeToggleLabel() {
+    if (!themeToggleEl) return;
+    const terminalEnabled = state.theme === TERMINAL_THEME;
+    themeToggleEl.textContent = terminalEnabled ? "Default theme" : "Terminal preview";
+    themeToggleEl.setAttribute("aria-pressed", terminalEnabled ? "true" : "false");
+  }
+
+  function setTheme(theme) {
+    state.theme = normalizeTheme(theme);
+    document.documentElement.setAttribute("data-theme", state.theme);
+    persistTheme(state.theme);
+    syncThemeInUrl();
+    updateThemeToggleLabel();
+    applyTelegramChrome();
+    if (state.running && state.canvas && state.ctx) {
+      draw();
+    }
+  }
+
+  function initializeTheme() {
+    const themeFromQuery = new URLSearchParams(window.location.search).get("theme");
+    const initialTheme = themeFromQuery ? normalizeTheme(themeFromQuery) : readStoredTheme();
+    setTheme(initialTheme);
+  }
+
+  function bindThemeToggle() {
+    if (!themeToggleEl) return;
+    updateThemeToggleLabel();
+    themeToggleEl.addEventListener("click", () => {
+      tapFeedback();
+      setTheme(state.theme === TERMINAL_THEME ? DEFAULT_THEME : TERMINAL_THEME);
+    });
   }
 
   function tapFeedback(kind) {
@@ -142,7 +226,7 @@
       </section>
     `;
     document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign("/webapp");
+      window.location.assign(withCurrentTheme("/webapp"));
     });
     document.getElementById("close-app").addEventListener("click", () => {
       if (tg && typeof tg.close === "function") {
@@ -180,7 +264,7 @@
     `;
     document.getElementById("start-challenge").addEventListener("click", startGame);
     document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign("/webapp");
+      window.location.assign(withCurrentTheme("/webapp"));
     });
   }
 
@@ -257,8 +341,13 @@
     `;
     document.getElementById("try-again").addEventListener("click", () => window.location.reload());
     document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign("/webapp");
+      window.location.assign(withCurrentTheme("/webapp"));
     });
+  }
+
+  function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
   }
 
   function resizeCanvas() {
@@ -323,7 +412,7 @@
     const correct = Math.random() >= 0.5;
     const text = pickRandom(correct ? challenge.correctSkills : challenge.distractorSkills);
     if (!text) return;
-    state.ctx.font = "700 18px system-ui, sans-serif";
+    state.ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
     const textWidth = state.ctx.measureText(text).width;
     const width = Math.min(state.canvas.clientWidth - 24, textWidth + 28);
     const height = 46;
@@ -372,25 +461,39 @@
     ctx.clearRect(0, 0, width, height);
 
     const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, "#11111a");
-    gradient.addColorStop(1, "#09090d");
+    gradient.addColorStop(0, cssVar("--canvas-bg-start", "#11111a"));
+    gradient.addColorStop(1, cssVar("--canvas-bg-end", "#09090d"));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    ctx.fillStyle = "rgba(140,40,255,0.14)";
+    ctx.fillStyle = cssVar("--canvas-glow", "rgba(140,40,255,0.14)");
     ctx.beginPath();
     ctx.arc(width * 0.18, height * 0.12, Math.min(width, height) * 0.16, 0, Math.PI * 2);
     ctx.fill();
 
+    const gridColor = cssVar("--canvas-grid", "rgba(255,255,255,0.04)");
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    for (let y = 20; y < height; y += 28) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
     state.objects.forEach((item) => {
-      roundRect(ctx, item.x, item.y, item.width, item.height, 18);
-      ctx.fillStyle = "rgba(12,12,18,0.92)";
+      roundRect(ctx, item.x, item.y, item.width, item.height, 16);
+      ctx.fillStyle = item.correct
+        ? cssVar("--token-fill-correct", "rgba(12,12,18,0.92)")
+        : cssVar("--token-fill-wrong", "rgba(12,12,18,0.92)");
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.strokeStyle = item.correct
+        ? cssVar("--token-stroke-correct", "rgba(255,255,255,0.08)")
+        : cssVar("--token-stroke-wrong", "rgba(255,255,255,0.08)");
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.font = "700 18px system-ui, sans-serif";
-      ctx.fillStyle = "#f8f8fb";
+      ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
+      ctx.fillStyle = cssVar("--token-text", "#f8f8fb");
       ctx.textBaseline = "middle";
       ctx.fillText(item.text, item.x + 14, item.y + item.height / 2);
     });
@@ -504,7 +607,9 @@
 
   async function boot() {
     try {
+      initializeTheme();
       bindTelegramRuntime();
+      bindThemeToggle();
       if (tg) {
         if (typeof tg.ready === "function") tg.ready();
         if (typeof tg.expand === "function") tg.expand();
