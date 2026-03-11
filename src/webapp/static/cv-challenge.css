@@ -651,11 +651,11 @@ html[data-theme="terminal"] .challenge-shell > #app {
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 16px;
-  background: #1c1c1e;
-  box-shadow: var(--shadow);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="terminal"] .challenge-shell > #app.app-mode-game {
@@ -809,7 +809,7 @@ html[data-theme="terminal"] .app-mode-game .game-canvas {
   }
 
   html[data-theme="terminal"] .challenge-shell > #app {
-    padding: 14px;
+    padding: 0;
   }
 
   html[data-theme="terminal"] .challenge-shell > #app.app-mode-game {
