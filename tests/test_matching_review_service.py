@@ -278,6 +278,135 @@ def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies(
     )
 
 
+def test_dispatch_manager_batch_for_vacancy_does_not_resend_existing_cards_on_force_refresh() -> None:
+    vacancy = SimpleNamespace(id="vacancy-force-1", manager_user_id="manager-force-1", role_title="Node.js Developer")
+    existing_match = SimpleNamespace(
+        id="match-existing",
+        vacancy_id=vacancy.id,
+        candidate_profile_id="candidate-existing",
+        candidate_profile_version_id="cpv-existing",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={"candidate-existing": SimpleNamespace(id="candidate-existing", user_id="candidate-user-existing")},
+        versions={"cpv-existing": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[existing_match])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            "candidate-user-existing": SimpleNamespace(id="candidate-user-existing", display_name="Existing Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=True, trigger_type="job")
+
+    assert result["status"] == "already_presented"
+    assert result["batch_count"] == 1
+    assert service.notifications.rows == []
+
+
+def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refresh() -> None:
+    vacancy = SimpleNamespace(id="vacancy-force-2", manager_user_id="manager-force-2", role_title="Node.js Developer")
+    existing_candidate = SimpleNamespace(id="candidate-existing-2", user_id="candidate-user-existing-2")
+    new_candidate = SimpleNamespace(id="candidate-new-2", user_id="candidate-user-new-2")
+    existing_match = SimpleNamespace(
+        id="match-existing-2",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=existing_candidate.id,
+        candidate_profile_version_id="cpv-existing-2",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+    )
+    new_match = SimpleNamespace(
+        id="match-new-2",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=new_candidate.id,
+        candidate_profile_version_id="cpv-new-2",
+        status="shortlisted",
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={
+            existing_candidate.id: existing_candidate,
+            new_candidate.id: new_candidate,
+        },
+        versions={
+            "cpv-existing-2": SimpleNamespace(summary_json={}),
+            "cpv-new-2": SimpleNamespace(summary_json={}),
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[existing_match], shortlisted_for_vacancy=[new_match])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            existing_candidate.user_id: SimpleNamespace(id=existing_candidate.user_id, display_name="Existing Candidate"),
+            new_candidate.user_id: SimpleNamespace(id=new_candidate.user_id, display_name="New Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=True, trigger_type="job")
+
+    assert result["status"] == "dispatched"
+    assert result["batch_count"] == 2
+    assert result["notified_count"] == 1
+    assert result["promoted_count"] == 1
+    assert len(service.notifications.rows) == 1
+    entries = service.notifications.rows[0].payload_json["message_entries"]
+    assert entries[0]["text"].startswith("I found 1 candidate matches")
+    assert len(entries) == 2
+    assert entries[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-new-2"
+
+
+def test_dispatch_candidate_batch_for_profile_does_not_resend_existing_cards_on_force_refresh() -> None:
+    candidate = SimpleNamespace(id="candidate-force-1", user_id="candidate-user-force-1")
+    vacancy = SimpleNamespace(id="vacancy-force-cand-1", role_title="Python Engineer")
+    existing_match = SimpleNamespace(
+        id="match-force-cand-1",
+        vacancy_id=vacancy.id,
+        vacancy_version_id="vacancy-version-force-cand-1",
+        candidate_profile_id=candidate.id,
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate})
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[existing_match], active_candidate=[])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository({candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate")})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-force-cand-1": SimpleNamespace(summary_json={})},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_candidate_batch_for_profile(candidate_profile_id=candidate.id, force=True, trigger_type="job")
+
+    assert result["status"] == "already_presented"
+    assert result["batch_count"] == 1
+    assert service.notifications.rows == []
+
+
 def test_execute_candidate_pre_interview_action_accepts_match_id_from_inline_button() -> None:
     candidate_user = SimpleNamespace(id="candidate-user-inline", is_candidate=True, is_hiring_manager=False)
     candidate = SimpleNamespace(id="candidate-inline", user_id=candidate_user.id)

@@ -253,7 +253,9 @@ class MatchingReviewService:
                 limit=presentation_limit,
             )
         )
+        preexisting_count = len(current_batch)
         current_batch_ids = {match.id for match in current_batch}
+        newly_promoted: list = []
         promoted_count = 0
         if len(current_batch) < presentation_limit:
             shortlisted = self.matches.list_shortlisted_for_vacancy(
@@ -273,6 +275,7 @@ class MatchingReviewService:
                 )
                 current_batch.append(match)
                 current_batch_ids.add(match.id)
+                newly_promoted.append(match)
                 promoted_count += 1
                 if len(current_batch) >= presentation_limit:
                     break
@@ -286,7 +289,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        if not force and promoted_count == 0:
+        if promoted_count == 0 and preexisting_count > 0:
             return {
                 "status": "already_presented",
                 "vacancy_id": str(vacancy_id),
@@ -295,13 +298,14 @@ class MatchingReviewService:
                 "notified": False,
             }
 
+        notification_batch = current_batch if preexisting_count == 0 else newly_promoted
         self.notifications.create(
             user_id=vacancy.manager_user_id,
             entity_type="vacancy",
             entity_id=vacancy.id,
             template_key="manager_pre_interview_review_ready",
             payload_json={
-                "message_entries": self._build_manager_batch_entries(vacancy=vacancy, batch=current_batch),
+                "message_entries": self._build_manager_batch_entries(vacancy=vacancy, batch=notification_batch),
             },
             allow_duplicate=True,
         )
@@ -309,6 +313,7 @@ class MatchingReviewService:
             "status": "dispatched",
             "vacancy_id": str(vacancy_id),
             "batch_count": len(current_batch),
+            "notified_count": len(notification_batch),
             "promoted_count": promoted_count,
             "notified": True,
         }
@@ -366,7 +371,9 @@ class MatchingReviewService:
                 limit=presentation_limit,
             )
         )
+        preexisting_count = len(current_batch)
         current_batch_ids = {match.id for match in current_batch}
+        newly_promoted: list = []
         promoted_count = 0
         if len(current_batch) < presentation_limit:
             shortlisted = self.matches.list_shortlisted_for_candidate(
@@ -389,6 +396,7 @@ class MatchingReviewService:
                 )
                 current_batch.append(match)
                 current_batch_ids.add(match.id)
+                newly_promoted.append(match)
                 promoted_count += 1
                 if len(current_batch) >= presentation_limit:
                     break
@@ -402,7 +410,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        if not force and promoted_count == 0:
+        if promoted_count == 0 and preexisting_count > 0:
             return {
                 "status": "already_presented",
                 "candidate_profile_id": str(candidate_profile_id),
@@ -411,13 +419,14 @@ class MatchingReviewService:
                 "notified": False,
             }
 
+        notification_batch = current_batch if preexisting_count == 0 else newly_promoted
         self.notifications.create(
             user_id=candidate.user_id,
             entity_type="candidate_profile",
             entity_id=candidate.id,
             template_key="candidate_vacancy_review_ready",
             payload_json={
-                "message_entries": self._build_candidate_batch_entries(batch=current_batch),
+                "message_entries": self._build_candidate_batch_entries(batch=notification_batch),
             },
             allow_duplicate=True,
         )
@@ -425,6 +434,7 @@ class MatchingReviewService:
             "status": "dispatched",
             "candidate_profile_id": str(candidate_profile_id),
             "batch_count": len(current_batch),
+            "notified_count": len(notification_batch),
             "promoted_count": promoted_count,
             "notified": True,
         }
