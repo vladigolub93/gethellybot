@@ -314,11 +314,11 @@
         <section class="canvas-wrap">
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
-        <p class="game-footer">
-          ${isTerminalTheme()
-            ? "% tap only the skills from your cv. wrong tap or missed valid skill costs 1 life."
-            : "Tap only the skills from your CV. Wrong taps and missed real skills cost 1 life."}
-        </p>
+        <footer class="game-footer" aria-label="How to play">
+          <span class="game-footer-chip">${isTerminalTheme() ? "tap cv skills" : "Tap CV skills"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "wrong tap = -1 life" : "Wrong tap = -1 life"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "missed real skill = -1 life" : "Missed real skill = -1 life"}</span>
+        </footer>
       </section>
     `;
     state.canvas = document.getElementById("game-canvas");
