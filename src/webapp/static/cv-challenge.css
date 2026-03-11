@@ -460,7 +460,7 @@ html[data-theme="terminal"] .missed-item {
 .canvas-wrap {
   position: relative;
   flex: 1 1 auto;
-  min-height: clamp(360px, 54dvh, 560px);
+  height: clamp(360px, 54dvh, 560px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -794,7 +794,7 @@ html[data-theme="terminal"] .app-mode-game .game-shell {
 }
 
 html[data-theme="terminal"] .app-mode-game .canvas-wrap {
-  min-height: clamp(380px, 56dvh, 620px);
+  height: clamp(380px, 56dvh, 620px);
 }
 
 @media (max-width: 420px) {
@@ -828,7 +828,7 @@ html[data-theme="terminal"] .app-mode-game .canvas-wrap {
   }
 
   .canvas-wrap {
-    min-height: clamp(380px, 54dvh, 520px);
+    height: clamp(380px, 54dvh, 520px);
   }
 
   .game-canvas {
@@ -865,6 +865,6 @@ html[data-theme="terminal"] .app-mode-game .canvas-wrap {
   }
 
   html[data-theme="terminal"] .app-mode-game .canvas-wrap {
-    min-height: clamp(400px, 58dvh, 560px);
+    height: clamp(400px, 58dvh, 560px);
   }
 }

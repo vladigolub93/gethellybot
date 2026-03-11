@@ -472,8 +472,11 @@
 
   function resizeCanvas() {
     if (!state.canvas) return;
-    const rect = state.canvas.getBoundingClientRect();
+    const host = state.canvas.parentElement || state.canvas;
+    const rect = host.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
+    state.canvas.style.width = `${Math.max(Math.floor(rect.width), 320)}px`;
+    state.canvas.style.height = `${Math.max(Math.floor(rect.height), 320)}px`;
     state.canvas.width = Math.max(Math.floor(rect.width * ratio), 320);
     state.canvas.height = Math.max(Math.floor(rect.height * ratio), 440);
     state.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
