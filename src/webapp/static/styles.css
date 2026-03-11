@@ -198,6 +198,23 @@ html[data-theme="terminal"] body::before {
   line-height: 1.55;
 }
 
+.app-shell.topbar-compact .topbar {
+  margin-bottom: 14px;
+}
+
+.app-shell.topbar-compact .topbar-copy {
+  gap: 0;
+}
+
+.app-shell.topbar-compact .brand-lockup {
+  font-size: clamp(1.35rem, 6vw, 1.85rem);
+}
+
+.app-shell.topbar-compact .topbar-divider,
+.app-shell.topbar-compact .topbar-note {
+  display: none;
+}
+
 .topbar-actions {
   display: none;
 }
@@ -1205,6 +1222,15 @@ html[data-theme="terminal"] .topbar-note {
 html[data-theme="terminal"] .topbar-note::before {
   content: "% ";
   color: #8e8e93;
+}
+
+html[data-theme="terminal"] .app-shell.topbar-compact .topbar {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+html[data-theme="terminal"] .app-shell.topbar-compact .brand-lockup {
+  font-size: clamp(1.2rem, 5vw, 1.5rem);
 }
 
 html[data-theme="terminal"] .topbar-actions {

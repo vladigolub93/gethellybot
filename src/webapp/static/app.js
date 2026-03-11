@@ -9,6 +9,7 @@
   const TERMINAL_THEME = "terminal";
 
   const appEl = document.getElementById("app");
+  const appShellEl = document.querySelector(".app-shell");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const handleTelegramBack = () => {
     if (getCurrentRoute() === "home") {
@@ -386,6 +387,12 @@
     tg.BackButton.show();
   }
 
+  function updateTopbar(route) {
+    if (!appShellEl) return;
+    const compact = sanitizeRoute(route) !== "home";
+    appShellEl.classList.toggle("topbar-compact", compact);
+  }
+
   function sanitizeRoute(route) {
     return route && route !== "#" ? String(route).replace(/^#/, "") : "home";
   }
@@ -746,8 +753,9 @@
   }
 
   async function renderRoute() {
-    updateBackButton();
     const currentRoute = getCurrentRoute();
+    updateBackButton();
+    updateTopbar(currentRoute);
     if (!state.session) return;
     try {
       if (currentRoute === "home") {
