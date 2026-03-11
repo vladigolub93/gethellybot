@@ -760,6 +760,14 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   gap: 10px;
 }
 
+.card-head-compact {
+  gap: 8px;
+}
+
+.card-title-wrap {
+  min-width: 0;
+}
+
 .card h3 {
   font-size: 1.08rem;
   font-weight: 800;
@@ -767,11 +775,64 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   letter-spacing: -0.02em;
 }
 
+.card-compact {
+  padding: 14px;
+}
+
+.card-compact h3 {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
 .card-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
+}
+
+.inline-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.inline-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.inline-metric-label {
+  color: var(--muted);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inline-metric-value {
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .metric {
@@ -960,6 +1021,10 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
     justify-content: space-between;
     align-items: flex-start;
   }
+
+  .card-head-compact {
+    align-items: center;
+  }
 }
 
 @media (min-width: 720px) {
@@ -968,6 +1033,10 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   }
 
   .card-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .inline-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1213,6 +1282,18 @@ html[data-theme="terminal"] .metric {
   background: rgba(255, 255, 255, 0.04);
 }
 
+html[data-theme="terminal"] .inline-metric {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .inline-metric-label {
+  color: #8e8e93;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 html[data-theme="terminal"] .badge[data-tone="accent"] {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
@@ -1356,6 +1437,23 @@ html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
 
   html[data-theme="terminal"] .app-root {
     padding: 14px;
+  }
+
+  .card-compact {
+    padding: 12px;
+  }
+
+  .inline-metrics {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .inline-metric {
+    padding: 7px 8px;
+  }
+
+  .inline-metric-value {
+    font-size: 0.84rem;
   }
 
   html[data-theme="terminal"] .stat-value {

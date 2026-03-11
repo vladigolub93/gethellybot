@@ -305,6 +305,21 @@
     return `<p class="card-note ${isTerminalTheme() ? "card-note-terminal" : ""}">${escapeHtml(value)}</p>`;
   }
 
+  function renderInlineMetrics(metrics) {
+    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
+    if (!visibleMetrics.length) return "";
+    return `
+      <div class="inline-metrics">
+        ${visibleMetrics.map((metric) => `
+          <div class="inline-metric">
+            <span class="inline-metric-label">${escapeHtml(isTerminalTheme() ? terminalToken(metric.label) : metric.label)}</span>
+            <span class="inline-metric-value">${escapeHtml(metric.value)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
   function renderActionPanel(challenge) {
     if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
     return `
@@ -428,21 +443,14 @@
         </section>
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="candidate-match:${item.id}">
-              <div class="card-head">
-                <div>
-                  <p class="eyebrow">${isTerminalTheme() ? "opportunity_record" : "Opportunity"}</p>
+            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="candidate-match:${item.id}">
+              <div class="card-head card-head-compact">
+                <div class="card-title-wrap">
                   <h3>${escapeHtml(item.roleTitle || "Untitled role")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
-              ${isTerminalTheme() ? `
-                <div class="terminal-command-row terminal-command-row-card">
-                  <span class="terminal-prompt">&gt;</span>
-                  <span class="terminal-command">inspect /matches/${escapeHtml(item.id)}</span>
-                </div>
-              ` : ""}
-              ${renderCardMetrics([
+              ${renderInlineMetrics([
                 { label: "Budget", value: item.budget || "Not set" },
                 { label: "Interview", value: item.interviewStateLabel || "Not started" },
                 { label: "Updated", value: formatRelativeTime(item.updatedAt) }
