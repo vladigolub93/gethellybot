@@ -28,3 +28,5 @@ class NormalizedTelegramUpdate:
     language_code: Optional[str]
     file: Optional[NormalizedTelegramFile]
     payload: dict
+    chat_type: Optional[str] = None
+    chat_title: Optional[str] = None

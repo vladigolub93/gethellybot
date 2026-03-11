@@ -24,6 +24,7 @@ from src.orchestrator.policy import resolve_state_context
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.processor import process_job
 from src.jobs.queue import JobMessage
+from src.monitoring.telegram_alerts import TelegramErrorAlertService
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
     candidate_vacancy_review_keyboard,
@@ -1802,38 +1803,45 @@ class TelegramUpdateService:
         )
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
-        self.session.info["created_job_ids"] = []
-        self.session.info["created_notification_ids"] = []
-        existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
-        if existing is not None:
-            return ProcessedTelegramUpdate(
-                status="duplicate",
-                deduplicated=True,
-                notification_templates=[],
-                user_id=str(existing.user_id) if existing.user_id else "",
+        session_info = getattr(self.session, "info", None)
+        if isinstance(session_info, dict):
+            session_info["telegram_reply_chat_id"] = normalized_update.telegram_chat_id
+        try:
+            self.session.info["created_job_ids"] = []
+            self.session.info["created_notification_ids"] = []
+            existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)
+            if existing is not None:
+                return ProcessedTelegramUpdate(
+                    status="duplicate",
+                    deduplicated=True,
+                    notification_templates=[],
+                    user_id=str(existing.user_id) if existing.user_id else "",
+                )
+
+            user = self.identity_service.ensure_user(normalized_update)
+            raw_message = self._create_raw_message_for_update(
+                user_id=user.id,
+                normalized_update=normalized_update,
             )
+            persisted_file = self._persist_file_if_present(user.id, raw_message, normalized_update)
 
-        user = self.identity_service.ensure_user(normalized_update)
-        raw_message = self._create_raw_message_for_update(
-            user_id=user.id,
-            normalized_update=normalized_update,
-        )
-        persisted_file = self._persist_file_if_present(user.id, raw_message, normalized_update)
+            notification_templates = self._apply_identity_flow(
+                user,
+                raw_message.id,
+                normalized_update,
+                file_id=persisted_file.id if persisted_file is not None else None,
+            )
+            self.session.commit()
+            self._flush_immediate_jobs()
+            self._flush_immediate_notifications_for_user(user.id)
 
-        notification_templates = self._apply_identity_flow(
-            user,
-            raw_message.id,
-            normalized_update,
-            file_id=persisted_file.id if persisted_file is not None else None,
-        )
-        self.session.commit()
-        self._flush_immediate_jobs()
-        self._flush_immediate_notifications_for_user(user.id)
-
-        return self._build_processed_update_result(
-            user_id=user.id,
-            notification_templates=notification_templates,
-        )
+            return self._build_processed_update_result(
+                user_id=user.id,
+                notification_templates=notification_templates,
+            )
+        finally:
+            if isinstance(session_info, dict):
+                session_info.pop("telegram_reply_chat_id", None)
 
     def _apply_identity_flow(
         self,
@@ -1905,12 +1913,18 @@ class TelegramUpdateService:
         return file_row
 
     def _notify(self, user_id, template_key: str, payload: dict, *, allow_duplicate: bool = False) -> str:
+        notification_payload = dict(payload or {})
+        session_info = getattr(self.session, "info", None)
+        if isinstance(session_info, dict):
+            reply_chat_id = session_info.get("telegram_reply_chat_id")
+            if reply_chat_id and "telegram_chat_id" not in notification_payload:
+                notification_payload["telegram_chat_id"] = reply_chat_id
         self.notifications_repo.create(
             user_id=user_id,
             entity_type="user",
             entity_id=user_id,
             template_key=template_key,
-            payload_json=payload,
+            payload_json=notification_payload,
             allow_duplicate=allow_duplicate,
         )
         return template_key
@@ -1945,6 +1959,12 @@ class TelegramUpdateService:
                 job_count=len(created_job_ids),
                 error=str(exc),
             )
+            TelegramErrorAlertService().send_error_alert(
+                source="telegram_immediate_job_flush",
+                summary="Immediate job flush failed during Telegram webhook processing.",
+                exc=exc,
+                context={"job_count": len(created_job_ids)},
+            )
 
     def _flush_immediate_notifications_for_user(self, user_id) -> None:
         notification_ids = list(self.session.info.pop("created_notification_ids", []))
@@ -1959,4 +1979,13 @@ class TelegramUpdateService:
                 "telegram_immediate_notification_flush_failed",
                 notification_count=len(notification_ids),
                 error=str(exc),
+            )
+            TelegramErrorAlertService().send_error_alert(
+                source="telegram_immediate_notification_flush",
+                summary="Immediate notification flush failed during Telegram webhook processing.",
+                exc=exc,
+                context={
+                    "notification_count": len(notification_ids),
+                    "user_id": str(user_id),
+                },
             )

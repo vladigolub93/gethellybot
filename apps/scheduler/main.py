@@ -8,6 +8,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.session import get_session_factory
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
+from src.monitoring.telegram_alerts import TelegramErrorAlertService
 
 
 def dispatch_once() -> dict:
@@ -81,8 +82,13 @@ def dispatch_once() -> dict:
             "invite_wave_reminders_enqueued": enqueued_wave_reminders,
             "invite_wave_evaluations_enqueued": enqueued_wave_evaluations,
         }
-    except Exception:
+    except Exception as exc:
         session.rollback()
+        TelegramErrorAlertService().send_error_alert(
+            source="scheduler_dispatch_once",
+            summary="Scheduler dispatch cycle failed.",
+            exc=exc,
+        )
         raise
     finally:
         session.close()

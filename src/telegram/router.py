@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from src.config.settings import get_settings
 from src.db.dependencies import get_db_session
+from src.monitoring.telegram_alerts import TelegramErrorAlertService
 from src.telegram.normalizer import (
     TelegramUpdateNormalizationError,
     normalize_telegram_update,
@@ -37,7 +38,20 @@ async def telegram_webhook(
 
     try:
         result = TelegramUpdateService(db).process(normalized_update)
-    except Exception:
+    except Exception as exc:
+        TelegramErrorAlertService().send_error_alert(
+            source="telegram_webhook",
+            summary="Telegram webhook update processing failed.",
+            exc=exc,
+            context={
+                "update_id": update.get("update_id"),
+                "telegram_user_id": normalized_update.telegram_user_id,
+                "telegram_chat_id": normalized_update.telegram_chat_id,
+                "message_id": normalized_update.message_id,
+                "chat_type": normalized_update.chat_type,
+                "chat_title": normalized_update.chat_title,
+            },
+        )
         db.rollback()
         raise
 

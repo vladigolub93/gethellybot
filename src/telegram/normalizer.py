@@ -97,4 +97,6 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
         language_code=sender.get("language_code"),
         file=file,
         payload=update,
+        chat_type=chat.get("type"),
+        chat_title=chat.get("title"),
     )

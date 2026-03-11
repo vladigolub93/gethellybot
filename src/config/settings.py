@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(default="", alias="TELEGRAM_BOT_TOKEN")
     telegram_webhook_secret: str = Field(default="", alias="TELEGRAM_WEBHOOK_SECRET")
+    telegram_error_chat_id: Optional[int] = Field(default=None, alias="TELEGRAM_ERROR_CHAT_ID")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model_extraction: str = Field(

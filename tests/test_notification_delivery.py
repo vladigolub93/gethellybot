@@ -151,3 +151,21 @@ def test_send_notification_records_correlation_id_on_outbound_raw_messages() -> 
     assert result["status"] == "sent"
     assert len(service.raw_messages.created) == 1
     assert service.raw_messages.created[0]["correlation_id"] == notification.id
+
+
+def test_send_notification_uses_payload_telegram_chat_id_override() -> None:
+    service = _build_service()
+    notification = SimpleNamespace(
+        id="notification-5",
+        user_id="user-1",
+        template_key="request_role",
+        payload_json={"text": "Reply in group.", "telegram_chat_id": -100123},
+        status="pending",
+    )
+    service.notifications.rows[str(notification.id)] = notification
+
+    result = service.send_notification_by_id(notification.id)
+
+    assert result["status"] == "sent"
+    assert service.telegram.calls[0]["chat_id"] == -100123
+    assert service.raw_messages.created[0]["telegram_chat_id"] == -100123

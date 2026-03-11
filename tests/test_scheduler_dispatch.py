@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 import apps.scheduler.main as scheduler_main
 
 
@@ -62,3 +64,34 @@ def test_scheduler_enqueues_invite_wave_evaluations(monkeypatch) -> None:
     assert len(fake_queue.messages) == 3
     assert fake_queue.messages[0].job_type == "matching_send_invite_wave_reminder_v1"
     assert all(message.job_type == "matching_evaluate_invite_wave_v1" for message in fake_queue.messages[1:])
+
+
+class BrokenNotificationsRepository:
+    def list_pending_dispatchable(self, limit=20):
+        raise RuntimeError("scheduler boom")
+
+
+class FakeAlertService:
+    def __init__(self, sink) -> None:
+        self.sink = sink
+
+    def send_error_alert(self, **kwargs):
+        self.sink.append(kwargs)
+        return True
+
+
+def test_scheduler_dispatch_sends_error_alert_on_failure(monkeypatch) -> None:
+    alerts = []
+
+    monkeypatch.setattr(scheduler_main, "get_session_factory", lambda: lambda: FakeSession())
+    monkeypatch.setattr(
+        scheduler_main,
+        "NotificationsRepository",
+        lambda session: BrokenNotificationsRepository(),
+    )
+    monkeypatch.setattr(scheduler_main, "TelegramErrorAlertService", lambda: FakeAlertService(alerts))
+
+    with pytest.raises(RuntimeError, match="scheduler boom"):
+        scheduler_main.dispatch_once()
+
+    assert alerts[0]["source"] == "scheduler_dispatch_once"

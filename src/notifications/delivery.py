@@ -60,7 +60,9 @@ class NotificationDeliveryService:
             raise ValueError("Notification was not found.")
         try:
             user = self.users.get_by_id(notification.user_id)
-            if user is None or not user.telegram_chat_id:
+            payload = notification.payload_json or {}
+            target_chat_id = payload.get("telegram_chat_id") or getattr(user, "telegram_chat_id", None)
+            if user is None or not target_chat_id:
                 raise ValueError("Notification user or telegram_chat_id is not available.")
             if self.raw_messages.has_outbound_for_correlation(correlation_id=notification.id):
                 self.notifications.mark_sent(notification)
@@ -71,16 +73,16 @@ class NotificationDeliveryService:
 
             messages = render_notification_messages(
                 template_key=notification.template_key,
-                payload=notification.payload_json or {},
+                payload=payload,
             )
             reply_markup = render_notification_reply_markup(
                 template_key=notification.template_key,
-                payload=notification.payload_json or {},
+                payload=payload,
             )
             telegram_results = []
             for index, text in enumerate(messages):
                 telegram_result = self.telegram.send_text_message(
-                    chat_id=user.telegram_chat_id,
+                    chat_id=target_chat_id,
                     text=text,
                     reply_markup=reply_markup if index == len(messages) - 1 else None,
                 )
@@ -89,7 +91,7 @@ class NotificationDeliveryService:
                     user_id=user.id,
                     telegram_update_id=None,
                     telegram_message_id=telegram_result.get("message_id"),
-                    telegram_chat_id=user.telegram_chat_id,
+                    telegram_chat_id=target_chat_id,
                     direction="outbound",
                     content_type="text",
                     payload_json=telegram_result,

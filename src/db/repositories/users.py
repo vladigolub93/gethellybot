@@ -25,12 +25,14 @@ class UsersRepository:
         display_name: Optional[str],
         username: Optional[str],
         language_code: Optional[str],
+        chat_type: Optional[str] = None,
     ) -> User:
+        private_chat_id = telegram_chat_id if chat_type == "private" else None
         user = self.get_by_telegram_user_id(telegram_user_id)
         if user is None:
             user = User(
                 telegram_user_id=telegram_user_id,
-                telegram_chat_id=telegram_chat_id,
+                telegram_chat_id=private_chat_id,
                 display_name=display_name,
                 username=username,
                 language_code=language_code,
@@ -39,7 +41,7 @@ class UsersRepository:
             self.session.flush()
             return user
 
-        user.telegram_chat_id = telegram_chat_id or user.telegram_chat_id
+        user.telegram_chat_id = private_chat_id or user.telegram_chat_id
         user.display_name = display_name or user.display_name
         user.username = username or user.username
         user.language_code = language_code or user.language_code

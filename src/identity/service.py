@@ -16,6 +16,7 @@ class IdentityService:
             display_name=normalized_update.display_name,
             username=normalized_update.username,
             language_code=normalized_update.language_code,
+            chat_type=normalized_update.chat_type,
         )
 
     def attach_contact(self, user, normalized_update):

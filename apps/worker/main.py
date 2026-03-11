@@ -5,6 +5,7 @@ from src.config.settings import get_settings
 from src.db.repositories.job_execution_logs import JobExecutionLogsRepository
 from src.db.session import get_session_factory
 from src.jobs.processor import process_job
+from src.monitoring.telegram_alerts import TelegramErrorAlertService
 
 
 def process_once() -> bool:
@@ -24,8 +25,15 @@ def process_once() -> bool:
         return True
     except Exception as exc:
         session.rollback()
+        alert_context = {}
 
         if "job" in locals() and job is not None:
+            alert_context = {
+                "job_id": str(job.id),
+                "job_type": job.job_type,
+                "entity_type": job.entity_type,
+                "entity_id": str(job.entity_id) if job.entity_id else None,
+            }
             session = session_factory()
             try:
                 repo = JobExecutionLogsRepository(session)
@@ -36,6 +44,12 @@ def process_once() -> bool:
             finally:
                 session.close()
 
+        TelegramErrorAlertService().send_error_alert(
+            source="worker_process_once",
+            summary="Worker job processing failed.",
+            exc=exc,
+            context=alert_context,
+        )
         raise
     finally:
         session.close()

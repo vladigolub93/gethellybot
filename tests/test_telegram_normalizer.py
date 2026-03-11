@@ -23,6 +23,7 @@ def test_normalize_start_message() -> None:
     assert normalized.update_id == 123
     assert normalized.telegram_user_id == 999
     assert normalized.telegram_chat_id == 555
+    assert normalized.chat_type == "private"
     assert normalized.content_type == "text"
     assert normalized.text == "/start"
     assert normalized.display_name == "Vlad Golub"
