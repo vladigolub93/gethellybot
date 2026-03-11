@@ -332,7 +332,7 @@ class FakeEvaluationService:
         self.result = SimpleNamespace(
             status="help",
             notification_template="manager_candidate_review_help",
-            notification_text="Reply 'Approve candidate' or 'Reject candidate'.",
+            notification_text="Use the buttons under the candidate card to approve or reject.",
         )
 
     def handle_manager_message(self, **kwargs):
@@ -1983,6 +1983,68 @@ def test_candidate_interview_skip_callback_routes_action_by_match_id() -> None:
     assert service.interview_service.calls
     assert service.interview_service.calls[-1]["action"] == "skip_opportunity"
     assert service.interview_service.calls[-1]["match_id"] == "match-89"
+
+
+def test_manager_review_approve_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="approved",
+        notification_template="manager_candidate_approved",
+        notification_text="Candidate approved.",
+    )
+
+    user = SimpleNamespace(
+        id="u5r",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5r",
+        build_update(content_type="callback", callback_data="mgr_rev:approve:match-91"),
+    )
+
+    assert templates == ["manager_candidate_approved"]
+    assert service.evaluation_service.calls[-1]["action"] == "approve_candidate"
+    assert service.evaluation_service.calls[-1]["match_id"] == "match-91"
+
+
+def test_manager_review_reject_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = SimpleNamespace(
+        status="rejected",
+        notification_template="manager_candidate_rejected",
+        notification_text="Candidate rejected.",
+    )
+
+    user = SimpleNamespace(
+        id="u5s",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5s",
+        build_update(content_type="callback", callback_data="mgr_rev:reject:match-92"),
+    )
+
+    assert templates == ["manager_candidate_rejected"]
+    assert service.evaluation_service.calls[-1]["action"] == "reject_candidate"
+    assert service.evaluation_service.calls[-1]["match_id"] == "match-92"
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:

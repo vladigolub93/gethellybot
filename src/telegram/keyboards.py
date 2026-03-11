@@ -35,11 +35,20 @@ def summary_review_keyboard(*, edit_allowed: bool = True) -> dict:
     }
 
 
-def manager_review_keyboard() -> dict:
+def manager_review_inline_keyboard(*, match_id: str) -> dict:
     return {
-        "keyboard": [["Approve candidate", "Reject candidate"]],
-        "resize_keyboard": True,
-        "one_time_keyboard": True,
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Approve",
+                    "callback_data": f"mgr_rev:approve:{match_id}",
+                },
+                {
+                    "text": "Reject",
+                    "callback_data": f"mgr_rev:reject:{match_id}",
+                },
+            ]
+        ]
     }
 
 def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:

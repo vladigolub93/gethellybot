@@ -30,7 +30,6 @@ from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
     contact_request_keyboard,
     deletion_confirmation_keyboard,
-    manager_review_keyboard,
     remove_keyboard,
     role_selection_keyboard,
     summary_review_keyboard,
@@ -437,9 +436,7 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=manager_result.notification_template,
                 text=manager_result.notification_text,
-                reply_markup=manager_review_keyboard()
-                if manager_result.status == "help"
-                else remove_keyboard(),
+                reply_markup=remove_keyboard() if manager_result.status != "help" else None,
             )
         ]
 
@@ -502,6 +499,44 @@ class TelegramUpdateService:
                 match_id=match_id,
             )
             return [] if result is not None else None
+
+        if callback_data.startswith("mgr_rev:approve:"):
+            match_id = callback_data[len("mgr_rev:approve:") :]
+            manager_result = self.evaluation_service.execute_manager_review_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="approve_candidate",
+                match_id=match_id,
+            )
+            if manager_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=manager_result.notification_template,
+                    text=manager_result.notification_text,
+                    reply_markup=remove_keyboard() if manager_result.status != "help" else None,
+                )
+            ]
+
+        if callback_data.startswith("mgr_rev:reject:"):
+            match_id = callback_data[len("mgr_rev:reject:") :]
+            manager_result = self.evaluation_service.execute_manager_review_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="reject_candidate",
+                match_id=match_id,
+            )
+            if manager_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=manager_result.notification_template,
+                    text=manager_result.notification_text,
+                    reply_markup=remove_keyboard() if manager_result.status != "help" else None,
+                )
+            ]
 
         if callback_data.startswith("cand_pre:apply:"):
             match_id = callback_data[len("cand_pre:apply:") :]

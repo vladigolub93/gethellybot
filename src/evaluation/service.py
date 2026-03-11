@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from src.candidate_profile.states import CANDIDATE_STATE_READY
@@ -12,8 +14,9 @@ from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_evaluate_candidate
 from src.messaging.service import MessagingService
 from src.state.service import StateService
-from src.telegram.keyboards import manager_review_keyboard
+from src.telegram.keyboards import manager_review_inline_keyboard
 from src.evaluation.package_builder import build_candidate_package
+from src.notifications.rendering import render_notification_text
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,29 @@ class EvaluationService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    def _render_candidate_package_message(
+        self,
+        *,
+        candidate_user,
+        candidate_summary: dict,
+        candidate_profile,
+        vacancy,
+        evaluation: dict,
+        verification,
+    ) -> str:
+        package = build_candidate_package(
+            candidate_user=candidate_user,
+            candidate_summary=candidate_summary,
+            candidate_profile=candidate_profile,
+            vacancy=vacancy,
+            evaluation=evaluation,
+            verification=verification,
+        )
+        return render_notification_text(
+            template_key="manager_candidate_review_ready",
+            payload={"candidate_package": package},
+        )
 
     def _restore_candidate_to_ready(
         self,
@@ -128,6 +154,28 @@ class EvaluationService:
             entity_id=match.id,
             template_key="manager_candidate_review_ready",
             payload_json={
+                "message_entries": [
+                    {
+                        "text": self._copy("An interviewed candidate is ready for review."),
+                    },
+                    {
+                        "text": self._copy(
+                            "I put the candidate package below, including the interview summary, risks, and recommendation. "
+                            "Use the buttons under this candidate card to approve or reject."
+                        ),
+                    },
+                    {
+                        "text": self._render_candidate_package_message(
+                            candidate_user=candidate_user,
+                            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
+                            candidate_profile=candidate,
+                            vacancy=vacancy,
+                            evaluation=evaluation,
+                            verification=verification,
+                        ),
+                        "reply_markup": manager_review_inline_keyboard(match_id=str(match.id)),
+                    },
+                ],
                 "text": self._copy(
                     "An interviewed candidate is ready for review. "
                     "I included the interview summary and AI recommendation, and the final decision is yours."
@@ -135,8 +183,7 @@ class EvaluationService:
                 "messages": [
                     self._copy("An interviewed candidate is ready for review."),
                     self._copy(
-                        "I put the candidate package below, including the interview summary, risks, and recommendation. "
-                        "When you're ready, use the buttons to approve or reject."
+                        "I put the candidate package below, including the interview summary, risks, and recommendation."
                     ),
                 ],
                 "candidate_package": build_candidate_package(
@@ -147,7 +194,6 @@ class EvaluationService:
                     evaluation=evaluation,
                     verification=verification,
                 ),
-                "reply_markup": manager_review_keyboard(),
             },
         )
 
@@ -158,14 +204,22 @@ class EvaluationService:
             "final_score": evaluation["final_score"],
         }
 
-    def execute_manager_review_action(self, *, user, raw_message_id, action: str):
+    def execute_manager_review_action(self, *, user, raw_message_id, action: str, match_id: str | None = None):
         if not user.is_hiring_manager:
             return None
 
         manager_vacancies = self.vacancies.get_by_manager_user_id(user.id)
-        match = self.matches.get_latest_manager_review_for_manager(
-            [vacancy.id for vacancy in manager_vacancies]
-        )
+        manager_vacancy_ids = [vacancy.id for vacancy in manager_vacancies]
+        if match_id:
+            match = self.matches.get_by_id(match_id)
+            if (
+                match is None
+                or match.vacancy_id not in manager_vacancy_ids
+                or getattr(match, "status", None) != "manager_review"
+            ):
+                return None
+        else:
+            match = self.matches.get_latest_manager_review_for_manager(manager_vacancy_ids)
         if match is None:
             return None
 
@@ -176,7 +230,7 @@ class EvaluationService:
         return ManagerDecisionResult(
             status="help",
             notification_template="manager_candidate_review_help",
-            notification_text=self._copy("Reply 'Approve candidate' or 'Reject candidate'."),
+            notification_text=self._copy("Use the buttons under the candidate card to approve or reject."),
         )
 
     def _approve_candidate(self, *, user, match, raw_message_id):

@@ -48,7 +48,7 @@ class FakeMatchingRepository:
         self.match = match
 
     def get_by_id(self, match_id):
-        return self.match if self.match.id == match_id else None
+        return self.match if str(self.match.id) == str(match_id) else None
 
     def mark_manager_decision(self, match, *, status):
         match.status = status
@@ -165,10 +165,13 @@ def test_evaluate_interview_routes_candidate_to_manager_review() -> None:
     assert len(service.notifications.rows) == 1
     assert service.notifications.rows[0].user_id == manager.id
     candidate_package = service.notifications.rows[0].payload_json["candidate_package"]
+    message_entries = service.notifications.rows[0].payload_json["message_entries"]
     assert candidate_package["candidate_name"] == "Candidate User"
     assert candidate_package["verification_status"] == "verification_submitted"
     assert candidate_package["recommendation"] == "advance"
     assert "final decision is yours" in service.notifications.rows[0].payload_json["text"].lower()
+    assert message_entries[-1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == f"mgr_rev:approve:{match.id}"
+    assert message_entries[-1]["reply_markup"]["inline_keyboard"][0][1]["callback_data"] == f"mgr_rev:reject:{match.id}"
 
 
 def test_evaluate_interview_with_reject_recommendation_still_routes_to_manager_review(monkeypatch) -> None:
@@ -258,4 +261,38 @@ def test_execute_manager_review_action_approves_without_raw_text_parsing() -> No
     assert result is not None
     assert result.status == "approved"
     assert match.status == "approved"
+
+
+def test_execute_manager_review_action_uses_explicit_match_id() -> None:
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
+    match.status = "manager_review"
+    user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
+
+    result = service.execute_manager_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_candidate",
+        match_id=str(match.id),
+    )
+
+    assert result is not None
+    assert result.status == "approved"
+    assert match.status == "approved"
+    assert candidate.state == "READY"
+
+
+def test_execute_manager_review_action_rejects_unknown_match_id() -> None:
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
+    match.status = "manager_review"
+    user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
+
+    result = service.execute_manager_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_candidate",
+        match_id=str(uuid4()),
+    )
+
+    assert result is None
+    assert match.status == "manager_review"
     assert candidate.state == "READY"
