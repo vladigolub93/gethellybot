@@ -170,6 +170,38 @@
     } catch (_) {}
   }
 
+  function bindPress(element, handler) {
+    if (!element || typeof handler !== "function") return;
+    let touchHandled = false;
+    const run = (event) => {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      handler();
+    };
+    element.addEventListener("click", (event) => {
+      if (touchHandled) {
+        touchHandled = false;
+        return;
+      }
+      run(event);
+    });
+    element.addEventListener("touchend", (event) => {
+      touchHandled = true;
+      run(event);
+    }, { passive: false });
+  }
+
+  function openDashboard() {
+    const targetUrl = withCurrentTheme("/webapp");
+    try {
+      window.location.href = targetUrl;
+    } catch (_) {
+      window.location.assign(targetUrl);
+    }
+  }
+
   async function api(path, options) {
     const response = await fetch(path, {
       ...options,
@@ -220,10 +252,8 @@
         </div>
       </section>
     `;
-    document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign(withCurrentTheme("/webapp"));
-    });
-    document.getElementById("close-app").addEventListener("click", () => {
+    bindPress(document.getElementById("open-dashboard"), openDashboard);
+    bindPress(document.getElementById("close-app"), () => {
       if (tg && typeof tg.close === "function") {
         tg.close();
       }
@@ -264,10 +294,8 @@
         </div>
       </section>
     `;
-    document.getElementById("start-challenge").addEventListener("click", startGame);
-    document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign(withCurrentTheme("/webapp"));
-    });
+    bindPress(document.getElementById("start-challenge"), startGame);
+    bindPress(document.getElementById("open-dashboard"), openDashboard);
   }
 
   function renderGameShell() {
@@ -341,10 +369,8 @@
         </div>
       </section>
     `;
-    document.getElementById("try-again").addEventListener("click", () => window.location.reload());
-    document.getElementById("open-dashboard").addEventListener("click", () => {
-      window.location.assign(withCurrentTheme("/webapp"));
-    });
+    bindPress(document.getElementById("try-again"), startGame);
+    bindPress(document.getElementById("open-dashboard"), openDashboard);
   }
 
   function cssVar(name, fallback) {

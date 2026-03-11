@@ -350,11 +350,16 @@ html[data-theme="terminal"] .result-meta-card {
   flex-direction: column;
   gap: 10px;
   margin-top: 22px;
+  position: relative;
+  z-index: 2;
 }
 
 .button,
 .ghost-button {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-height: 54px;
   border-radius: 999px;
@@ -362,6 +367,13 @@ html[data-theme="terminal"] .result-meta-card {
   font-weight: 800;
   border: 1px solid transparent;
   cursor: pointer;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  text-decoration: none;
 }
 
 html[data-theme="terminal"] .button,
