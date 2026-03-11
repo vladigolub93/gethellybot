@@ -243,7 +243,8 @@
         <div class="terminal-console-body">
           ${visibleRows.map((row) => `
             <div class="terminal-line">
-              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}<span class="terminal-separator"> ::</span></span>
+              <span class="terminal-key">${escapeHtml(terminalToken(row.key || row.label))}</span>
+              <span class="terminal-separator">::</span>
               <span class="terminal-value">${escapeHtml(row.value)}</span>
             </div>
           `).join("")}
@@ -411,10 +412,10 @@
           <p>${isTerminalTheme() ? "Read-only shell over your current match queue, interview state and saved profile context." : "Your current matches, interview progress and saved profile context."}</p>
         </section>
         ${renderTerminalConsole("helly@candidate:~ % tail -f opportunities.log", [
-          { label: "profile state", value: payload.profile.state || "unknown" },
-          { label: "records loaded", value: String(items.length) },
-          { label: "active interviews", value: String(activeInterviewCount) },
-          { label: "cv challenge", value: payload.cvChallenge && payload.cvChallenge.eligible ? "available" : (payload.cvChallenge && payload.cvChallenge.reasonCode) || "locked" }
+          { label: "profile state", key: "state", value: payload.profile.state || "unknown" },
+          { label: "records loaded", key: "records", value: String(items.length) },
+          { label: "active interviews", key: "interviews", value: String(activeInterviewCount) },
+          { label: "cv challenge", key: "challenge", value: payload.cvChallenge && payload.cvChallenge.eligible ? "available" : (payload.cvChallenge && payload.cvChallenge.reasonCode) || "locked" }
         ])}
         ${renderStatsStrip([
           { label: "Opportunities", value: String(items.length) },
@@ -475,10 +476,10 @@
           <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate pipeline depth and interview throughput." : "One clean view of your live candidate pipeline and interview progress."}</p>
         </section>
         ${renderTerminalConsole("helly@manager:~ % tail -f vacancies.log", [
-          { label: "vacancies", value: String(items.length) },
-          { label: "candidate records", value: String(totalCandidateCount) },
-          { label: "pipeline active", value: String(totalActivePipelineCount) },
-          { label: "interviews completed", value: String(totalCompletedInterviewCount) }
+          { label: "vacancies", key: "vacancies", value: String(items.length) },
+          { label: "candidate records", key: "candidates", value: String(totalCandidateCount) },
+          { label: "pipeline active", key: "pipeline", value: String(totalActivePipelineCount) },
+          { label: "interviews completed", key: "completed", value: String(totalCompletedInterviewCount) }
         ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
@@ -528,9 +529,9 @@
           <p>${isTerminalTheme() ? "Production-wide read-only shell across all live vacancy records." : "Read-only visibility across the full Helly production pipeline."}</p>
         </section>
         ${renderTerminalConsole("helly@admin:~ % tail -f production.log", [
-          { label: "vacancies", value: String(items.length) },
-          { label: "candidate records", value: String(totalCandidateCount) },
-          { label: "interviews completed", value: String(totalCompletedInterviewCount) }
+          { label: "vacancies", key: "vacancies", value: String(items.length) },
+          { label: "candidate records", key: "candidates", value: String(totalCandidateCount) },
+          { label: "interviews completed", key: "completed", value: String(totalCompletedInterviewCount) }
         ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
@@ -576,10 +577,10 @@
         <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
       ${renderTerminalConsole("helly@candidate:~ % cat match.txt", [
-        { label: "match id", value: payload.match.id || matchId },
-        { label: "status", value: payload.match.statusLabel || "unknown" },
-        { label: "interview", value: payload.interview.stateLabel || "not_started" },
-        { label: "score", value: formatScore(payload.evaluation.finalScore) }
+        { label: "match id", key: "match", value: payload.match.id || matchId },
+        { label: "status", key: "status", value: payload.match.statusLabel || "unknown" },
+        { label: "interview", key: "interview", value: payload.interview.stateLabel || "not_started" },
+        { label: "score", key: "score", value: formatScore(payload.evaluation.finalScore) }
       ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
@@ -635,10 +636,10 @@
         <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
       </section>
       ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat vacancy.txt`, [
-        { label: "vacancy id", value: vacancy.id || vacancyId },
-        { label: "state", value: vacancy.state || "unknown" },
-        { label: "candidates", value: String(stats.candidateCount) },
-        { label: "pipeline", value: String(stats.activePipelineCount) }
+        { label: "vacancy id", key: "vacancy", value: vacancy.id || vacancyId },
+        { label: "state", key: "state", value: vacancy.state || "unknown" },
+        { label: "candidates", key: "candidates", value: String(stats.candidateCount) },
+        { label: "pipeline", key: "pipeline", value: String(stats.activePipelineCount) }
       ])}
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
@@ -704,10 +705,10 @@
         <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
       ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat candidate.txt`, [
-        { label: "match id", value: payload.match.id || matchId },
-        { label: "candidate", value: payload.candidate.name || "candidate" },
-        { label: "recommendation", value: payload.evaluation.recommendation || "n_a" },
-        { label: "score", value: formatScore(payload.evaluation.finalScore) }
+        { label: "match id", key: "match", value: payload.match.id || matchId },
+        { label: "candidate", key: "candidate", value: payload.candidate.name || "candidate" },
+        { label: "recommendation", key: "recommend", value: payload.evaluation.recommendation || "n_a" },
+        { label: "score", key: "score", value: formatScore(payload.evaluation.finalScore) }
       ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },

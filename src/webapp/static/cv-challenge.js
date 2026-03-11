@@ -143,7 +143,8 @@
         <div class="terminal-console-body">
           ${visibleRows.map((row) => `
             <div class="terminal-line">
-              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}<span class="terminal-separator"> ::</span></span>
+              <span class="terminal-key">${escapeHtml(terminalToken(row.key || row.label))}</span>
+              <span class="terminal-separator">::</span>
               <span class="terminal-value">${escapeHtml(row.value)}</span>
             </div>
           `).join("")}
@@ -189,8 +190,8 @@
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
         ${renderTerminalConsole("helly@cv-challenge:~ % boot", [
-          { label: "runtime", value: "telegram_webapp" },
-          { label: "profile_sync", value: "pending" },
+          { label: "runtime", key: "runtime", value: "telegram_webapp" },
+          { label: "profile_sync", key: "profile", value: "pending" },
         ])}
       </section>
     `;
@@ -204,8 +205,8 @@
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
         ${renderTerminalConsole("helly@cv-challenge:~ % access", [
-          { label: "status", value: "locked" },
-          { label: "hint", value: "return_to_dashboard" },
+          { label: "status", key: "status", value: "locked" },
+          { label: "hint", key: "hint", value: "return_to_dashboard" },
         ])}
         <div class="action-row">
           <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
@@ -231,10 +232,10 @@
         <h1><span class="brand-angle">&gt;</span>helly<span class="brand-tail">_</span></h1>
         <p class="copy">${escapeHtml(challenge.subtitle)}</p>
         ${renderTerminalConsole("helly@cv-challenge:~ % cat challenge.txt", [
-          { label: "correct skills", value: String(challenge.correctSkills.length) },
-          { label: "distractors", value: String(challenge.distractorSkills.length) },
-          { label: "stages", value: String(challenge.stages.length) },
-          { label: "lives", value: String(challenge.totalLives) },
+          { label: "correct skills", key: "correct", value: String(challenge.correctSkills.length) },
+          { label: "distractors", key: "wrong_pool", value: String(challenge.distractorSkills.length) },
+          { label: "stages", key: "stages", value: String(challenge.stages.length) },
+          { label: "lives", key: "lives", value: String(challenge.totalLives) },
         ])}
         <div class="meta-strip">
           <article class="meta-card">
@@ -266,8 +267,8 @@
     appEl.innerHTML = `
       <section class="game-shell">
         ${renderTerminalConsole("helly@cv-challenge:~ % ./run", [
-          { label: "mode", value: "live" },
-          { label: "rule", value: "tap_valid_tokens_only" },
+          { label: "mode", key: "mode", value: "live" },
+          { label: "rule", key: "rule", value: "tap_valid_tokens_only" },
         ])}
         <header class="hud">
           <article class="hud-card">
@@ -309,10 +310,10 @@
         <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
         <p class="result-copy">${won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."}</p>
         ${renderTerminalConsole("helly@cv-challenge:~ % cat result.txt", [
-          { label: "score", value: String(state.score) },
-          { label: "stage reached", value: String(state.stageIndex + 1) },
-          { label: "mistakes", value: String(state.totalMistakes) },
-          { label: "status", value: won ? "complete" : "failed" },
+          { label: "score", key: "score", value: String(state.score) },
+          { label: "stage reached", key: "stage", value: String(state.stageIndex + 1) },
+          { label: "mistakes", key: "mistakes", value: String(state.totalMistakes) },
+          { label: "status", key: "status", value: won ? "complete" : "failed" },
         ])}
         <div class="result-meta">
           <article class="result-meta-card">

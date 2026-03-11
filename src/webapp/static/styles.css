@@ -533,7 +533,7 @@ html[data-theme="terminal"] .card-note-terminal::before {
 .terminal-line,
 .terminal-command-row {
   display: grid;
-  grid-template-columns: minmax(88px, 118px) minmax(0, 1fr);
+  grid-template-columns: minmax(72px, 96px) 16px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   font-family:
@@ -552,9 +552,8 @@ html[data-theme="terminal"] .card-note-terminal::before {
 .terminal-key,
 .terminal-metric-key {
   color: var(--muted);
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   text-transform: lowercase;
 }
@@ -1045,12 +1044,11 @@ html[data-theme="terminal"] .app-shell {
 html[data-theme="terminal"] .topbar {
   position: relative;
   margin-bottom: 0;
-  padding: 42px 18px 18px;
+  padding: 18px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-bottom: 0;
   border-radius: 16px 16px 0 0;
-  background:
-    linear-gradient(180deg, #3a3a3d 0, #2f2f32 40px, #1c1c1e 40px, #1c1c1e 100%);
+  background: #1c1c1e;
 }
 
 html[data-theme="terminal"] .topbar::before {
@@ -1058,16 +1056,14 @@ html[data-theme="terminal"] .topbar::before {
 }
 
 html[data-theme="terminal"] .topbar-copy {
-  gap: 10px;
+  gap: 8px;
 }
 
 html[data-theme="terminal"] .topbar-kicker {
-  position: absolute;
-  top: 13px;
-  left: 50%;
-  max-width: calc(100% - 32px);
+  position: static;
+  max-width: none;
   overflow: hidden;
-  transform: translateX(-50%);
+  transform: none;
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -1264,7 +1260,7 @@ html[data-theme="terminal"] .terminal-console-head {
   min-height: 34px;
   padding: 0 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, #3a3a3d, #2f2f32);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 html[data-theme="terminal"] .terminal-led {
@@ -1341,8 +1337,8 @@ html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
   }
 
   .terminal-line {
-    grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
-    gap: 6px;
+    grid-template-columns: minmax(62px, 78px) 14px minmax(0, 1fr);
+    gap: 5px;
   }
 
   .terminal-metric {
@@ -1351,11 +1347,10 @@ html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
   }
 
   html[data-theme="terminal"] .topbar {
-    padding: 40px 14px 14px;
+    padding: 14px;
   }
 
   html[data-theme="terminal"] .topbar-kicker {
-    max-width: calc(100% - 28px);
     font-size: 0.76rem;
   }
 
