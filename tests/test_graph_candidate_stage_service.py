@@ -45,11 +45,21 @@ class FakeCandidateProfilesRepository:
 
 
 class FakeInterviewsRepository:
-    def __init__(self, active_session=None):
+    def __init__(self, active_session=None, current_question=None):
         self.active_session = active_session
+        self.current_question = current_question
 
     def get_active_session_for_candidate(self, candidate_profile_id):
         return self.active_session
+
+    def get_question_by_order(self, session_id, order_no):
+        if self.active_session is None or self.current_question is None:
+            return None
+        if getattr(self.active_session, "id", None) != session_id:
+            return None
+        if getattr(self.active_session, "current_question_order", None) != order_no:
+            return None
+        return self.current_question
 
 
 class FakeMatchesRepository:
@@ -1037,13 +1047,27 @@ def test_graph_candidate_stage_accepts_interview_invite_accept() -> None:
     assert result.stage_status == "ready_for_transition"
 
 
-def test_graph_candidate_stage_handles_interview_in_progress_help() -> None:
+def test_graph_candidate_stage_handles_interview_in_progress_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.CandidateProfilesRepository",
+        lambda _session: FakeCandidateProfilesRepository(SimpleNamespace(id="cp11", state="READY")),
+    )
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.InterviewsRepository",
+        lambda _session: FakeInterviewsRepository(
+            active_session=SimpleNamespace(id="s1", current_question_order=1),
+            current_question=SimpleNamespace(question_text="Walk me through the backend project that is closest to this role."),
+        ),
+    )
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp11", state="READY")
     )
-    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s1"))
+    service.interviews = FakeInterviewsRepository(
+        active_session=SimpleNamespace(id="s1", current_question_order=1),
+        current_question=SimpleNamespace(question_text="Walk me through the backend project that is closest to this role."),
+    )
     service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
@@ -1060,16 +1084,30 @@ def test_graph_candidate_stage_handles_interview_in_progress_help() -> None:
     )
 
     assert reply is not None
-    assert "answer" in reply.lower() or "question" in reply.lower()
+    assert "Walk me through the backend project" in reply
 
 
-def test_graph_candidate_stage_does_not_treat_interview_clarification_as_answer() -> None:
+def test_graph_candidate_stage_does_not_treat_interview_clarification_as_answer(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.CandidateProfilesRepository",
+        lambda _session: FakeCandidateProfilesRepository(SimpleNamespace(id="cp11a", state="READY")),
+    )
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.InterviewsRepository",
+        lambda _session: FakeInterviewsRepository(
+            active_session=SimpleNamespace(id="s1a", current_question_order=1),
+            current_question=SimpleNamespace(question_text="What did you personally implement there?"),
+        ),
+    )
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
         SimpleNamespace(id="cp11a", state="READY")
     )
-    service.interviews = FakeInterviewsRepository(active_session=SimpleNamespace(id="s1a"))
+    service.interviews = FakeInterviewsRepository(
+        active_session=SimpleNamespace(id="s1a", current_question_order=1),
+        current_question=SimpleNamespace(question_text="What did you personally implement there?"),
+    )
     service.matches = FakeMatchesRepository()
 
     user = SimpleNamespace(
@@ -1090,6 +1128,47 @@ def test_graph_candidate_stage_does_not_treat_interview_clarification_as_answer(
     assert result.action_accepted is False
     assert result.proposed_action is None
     assert result.reply_text is not None
+    assert "What did you personally implement there?" in result.reply_text
+
+
+def test_graph_candidate_stage_repeats_current_question_after_brief_confirmation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.CandidateProfilesRepository",
+        lambda _session: FakeCandidateProfilesRepository(SimpleNamespace(id="cp11b", state="READY")),
+    )
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.InterviewsRepository",
+        lambda _session: FakeInterviewsRepository(
+            active_session=SimpleNamespace(id="s1b", current_question_order=1),
+            current_question=SimpleNamespace(question_text="How did you design the rules flow and keep it safe under load?"),
+        ),
+    )
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp11b", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository(
+        active_session=SimpleNamespace(id="s1b", current_question_order=1),
+        current_question=SimpleNamespace(question_text="How did you design the rules flow and keep it safe under load?"),
+    )
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u14b",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Да, отлично",
+    )
+
+    assert reply is not None
+    assert "How did you design the rules flow" in reply
 
 
 def test_graph_candidate_stage_accepts_interview_in_progress_answer() -> None:

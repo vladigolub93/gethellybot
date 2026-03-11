@@ -25,8 +25,8 @@ Output:
 
 ```json
 {
-  "mode": "wait_for_confirmation",
-  "utterance": "Hi Alex, thanks for joining. I reviewed your profile and prepared a few questions about your experience for this Senior Python Engineer role. This should take around five to ten minutes. Does that sound good?",
+  "mode": "opening",
+  "utterance": "Hi Alex, thanks for joining. I reviewed your profile and prepared a few questions about your experience for this Senior Python Engineer role. This should take around five to ten minutes. First question: can you walk me through the backend system from your recent project that is closest to this role?",
   "current_question_id": null,
   "current_question_type": null,
   "answer_quality": null,

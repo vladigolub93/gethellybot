@@ -66,6 +66,18 @@ class InterviewService:
         return question.question_text
 
     @staticmethod
+    def _ensure_opening_contains_question(opening_text: str | None, question_text: str | None) -> str:
+        opening = (opening_text or "").strip()
+        question = (question_text or "").strip()
+        if not question:
+            return opening
+        if question in opening:
+            return opening
+        if not opening:
+            return question
+        return f"{opening}\n\nFirst question:\n{question}"
+
+    @staticmethod
     def _vacancy_context(vacancy) -> dict:
         return {
             "role_title": getattr(vacancy, "role_title", None),
@@ -239,12 +251,16 @@ class InterviewService:
         first_question = self.interviews.get_question_by_order(session.id, session.current_question_order)
         if first_question is not None and first_question.asked_at is None:
             self.interviews.mark_question_asked(first_question)
-        return self._render_interview_utterance(
+        opening_text = self._render_interview_utterance(
             mode="opening",
             candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
             vacancy=vacancy,
             session=session,
             current_question=first_question,
+        )
+        return self._ensure_opening_contains_question(
+            opening_text=opening_text,
+            question_text=self._question_prompt_text(first_question) if first_question is not None else None,
         )
 
     def _start_next_queued_interview_for_candidate(

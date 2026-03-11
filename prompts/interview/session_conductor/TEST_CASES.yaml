@@ -9,9 +9,10 @@ cases:
         role_title: Senior Python Engineer
       stage: opening
     expected:
-      mode: wait_for_confirmation
+      mode: opening
       mentions_demo: false
       mentions_role: true
+      asks_first_question: true
   - id: strong_answer_deepen_once
     input:
       current_question:

@@ -1401,6 +1401,7 @@ def interview_in_progress_decision_with_llm(
     current_step_guidance: str | None = None,
     recent_context: list[str] | None = None,
 ) -> LLMResult:
+    normalized_text = (latest_user_message or "").strip()
     result = _client.parse(
         schema=InterviewInProgressDecisionSchema,
         system_prompt=build_user_facing_grounded_system_prompt("interview", "in_progress_decision"),
@@ -1411,7 +1412,7 @@ def interview_in_progress_decision_with_llm(
             recent_context=recent_context,
         ),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="interview_in_progress_decision_llm_v1",
+        prompt_version="interview_in_progress_decision_llm_v2",
     )
     proposed_action = result.payload.get("proposed_action")
     if proposed_action not in {None, "answer_current_question", "accept_interview", "skip_opportunity", "cancel_interview"}:
@@ -1419,6 +1420,20 @@ def interview_in_progress_decision_with_llm(
     intent = _clean_text(result.payload.get("intent"), limit=80) or "help"
     response_text = _clean_text(result.payload.get("response_text"), limit=400)
     answer_text = _clean_text(result.payload.get("answer_text"), limit=4000)
+    if current_question_text:
+        if _is_interview_start_confirmation(normalized_text):
+            proposed_action = None
+            intent = "help"
+            answer_text = None
+            response_text = _current_question_help_text(
+                current_question_text,
+                preface="Great. Here is the first interview question:",
+            )
+        elif _should_repeat_current_question(normalized_text):
+            proposed_action = None
+            intent = "help"
+            answer_text = None
+            response_text = _current_question_help_text(current_question_text)
     if proposed_action == "answer_current_question" and not answer_text:
         answer_text = _clean_text(latest_user_message, limit=4000)
     return LLMResult(
@@ -1615,7 +1630,7 @@ def conduct_interview_turn_with_llm(
             follow_up_reason=follow_up_reason,
         ),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="interview_session_conductor_llm_v1",
+        prompt_version="interview_session_conductor_llm_v2",
     )
     payload = {
         "mode": (result.payload.get("mode") or mode).strip().lower(),
@@ -1851,6 +1866,84 @@ def safe_parse_candidate_questions(session, text: str) -> LLMResult:
         payload=parse_candidate_questions(text),
         model_name="baseline-deterministic",
         prompt_version="baseline_candidate_questions_parse_v1",
+    )
+
+
+def _current_question_help_text(current_question_text: str | None, *, preface: str | None = None) -> str:
+    question = (current_question_text or "").strip()
+    if not question:
+        return "Answer the current interview question in your own words. If something is unclear, ask me to clarify one specific part."
+    lead = (preface or "Here is the current interview question:").strip()
+    return f"{lead}\n{question}\n\nYou can answer in text, voice, or video."
+
+
+def _is_interview_start_confirmation(text: str) -> bool:
+    command = normalize_command_text(text)
+    cleaned = " ".join(re.sub(r"[^\w\s]+", " ", command).split())
+    candidates = {command, cleaned}
+    return any(
+        candidate in {
+        "yes",
+        "yes sure",
+        "yes sounds good",
+        "sounds good",
+        "sure",
+        "ok",
+        "okay",
+        "lets go",
+        "let's go",
+        "go ahead",
+        "да",
+        "да отлично",
+        "давай",
+        "ок",
+        "хорошо",
+        "супер",
+        }
+        for candidate in candidates
+    )
+
+
+def _should_repeat_current_question(text: str) -> bool:
+    normalized = normalize_command_text(text)
+    cleaned = " ".join(re.sub(r"[^\w\s]+", " ", normalized).split())
+    lowered = (text or "").lower().strip()
+    repeat_commands = {
+        "repeat",
+        "repeat question",
+        "repeat the question",
+        "what is the question",
+        "where is the question",
+        "what was the question",
+        "can you repeat",
+        "can you repeat the question",
+        "can you clarify",
+        "what do you mean",
+        "what exactly are you asking",
+        "what exactly you are asking",
+        "а где вопрос",
+        "какой вопрос",
+        "повтори вопрос",
+        "повтори пожалуйста вопрос",
+        "в чем вопрос",
+        "что за вопрос",
+        "уточни вопрос",
+    }
+    if normalized in repeat_commands or cleaned in repeat_commands:
+        return True
+    return any(
+        phrase in lowered
+        for phrase in [
+            "where is the question",
+            "what is the question",
+            "repeat the question",
+            "what exactly are you asking",
+            "what exactly you are asking",
+            "а где вопрос",
+            "повтори вопрос",
+            "какой вопрос",
+            "в чем вопрос",
+        ]
     )
 
 
@@ -2165,6 +2258,31 @@ def safe_interview_in_progress_decision(
         "needs_follow_up": True,
         "reason_code": "interview_in_progress_help_fallback",
     }
+    if current_question_text and _is_interview_start_confirmation(normalized_text):
+        return LLMResult(
+            payload={
+                **payload,
+                "response_text": _current_question_help_text(
+                    current_question_text,
+                    preface="Great. Here is the first interview question:",
+                ),
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_repeat_current_question",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
+    if current_question_text and _should_repeat_current_question(normalized_text):
+        return LLMResult(
+            payload={
+                **payload,
+                "response_text": _current_question_help_text(current_question_text),
+                "needs_follow_up": False,
+                "reason_code": "interview_in_progress_repeat_current_question",
+            },
+            model_name="baseline-deterministic",
+            prompt_version="baseline_interview_in_progress_decision_v1",
+        )
     if command in {"accept interview", "accept"}:
         return LLMResult(
             payload={

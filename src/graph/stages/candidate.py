@@ -370,6 +370,10 @@ def build_candidate_stage_reply_node(session):
         state.follow_up_needed = False
         state.confidence = 0.85
         if state.parsed_input.get("intent") == "help":
+            if state.active_stage == "INTERVIEW_IN_PROGRESS" and state.reply_text:
+                state.follow_up_needed = True
+                state.follow_up_question = state.reply_text
+                return state
             result = safe_state_assistance_decision(
                 session,
                 context=context,

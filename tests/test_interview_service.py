@@ -334,6 +334,28 @@ def test_accept_invitation_starts_interview() -> None:
     assert len(service.interviews.questions) == 4
 
 
+def test_accept_invitation_always_includes_first_question_in_opening(monkeypatch: pytest.MonkeyPatch) -> None:
+    service, candidate, match, _vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+
+    monkeypatch.setattr(
+        "src.interview.service.safe_conduct_interview_turn",
+        lambda *args, **kwargs: SimpleNamespace(payload={"utterance": "Hi — I reviewed your profile and prepared a few questions."}),
+    )
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert "First question:" in result.notification_text
+    assert service.interviews.questions[0].question_text in result.notification_text
+
+
 def test_accept_invitation_starts_interview_when_match_id_is_provided() -> None:
     service, candidate, match, _vacancy, _matching_run = _build_service()
     service.matches.mark_invited(match)
