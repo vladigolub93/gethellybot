@@ -232,28 +232,6 @@
       .replace(/^_+|_+$/g, "") || "value";
   }
 
-  function renderTerminalConsole(title, rows) {
-    if (!isTerminalTheme()) return "";
-    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
-    if (!visibleRows.length) return "";
-    return `
-      <section class="terminal-console">
-        <div class="terminal-console-head">
-          <span class="terminal-title">${escapeHtml(title)}</span>
-        </div>
-        <div class="terminal-console-body">
-          ${visibleRows.map((row) => `
-            <div class="terminal-line">
-              <span class="terminal-key">${escapeHtml(terminalToken(row.key || row.label))}</span>
-              <span class="terminal-separator">::</span>
-              <span class="terminal-value">${escapeHtml(row.value)}</span>
-            </div>
-          `).join("")}
-        </div>
-      </section>
-    `;
-  }
-
   function renderStatsStrip(items) {
     const visibleItems = (items || []).filter((item) => item && item.value !== null && item.value !== undefined && item.value !== "");
     if (!visibleItems.length) return "";
@@ -496,20 +474,13 @@
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="manager-vacancy:${item.id}">
-              <div class="card-head">
-                <div>
-                  <p class="eyebrow">${isTerminalTheme() ? "vacancy_record" : "Vacancy"}</p>
+            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="manager-vacancy:${item.id}">
+              <div class="card-head card-head-compact">
+                <div class="card-title-wrap">
                   <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
-              ${isTerminalTheme() ? `
-                <div class="terminal-command-row terminal-command-row-card">
-                  <span class="terminal-prompt">&gt;</span>
-                  <span class="terminal-command">inspect /vacancies/${escapeHtml(item.id)}</span>
-                </div>
-              ` : ""}
               ${renderCardMetrics([
                 { label: "Candidates", value: String(item.candidateCount) },
                 { label: "In pipeline", value: String(item.activePipelineCount) },
@@ -535,11 +506,6 @@
           <h2>All Vacancies</h2>
           <p>${isTerminalTheme() ? "Production-wide read-only shell across all live vacancy records." : "Read-only visibility across the full Helly production pipeline."}</p>
         </section>
-        ${renderTerminalConsole("helly@admin:~ % tail -f production.log", [
-          { label: "vacancies", key: "vacancies", value: String(items.length) },
-          { label: "candidate records", key: "candidates", value: String(totalCandidateCount) },
-          { label: "interviews completed", key: "completed", value: String(totalCompletedInterviewCount) }
-        ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
@@ -547,20 +513,13 @@
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="admin-vacancy:${item.id}">
-              <div class="card-head">
-                <div>
-                  <p class="eyebrow">${isTerminalTheme() ? "vacancy_record" : "Vacancy"}</p>
+            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="admin-vacancy:${item.id}">
+              <div class="card-head card-head-compact">
+                <div class="card-title-wrap">
                   <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
-              ${isTerminalTheme() ? `
-                <div class="terminal-command-row terminal-command-row-card">
-                  <span class="terminal-prompt">&gt;</span>
-                  <span class="terminal-command">inspect /admin/vacancies/${escapeHtml(item.id)}</span>
-                </div>
-              ` : ""}
               ${renderCardMetrics([
                 { label: "Manager", value: item.managerName || "Unknown" },
                 { label: "Candidates", value: String(item.candidateCount) },
