@@ -51,7 +51,40 @@ class FakeWebAppService:
         }
 
     def list_candidate_opportunities(self, _session_context):
-        return {"profile": {"location": "Warsaw"}, "items": [{"id": "match-1"}]}
+        return {
+            "profile": {"location": "Warsaw"},
+            "cvChallenge": {"eligible": True, "launchUrl": "https://example.com/webapp/cv-challenge"},
+            "items": [{"id": "match-1"}],
+        }
+
+    def bootstrap_candidate_cv_challenge(self, _session_context):
+        return {
+            "eligible": True,
+            "attempt": {"id": "attempt-1"},
+            "challenge": {"title": "Helly CV Challenge"},
+        }
+
+    def finish_candidate_cv_challenge(
+        self,
+        _session_context,
+        *,
+        attempt_id,
+        score,
+        lives_left,
+        stage_reached,
+        won,
+        result_json,
+    ):
+        return {
+            "attempt": {
+                "id": attempt_id,
+                "score": score,
+                "livesLeft": lives_left,
+                "stageReached": stage_reached,
+                "won": won,
+                "result": result_json,
+            }
+        }
 
 
 def test_webapp_index_route_serves_html() -> None:
@@ -62,6 +95,16 @@ def test_webapp_index_route_serves_html() -> None:
 
     assert response.status_code == 200
     assert "Helly Dashboard" in response.text
+
+
+def test_cv_challenge_route_serves_html() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.get("/webapp/cv-challenge")
+
+    assert response.status_code == 200
+    assert "Helly CV Challenge" in response.text
 
 
 def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
@@ -76,6 +119,22 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
         "/webapp/api/candidate/opportunities",
         headers={"Authorization": "Bearer token-1"},
     )
+    challenge_bootstrap_response = client.get(
+        "/webapp/api/candidate/cv-challenge/bootstrap",
+        headers={"Authorization": "Bearer token-1"},
+    )
+    challenge_finish_response = client.post(
+        "/webapp/api/candidate/cv-challenge/finish",
+        headers={"Authorization": "Bearer token-1"},
+        json={
+            "attemptId": "attempt-1",
+            "score": 9,
+            "livesLeft": 1,
+            "stageReached": 3,
+            "won": True,
+            "result": {"missedSkills": ["Docker"]},
+        },
+    )
 
     assert auth_response.status_code == 200
     assert auth_response.json()["session"]["role"] == "candidate"
@@ -83,3 +142,7 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
     assert session_response.json()["capabilities"]["candidateDashboard"] is True
     assert candidate_response.status_code == 200
     assert candidate_response.json()["items"][0]["id"] == "match-1"
+    assert challenge_bootstrap_response.status_code == 200
+    assert challenge_bootstrap_response.json()["attempt"]["id"] == "attempt-1"
+    assert challenge_finish_response.status_code == 200
+    assert challenge_finish_response.json()["attempt"]["score"] == 9

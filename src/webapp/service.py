@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
+from src.cv_challenge.service import CandidateCvChallengeService
 from src.config.settings import get_settings
 from src.db.models.core import User
 from src.db.models.matching import Match
@@ -54,6 +55,7 @@ class WebAppService:
         self.matches = MatchingRepository(session)
         self.interviews = InterviewsRepository(session)
         self.evaluations = EvaluationsRepository(session)
+        self.cv_challenge = CandidateCvChallengeService(session)
 
     def authenticate_init_data(self, init_data: str) -> Dict[str, Any]:
         try:
@@ -115,8 +117,37 @@ class WebAppService:
         items = [self._serialize_candidate_opportunity_card(match) for match in matches]
         return {
             "profile": self._serialize_candidate_profile(profile, current_version),
+            "cvChallenge": self.cv_challenge.build_dashboard_card(user_id),
             "items": items,
         }
+
+    def bootstrap_candidate_cv_challenge(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
+        self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
+        user_id = self._require_session_user_id(session_context)
+        return self.cv_challenge.bootstrap_for_candidate(user_id)
+
+    def finish_candidate_cv_challenge(
+        self,
+        session_context: WebAppSessionContext,
+        *,
+        attempt_id: str,
+        score: int,
+        lives_left: int,
+        stage_reached: int,
+        won: bool,
+        result_json: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
+        user_id = self._require_session_user_id(session_context)
+        return self.cv_challenge.finish_attempt(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            score=score,
+            lives_left=lives_left,
+            stage_reached=stage_reached,
+            won=won,
+            result_json=result_json,
+        )
 
     def get_candidate_opportunity_detail(
         self,
@@ -287,6 +318,7 @@ class WebAppService:
             "candidateDashboard": role == WEBAPP_ROLE_CANDIDATE,
             "managerDashboard": role == WEBAPP_ROLE_HIRING_MANAGER,
             "adminDashboard": role == WEBAPP_ROLE_ADMIN,
+            "candidateCvChallenge": role == WEBAPP_ROLE_CANDIDATE,
         }
 
     def _require_role(self, session_context: WebAppSessionContext, allowed_roles: set) -> None:

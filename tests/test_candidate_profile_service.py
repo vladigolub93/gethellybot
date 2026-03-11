@@ -734,6 +734,11 @@ def test_execute_ready_action_handles_no_open_vacancies() -> None:
     service.matching = FakeMatchingRepository()
     service.vacancies = FakeVacanciesRepository()
     service.queue = FakeQueue()
+    service.cv_challenge = SimpleNamespace(
+        build_invitation_payload=lambda user_id: {
+            "launchUrl": "https://helly.test/webapp/cv-challenge",
+        }
+    )
 
     user = SimpleNamespace(id=uuid4())
     fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
@@ -747,6 +752,7 @@ def test_execute_ready_action_handles_no_open_vacancies() -> None:
     assert result is not None
     assert result.status == "no_open_vacancies"
     assert service.queue.messages == []
+    assert result.reply_markup["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
 
 
 def test_verification_instruction_is_returned_for_non_video_input() -> None:

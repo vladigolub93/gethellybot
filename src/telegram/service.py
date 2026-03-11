@@ -308,6 +308,7 @@ class TelegramUpdateService:
                         user_id=user.id,
                         template_key=ready_result.notification_template,
                         text=ready_result.notification_text,
+                        reply_markup=ready_result.reply_markup,
                         allow_duplicate=True,
                     )
                 ]

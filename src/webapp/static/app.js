@@ -222,6 +222,20 @@
     return `<p class="card-note">${escapeHtml(value)}</p>`;
   }
 
+  function renderActionPanel(challenge) {
+    if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
+    return `
+      <section class="detail-panel action-panel">
+        <div class="action-panel-copy">
+          <p class="eyebrow">While you wait</p>
+          <h3 class="section-title">Play Helly CV Challenge</h3>
+          <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
+        </div>
+        <button class="action-button" type="button" data-open-url="${escapeHtml(challenge.launchUrl)}">Play challenge</button>
+      </section>
+    `;
+  }
+
   function renderDetailSection(title, rows) {
     return `
       <section class="detail-panel">
@@ -307,6 +321,7 @@
           { label: "In interview", value: String(activeInterviewCount) },
           { label: "Completed", value: String(completedInterviewCount) }
         ])}
+        ${renderActionPanel(payload.cvChallenge)}
         <section class="detail-panel">
           <h3 class="section-title">Profile Snapshot</h3>
           <dl class="detail-grid">
@@ -337,6 +352,7 @@
         <p class="footer-note">Read-only mode. Apply, skip and interview actions still happen in the bot chat.</p>
       `;
       bindCards();
+      bindActionButtons();
       return;
     }
 
@@ -580,6 +596,16 @@
           tapFeedback();
           pushRoute(route);
         }
+      });
+    });
+  }
+
+  function bindActionButtons() {
+    Array.from(document.querySelectorAll("[data-open-url]")).forEach((node) => {
+      const targetUrl = node.getAttribute("data-open-url");
+      node.addEventListener("click", () => {
+        tapFeedback();
+        window.location.assign(targetUrl);
       });
     });
   }

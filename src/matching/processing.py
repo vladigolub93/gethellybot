@@ -1,5 +1,8 @@
 from __future__ import annotations
+from uuid import UUID
 
+from src.cv_challenge.service import CandidateCvChallengeService
+from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.vacancies import VacanciesRepository
@@ -9,18 +12,21 @@ from src.matching.policy import MATCH_BATCH_SIZE, MAX_ACTIVE_INTERVIEW_CANDIDATE
 from src.matching.review import MatchingReviewService
 from src.matching.service import MatchingService
 from src.matching.waves import InviteWaveService
+from src.telegram.keyboards import candidate_cv_challenge_keyboard
 
 
 class MatchingProcessingService:
     def __init__(self, session):
         self.session = session
         self.queue = DatabaseQueueClient(session)
+        self.candidate_profiles = CandidateProfilesRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.matching = MatchingRepository(session)
         self.notifications = NotificationsRepository(session)
         self.matching_service = MatchingService(session)
         self.review_service = MatchingReviewService(session)
         self.wave_service = InviteWaveService(session)
+        self.cv_challenge = CandidateCvChallengeService(session)
 
     def process_job(self, job) -> dict:
         if job.job_type == "matching_candidate_ready_v1":
@@ -51,10 +57,34 @@ class MatchingProcessingService:
                     entity_id=vacancy.id,
                 )
             )
+        if not open_vacancies and candidate_profile_id:
+            self._notify_candidate_waiting_game(candidate_profile_id)
         return {
             "candidate_profile_id": candidate_profile_id,
             "open_vacancies_count": len(open_vacancies),
         }
+
+    def _notify_candidate_waiting_game(self, candidate_profile_id: str) -> None:
+        try:
+            profile_id = UUID(str(candidate_profile_id))
+        except (TypeError, ValueError):
+            return
+        profile = self.candidate_profiles.get_by_id(profile_id)
+        if profile is None:
+            return
+        invitation = self.cv_challenge.build_invitation_payload(profile.user_id)
+        if invitation is None:
+            return
+        self.notifications.create(
+            user_id=profile.user_id,
+            entity_type=invitation["entityType"],
+            entity_id=profile.id,
+            template_key="candidate_ready",
+            payload_json={
+                "text": invitation["text"],
+                "reply_markup": candidate_cv_challenge_keyboard(invitation["launchUrl"]),
+            },
+        )
 
     def _process_vacancy_run(self, job) -> dict:
         payload = job.payload_json or {}

@@ -16,6 +16,7 @@ from src.candidate_profile.question_prompts import (
 from src.candidate_profile.verification import build_verification_phrase
 from src.candidate_profile.verification import format_verification_phrase_feedback
 from src.candidate_profile.verification import phrase_matches_verification
+from src.cv_challenge.service import CandidateCvChallengeService
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CONSENTED,
     CANDIDATE_STATE_CONTACT_COLLECTED,
@@ -39,6 +40,7 @@ from src.jobs.queue import JobMessage
 from src.llm.service import safe_build_deletion_confirmation, safe_parse_candidate_questions
 from src.messaging.service import MessagingService
 from src.state.service import StateService
+from src.telegram.keyboards import candidate_cv_challenge_keyboard
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,7 @@ class CandidateReadyActionResult:
     status: str
     notification_template: str
     notification_text: str
+    reply_markup: Optional[dict] = None
 
 
 class CandidateProfileService:
@@ -93,6 +96,7 @@ class CandidateProfileService:
         self.messaging = MessagingService(session)
         self.state_service = StateService(session)
         self.queue = DatabaseQueueClient(session)
+        self.cv_challenge = CandidateCvChallengeService(session)
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
@@ -632,11 +636,17 @@ class CandidateProfileService:
 
         open_vacancies = self.vacancies.get_open_vacancies()
         if not open_vacancies:
+            challenge_payload = self.cv_challenge.build_invitation_payload(user.id)
             return CandidateReadyActionResult(
                 status="no_open_vacancies",
                 notification_template="candidate_ready",
                 notification_text=self._copy(
                     "I checked current open roles. Nothing is open right now, but I’ll keep watching and message you when a strong match appears."
+                ),
+                reply_markup=(
+                    candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
+                    if challenge_payload is not None
+                    else None
                 ),
             )
 

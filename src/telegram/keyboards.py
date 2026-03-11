@@ -73,6 +73,19 @@ def candidate_vacancy_review_keyboard(vacancy_count: int) -> dict:
     }
 
 
+def candidate_cv_challenge_keyboard(url: str) -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Play CV Challenge",
+                    "web_app": {"url": url},
+                }
+            ]
+        ]
+    }
+
+
 def deletion_confirmation_keyboard(entity_type: str) -> dict:
     confirm_text = "Confirm delete profile" if entity_type == "candidate" else "Confirm delete vacancy"
     return {

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from uuid import uuid4
 
 from src.matching.processing import MatchingProcessingService
 
@@ -45,6 +46,26 @@ class FakeNotificationsRepository:
     def create(self, **kwargs):
         self.rows.append(SimpleNamespace(**kwargs))
         return self.rows[-1]
+
+
+class FakeCandidateProfilesRepository:
+    def __init__(self, profile=None):
+        self.profile = profile
+
+    def get_by_id(self, profile_id):
+        if self.profile is None:
+            return None
+        if str(getattr(self.profile, "id", "")) == str(profile_id):
+            return self.profile
+        return None
+
+
+class FakeCvChallengeService:
+    def __init__(self, invitation=None):
+        self.invitation = invitation
+
+    def build_invitation_payload(self, user_id):
+        return self.invitation
 
 
 class FakeReviewService:
@@ -187,6 +208,38 @@ def test_matching_processing_routes_invite_wave_reminder_job() -> None:
 
     assert result["invite_wave_id"] == "wave-1"
     assert result["reminder_sent_count"] == 2
+
+
+def test_matching_processing_notifies_candidate_about_cv_challenge_when_waiting() -> None:
+    profile_id = uuid4()
+    profile = SimpleNamespace(id=profile_id, user_id="user-1")
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.candidate_profiles = FakeCandidateProfilesRepository(profile=profile)
+    service.vacancies = FakeVacanciesRepository()
+    service.matching = FakeMatchingRepository()
+    service.notifications = FakeNotificationsRepository()
+    service.cv_challenge = FakeCvChallengeService(
+        invitation={
+            "entityType": "candidate_profile",
+            "entityId": "candidate-1",
+            "text": "Try the challenge.",
+            "launchUrl": "https://helly.test/webapp/cv-challenge",
+        }
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            job_type="matching_candidate_ready_v1",
+            payload_json={"candidate_profile_id": str(profile_id)},
+        )
+    )
+
+    assert result["open_vacancies_count"] == 0
+    assert len(service.notifications.rows) == 1
+    notification = service.notifications.rows[0]
+    assert notification.user_id == "user-1"
+    assert notification.payload_json["reply_markup"]["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
 
 
 def test_matching_processing_notifies_manager_after_manual_refresh_with_new_candidates() -> None:

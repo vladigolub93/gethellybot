@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Header
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -14,6 +16,15 @@ router = APIRouter(prefix="/webapp", tags=["webapp"])
 
 class TelegramWebAppAuthRequest(BaseModel):
     initData: str
+
+
+class CandidateCvChallengeFinishRequest(BaseModel):
+    attemptId: str
+    score: int
+    livesLeft: int
+    stageReached: int
+    won: bool
+    result: Optional[dict] = None
 
 
 def _service(db: Session = Depends(get_db_session)) -> WebAppService:
@@ -31,6 +42,12 @@ def _session_context(
 @router.get("/", response_class=FileResponse)
 def webapp_index():
     return FileResponse(WEBAPP_STATIC_DIR / "index.html")
+
+
+@router.get("/cv-challenge", response_class=FileResponse)
+@router.get("/cv-challenge/", response_class=FileResponse)
+def cv_challenge_index():
+    return FileResponse(WEBAPP_STATIC_DIR / "cv-challenge.html")
 
 
 @router.post("/api/auth/telegram")
@@ -64,6 +81,31 @@ def candidate_opportunity_detail(
     service: WebAppService = Depends(_service),
 ):
     return service.get_candidate_opportunity_detail(session_context, match_id)
+
+
+@router.get("/api/candidate/cv-challenge/bootstrap")
+def candidate_cv_challenge_bootstrap(
+    session_context=Depends(_session_context),
+    service: WebAppService = Depends(_service),
+):
+    return service.bootstrap_candidate_cv_challenge(session_context)
+
+
+@router.post("/api/candidate/cv-challenge/finish")
+def candidate_cv_challenge_finish(
+    payload: CandidateCvChallengeFinishRequest,
+    session_context=Depends(_session_context),
+    service: WebAppService = Depends(_service),
+):
+    return service.finish_candidate_cv_challenge(
+        session_context,
+        attempt_id=payload.attemptId,
+        score=payload.score,
+        lives_left=payload.livesLeft,
+        stage_reached=payload.stageReached,
+        won=payload.won,
+        result_json=payload.result,
+    )
 
 
 @router.get("/api/hiring-manager/vacancies")
