@@ -24,21 +24,50 @@ class FakeCandidateProfilesRepository:
     def get_current_version(self, _profile):
         return self.version
 
+    def get_by_id(self, _profile_id):
+        return self.profile
+
 
 class FakeMatchingRepository:
+    ACTIVE_MATCH_STATUSES = frozenset(
+        {
+            "shortlisted",
+            "manager_decision_pending",
+            "candidate_decision_pending",
+            "candidate_applied",
+            "manager_interview_requested",
+        }
+    )
+
     def __init__(self, matches):
         self.matches = list(matches)
 
     def list_all_for_candidate(self, _candidate_profile_id):
         return list(self.matches)
 
+    def list_all_for_vacancy(self, _vacancy_id):
+        return list(self.matches)
+
+    def get_by_id(self, match_id):
+        for match in self.matches:
+            if str(match.id) == str(match_id):
+                return match
+        return None
+
 
 class FakeVacanciesRepository:
-    def __init__(self, vacancy):
+    def __init__(self, vacancy, *, version=None):
         self.vacancy = vacancy
+        self.version = version
 
     def get_by_id(self, _vacancy_id):
         return self.vacancy
+
+    def get_by_manager_user_id(self, _user_id):
+        return [self.vacancy]
+
+    def get_current_version(self, _vacancy):
+        return self.version
 
 
 class FakeInterviewsRepository:
@@ -87,6 +116,22 @@ class FakeCvChallengeWriteService:
                 "progress": kwargs["progress_json"],
             }
         }
+
+
+class FakeUsersRepository:
+    def __init__(self, users_by_id):
+        self.users_by_id = dict(users_by_id)
+
+    def get_by_id(self, user_id):
+        return self.users_by_id.get(str(user_id))
+
+
+class FakeEvaluationsRepository:
+    def __init__(self, evaluation):
+        self.evaluation = evaluation
+
+    def get_by_match_id(self, _match_id):
+        return self.evaluation
 
 
 def test_list_candidate_opportunities_includes_challenge_card_and_serialized_matches() -> None:
@@ -175,8 +220,6 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             "workFormat": "remote",
             "stage": "candidate_decision_pending",
             "stageLabel": "Waiting for your reply",
-            "interviewState": "INVITED",
-            "interviewStateLabel": "Invited",
             "updatedAt": now.isoformat(),
         }
     ]
@@ -267,3 +310,133 @@ def test_save_candidate_cv_challenge_progress_commits_result() -> None:
     assert str(service.cv_challenge.progress_payload["user_id"]) == str(user_id)
     assert service.cv_challenge.progress_payload["attempt_id"] == "attempt-2"
     assert session.commit_calls == 1
+
+
+def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
+    manager_user_id = uuid4()
+    candidate_user_id = uuid4()
+    profile_id = uuid4()
+    vacancy_id = uuid4()
+    match_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    vacancy = SimpleNamespace(
+        id=vacancy_id,
+        manager_user_id=manager_user_id,
+        role_title="Node.js Developer",
+        state="OPEN",
+        budget_min=6000,
+        budget_max=7000,
+        budget_currency="USD",
+        budget_period="month",
+        countries_allowed_json=["UA"],
+        work_format="remote",
+        team_size="8",
+        project_description="Realtime pricing platform",
+        primary_tech_stack_json=["Node.js", "PostgreSQL"],
+        seniority_normalized="senior",
+        opened_at=now,
+        updated_at=now,
+    )
+    service = WebAppService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=vacancy,
+        version=SimpleNamespace(
+            summary_json={
+                "approval_summary_text": "Build and run a pricing platform.",
+                "headline": "Senior Node.js role",
+                "skills": ["Node.js", "PostgreSQL"],
+            }
+        ),
+    )
+    service.matches = FakeMatchingRepository(
+        matches=[
+            SimpleNamespace(
+                id=match_id,
+                vacancy_id=vacancy_id,
+                candidate_profile_id=profile_id,
+                status="approved",
+                updated_at=now,
+                invitation_sent_at=now,
+                candidate_response_at=now,
+                manager_decision_at=now,
+            )
+        ]
+    )
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(
+            id=profile_id,
+            user_id=candidate_user_id,
+            location_text="Kyiv",
+            country_code="UA",
+            work_format="remote",
+            salary_min=5000,
+            salary_max=6000,
+            salary_currency="USD",
+            salary_period="month",
+        ),
+        version=SimpleNamespace(
+            summary_json={
+                "approval_summary_text": "Built scalable Node.js backends.",
+                "skills": ["Node.js", "TypeScript"],
+            }
+        ),
+    )
+    service.users = FakeUsersRepository(
+        {
+            str(manager_user_id): SimpleNamespace(
+                id=manager_user_id,
+                display_name="Manager Name",
+                username="manager_name",
+            ),
+            str(candidate_user_id): SimpleNamespace(
+                id=candidate_user_id,
+                display_name="Candidate Name",
+                username="candidate_name",
+            ),
+        }
+    )
+    service.interviews = FakeInterviewsRepository(interview=None)
+    service.evaluations = FakeEvaluationsRepository(evaluation=None)
+
+    session_context = SimpleNamespace(role="hiring_manager", user_id=str(manager_user_id))
+
+    vacancies_payload = service.list_manager_vacancies(session_context)
+    matches_payload = service.list_manager_vacancy_matches(session_context, str(vacancy_id))
+    match_detail_payload = service.get_manager_match_detail(session_context, str(match_id))
+
+    assert vacancies_payload["items"] == [
+        {
+            "id": str(vacancy_id),
+            "roleTitle": "Node.js Developer",
+            "state": "OPEN",
+            "budget": "6000-7000 USD per month",
+            "candidateCount": 1,
+            "activePipelineCount": 0,
+            "connectedCount": 1,
+            "updatedAt": now.isoformat(),
+        }
+    ]
+    assert matches_payload["items"] == [
+        {
+            "id": str(match_id),
+            "candidateProfileId": str(profile_id),
+            "candidateName": "Candidate Name",
+            "location": "Kyiv",
+            "salaryExpectation": "5000-6000 USD per month",
+            "workFormat": "remote",
+            "stage": "approved",
+            "stageLabel": "Contacts shared",
+            "summary": {
+                "headline": None,
+                "approvalSummaryText": "Built scalable Node.js backends.",
+                "skills": ["Node.js", "TypeScript"],
+                "yearsExperience": None,
+                "targetRole": None,
+            },
+            "updatedAt": now.isoformat(),
+        }
+    ]
+    assert match_detail_payload["match"]["statusLabel"] == "Contacts shared"
+    assert match_detail_payload["interview"]["state"] is None
+    assert match_detail_payload["evaluation"]["interviewSummary"] is None

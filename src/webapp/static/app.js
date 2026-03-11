@@ -663,7 +663,12 @@
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
         { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
-        { label: "Score", value: formatScore(payload.evaluation.finalScore) }
+        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
+      ])}
+      ${renderDetailSection("Match", [
+        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
+        { label: "Candidate reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
+        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
       ])}
       ${renderDetailSection("Candidate", [
         { label: "Location", value: payload.candidate.location || "Not specified" },

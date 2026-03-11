@@ -408,7 +408,6 @@ class WebAppService:
 
     def _serialize_candidate_opportunity_card(self, match) -> Dict[str, Any]:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
-        interview = self.interviews.get_session_by_match_id(match.id)
         return {
             "id": str(match.id),
             "vacancyId": str(match.vacancy_id),
@@ -422,14 +421,11 @@ class WebAppService:
             "workFormat": getattr(vacancy, "work_format", None),
             "stage": match.status,
             "stageLabel": match_status_label(match.status),
-            "interviewState": getattr(interview, "state", None),
-            "interviewStateLabel": interview_state_label(getattr(interview, "state", None)),
             "updatedAt": isoformat_or_none(match.updated_at),
         }
 
     def _serialize_vacancy_card(self, vacancy, include_manager: bool = False) -> Dict[str, Any]:
         matches = self.matches.list_all_for_vacancy(vacancy.id)
-        match_ids = [match.id for match in matches]
         data = {
             "id": str(vacancy.id),
             "roleTitle": vacancy.role_title,
@@ -443,7 +439,6 @@ class WebAppService:
             "candidateCount": len(matches),
             "activePipelineCount": len([match for match in matches if match.status in self.matches.ACTIVE_MATCH_STATUSES]),
             "connectedCount": len([match for match in matches if getattr(match, "status", None) == "approved"]),
-            "completedInterviewCount": self.interviews.count_completed_for_match_ids(match_ids),
             "updatedAt": isoformat_or_none(vacancy.updated_at),
         }
         if include_manager:
@@ -485,7 +480,6 @@ class WebAppService:
         profile = self.candidate_profiles.get_by_id(match.candidate_profile_id)
         candidate_user = self.users.get_by_id(profile.user_id) if profile is not None else None
         candidate_version = self.candidate_profiles.get_current_version(profile) if profile is not None else None
-        interview = self.interviews.get_session_by_match_id(match.id)
         return {
             "id": str(match.id),
             "candidateProfileId": str(match.candidate_profile_id),
@@ -500,8 +494,6 @@ class WebAppService:
             "workFormat": getattr(profile, "work_format", None),
             "stage": match.status,
             "stageLabel": match_status_label(match.status),
-            "interviewState": getattr(interview, "state", None),
-            "interviewStateLabel": interview_state_label(getattr(interview, "state", None)),
             "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
             "updatedAt": isoformat_or_none(match.updated_at),
         }
