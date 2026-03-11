@@ -477,12 +477,6 @@
           <h2>My Vacancies</h2>
           <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate pipeline depth and interview throughput." : "One clean view of your live candidate pipeline and interview progress."}</p>
         </section>
-        ${renderTerminalConsole("helly@manager:~ % tail -f vacancies.log", [
-          { label: "vacancies", key: "vacancies", value: String(items.length) },
-          { label: "candidate records", key: "candidates", value: String(totalCandidateCount) },
-          { label: "pipeline active", key: "pipeline", value: String(totalActivePipelineCount) },
-          { label: "interviews completed", key: "completed", value: String(totalCompletedInterviewCount) }
-        ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
