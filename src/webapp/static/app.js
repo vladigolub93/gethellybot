@@ -625,12 +625,6 @@
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
         <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
       </section>
-      ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat vacancy.txt`, [
-        { label: "vacancy id", key: "vacancy", value: vacancy.id || vacancyId },
-        { label: "state", key: "state", value: vacancy.state || "unknown" },
-        { label: "candidates", key: "candidates", value: String(stats.candidateCount) },
-        { label: "pipeline", key: "pipeline", value: String(stats.activePipelineCount) }
-      ])}
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
         { label: "Candidates", value: String(stats.candidateCount) },
