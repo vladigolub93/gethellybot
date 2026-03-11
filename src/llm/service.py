@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 import re
 from typing import Optional, TypeVar
 
@@ -10,7 +11,7 @@ from src.candidate_profile.question_parser import COUNTRY_CODES, parse_candidate
 from src.candidate_profile.summary_builder import build_approval_summary_text, build_candidate_summary
 from src.config.logging import get_logger
 from src.config.settings import get_settings
-from src.evaluation.scoring import evaluate_candidate
+from src.evaluation.scoring import build_interview_summary, evaluate_candidate
 from src.interview.question_plan import build_question_plan
 from src.llm.assets import build_user_facing_grounded_system_prompt, load_system_prompt
 from src.llm.prompts import (
@@ -257,6 +258,93 @@ def _clean_summary_text(value: Optional[str], *, limit: int) -> Optional[str]:
             return trimmed
 
     return normalized[:limit].rstrip(" ,;:-")
+
+
+def _trim_sentenceish_text(value: str, *, limit: int) -> str:
+    normalized = re.sub(r"\s+", " ", value).strip()
+    if not normalized:
+        return ""
+    if len(normalized) <= limit:
+        return normalized
+
+    min_sentence_cutoff = int(limit * 0.6)
+    punctuation_positions = [
+        normalized.rfind(". ", 0, limit + 1),
+        normalized.rfind("! ", 0, limit + 1),
+        normalized.rfind("? ", 0, limit + 1),
+        normalized.rfind(".", 0, limit + 1),
+        normalized.rfind("!", 0, limit + 1),
+        normalized.rfind("?", 0, limit + 1),
+    ]
+    valid_positions = [position for position in punctuation_positions if position >= 0]
+    sentence_end = max(valid_positions) if valid_positions else -1
+    if sentence_end >= min_sentence_cutoff:
+        trimmed = normalized[: sentence_end + 1].strip()
+        if trimmed:
+            return trimmed
+
+    word_boundary = normalized.rfind(" ", 0, limit + 1)
+    if word_boundary >= max(min_sentence_cutoff, 1):
+        trimmed = normalized[:word_boundary].rstrip(" ,;:-")
+        if trimmed:
+            return trimmed
+
+    return normalized[:limit].rstrip(" ,;:-")
+
+
+def _clean_interview_summary_text(value: Optional[str], *, limit: int) -> Optional[str]:
+    if value is None:
+        return None
+
+    raw_text = str(value).strip()
+    if not raw_text:
+        return None
+
+    paragraphs = [
+        _trim_sentenceish_text(paragraph, limit=limit)
+        for paragraph in re.split(r"\n\s*\n+", raw_text)
+        if paragraph and paragraph.strip()
+    ]
+    paragraphs = [paragraph for paragraph in paragraphs if paragraph]
+    if not paragraphs:
+        return None
+
+    if len(paragraphs) == 1:
+        sentences = re.split(r"(?<=[.!?])\s+", paragraphs[0])
+        sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+        if len(sentences) >= 4:
+            split_index = max(2, len(sentences) // 2)
+            paragraphs = [
+                " ".join(sentences[:split_index]).strip(),
+                " ".join(sentences[split_index:]).strip(),
+            ]
+
+    normalized_paragraphs: list[str] = []
+    current_length = 0
+    for paragraph in paragraphs[:2]:
+        paragraph = _trim_sentenceish_text(paragraph, limit=max(120, limit - current_length))
+        if not paragraph:
+            continue
+        projected = current_length + len(paragraph) + (2 if normalized_paragraphs else 0)
+        if normalized_paragraphs and projected > limit:
+            break
+        normalized_paragraphs.append(paragraph)
+        current_length = projected
+
+    if not normalized_paragraphs:
+        return None
+    return "\n\n".join(normalized_paragraphs).strip()
+
+
+def _looks_like_transcript_dump(summary: Optional[str], answer_texts: list[str]) -> bool:
+    normalized_summary = re.sub(r"\s+", " ", summary or "").strip().lower()
+    normalized_answers = re.sub(r"\s+", " ", " ".join(answer_texts or [])).strip().lower()
+    if not normalized_summary or not normalized_answers:
+        return False
+    if normalized_summary in normalized_answers:
+        return True
+    similarity = SequenceMatcher(None, normalized_summary[:1500], normalized_answers[:1500]).ratio()
+    return similarity >= 0.72
 
 
 def _normalize_skill_list(values: list[str]) -> list[str]:
@@ -1339,15 +1427,27 @@ def evaluate_candidate_with_llm(candidate_summary: dict, vacancy, answer_texts: 
     if score is None:
         score = 0.0
     score = max(0.0, min(1.0, float(score)))
+    recommendation = (
+        "advance" if str(result.payload.get("recommendation", "")).lower() == "advance" else "reject"
+    )
+    interview_summary = _clean_interview_summary_text(
+        result.payload.get("interview_summary"),
+        limit=1500,
+    )
+    if not interview_summary or _looks_like_transcript_dump(interview_summary, answer_texts):
+        interview_summary = build_interview_summary(
+            candidate_summary=candidate_summary,
+            vacancy=vacancy,
+            answer_texts=answer_texts,
+            score=round(score, 4),
+            recommendation=recommendation,
+        )
     payload = {
         "final_score": round(score, 4),
         "strengths": result.payload.get("strengths") or [],
         "risks": result.payload.get("risks") or [],
-        "recommendation": "advance"
-        if str(result.payload.get("recommendation", "")).lower() == "advance"
-        else "reject",
-        "interview_summary": _clean_text(result.payload.get("interview_summary"), limit=1500)
-        or "",
+        "recommendation": recommendation,
+        "interview_summary": interview_summary or "",
     }
     return LLMResult(
         payload=payload,

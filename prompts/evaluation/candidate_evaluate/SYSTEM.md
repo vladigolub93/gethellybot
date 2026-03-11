@@ -28,6 +28,8 @@ Rules:
 - write it like a natural recruiter note that could be pasted into an email
 - exactly 2 short paragraphs, around 5-7 sentences total
 - no bullets, no headings, no transcript dump
+- do not concatenate or paraphrase the interview answer transcript step by step
+- if the output reads like a transcript retelling instead of a recruiter note, it is invalid
 - paragraph 1 should cover:
   - the candidate's apparent background
   - the type of experience they described
