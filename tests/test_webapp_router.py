@@ -74,7 +74,7 @@ class FakeWebAppService:
         stage_reached,
         won,
         result_json,
-    ):
+        ):
         return {
             "attempt": {
                 "id": attempt_id,
@@ -83,6 +83,26 @@ class FakeWebAppService:
                 "stageReached": stage_reached,
                 "won": won,
                 "result": result_json,
+            }
+        }
+
+    def save_candidate_cv_challenge_progress(
+        self,
+        _session_context,
+        *,
+        attempt_id,
+        score,
+        lives_left,
+        stage_reached,
+        progress_json,
+    ):
+        return {
+            "attempt": {
+                "id": attempt_id,
+                "score": score,
+                "livesLeft": lives_left,
+                "stageReached": stage_reached,
+                "progress": progress_json,
             }
         }
 
@@ -135,6 +155,17 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
             "result": {"missedSkills": ["Docker"]},
         },
     )
+    challenge_progress_response = client.post(
+        "/webapp/api/candidate/cv-challenge/progress",
+        headers={"Authorization": "Bearer token-1"},
+        json={
+            "attemptId": "attempt-1",
+            "score": 4,
+            "livesLeft": 2,
+            "stageReached": 2,
+            "progress": {"score": 4, "objects": [{"text": "React"}]},
+        },
+    )
 
     assert auth_response.status_code == 200
     assert auth_response.json()["session"]["role"] == "candidate"
@@ -144,5 +175,7 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
     assert candidate_response.json()["items"][0]["id"] == "match-1"
     assert challenge_bootstrap_response.status_code == 200
     assert challenge_bootstrap_response.json()["attempt"]["id"] == "attempt-1"
+    assert challenge_progress_response.status_code == 200
+    assert challenge_progress_response.json()["attempt"]["livesLeft"] == 2
     assert challenge_finish_response.status_code == 200
     assert challenge_finish_response.json()["attempt"]["score"] == 9

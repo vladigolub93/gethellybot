@@ -240,6 +240,24 @@ class CandidateCvChallengeService:
             "reasonCode": eligibility.reason_code,
         }
 
+    def _serialize_attempt(self, attempt, *, include_progress: bool) -> Dict[str, Any]:
+        payload = {
+            "id": str(attempt.id),
+            "status": attempt.status,
+            "score": int(attempt.score or 0),
+            "livesLeft": int(attempt.lives_left or 0),
+            "stageReached": int(attempt.stage_reached or 1),
+            "won": bool(attempt.won),
+            "startedAt": attempt.started_at.isoformat() if attempt.started_at else None,
+            "finishedAt": attempt.finished_at.isoformat() if attempt.finished_at else None,
+        }
+        if include_progress:
+            payload["progress"] = dict(attempt.result_json or {})
+            payload["resumable"] = bool(attempt.result_json)
+        else:
+            payload["result"] = dict(attempt.result_json or {})
+        return payload
+
     def build_invitation_payload(self, user_id) -> Optional[Dict[str, Any]]:
         eligibility = self.build_eligibility_for_user_id(user_id)
         if not eligibility.eligible or not eligibility.candidate_profile_id or not eligibility.launch_url:
@@ -265,24 +283,32 @@ class CandidateCvChallengeService:
                 "reasonCode": eligibility.reason_code,
             }
 
-        attempt = self.attempts.create(
-            candidate_profile_id=UUID(eligibility.candidate_profile_id),
-            candidate_profile_version_id=UUID(eligibility.candidate_profile_version_id)
-            if eligibility.candidate_profile_version_id
-            else None,
-            skills_snapshot_json={
-                "correctSkills": eligibility.correct_skills,
-                "distractorSkills": eligibility.distractor_skills,
-                "stageConfig": list(CV_CHALLENGE_STAGE_CONFIG),
-                "totalLives": CV_CHALLENGE_TOTAL_LIVES,
-            },
-        )
+        profile_id = UUID(eligibility.candidate_profile_id)
+        active_attempt = self.attempts.get_latest_active_for_candidate_profile(profile_id)
+        last_completed = self.attempts.get_latest_completed_for_candidate_profile(profile_id)
+
+        if active_attempt is None:
+            active_attempt = self.attempts.create(
+                candidate_profile_id=profile_id,
+                candidate_profile_version_id=UUID(eligibility.candidate_profile_version_id)
+                if eligibility.candidate_profile_version_id
+                else None,
+                skills_snapshot_json={
+                    "correctSkills": eligibility.correct_skills,
+                    "distractorSkills": eligibility.distractor_skills,
+                    "stageConfig": list(CV_CHALLENGE_STAGE_CONFIG),
+                    "totalLives": CV_CHALLENGE_TOTAL_LIVES,
+                },
+            )
+
         return {
             "eligible": True,
-            "attempt": {
-                "id": str(attempt.id),
-                "startedAt": attempt.started_at.isoformat() if attempt.started_at else None,
-            },
+            "attempt": self._serialize_attempt(active_attempt, include_progress=True),
+            "lastResult": (
+                self._serialize_attempt(last_completed, include_progress=False)
+                if last_completed is not None
+                else None
+            ),
             "challenge": {
                 "title": "Helly CV Challenge",
                 "subtitle": "Tap only the skills that appear in your CV.",
@@ -291,6 +317,41 @@ class CandidateCvChallengeService:
                 "distractorSkills": eligibility.distractor_skills,
                 "stages": list(CV_CHALLENGE_STAGE_CONFIG),
             },
+        }
+
+    def save_attempt_progress(
+        self,
+        *,
+        user_id,
+        attempt_id: str,
+        score: int,
+        lives_left: int,
+        stage_reached: int,
+        progress_json: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        profile = self.profiles.get_active_by_user_id(user_id)
+        if profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate profile not found.")
+
+        attempt = self.attempts.get_by_id(UUID(attempt_id))
+        if attempt is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge attempt not found.")
+        if str(attempt.candidate_profile_id) != str(profile.id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+        if attempt.finished_at is not None:
+            return {
+                "attempt": self._serialize_attempt(attempt, include_progress=False),
+            }
+
+        updated = self.attempts.save_progress(
+            attempt,
+            score=score,
+            lives_left=lives_left,
+            stage_reached=stage_reached,
+            progress_json=progress_json or {},
+        )
+        return {
+            "attempt": self._serialize_attempt(updated, include_progress=True),
         }
 
     def finish_attempt(
@@ -315,14 +376,7 @@ class CandidateCvChallengeService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
         if attempt.finished_at is not None:
             return {
-                "attempt": {
-                    "id": str(attempt.id),
-                    "status": attempt.status,
-                    "score": attempt.score,
-                    "won": attempt.won,
-                    "stageReached": attempt.stage_reached,
-                    "finishedAt": attempt.finished_at.isoformat(),
-                }
+                "attempt": self._serialize_attempt(attempt, include_progress=False)
             }
 
         finished = self.attempts.mark_finished(
@@ -334,12 +388,5 @@ class CandidateCvChallengeService:
             result_json=result_json or {},
         )
         return {
-            "attempt": {
-                "id": str(finished.id),
-                "status": finished.status,
-                "score": finished.score,
-                "won": finished.won,
-                "stageReached": finished.stage_reached,
-                "finishedAt": finished.finished_at.isoformat() if finished.finished_at else None,
-            }
+            "attempt": self._serialize_attempt(finished, include_progress=False)
         }

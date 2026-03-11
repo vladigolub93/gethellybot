@@ -65,6 +65,7 @@ class FakeCvChallengeWriteService:
         self.finish_response = finish_response or {}
         self.bootstrap_user_id = None
         self.finish_payload = None
+        self.progress_payload = None
 
     def bootstrap_for_candidate(self, user_id):
         self.bootstrap_user_id = user_id
@@ -73,6 +74,19 @@ class FakeCvChallengeWriteService:
     def finish_attempt(self, **kwargs):
         self.finish_payload = dict(kwargs)
         return dict(self.finish_response)
+
+    def save_attempt_progress(self, **kwargs):
+        self.progress_payload = dict(kwargs)
+        return {
+            "attempt": {
+                "id": kwargs["attempt_id"],
+                "status": "started",
+                "score": kwargs["score"],
+                "livesLeft": kwargs["lives_left"],
+                "stageReached": kwargs["stage_reached"],
+                "progress": kwargs["progress_json"],
+            }
+        }
 
 
 def test_list_candidate_opportunities_includes_challenge_card_and_serialized_matches() -> None:
@@ -231,4 +245,25 @@ def test_finish_candidate_cv_challenge_commits_result() -> None:
     assert response["attempt"]["status"] == "completed"
     assert str(service.cv_challenge.finish_payload["user_id"]) == str(user_id)
     assert service.cv_challenge.finish_payload["attempt_id"] == "attempt-1"
+    assert session.commit_calls == 1
+
+
+def test_save_candidate_cv_challenge_progress_commits_result() -> None:
+    session = FakeSession()
+    user_id = uuid4()
+    service = WebAppService(session=session)
+    service.cv_challenge = FakeCvChallengeWriteService()
+
+    response = service.save_candidate_cv_challenge_progress(
+        SimpleNamespace(role="candidate", user_id=str(user_id)),
+        attempt_id="attempt-2",
+        score=5,
+        lives_left=2,
+        stage_reached=2,
+        progress_json={"score": 5, "objects": [{"text": "React"}]},
+    )
+
+    assert response["attempt"]["status"] == "started"
+    assert str(service.cv_challenge.progress_payload["user_id"]) == str(user_id)
+    assert service.cv_challenge.progress_payload["attempt_id"] == "attempt-2"
     assert session.commit_calls == 1

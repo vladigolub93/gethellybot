@@ -27,6 +27,14 @@ class CandidateCvChallengeFinishRequest(BaseModel):
     result: Optional[dict] = None
 
 
+class CandidateCvChallengeProgressRequest(BaseModel):
+    attemptId: str
+    score: int
+    livesLeft: int
+    stageReached: int
+    progress: Optional[dict] = None
+
+
 def _service(db: Session = Depends(get_db_session)) -> WebAppService:
     return WebAppService(db)
 
@@ -105,6 +113,22 @@ def candidate_cv_challenge_finish(
         stage_reached=payload.stageReached,
         won=payload.won,
         result_json=payload.result,
+    )
+
+
+@router.post("/api/candidate/cv-challenge/progress")
+def candidate_cv_challenge_progress(
+    payload: CandidateCvChallengeProgressRequest,
+    session_context=Depends(_session_context),
+    service: WebAppService = Depends(_service),
+):
+    return service.save_candidate_cv_challenge_progress(
+        session_context,
+        attempt_id=payload.attemptId,
+        score=payload.score,
+        lives_left=payload.livesLeft,
+        stage_reached=payload.stageReached,
+        progress_json=payload.progress,
     )
 
 

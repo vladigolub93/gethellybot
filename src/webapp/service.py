@@ -155,6 +155,29 @@ class WebAppService:
         self.session.commit()
         return response
 
+    def save_candidate_cv_challenge_progress(
+        self,
+        session_context: WebAppSessionContext,
+        *,
+        attempt_id: str,
+        score: int,
+        lives_left: int,
+        stage_reached: int,
+        progress_json: Optional[dict] = None,
+    ) -> Dict[str, Any]:
+        self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
+        user_id = self._require_session_user_id(session_context)
+        response = self.cv_challenge.save_attempt_progress(
+            user_id=user_id,
+            attempt_id=attempt_id,
+            score=score,
+            lives_left=lives_left,
+            stage_reached=stage_reached,
+            progress_json=progress_json,
+        )
+        self.session.commit()
+        return response
+
     def get_candidate_opportunity_detail(
         self,
         session_context: WebAppSessionContext,

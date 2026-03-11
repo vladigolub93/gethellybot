@@ -27,6 +27,8 @@
     hudScoreEl: null,
     hudLivesEl: null,
     hudStageEl: null,
+    progressSaveInFlight: false,
+    lastProgressSavedAt: 0,
   };
   const TERMINAL_THEME = "terminal";
 
@@ -202,6 +204,10 @@
     }
   }
 
+  function currentAttemptId() {
+    return state.bootstrap && state.bootstrap.attempt ? state.bootstrap.attempt.id : null;
+  }
+
   async function api(path, options) {
     const response = await fetch(path, {
       ...options,
@@ -263,6 +269,9 @@
   function renderStartScreen() {
     setAppMode("panel");
     const challenge = state.bootstrap.challenge;
+    const attempt = state.bootstrap.attempt || null;
+    const lastResult = state.bootstrap.lastResult || null;
+    const canResume = Boolean(attempt && attempt.resumable && attempt.progress);
     appEl.innerHTML = `
       <section class="screen-card">
         <p class="eyebrow">${isTerminalTheme() ? "cv_challenge_runtime" : "CV Challenge"}</p>
@@ -288,13 +297,42 @@
             <span class="meta-label">${isTerminalTheme() ? "stages" : "Stages"}</span>
           </article>
         </div>
+        ${lastResult ? `
+          <div class="result-history">
+            <p class="eyebrow">${isTerminalTheme() ? "last_run" : "Last result"}</p>
+            <div class="result-meta">
+              <article class="result-meta-card">
+                <span class="result-meta-value">${escapeHtml(lastResult.score)}</span>
+                <span class="result-meta-label">${isTerminalTheme() ? "score" : "Score"}</span>
+              </article>
+              <article class="result-meta-card">
+                <span class="result-meta-value">${escapeHtml(lastResult.stageReached)}</span>
+                <span class="result-meta-label">${isTerminalTheme() ? "stage_reached" : "Stage reached"}</span>
+              </article>
+              <article class="result-meta-card">
+                <span class="result-meta-value">${escapeHtml(lastResult.won ? (isTerminalTheme() ? "won" : "Won") : (isTerminalTheme() ? "failed" : "Failed"))}</span>
+                <span class="result-meta-label">${isTerminalTheme() ? "status" : "Status"}</span>
+              </article>
+              <article class="result-meta-card">
+                <span class="result-meta-value">${escapeHtml((lastResult.result && lastResult.result.totalMistakes) || 0)}</span>
+                <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
+              </article>
+            </div>
+          </div>
+        ` : ""}
         <div class="action-row">
-          <button id="start-challenge" class="button" type="button">${isTerminalTheme() ? "run challenge" : "Start challenge"}</button>
+          <button id="start-challenge" class="button" type="button">${canResume ? (isTerminalTheme() ? "resume run" : "Resume challenge") : (isTerminalTheme() ? "run challenge" : "Start challenge")}</button>
           <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Back to dashboard"}</button>
         </div>
       </section>
     `;
-    bindPress(document.getElementById("start-challenge"), startGame);
+    bindPress(document.getElementById("start-challenge"), () => {
+      if (canResume) {
+        startGame(attempt.progress || {});
+        return;
+      }
+      startGame();
+    });
     bindPress(document.getElementById("open-dashboard"), openDashboard);
   }
 
@@ -369,8 +407,100 @@
         </div>
       </section>
     `;
-    bindPress(document.getElementById("try-again"), startGame);
+    bindPress(document.getElementById("try-again"), async () => {
+      await refreshBootstrap();
+      startGame();
+    });
     bindPress(document.getElementById("open-dashboard"), openDashboard);
+  }
+
+  function buildProgressSnapshot() {
+    const now = performance.now();
+    const stageConfig = currentStageConfig();
+    const stageRemainingMs = state.stageEndsAt ? Math.max(Math.round(state.stageEndsAt - now), 0) : stageConfig.durationMs;
+    const nextSpawnRemainingMs = state.lastSpawnAt
+      ? Math.max(Math.round((state.lastSpawnAt + stageConfig.spawnIntervalMs) - now), 0)
+      : stageConfig.spawnIntervalMs;
+    return {
+      score: state.score,
+      livesLeft: state.livesLeft,
+      stageIndex: state.stageIndex,
+      stageReached: state.stageIndex + 1,
+      stageRemainingMs,
+      nextSpawnRemainingMs,
+      elapsedMs: Math.max(Date.now() - state.startedAt, 0),
+      missedSkills: Array.from(state.missedCorrect),
+      correctTapCount: state.correctTapCount,
+      wrongTapCount: state.wrongTapCount,
+      totalMistakes: state.totalMistakes,
+      objects: state.objects.map((item) => ({
+        text: item.text,
+        displayText: item.displayText,
+        correct: Boolean(item.correct),
+        width: item.width,
+        height: item.height,
+        x: item.x,
+        y: item.y,
+        speed: item.speed,
+      })),
+    };
+  }
+
+  async function saveProgressSnapshot(force) {
+    if (!state.running || state.finishSubmitted || state.progressSaveInFlight) return;
+    const attemptId = currentAttemptId();
+    if (!attemptId) return;
+    const now = performance.now();
+    if (!force && now - state.lastProgressSavedAt < 1800) return;
+    state.progressSaveInFlight = true;
+    try {
+      const snapshot = buildProgressSnapshot();
+      await api("/webapp/api/candidate/cv-challenge/progress", {
+        method: "POST",
+        body: JSON.stringify({
+          attemptId,
+          score: state.score,
+          livesLeft: state.livesLeft,
+          stageReached: state.stageIndex + 1,
+          progress: snapshot,
+        }),
+      });
+      state.lastProgressSavedAt = performance.now();
+    } catch (_) {
+      state.lastProgressSavedAt = now;
+    } finally {
+      state.progressSaveInFlight = false;
+    }
+  }
+
+  function restoreProgressSnapshot(snapshot) {
+    const currentStage = state.bootstrap.challenge.stages[Math.min(snapshot.stageIndex || 0, state.bootstrap.challenge.stages.length - 1)];
+    state.objects = (snapshot.objects || []).map((item) => ({
+      id: state.nextId++,
+      text: item.text,
+      displayText: item.displayText || item.text,
+      correct: Boolean(item.correct),
+      width: item.width,
+      height: item.height,
+      x: item.x,
+      y: item.y,
+      speed: item.speed,
+    }));
+    state.score = Number(snapshot.score || 0);
+    state.livesLeft = Number(snapshot.livesLeft || state.bootstrap.challenge.totalLives);
+    state.stageIndex = Math.min(Number(snapshot.stageIndex || 0), state.bootstrap.challenge.stages.length - 1);
+    state.missedCorrect = new Set(snapshot.missedSkills || []);
+    state.correctTapCount = Number(snapshot.correctTapCount || 0);
+    state.wrongTapCount = Number(snapshot.wrongTapCount || 0);
+    state.totalMistakes = Number(snapshot.totalMistakes || 0);
+    state.startedAt = Date.now() - Math.max(Number(snapshot.elapsedMs || 0), 0);
+    const now = performance.now();
+    const stageRemainingMs = Math.max(Number(snapshot.stageRemainingMs || currentStage.durationMs), 0);
+    const nextSpawnRemainingMs = Math.max(Number(snapshot.nextSpawnRemainingMs || currentStage.spawnIntervalMs), 0);
+    state.stageStartedAt = now - Math.max(currentStage.durationMs - stageRemainingMs, 0);
+    state.stageEndsAt = now + stageRemainingMs;
+    state.lastSpawnAt = now - Math.max(currentStage.spawnIntervalMs - nextSpawnRemainingMs, 0);
+    state.lastFrameTime = now;
   }
 
   function cssVar(name, fallback) {
@@ -612,12 +742,13 @@
 
     updateHud();
     draw();
+    saveProgressSnapshot(false);
     if (state.running) {
       state.frameId = window.requestAnimationFrame(frame);
     }
   }
 
-  function startGame() {
+  function startGame(resumeSnapshot) {
     renderGameShell();
     state.running = true;
     state.finishSubmitted = false;
@@ -635,8 +766,19 @@
     state.wrongTapCount = 0;
     state.totalMistakes = 0;
     state.startedAt = Date.now();
+    state.progressSaveInFlight = false;
+    state.lastProgressSavedAt = 0;
+    if (resumeSnapshot && Object.keys(resumeSnapshot).length) {
+      restoreProgressSnapshot(resumeSnapshot);
+    }
     updateHud();
     state.frameId = window.requestAnimationFrame(frame);
+  }
+
+  async function refreshBootstrap() {
+    const bootstrap = await api("/webapp/api/candidate/cv-challenge/bootstrap");
+    state.bootstrap = bootstrap;
+    return bootstrap;
   }
 
   async function boot() {
@@ -672,8 +814,7 @@
       state.sessionToken = authPayload.sessionToken;
 
       renderLoading("Syncing your candidate profile", "Preparing the skills Helly extracted from your CV.");
-      const bootstrap = await api("/webapp/api/candidate/cv-challenge/bootstrap");
-      state.bootstrap = bootstrap;
+      const bootstrap = await refreshBootstrap();
       if (!bootstrap.eligible) {
         renderLocked(bootstrap.title || "Challenge unavailable", bootstrap.body || "The challenge is not available right now.");
         return;
@@ -684,6 +825,15 @@
       renderLocked("Unable to open CV Challenge", error.message || "Unknown error.");
     }
   }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      saveProgressSnapshot(true);
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    saveProgressSnapshot(true);
+  });
 
   boot();
 })();

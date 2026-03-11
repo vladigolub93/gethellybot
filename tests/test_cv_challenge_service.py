@@ -51,6 +51,29 @@ class FakeAttemptsRepository:
     def get_by_id(self, attempt_id):
         return self.rows.get(str(attempt_id))
 
+    def get_latest_active_for_candidate_profile(self, candidate_profile_id):
+        attempts = [
+            row
+            for row in self.rows.values()
+            if str(row.candidate_profile_id) == str(candidate_profile_id) and row.finished_at is None
+        ]
+        return attempts[-1] if attempts else None
+
+    def get_latest_completed_for_candidate_profile(self, candidate_profile_id):
+        attempts = [
+            row
+            for row in self.rows.values()
+            if str(row.candidate_profile_id) == str(candidate_profile_id) and row.finished_at is not None
+        ]
+        return attempts[-1] if attempts else None
+
+    def save_progress(self, attempt, **kwargs):
+        attempt.score = kwargs["score"]
+        attempt.lives_left = kwargs["lives_left"]
+        attempt.stage_reached = kwargs["stage_reached"]
+        attempt.result_json = kwargs.get("progress_json")
+        return attempt
+
     def mark_finished(self, attempt, **kwargs):
         attempt.status = "completed"
         attempt.score = kwargs["score"]
@@ -92,6 +115,8 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["challenge"]["title"] == "Helly CV Challenge"
     assert bootstrap["challenge"]["correctSkills"] == ["React", "TypeScript", "Docker"]
     assert bootstrap["attempt"]["id"]
+    assert bootstrap["attempt"]["status"] == "started"
+    assert bootstrap["lastResult"] is None
 
 
 def test_cv_challenge_service_rejects_candidate_with_active_matches() -> None:
@@ -119,6 +144,42 @@ def test_cv_challenge_service_finishes_own_attempt_only() -> None:
 
     assert result["attempt"]["score"] == 12
     assert result["attempt"]["won"] is True
+    assert result["attempt"]["result"]["missedSkills"] == ["Docker"]
+
+
+def test_cv_challenge_service_reuses_unfinished_attempt_and_shows_last_result() -> None:
+    service, profile = _build_service()
+    first = service.bootstrap_for_candidate(profile.user_id)
+    service.save_attempt_progress(
+        user_id=profile.user_id,
+        attempt_id=first["attempt"]["id"],
+        score=4,
+        lives_left=2,
+        stage_reached=2,
+        progress_json={"score": 4, "stageIndex": 1},
+    )
+
+    resumed = service.bootstrap_for_candidate(profile.user_id)
+
+    assert resumed["attempt"]["id"] == first["attempt"]["id"]
+    assert resumed["attempt"]["resumable"] is True
+    assert resumed["attempt"]["progress"]["score"] == 4
+
+    service.finish_attempt(
+        user_id=profile.user_id,
+        attempt_id=first["attempt"]["id"],
+        score=7,
+        lives_left=1,
+        stage_reached=3,
+        won=False,
+        result_json={"totalMistakes": 3},
+    )
+
+    next_bootstrap = service.bootstrap_for_candidate(profile.user_id)
+
+    assert next_bootstrap["attempt"]["id"] != first["attempt"]["id"]
+    assert next_bootstrap["lastResult"]["score"] == 7
+    assert next_bootstrap["lastResult"]["result"]["totalMistakes"] == 3
 
 
 def test_cv_challenge_service_blocks_foreign_attempt() -> None:
