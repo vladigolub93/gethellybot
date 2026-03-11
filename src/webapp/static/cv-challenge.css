@@ -404,19 +404,19 @@ html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
 .game-shell {
   display: flex;
   flex-direction: column;
-  min-height: clamp(520px, calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 92px), 860px);
-  gap: 12px;
-  padding: 14px;
+  min-height: clamp(560px, calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 72px), 900px);
+  gap: 10px;
+  padding: 12px;
 }
 
 .hud {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .hud-card {
-  padding: 12px 12px 10px;
+  padding: 10px 10px 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.04);
@@ -446,8 +446,8 @@ html[data-theme="terminal"] .missed-item {
 
 .canvas-wrap {
   position: relative;
-  flex: 1;
-  min-height: clamp(300px, 48dvh, 460px);
+  flex: 1 1 auto;
+  min-height: clamp(380px, 60dvh, 620px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -468,8 +468,8 @@ html[data-theme="terminal"] .canvas-wrap {
 .game-canvas {
   display: block;
   width: 100%;
-  height: clamp(300px, 48dvh, 460px);
-  min-height: 300px;
+  height: 100%;
+  min-height: clamp(380px, 60dvh, 620px);
   touch-action: manipulation;
 }
 
@@ -512,8 +512,7 @@ html[data-theme="terminal"] .locked-card h1::before {
 
 html[data-theme="terminal"] .screen-card .copy::before,
 html[data-theme="terminal"] .locked-card .copy::before,
-html[data-theme="terminal"] .result-copy::before,
-html[data-theme="terminal"] .canvas-hint::before {
+html[data-theme="terminal"] .result-copy::before {
   content: "$ ";
   color: var(--accent-soft);
 }
@@ -598,14 +597,6 @@ html[data-theme="terminal"] .canvas-hint::before {
   min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.canvas-hint {
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.4;
-  text-align: left;
-  padding: 0 2px 2px;
 }
 
 .result-card h2 {

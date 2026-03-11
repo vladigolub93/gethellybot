@@ -291,7 +291,6 @@
         <section class="canvas-wrap">
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
-        <p class="canvas-hint">${isTerminalTheme() ? "tap tokens from your real cv. ignore foreign tokens. missing a valid one costs 1 life." : "Tap only the technologies that truly appear in your CV. Missing a real one also costs a life."}</p>
       </section>
     `;
     state.canvas = document.getElementById("game-canvas");
@@ -313,12 +312,6 @@
         <p class="eyebrow">${won ? (isTerminalTheme() ? "run_complete" : "Challenge complete") : (isTerminalTheme() ? "run_failed" : "Game over")}</p>
         <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
         <p class="result-copy">${won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."}</p>
-        ${renderTerminalConsole("helly@cv-challenge:~ % cat result.txt", [
-          { label: "score", key: "score", value: String(state.score) },
-          { label: "stage reached", key: "stage", value: String(state.stageIndex + 1) },
-          { label: "mistakes", key: "mistakes", value: String(state.totalMistakes) },
-          { label: "status", key: "status", value: won ? "complete" : "failed" },
-        ])}
         <div class="result-meta">
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.score)}</span>
