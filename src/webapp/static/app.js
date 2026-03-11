@@ -16,6 +16,12 @@
       .replace(/'/g, "&#039;");
   }
 
+  function truncateText(value, maxLength) {
+    const text = String(value || "");
+    if (!text || text.length <= maxLength) return text;
+    return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
   function badgeTone(value) {
     const text = String(value || "").toLowerCase();
     if (text.includes("approved") || text.includes("completed") || text.includes("accepted")) return "good";
@@ -128,7 +134,7 @@
         <section class="screen-header">
           <p class="eyebrow">Candidate view</p>
           <h2>My Opportunities</h2>
-          <p>Read-only visibility into your current Helly matches and interview pipeline.</p>
+          <p>Your current matches, interview progress and saved profile context.</p>
         </section>
         <section class="detail-panel">
           <h3 class="section-title">Profile Snapshot</h3>
@@ -157,7 +163,7 @@
             </article>
           `).join("") : `<div class="empty-state">No opportunities yet. Once Helly creates matches for you, they will appear here.</div>`}
         </section>
-        <p class="footer-note">This dashboard is read-only. Decisions and interview actions still happen in the Telegram bot chat.</p>
+        <p class="footer-note">Read-only mode. Apply, skip and interview actions still happen in the bot chat.</p>
       `;
       bindCards();
       return;
@@ -170,7 +176,7 @@
         <section class="screen-header">
           <p class="eyebrow">Manager view</p>
           <h2>My Vacancies</h2>
-          <p>Track live candidate pipeline and interview progress without digging through chat history.</p>
+          <p>One clean view of your live candidate pipeline and interview progress.</p>
         </section>
         <section class="list">
           ${items.length ? items.map((item) => `
@@ -203,7 +209,7 @@
         <section class="screen-header">
           <p class="eyebrow">Admin view</p>
           <h2>All Vacancies</h2>
-          <p>Global read-only visibility across the live Helly production pipeline.</p>
+          <p>Read-only visibility across the full Helly production pipeline.</p>
         </section>
         <section class="list">
           ${items.length ? items.map((item) => `
@@ -309,7 +315,7 @@
                 <p class="meta-line">Location: ${escapeHtml(item.location || "Not specified")}</p>
                 <p class="meta-line">Salary: ${escapeHtml(item.salaryExpectation || "Not specified")}</p>
                 <p class="meta-line">Interview: ${escapeHtml(item.interviewStateLabel || "Not started")}</p>
-                <p class="meta-line">Summary: ${escapeHtml(((item.summary || {}).approvalSummaryText) || "No summary yet.")}</p>
+                <p class="meta-line">Summary: ${escapeHtml(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 110))}</p>
               </div>
             </article>
           `).join("") : `<div class="empty-state">No candidates are attached to this vacancy yet.</div>`}
@@ -357,7 +363,16 @@
 
   function bindCards() {
     Array.from(document.querySelectorAll("[data-route]")).forEach((node) => {
-      node.addEventListener("click", () => pushRoute(node.getAttribute("data-route")));
+      const route = node.getAttribute("data-route");
+      node.setAttribute("tabindex", "0");
+      node.setAttribute("role", "button");
+      node.addEventListener("click", () => pushRoute(route));
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          pushRoute(route);
+        }
+      });
     });
   }
 
