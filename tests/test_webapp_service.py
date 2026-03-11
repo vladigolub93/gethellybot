@@ -5,6 +5,14 @@ from uuid import uuid4
 from src.webapp.service import WebAppService
 
 
+class FakeSession:
+    def __init__(self):
+        self.commit_calls = 0
+
+    def commit(self):
+        self.commit_calls += 1
+
+
 class FakeCandidateProfilesRepository:
     def __init__(self, profile, version):
         self.profile = profile
@@ -49,6 +57,22 @@ class FakeCvChallengeService:
     def build_dashboard_card(self, user_id):
         self.called_user_id = user_id
         return dict(self.response)
+
+
+class FakeCvChallengeWriteService:
+    def __init__(self, bootstrap_response=None, finish_response=None):
+        self.bootstrap_response = bootstrap_response or {}
+        self.finish_response = finish_response or {}
+        self.bootstrap_user_id = None
+        self.finish_payload = None
+
+    def bootstrap_for_candidate(self, user_id):
+        self.bootstrap_user_id = user_id
+        return dict(self.bootstrap_response)
+
+    def finish_attempt(self, **kwargs):
+        self.finish_payload = dict(kwargs)
+        return dict(self.finish_response)
 
 
 def test_list_candidate_opportunities_includes_challenge_card_and_serialized_matches() -> None:
@@ -142,3 +166,69 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             "updatedAt": now.isoformat(),
         }
     ]
+
+
+def test_bootstrap_candidate_cv_challenge_commits_only_for_eligible_attempts() -> None:
+    session = FakeSession()
+    user_id = uuid4()
+    service = WebAppService(session=session)
+    service.cv_challenge = FakeCvChallengeWriteService(
+        bootstrap_response={
+            "eligible": True,
+            "attempt": {"id": "attempt-1"},
+            "challenge": {"title": "Helly CV Challenge"},
+        }
+    )
+
+    response = service.bootstrap_candidate_cv_challenge(
+        SimpleNamespace(role="candidate", user_id=str(user_id))
+    )
+
+    assert response["attempt"]["id"] == "attempt-1"
+    assert str(service.cv_challenge.bootstrap_user_id) == str(user_id)
+    assert session.commit_calls == 1
+
+    ineligible_service = WebAppService(session=FakeSession())
+    ineligible_service.cv_challenge = FakeCvChallengeWriteService(
+        bootstrap_response={
+            "eligible": False,
+            "reasonCode": "candidate_has_active_matches",
+        }
+    )
+    response = ineligible_service.bootstrap_candidate_cv_challenge(
+        SimpleNamespace(role="candidate", user_id=str(user_id))
+    )
+
+    assert response["eligible"] is False
+    assert ineligible_service.session.commit_calls == 0
+
+
+def test_finish_candidate_cv_challenge_commits_result() -> None:
+    session = FakeSession()
+    user_id = uuid4()
+    service = WebAppService(session=session)
+    service.cv_challenge = FakeCvChallengeWriteService(
+        finish_response={
+            "attempt": {
+                "id": "attempt-1",
+                "status": "completed",
+                "score": 9,
+                "won": False,
+            }
+        }
+    )
+
+    response = service.finish_candidate_cv_challenge(
+        SimpleNamespace(role="candidate", user_id=str(user_id)),
+        attempt_id="attempt-1",
+        score=9,
+        lives_left=1,
+        stage_reached=3,
+        won=False,
+        result_json={"missedSkills": ["Docker"]},
+    )
+
+    assert response["attempt"]["status"] == "completed"
+    assert str(service.cv_challenge.finish_payload["user_id"]) == str(user_id)
+    assert service.cv_challenge.finish_payload["attempt_id"] == "attempt-1"
+    assert session.commit_calls == 1

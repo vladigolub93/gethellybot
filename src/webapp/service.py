@@ -125,7 +125,10 @@ class WebAppService:
     def bootstrap_candidate_cv_challenge(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
         user_id = self._require_session_user_id(session_context)
-        return self.cv_challenge.bootstrap_for_candidate(user_id)
+        response = self.cv_challenge.bootstrap_for_candidate(user_id)
+        if response.get("eligible"):
+            self.session.commit()
+        return response
 
     def finish_candidate_cv_challenge(
         self,
@@ -140,7 +143,7 @@ class WebAppService:
     ) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
         user_id = self._require_session_user_id(session_context)
-        return self.cv_challenge.finish_attempt(
+        response = self.cv_challenge.finish_attempt(
             user_id=user_id,
             attempt_id=attempt_id,
             score=score,
@@ -149,6 +152,8 @@ class WebAppService:
             won=won,
             result_json=result_json,
         )
+        self.session.commit()
+        return response
 
     def get_candidate_opportunity_detail(
         self,
