@@ -685,12 +685,6 @@
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
         <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
-      ${renderTerminalConsole(`helly@${rolePrefix}:~ % cat candidate.txt`, [
-        { label: "match id", key: "match", value: payload.match.id || matchId },
-        { label: "candidate", key: "candidate", value: payload.candidate.name || "candidate" },
-        { label: "recommendation", key: "recommend", value: payload.evaluation.recommendation || "n_a" },
-        { label: "score", key: "score", value: formatScore(payload.evaluation.finalScore) }
-      ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Interview", value: payload.interview.stateLabel || "Not started" },
