@@ -409,14 +409,8 @@
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "candidate_session" : "Candidate view"}</p>
           <h2>My Opportunities</h2>
-          <p>${isTerminalTheme() ? "Read-only shell over your current match queue, interview state and saved profile context." : "Your current matches, interview progress and saved profile context."}</p>
+          <p>Your current matches, interview state and saved profile context.</p>
         </section>
-        ${renderTerminalConsole("helly@candidate:~ % tail -f opportunities.log", [
-          { label: "profile state", key: "state", value: payload.profile.state || "unknown" },
-          { label: "records loaded", key: "records", value: String(items.length) },
-          { label: "active interviews", key: "interviews", value: String(activeInterviewCount) },
-          { label: "cv challenge", key: "challenge", value: payload.cvChallenge && payload.cvChallenge.eligible ? "available" : (payload.cvChallenge && payload.cvChallenge.reasonCode) || "locked" }
-        ])}
         ${renderStatsStrip([
           { label: "Opportunities", value: String(items.length) },
           { label: "In interview", value: String(activeInterviewCount) },
