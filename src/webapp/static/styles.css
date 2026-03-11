@@ -126,16 +126,21 @@ body::before {
 .topbar-kicker,
 .topbar-note,
 .eyebrow,
+.stat-value,
+.stat-label,
 .screen-header h2,
 .screen-header p,
 .state-card h2,
 .state-card p,
 .card h3,
+.metric-label,
+.metric-value,
 .meta-line,
 .section-title,
 .detail-grid dt,
 .detail-grid dd,
 .empty-state,
+.card-note,
 .footer-note,
 .chip {
   overflow-wrap: anywhere;
@@ -146,6 +151,59 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  padding: 14px 14px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(84px, 42%);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(140, 40, 255, 0.92), rgba(140, 40, 255, 0));
+}
+
+.stat-value,
+.metric-value {
+  display: block;
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.stat-value {
+  font-size: 1.08rem;
+  line-height: 1.14;
+}
+
+.stat-label,
+.metric-label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.35;
 }
 
 .state-card,
@@ -276,16 +334,30 @@ body::before {
   letter-spacing: -0.02em;
 }
 
-.meta-stack {
-  display: flex;
-  flex-direction: column;
+.card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-top: 14px;
 }
 
-.meta-line {
+.metric {
+  padding: 10px 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.metric-value {
+  margin-top: 5px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.card-note {
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 0.96rem;
+  font-size: 0.94rem;
   line-height: 1.5;
 }
 
@@ -420,6 +492,16 @@ body::before {
     flex-direction: row;
     justify-content: space-between;
     align-items: flex-start;
+  }
+}
+
+@media (min-width: 720px) {
+  .stats-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .card-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

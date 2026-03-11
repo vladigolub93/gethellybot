@@ -85,6 +85,58 @@
       .join("")}</div>`;
   }
 
+  function includesAny(value, fragments) {
+    const text = String(value || "").toLowerCase();
+    return fragments.some((fragment) => text.includes(fragment));
+  }
+
+  function sumBy(items, key) {
+    return (items || []).reduce((total, item) => {
+      const value = Number(item && item[key]);
+      return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }
+
+  function formatScore(value) {
+    if (value === null || value === undefined || value === "") return "N/A";
+    return String(value);
+  }
+
+  function renderStatsStrip(items) {
+    const visibleItems = (items || []).filter((item) => item && item.value !== null && item.value !== undefined && item.value !== "");
+    if (!visibleItems.length) return "";
+    return `
+      <section class="stats-strip">
+        ${visibleItems.map((item) => `
+          <article class="stat-card">
+            <span class="stat-value">${escapeHtml(item.value)}</span>
+            <span class="stat-label">${escapeHtml(item.label)}</span>
+          </article>
+        `).join("")}
+      </section>
+    `;
+  }
+
+  function renderCardMetrics(metrics) {
+    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
+    if (!visibleMetrics.length) return "";
+    return `
+      <div class="card-metrics">
+        ${visibleMetrics.map((metric) => `
+          <div class="metric">
+            <span class="metric-label">${escapeHtml(metric.label)}</span>
+            <span class="metric-value">${escapeHtml(metric.value)}</span>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderCardNote(value) {
+    if (!value) return "";
+    return `<p class="card-note">${escapeHtml(value)}</p>`;
+  }
+
   function renderDetailSection(title, rows) {
     return `
       <section class="detail-panel">
@@ -130,19 +182,30 @@
     if (role === "candidate") {
       const payload = await api("/webapp/api/candidate/opportunities");
       const items = payload.items || [];
+      const activeInterviewCount = items.filter((item) =>
+        includesAny(item.interviewStateLabel, ["queued", "active", "accepted", "started", "progress", "invited"])
+      ).length;
+      const completedInterviewCount = items.filter((item) =>
+        includesAny(item.interviewStateLabel, ["completed"])
+      ).length;
       appEl.innerHTML = `
         <section class="screen-header">
           <p class="eyebrow">Candidate view</p>
           <h2>My Opportunities</h2>
           <p>Your current matches, interview progress and saved profile context.</p>
         </section>
+        ${renderStatsStrip([
+          { label: "Opportunities", value: String(items.length) },
+          { label: "In interview", value: String(activeInterviewCount) },
+          { label: "Completed", value: String(completedInterviewCount) }
+        ])}
         <section class="detail-panel">
           <h3 class="section-title">Profile Snapshot</h3>
           <dl class="detail-grid">
             <div><dt>Location</dt><dd>${escapeHtml(payload.profile.location || "Not set")}</dd></div>
             <div><dt>Work format</dt><dd>${escapeHtml(payload.profile.workFormat || "Not set")}</dd></div>
             <div><dt>Salary</dt><dd>${escapeHtml(payload.profile.salaryExpectation || "Not set")}</dd></div>
-            <div class="span-full"><dt>Summary</dt><dd>${escapeHtml((payload.profile.summary || {}).approvalSummaryText || "No summary yet.")}</dd></div>
+            <div class="span-full"><dt>Summary</dt><dd>${escapeHtml(truncateText((payload.profile.summary || {}).approvalSummaryText || "No summary yet.", 220))}</dd></div>
           </dl>
         </section>
         <section class="list">
@@ -155,11 +218,11 @@
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
-              <div class="meta-stack">
-                <p class="meta-line">Budget: ${escapeHtml(item.budget || "Not specified")}</p>
-                <p class="meta-line">Interview: ${escapeHtml(item.interviewStateLabel || "Not started")}</p>
-                <p class="meta-line">Updated: ${escapeHtml(formatRelativeTime(item.updatedAt))}</p>
-              </div>
+              ${renderCardMetrics([
+                { label: "Budget", value: item.budget || "Not set" },
+                { label: "Interview", value: item.interviewStateLabel || "Not started" },
+                { label: "Updated", value: formatRelativeTime(item.updatedAt) }
+              ])}
             </article>
           `).join("") : `<div class="empty-state">No opportunities yet. Once Helly creates matches for you, they will appear here.</div>`}
         </section>
@@ -172,12 +235,21 @@
     if (role === "hiring_manager") {
       const payload = await api("/webapp/api/hiring-manager/vacancies");
       const items = payload.items || [];
+      const totalCandidateCount = sumBy(items, "candidateCount");
+      const totalActivePipelineCount = sumBy(items, "activePipelineCount");
+      const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
       appEl.innerHTML = `
         <section class="screen-header">
           <p class="eyebrow">Manager view</p>
           <h2>My Vacancies</h2>
           <p>One clean view of your live candidate pipeline and interview progress.</p>
         </section>
+        ${renderStatsStrip([
+          { label: "Vacancies", value: String(items.length) },
+          { label: "Candidates", value: String(totalCandidateCount) },
+          { label: "In pipeline", value: String(totalActivePipelineCount) },
+          { label: "Interviewed", value: String(totalCompletedInterviewCount) }
+        ])}
         <section class="list">
           ${items.length ? items.map((item) => `
             <article class="card" data-route="manager-vacancy:${item.id}">
@@ -188,12 +260,12 @@
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
-              <div class="meta-stack">
-                <p class="meta-line">Candidates: ${escapeHtml(item.candidateCount)}</p>
-                <p class="meta-line">Active pipeline: ${escapeHtml(item.activePipelineCount)}</p>
-                <p class="meta-line">Completed interviews: ${escapeHtml(item.completedInterviewCount)}</p>
-                <p class="meta-line">Updated: ${escapeHtml(formatRelativeTime(item.updatedAt))}</p>
-              </div>
+              ${renderCardMetrics([
+                { label: "Candidates", value: String(item.candidateCount) },
+                { label: "In pipeline", value: String(item.activePipelineCount) },
+                { label: "Interviewed", value: String(item.completedInterviewCount) }
+              ])}
+              ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
             </article>
           `).join("") : `<div class="empty-state">No vacancies yet. Open a vacancy in the Telegram bot and it will show up here.</div>`}
         </section>
@@ -205,12 +277,19 @@
     if (role === "admin") {
       const payload = await api("/webapp/api/admin/vacancies");
       const items = payload.items || [];
+      const totalCandidateCount = sumBy(items, "candidateCount");
+      const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
       appEl.innerHTML = `
         <section class="screen-header">
           <p class="eyebrow">Admin view</p>
           <h2>All Vacancies</h2>
           <p>Read-only visibility across the full Helly production pipeline.</p>
         </section>
+        ${renderStatsStrip([
+          { label: "Vacancies", value: String(items.length) },
+          { label: "Candidates", value: String(totalCandidateCount) },
+          { label: "Interviewed", value: String(totalCompletedInterviewCount) }
+        ])}
         <section class="list">
           ${items.length ? items.map((item) => `
             <article class="card" data-route="admin-vacancy:${item.id}">
@@ -221,12 +300,12 @@
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
-              <div class="meta-stack">
-                <p class="meta-line">Manager: ${escapeHtml(item.managerName || "Unknown")}</p>
-                <p class="meta-line">Candidates: ${escapeHtml(item.candidateCount)}</p>
-                <p class="meta-line">Completed interviews: ${escapeHtml(item.completedInterviewCount)}</p>
-                <p class="meta-line">Updated: ${escapeHtml(formatRelativeTime(item.updatedAt))}</p>
-              </div>
+              ${renderCardMetrics([
+                { label: "Manager", value: item.managerName || "Unknown" },
+                { label: "Candidates", value: String(item.candidateCount) },
+                { label: "Interviewed", value: String(item.completedInterviewCount) }
+              ])}
+              ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
             </article>
           `).join("") : `<div class="empty-state">No vacancies found.</div>`}
         </section>
@@ -243,6 +322,11 @@
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
         <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
+      ${renderStatsStrip([
+        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
+        { label: "Interview", value: payload.interview.stateLabel || "Not started" },
+        { label: "Score", value: formatScore(payload.evaluation.finalScore) }
+      ])}
       ${renderDetailSection("Match", [
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
@@ -291,6 +375,12 @@
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
         <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
       </section>
+      ${renderStatsStrip([
+        { label: "State", value: vacancy.state || "Unknown" },
+        { label: "Candidates", value: String(stats.candidateCount) },
+        { label: "In pipeline", value: String(stats.activePipelineCount) },
+        { label: "Interviewed", value: String(stats.completedInterviewCount) }
+      ])}
       ${renderDetailSection("Vacancy snapshot", [
         { label: "Budget", value: vacancy.budget || "Not specified" },
         { label: "Work format", value: vacancy.workFormat || "Not specified" },
@@ -311,12 +401,12 @@
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
-              <div class="meta-stack">
-                <p class="meta-line">Location: ${escapeHtml(item.location || "Not specified")}</p>
-                <p class="meta-line">Salary: ${escapeHtml(item.salaryExpectation || "Not specified")}</p>
-                <p class="meta-line">Interview: ${escapeHtml(item.interviewStateLabel || "Not started")}</p>
-                <p class="meta-line">Summary: ${escapeHtml(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 110))}</p>
-              </div>
+              ${renderCardMetrics([
+                { label: "Location", value: item.location || "Not set" },
+                { label: "Salary", value: item.salaryExpectation || "Not set" },
+                { label: "Interview", value: item.interviewStateLabel || "Not started" }
+              ])}
+              ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 120))}
             </article>
           `).join("") : `<div class="empty-state">No candidates are attached to this vacancy yet.</div>`}
         </div>
@@ -336,6 +426,12 @@
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
         <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
+      ${renderStatsStrip([
+        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
+        { label: "Interview", value: payload.interview.stateLabel || "Not started" },
+        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
+        { label: "Score", value: formatScore(payload.evaluation.finalScore) }
+      ])}
       ${renderDetailSection("Candidate", [
         { label: "Location", value: payload.candidate.location || "Not specified" },
         { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
