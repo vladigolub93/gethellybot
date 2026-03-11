@@ -739,8 +739,8 @@ Use the available project inputs exactly as provided:
 
 Return:
 - final_score from 0.0 to 1.0
-- strengths: short evidence-based bullets
-- risks: short evidence-based bullets
+- strengths: short evidence-based bullets tied to fit for this vacancy
+- risks: short evidence-based bullets tied to missing or weak signals for this vacancy
 - recommendation: advance or reject
 - interview_summary: recruiter-style 2-paragraph note
 

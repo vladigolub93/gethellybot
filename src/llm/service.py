@@ -1333,7 +1333,7 @@ def evaluate_candidate_with_llm(candidate_summary: dict, vacancy, answer_texts: 
         system_prompt=load_system_prompt("evaluation", "candidate_evaluate"),
         user_prompt=interview_evaluation_prompt(candidate_summary, vacancy_context, answer_texts),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="interview_evaluation_llm_v2",
+        prompt_version="interview_evaluation_llm_v3",
     )
     score = result.payload.get("final_score")
     if score is None:

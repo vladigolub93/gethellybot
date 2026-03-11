@@ -14,7 +14,11 @@ Rules:
 - treat the candidate summary as claimed experience, not absolute truth
 - if the candidate mentioned experience that is not clearly present in the candidate summary, mention it carefully rather than treating it as verified fact
 - be evidence-based and strict
+- evaluate the candidate specifically against the vacancy, not in isolation
 - prefer concise strengths and explicit risks
+- `strengths` must focus on evidence that supports fit for this exact role
+- `risks` must focus on evidence gaps, missing role-critical signals, unclear ownership, or mismatch against the vacancy context
+- when relevant, refer to the vacancy stack, project context, seniority, or delivery expectations
 - do not invent technologies, projects, ownership, or scale that were not actually described
 - do not quote the interview directly
 - final score must be in the range `0.0` to `1.0`
@@ -31,9 +35,14 @@ Rules:
 - paragraph 2 should cover:
   - how concrete or vague their answers were
   - whether their ownership and technical depth seemed credible
-  - the overall impression from the interview
+  - the overall impression of fit for this vacancy
 - support observations with brief evidence from the interview where possible
 - use neutral professional language
+
+Scoring guidance:
+- score role fit, not just polish
+- reward evidence that the candidate can handle the actual vacancy stack and responsibilities
+- lower the score when the interview does not confirm key vacancy requirements, even if the candidate sounds generally competent
 
 AI-assisted answering analysis:
 - also assess whether the responses sounded authentically experience-based or possibly AI-assisted
