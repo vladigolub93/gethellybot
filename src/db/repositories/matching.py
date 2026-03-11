@@ -10,6 +10,7 @@ from src.db.models.matching import InviteWave, Match, MatchingRun
 from src.matching.policy import (
     ACTIVE_MATCH_STATUSES as MATCH_ACTIVE_STATUSES,
     MATCH_STATUS_CANDIDATE_APPLIED,
+    MATCH_STATUS_FILTERED_OUT,
     MATCH_STATUS_INTERVIEW_QUEUED,
     PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES,
     PRE_INTERVIEW_MANAGER_REVIEW_STATUSES,
@@ -372,6 +373,17 @@ class MatchingRepository:
 
     def list_all_for_vacancy(self, vacancy_id) -> list[Match]:
         stmt = select(Match).where(Match.vacancy_id == vacancy_id)
+        return list(self.session.execute(stmt).scalars().all())
+
+    def list_seen_candidate_ids_for_vacancy(self, vacancy_id) -> list:
+        stmt = (
+            select(Match.candidate_profile_id)
+            .where(
+                Match.vacancy_id == vacancy_id,
+                Match.status != MATCH_STATUS_FILTERED_OUT,
+            )
+            .distinct()
+        )
         return list(self.session.execute(stmt).scalars().all())
 
     def mark_invited(self, match: Match) -> Match:

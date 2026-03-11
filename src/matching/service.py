@@ -58,15 +58,12 @@ class MatchingService:
                 candidate_profiles = [item["candidate"] for item in preloaded_candidates]
             else:
                 candidate_profiles = self.candidates.get_ready_profiles()
-        active_candidate_ids = {
-            match.candidate_profile_id
-            for match in self.matching.list_active_for_vacancy(vacancy.id)
-        }
-        if active_candidate_ids:
+        seen_candidate_ids = set(self.matching.list_seen_candidate_ids_for_vacancy(vacancy.id))
+        if seen_candidate_ids:
             candidate_profiles = [
                 candidate
                 for candidate in candidate_profiles
-                if candidate.id not in active_candidate_ids
+                if candidate.id not in seen_candidate_ids
             ]
 
         run = self.matching.create_run(
