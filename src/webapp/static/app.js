@@ -316,12 +316,17 @@
     if (!visibleItems.length) return "";
     return `
       <section class="stats-strip">
-        ${visibleItems.map((item) => `
+        ${visibleItems.map((item) => {
+          const rawValue = String(item.value);
+          const isLongValue = rawValue.length > 18;
+          const displayValue = isLongValue ? truncateText(rawValue, 28) : rawValue;
+          return `
           <article class="stat-card ${isTerminalTheme() ? "terminal-stat-card" : ""}">
-            <span class="stat-value">${escapeHtml(item.value)}</span>
+            <span class="stat-value ${isLongValue ? "stat-value-long" : ""}" title="${escapeHtml(rawValue)}">${escapeHtml(displayValue)}</span>
             <span class="stat-label">${escapeHtml(isTerminalTheme() ? terminalToken(item.label) : item.label)}</span>
           </article>
-        `).join("")}
+        `;
+        }).join("")}
       </section>
     `;
   }

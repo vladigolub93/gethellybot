@@ -136,11 +136,26 @@ html[data-theme="terminal"] body::before {
   width: min(100%, 760px);
   min-height: var(--tg-viewport-stable-height, var(--app-height, 100dvh));
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
   padding:
     calc(18px + max(env(safe-area-inset-top), var(--tg-content-safe-area-inset-top, 0px)))
     calc(16px + max(env(safe-area-inset-right), var(--tg-content-safe-area-inset-right, 0px)))
     calc(24px + max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px)))
     calc(16px + max(env(safe-area-inset-left), var(--tg-content-safe-area-inset-left, 0px)));
+}
+
+.challenge-shell > #app {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.challenge-shell > #app > .screen-card:only-child,
+.challenge-shell > #app > .locked-card:only-child,
+.challenge-shell > #app > .result-card:only-child {
+  margin-block: auto;
 }
 
 .challenge-utility {
@@ -390,6 +405,7 @@ html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
 .game-shell {
   display: flex;
   flex-direction: column;
+  min-height: clamp(520px, calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 92px), 860px);
   gap: 12px;
   padding: 14px;
 }
@@ -431,7 +447,8 @@ html[data-theme="terminal"] .missed-item {
 
 .canvas-wrap {
   position: relative;
-  min-height: 66dvh;
+  flex: 1;
+  min-height: clamp(300px, 48dvh, 460px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -452,23 +469,26 @@ html[data-theme="terminal"] .canvas-wrap {
 .game-canvas {
   display: block;
   width: 100%;
-  height: 66dvh;
-  min-height: 440px;
+  height: clamp(300px, 48dvh, 460px);
+  min-height: 300px;
   touch-action: manipulation;
 }
 
 .stage-banner {
   position: absolute;
-  top: 16px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100% - 24px);
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(3, 3, 4, 0.76);
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
   backdrop-filter: blur(8px);
   pointer-events: none;
 }
@@ -513,6 +533,7 @@ html[data-theme="terminal"] .canvas-hint::before {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   min-height: 34px;
   padding: 0 12px;
   border-bottom: 1px solid rgba(87, 255, 158, 0.14);
@@ -528,11 +549,16 @@ html[data-theme="terminal"] .canvas-hint::before {
 }
 
 .terminal-title {
+  flex: 1;
+  min-width: 0;
   margin-left: 4px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
   letter-spacing: 0.08em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .terminal-console-body {
@@ -544,7 +570,7 @@ html[data-theme="terminal"] .canvas-hint::before {
 
 .terminal-line {
   display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr);
+  grid-template-columns: minmax(72px, 108px) max-content minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   font-family:
@@ -571,6 +597,9 @@ html[data-theme="terminal"] .canvas-hint::before {
 
 .terminal-value {
   color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .canvas-hint {
@@ -716,6 +745,10 @@ html[data-theme="terminal"] .challenge-utility::before {
 }
 
 html[data-theme="terminal"] .challenge-shell > #app {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-top: 0;
@@ -887,4 +920,67 @@ html[data-theme="terminal"] .terminal-line {
 html[data-theme="terminal"] .terminal-key,
 html[data-theme="terminal"] .terminal-separator {
   color: #8e8e93;
+}
+
+html[data-theme="terminal"] .game-shell > .terminal-console {
+  margin-top: 0;
+}
+
+@media (max-width: 420px) {
+  .challenge-shell {
+    padding-inline:
+      calc(12px + max(env(safe-area-inset-left), var(--tg-content-safe-area-inset-left, 0px)))
+      calc(12px + max(env(safe-area-inset-right), var(--tg-content-safe-area-inset-right, 0px)));
+  }
+
+  .game-shell {
+    min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 76px);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .hud {
+    gap: 8px;
+  }
+
+  .hud-card {
+    padding: 10px 10px 8px;
+  }
+
+  .hud-value {
+    font-size: 1rem;
+    line-height: 1.15;
+  }
+
+  .hud-label {
+    font-size: 0.68rem;
+  }
+
+  .terminal-line {
+    grid-template-columns: minmax(62px, 84px) max-content minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .canvas-wrap {
+    min-height: clamp(280px, 42dvh, 380px);
+  }
+
+  .game-canvas {
+    height: clamp(280px, 42dvh, 380px);
+    min-height: 280px;
+  }
+
+  .stage-banner {
+    top: 8px;
+    padding: 7px 10px;
+    font-size: 0.76rem;
+  }
+
+  html[data-theme="terminal"] .challenge-utility {
+    padding: 10px;
+  }
+
+  html[data-theme="terminal"] .challenge-shell > #app {
+    padding: 14px;
+  }
 }
