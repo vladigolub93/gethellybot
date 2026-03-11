@@ -27,15 +27,107 @@ VERIFICATION_PHRASES = (
     "sync complete",
 )
 
+_CYRILLIC_TO_LATIN = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "ґ": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "є": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "і": "i",
+    "ї": "yi",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ы": "y",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+    "ь": "",
+    "ъ": "",
+}
+
+_TOKEN_ALIASES = {
+    "heli": "helly",
+    "helli": "helly",
+    "chek": "check",
+    "grin": "green",
+    "klin": "clean",
+    "merj": "merge",
+    "merzh": "merge",
+    "merdzh": "merge",
+    "komit": "commit",
+    "mod": "mode",
+    "kesh": "cache",
+    "seif": "safe",
+    "rolbek": "rollback",
+    "ziro": "zero",
+    "dauntaim": "downtime",
+    "hotfiks": "hotfix",
+    "redi": "ready",
+    "bekend": "backend",
+    "onlain": "online",
+    "shipt": "shipped",
+    "klaud": "cloud",
+    "sink": "sync",
+    "steibl": "stable",
+    "steybl": "stable",
+    "bild": "build",
+    "asink": "async",
+    "aysink": "async",
+    "eysink": "async",
+    "kiu": "queue",
+    "kyu": "queue",
+    "riliz": "release",
+    "reliz": "release",
+    "vebhuk": "webhook",
+    "webhuk": "webhook",
+    "kuik": "quick",
+    "brench": "branch",
+    "iz": "is",
+    "taini": "tiny",
+    "komplit": "complete",
+}
+
 
 def build_verification_phrase(*, profile_id, attempt_no: int) -> str:
     del profile_id, attempt_no
     return f"Helly check: {secrets.choice(VERIFICATION_PHRASES)}"
 
 
+def _transliterate_cyrillic(text: str) -> str:
+    return "".join(_CYRILLIC_TO_LATIN.get(char, char) for char in (text or "").lower())
+
+
+def _canonicalize_token(token: str) -> str:
+    return _TOKEN_ALIASES.get(token, token)
+
+
 def normalize_verification_text(text: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
-    return re.sub(r"\s+", " ", normalized)
+    transliterated = _transliterate_cyrillic(text)
+    normalized = re.sub(r"[^a-z0-9]+", " ", transliterated).strip()
+    tokens = [_canonicalize_token(token) for token in re.sub(r"\s+", " ", normalized).split()]
+    return " ".join(token for token in tokens if token)
 
 
 def _token_matches(expected_token: str, spoken_token: str) -> bool:

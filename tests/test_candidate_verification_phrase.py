@@ -45,6 +45,13 @@ def test_phrase_matches_verification_accepts_fuzzy_short_phrase() -> None:
     )
 
 
+def test_phrase_matches_verification_accepts_cyrillic_transcribed_english_phrase() -> None:
+    assert phrase_matches_verification(
+        expected_phrase="Helly check: stable build",
+        spoken_text="Хелли чек. Стейбл билд.",
+    )
+
+
 def test_format_verification_transcript_hint_returns_user_facing_text() -> None:
     assert format_verification_transcript_hint("helly check prod is green") == (
         'What I heard: "helly check prod is green"'

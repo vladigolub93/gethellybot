@@ -831,3 +831,52 @@ def test_verification_rejects_video_with_wrong_phrase() -> None:
     assert 'I heard on the video: "Helly check green deploy".' in result.notification_text
     assert 'You were supposed to say: "Helly check: sync complete".' in result.notification_text
     assert service.queue.messages == []
+
+
+def test_verification_accepts_cyrillic_transcript_of_expected_phrase() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_verifications = FakeCandidateVerificationsRepository()
+    service.repo = fake_repo
+    service.verifications = fake_verifications
+    service.files = SimpleNamespace(get_by_id=lambda _file_id: SimpleNamespace(id=_file_id, kind="video"))
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    class _FakeIngestion:
+        def __init__(self, _session):
+            return None
+
+        def ingest_file(self, _file_row, *, prompt_text=None):
+            assert prompt_text == "Helly check: stable build"
+            return SimpleNamespace(text="Хелли чек. Стейбл билд.")
+
+    import src.candidate_profile.service as candidate_service_module
+
+    original_ingestion = candidate_service_module.ContentIngestionService
+    candidate_service_module.ContentIngestionService = _FakeIngestion
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_VERIFICATION_PENDING)
+    fake_verifications.create(
+        profile_id=profile.id,
+        attempt_no=1,
+        phrase_text="Helly check: stable build",
+    )
+
+    try:
+        result = service.handle_verification_submission(
+            user=user,
+            raw_message_id=uuid4(),
+            content_type="video",
+            file_id=uuid4(),
+        )
+    finally:
+        candidate_service_module.ContentIngestionService = original_ingestion
+
+    assert result is not None
+    assert result.status == "completed"
+    assert profile.state == CANDIDATE_STATE_READY
+    assert profile.ready_at == "now"
+    assert len(service.queue.messages) == 1
