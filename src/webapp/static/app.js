@@ -300,16 +300,20 @@
     `;
   }
 
-  function renderCardNote(value) {
+  function renderCardNote(value, extraClass) {
     if (!value) return "";
-    return `<p class="card-note ${isTerminalTheme() ? "card-note-terminal" : ""}">${escapeHtml(value)}</p>`;
+    const classes = ["card-note"];
+    if (isTerminalTheme()) classes.push("card-note-terminal");
+    if (extraClass) classes.push(extraClass);
+    return `<p class="${classes.join(" ")}">${escapeHtml(value)}</p>`;
   }
 
-  function renderInlineMetrics(metrics) {
+  function renderInlineMetrics(metrics, extraClass) {
     const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
+    const className = extraClass ? `inline-metrics ${extraClass}` : "inline-metrics";
     if (!visibleMetrics.length) return "";
     return `
-      <div class="inline-metrics">
+      <div class="${className}">
         ${visibleMetrics.map((metric) => `
           <div class="inline-metric">
             <span class="inline-metric-label">${escapeHtml(isTerminalTheme() ? terminalToken(metric.label) : metric.label)}</span>
@@ -649,26 +653,19 @@
         <h3 class="section-title">Candidate pipeline</h3>
         <div class="list">
           ${items.length ? items.map((item) => `
-            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="${rolePrefix}-match:${item.id}">
-              <div class="card-head">
-                <div>
-                  <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Candidate"}</p>
+            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="${rolePrefix}-match:${item.id}">
+              <div class="card-head card-head-compact">
+                <div class="card-title-wrap">
                   <h3>${escapeHtml(item.candidateName || "Candidate")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
-              ${isTerminalTheme() ? `
-                <div class="terminal-command-row terminal-command-row-card">
-                  <span class="terminal-prompt">&gt;</span>
-                  <span class="terminal-command">inspect /matches/${escapeHtml(item.id)}</span>
-                </div>
-              ` : ""}
-              ${renderCardMetrics([
+              ${renderInlineMetrics([
                 { label: "Location", value: item.location || "Not set" },
-                { label: "Salary", value: item.salaryExpectation || "Not set" },
-                { label: "Interview", value: item.interviewStateLabel || "Not started" }
-              ])}
-              ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 120))}
+                { label: "Interview", value: item.interviewStateLabel || "Not started" },
+                { label: "Salary", value: item.salaryExpectation || "Not set" }
+              ], "inline-metrics-compact")}
+              ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 96), "card-note-compact")}
             </article>
           `).join("") : `<div class="empty-state">No candidates are attached to this vacancy yet.</div>`}
         </div>
