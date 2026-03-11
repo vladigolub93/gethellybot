@@ -201,6 +201,18 @@ class MatchingRepository:
         )
         return self.session.execute(stmt).scalar_one_or_none()
 
+    def list_invited_for_candidate(self, candidate_profile_id, *, limit: int = 3) -> list[Match]:
+        stmt = (
+            select(Match)
+            .where(
+                Match.candidate_profile_id == candidate_profile_id,
+                Match.status == "invited",
+            )
+            .order_by(Match.updated_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
     def count_shortlisted_for_vacancy(self, vacancy_id) -> int:
         stmt = select(Match).where(
             Match.vacancy_id == vacancy_id,
@@ -429,3 +441,17 @@ class MatchingRepository:
             stmt = stmt.where(Match.status == "manager_review")
         stmt = stmt.order_by(Match.updated_at.desc()).limit(1)
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def list_manager_review_for_manager(self, vacancy_ids: list, *, limit: int = 3) -> list[Match]:
+        if not vacancy_ids:
+            return []
+        stmt = (
+            select(Match)
+            .where(
+                Match.vacancy_id.in_(vacancy_ids),
+                Match.status == "manager_review",
+            )
+            .order_by(Match.updated_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.execute(stmt).scalars().all())

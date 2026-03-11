@@ -318,9 +318,24 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
         if active_session is not None:
             current_vacancy = _call_optional(vacancies, "get_by_id", getattr(active_session, "vacancy_id", None))
     elif stage == "INTERVIEW_INVITED":
-        invited_match = _call_optional(matches, "get_latest_invited_for_candidate", candidate.id)
-        if invited_match is not None:
-            current_vacancy = _call_optional(vacancies, "get_by_id", getattr(invited_match, "vacancy_id", None))
+        invited_matches = _call_optional(matches, "list_invited_for_candidate", candidate.id, limit=3)
+        if invited_matches:
+            vacancy_briefs = []
+            for index, match in enumerate(invited_matches, start=1):
+                vacancy = _call_optional(vacancies, "get_by_id", getattr(match, "vacancy_id", None))
+                if vacancy is None:
+                    continue
+                brief = _format_vacancy_brief(slot=index, vacancy=vacancy)
+                if brief:
+                    vacancy_briefs.append(brief)
+            if vacancy_briefs:
+                snippets.append("Current interview invitations: " + " | ".join(vacancy_briefs))
+            if len(invited_matches) == 1:
+                current_vacancy = _call_optional(vacancies, "get_by_id", getattr(invited_matches[0], "vacancy_id", None))
+        else:
+            invited_match = _call_optional(matches, "get_latest_invited_for_candidate", candidate.id)
+            if invited_match is not None:
+                current_vacancy = _call_optional(vacancies, "get_by_id", getattr(invited_match, "vacancy_id", None))
     if current_vacancy is not None:
         current_vacancy_brief = _format_vacancy_brief(slot=1, vacancy=current_vacancy)
         if current_vacancy_brief:
@@ -390,18 +405,34 @@ def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancie
             snippets.append("Current candidate batch in review: " + " | ".join(candidate_briefs))
 
     if stage == "MANAGER_REVIEW":
-        review_match = _call_optional(matches, "get_latest_manager_review_for_manager", [vacancy.id])
-        if review_match is not None:
-            candidate = _call_optional(candidates, "get_by_id", getattr(review_match, "candidate_profile_id", None))
-            version = _get_current_version(candidates, candidate)
-            brief = _format_candidate_brief(slot=1, candidate=candidate, version=version)
-            if brief:
-                snippets.append(
-                    "Current candidate under final manager review: "
-                    + _strip_slot_prefix(brief).strip()
-                )
-            evaluation = _call_optional(evaluations, "get_by_match_id", getattr(review_match, "id", None))
-            snippets.extend(_evaluation_memory(evaluation))
+        review_vacancy_ids = [item.id for item in open_vacancies] or [vacancy.id]
+        review_matches = _call_optional(matches, "list_manager_review_for_manager", review_vacancy_ids, limit=3)
+        if review_matches:
+            candidate_briefs = []
+            for index, review_match in enumerate(review_matches, start=1):
+                candidate = _call_optional(candidates, "get_by_id", getattr(review_match, "candidate_profile_id", None))
+                version = _get_current_version(candidates, candidate)
+                brief = _format_candidate_brief(slot=index, candidate=candidate, version=version)
+                if brief:
+                    candidate_briefs.append(brief)
+            if candidate_briefs:
+                snippets.append("Current candidates under final manager review: " + " | ".join(candidate_briefs))
+            if len(review_matches) == 1:
+                evaluation = _call_optional(evaluations, "get_by_match_id", getattr(review_matches[0], "id", None))
+                snippets.extend(_evaluation_memory(evaluation))
+        else:
+            review_match = _call_optional(matches, "get_latest_manager_review_for_manager", review_vacancy_ids)
+            if review_match is not None:
+                candidate = _call_optional(candidates, "get_by_id", getattr(review_match, "candidate_profile_id", None))
+                version = _get_current_version(candidates, candidate)
+                brief = _format_candidate_brief(slot=1, candidate=candidate, version=version)
+                if brief:
+                    snippets.append(
+                        "Current candidate under final manager review: "
+                        + _strip_slot_prefix(brief).strip()
+                    )
+                evaluation = _call_optional(evaluations, "get_by_match_id", getattr(review_match, "id", None))
+                snippets.extend(_evaluation_memory(evaluation))
 
     return _dedupe(snippets)
 

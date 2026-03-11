@@ -68,6 +68,14 @@ class FakeMatchingRepository:
                 return match
         return None
 
+    def list_invited_for_candidate(self, candidate_profile_id, *, limit=3):
+        rows = [
+            match
+            for match in reversed(self.matches)
+            if match.candidate_profile_id == candidate_profile_id and match.status == "invited"
+        ]
+        return rows[:limit]
+
     def get_next_queued_for_candidate(self, candidate_profile_id):
         for match in self.matches:
             if match.candidate_profile_id == candidate_profile_id and match.status == "interview_queued":
@@ -449,6 +457,35 @@ def test_skip_opportunity_notifies_manager_and_marks_declined() -> None:
     assert match.status == "candidate_declined_interview"
     assert service.notifications.rows[-1].user_id == vacancy.manager_user_id
     assert "declined the interview invitation" in service.notifications.rows[-1].payload_json["text"].lower()
+
+
+def test_accept_invitation_requires_buttons_when_multiple_invites_exist() -> None:
+    service, candidate, match, _vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    second_match = SimpleNamespace(
+        id=uuid4(),
+        matching_run_id=uuid4(),
+        vacancy_id=uuid4(),
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id=service.candidates.candidate_version.id,
+        status="invited",
+        invitation_sent_at="now",
+        candidate_response_at=None,
+    )
+    service.matches.matches.append(second_match)
+    user = SimpleNamespace(id=candidate.user_id)
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+    )
+
+    assert result is not None
+    assert result.status == "invite_ambiguous"
+    assert "more than one interview invitation" in result.notification_text.lower()
+    assert match.status == "invited"
+    assert second_match.status == "invited"
 
 
 def test_accept_invitation_queues_when_another_interview_is_active() -> None:

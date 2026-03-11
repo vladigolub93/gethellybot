@@ -44,11 +44,15 @@ class FakeInterviewsRepository:
 
 
 class FakeMatchingRepository:
-    def __init__(self, match):
+    def __init__(self, match, extra_matches=None):
         self.match = match
+        self.matches = [match] + list(extra_matches or [])
 
     def get_by_id(self, match_id):
-        return self.match if str(self.match.id) == str(match_id) else None
+        for match in self.matches:
+            if str(match.id) == str(match_id):
+                return match
+        return None
 
     def mark_manager_decision(self, match, *, status):
         match.status = status
@@ -56,9 +60,18 @@ class FakeMatchingRepository:
         return match
 
     def get_latest_manager_review_for_manager(self, vacancy_ids, manager_review_only=True):
-        if self.match.vacancy_id in vacancy_ids and self.match.status == "manager_review":
-            return self.match
+        for match in reversed(self.matches):
+            if match.vacancy_id in vacancy_ids and match.status == "manager_review":
+                return match
         return None
+
+    def list_manager_review_for_manager(self, vacancy_ids, *, limit=3):
+        rows = [
+            match
+            for match in reversed(self.matches)
+            if match.vacancy_id in vacancy_ids and match.status == "manager_review"
+        ]
+        return rows[:limit]
 
 
 class FakeEvaluationsRepository:
@@ -296,3 +309,30 @@ def test_execute_manager_review_action_rejects_unknown_match_id() -> None:
     assert result is None
     assert match.status == "manager_review"
     assert candidate.state == "READY"
+
+
+def test_execute_manager_review_action_requires_buttons_when_multiple_reviews_exist() -> None:
+    service, candidate, _candidate_user, manager, match, _session_row = _build_service()
+    match.status = "manager_review"
+    second_match = SimpleNamespace(
+        id=uuid4(),
+        vacancy_id=match.vacancy_id,
+        candidate_profile_id=match.candidate_profile_id,
+        candidate_profile_version_id=match.candidate_profile_version_id,
+        status="manager_review",
+        manager_decision_at=None,
+    )
+    service.matches = FakeMatchingRepository(match, extra_matches=[second_match])
+    user = SimpleNamespace(id=manager.id, is_hiring_manager=True)
+
+    result = service.execute_manager_review_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="approve_candidate",
+    )
+
+    assert result is not None
+    assert result.status == "help"
+    assert "more than one candidate waiting for final review" in result.notification_text.lower()
+    assert match.status == "manager_review"
+    assert second_match.status == "manager_review"

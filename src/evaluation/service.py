@@ -219,7 +219,22 @@ class EvaluationService:
             ):
                 return None
         else:
-            match = self.matches.get_latest_manager_review_for_manager(manager_vacancy_ids)
+            review_matches = None
+            list_reviews = getattr(self.matches, "list_manager_review_for_manager", None)
+            if callable(list_reviews):
+                review_matches = list(list_reviews(manager_vacancy_ids, limit=3) or [])
+            if review_matches is not None:
+                if len(review_matches) > 1:
+                    return ManagerDecisionResult(
+                        status="help",
+                        notification_template="manager_candidate_review_help",
+                        notification_text=self._copy(
+                            "You have more than one candidate waiting for final review. Use the buttons under the candidate card you want to approve or reject."
+                        ),
+                    )
+                match = review_matches[0] if review_matches else None
+            else:
+                match = self.matches.get_latest_manager_review_for_manager(manager_vacancy_ids)
         if match is None:
             return None
 

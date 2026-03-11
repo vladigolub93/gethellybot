@@ -420,7 +420,26 @@ class InterviewService:
         if candidate is None:
             return None
 
-        invited_match = self.matches.get_by_id(match_id) if match_id else self.matches.get_latest_invited_for_candidate(candidate.id)
+        invited_match = None
+        if match_id:
+            invited_match = self.matches.get_by_id(match_id)
+        else:
+            invited_matches = None
+            list_invited = getattr(self.matches, "list_invited_for_candidate", None)
+            if callable(list_invited):
+                invited_matches = list(list_invited(candidate.id, limit=3) or [])
+            if invited_matches is not None:
+                if len(invited_matches) > 1:
+                    return InterviewUserResult(
+                        status="invite_ambiguous",
+                        notification_template="candidate_interview_invitation_help",
+                        notification_text=self._copy(
+                            "You have more than one interview invitation waiting. Use the buttons under the vacancy card you want to accept or skip."
+                        ),
+                    )
+                invited_match = invited_matches[0] if invited_matches else None
+            else:
+                invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
         if invited_match is not None and getattr(invited_match, "candidate_profile_id", None) != candidate.id:
             return None
         if invited_match is not None and getattr(invited_match, "status", None) != "invited":

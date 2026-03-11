@@ -9,7 +9,11 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.jobs.db_queue import DatabaseQueueClient
 from src.jobs.queue import JobMessage
-from src.matching.policy import MATCH_BATCH_SIZE, MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY
+from src.matching.policy import (
+    MATCH_BATCH_SIZE,
+    MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE,
+    MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY,
+)
 from src.matching.review import MatchingReviewService
 from src.matching.service import MatchingService
 from src.matching.waves import InviteWaveService
@@ -106,7 +110,7 @@ class MatchingProcessingService:
                 trigger_type="job",
             )
         elif result["shortlisted_count"] > 0 and trigger_type in candidate_review_triggers:
-            self.review_service.dispatch_candidate_batch_for_profile(
+            review_dispatch_result = self.review_service.dispatch_candidate_batch_for_profile(
                 candidate_profile_id=payload.get("trigger_candidate_profile_id"),
                 force=trigger_type == "candidate_manual_request",
                 trigger_type="job",
@@ -129,8 +133,9 @@ class MatchingProcessingService:
                 candidate_profile_id=payload.get("trigger_candidate_profile_id"),
                 request_id=payload.get("candidate_manual_request_id"),
                 shortlisted_count=result["shortlisted_count"],
+                review_dispatch_result=review_dispatch_result,
             )
-        return result
+        return {**result, "review_dispatch_result": review_dispatch_result}
 
     def _maybe_notify_candidate_manual_refresh_result(
         self,
@@ -139,6 +144,7 @@ class MatchingProcessingService:
         candidate_profile_id: str | None,
         request_id: str | None,
         shortlisted_count: int,
+        review_dispatch_result: dict | None = None,
     ) -> None:
         if not candidate_profile_id or not request_id:
             return
@@ -156,20 +162,34 @@ class MatchingProcessingService:
 
         total_shortlisted = max(int(shortlisted_count or 0), 0)
         had_failed_jobs = False
+        total_notified = max(int((review_dispatch_result or {}).get("notified_count") or 0), 0)
+        max_batch_count = max(int((review_dispatch_result or {}).get("batch_count") or 0), 0)
+        candidate_cap_reached = (review_dispatch_result or {}).get("status") == "candidate_cap_reached"
+        already_presented = (review_dispatch_result or {}).get("status") == "already_presented"
         for related_job in related_jobs:
             if str(getattr(related_job, "id", "")) == current_job_id:
                 continue
             if getattr(related_job, "status", None) == "completed":
-                total_shortlisted += max(int((getattr(related_job, "result_json", None) or {}).get("shortlisted_count") or 0), 0)
+                related_result = getattr(related_job, "result_json", None) or {}
+                total_shortlisted += max(int(related_result.get("shortlisted_count") or 0), 0)
+                related_review = related_result.get("review_dispatch_result") or {}
+                total_notified += max(int(related_review.get("notified_count") or 0), 0)
+                max_batch_count = max(max_batch_count, int(related_review.get("batch_count") or 0))
+                candidate_cap_reached = candidate_cap_reached or related_review.get("status") == "candidate_cap_reached"
+                already_presented = already_presented or related_review.get("status") == "already_presented"
             elif getattr(related_job, "status", None) == "failed":
                 had_failed_jobs = True
 
-        if total_shortlisted > 0:
+        if total_shortlisted > 0 and total_notified > 0:
             return
 
         self._notify_candidate_manual_refresh_result(
             candidate_profile_id=str(candidate_profile_id),
             had_failed_jobs=had_failed_jobs,
+            total_shortlisted=total_shortlisted,
+            current_batch_count=max_batch_count,
+            candidate_cap_reached=candidate_cap_reached,
+            already_presented=already_presented,
         )
 
     def _notify_manager_manual_refresh_result(
@@ -190,11 +210,26 @@ class MatchingProcessingService:
                 f"but you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates in the active interview pipeline. "
                 "Wait until one finishes or drops out before I send more profiles."
             )
+        elif review_dispatch_result and review_dispatch_result.get("status") == "already_presented":
+            batch_count = int(review_dispatch_result.get("batch_count") or 0)
+            if batch_count > 0:
+                text = (
+                    "Matching refresh complete. I found more matching signals, but I didn't resend profiles because "
+                    f"you already have {batch_count} active "
+                    f"{self._pluralize_candidates(batch_count)} in the current review batch for this vacancy."
+                )
+            else:
+                text = (
+                    "Matching refresh complete. I found more matching signals, but your current review batch is already active. "
+                    "Review those profiles first and I’ll send the next candidates when the queue moves."
+                )
         elif shortlisted_count > 0:
+            notified_count = max(int((review_dispatch_result or {}).get("notified_count") or 0), 0)
+            sent_count = notified_count or min(shortlisted_count, MATCH_BATCH_SIZE)
             text = (
                 f"Matching refresh complete. I found {shortlisted_count} strong "
                 f"{self._pluralize_candidates(shortlisted_count)} for this vacancy and sent you "
-                f"the first batch of up to {MATCH_BATCH_SIZE} for pre-interview review."
+                f"{sent_count} new {self._pluralize_candidates(sent_count)} for pre-interview review."
             )
         else:
             active_match_count = len(self.matching.list_active_for_vacancy(vacancy.id))
@@ -226,6 +261,10 @@ class MatchingProcessingService:
         *,
         candidate_profile_id: str,
         had_failed_jobs: bool,
+        total_shortlisted: int = 0,
+        current_batch_count: int = 0,
+        candidate_cap_reached: bool = False,
+        already_presented: bool = False,
     ) -> None:
         try:
             profile_id = UUID(str(candidate_profile_id))
@@ -244,6 +283,24 @@ class MatchingProcessingService:
                 "I rechecked current open roles for your profile, but I couldn't complete every search cleanly just now. "
                 "Nothing new is ready yet."
             )
+        elif candidate_cap_reached:
+            text = (
+                f"I found additional matching roles, but you already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
+                "Wait for manager decisions before I send more roles."
+            )
+        elif total_shortlisted > 0 and already_presented:
+            shown_count = current_batch_count or active_match_count
+            if shown_count > 0:
+                noun = "opportunity card" if shown_count == 1 else "opportunity cards"
+                text = (
+                    "I checked current open roles again. I found more matching signals, "
+                    f"but I didn't resend anything because you already have {shown_count} active {noun} waiting in chat."
+                )
+            else:
+                text = (
+                    "I checked current open roles again. I found more matching signals, "
+                    "but your current vacancy review batch is already active in chat, so I didn't resend it."
+                )
         elif active_match_count > 0:
             verb = "is" if active_match_count == 1 else "are"
             noun = "opportunity" if active_match_count == 1 else "opportunities"
