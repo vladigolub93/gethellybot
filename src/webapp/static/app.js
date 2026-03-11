@@ -4,14 +4,11 @@
     session: null,
     apiCache: new Map(),
     backButtonHandlerBound: false,
-    theme: "default",
+    theme: "terminal",
   };
-  const THEME_STORAGE_KEY = "helly-webapp-theme";
-  const DEFAULT_THEME = "default";
   const TERMINAL_THEME = "terminal";
 
   const appEl = document.getElementById("app");
-  const themeToggleEl = document.getElementById("theme-toggle");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const handleTelegramBack = () => {
     if (getCurrentRoute() === "home") {
@@ -54,11 +51,8 @@
   }
 
   function applyTelegramChrome() {
-    const themeColors = state.theme === TERMINAL_THEME
-      ? { background: "#020503", surface: "#07110b" }
-      : { background: "#030304", surface: "#0d0d11" };
-    const backgroundColor = themeColors.background;
-    const surfaceColor = themeColors.surface;
+    const backgroundColor = "#141415";
+    const surfaceColor = "#1c1c1e";
     updateThemeColorMeta(backgroundColor);
     if (!tg) return;
     try {
@@ -97,61 +91,26 @@
   }
 
   function normalizeTheme(value) {
-    return value === TERMINAL_THEME ? TERMINAL_THEME : DEFAULT_THEME;
-  }
-
-  function readStoredTheme() {
-    try {
-      return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
-    } catch (_) {
-      return DEFAULT_THEME;
-    }
-  }
-
-  function persistTheme(theme) {
-    try {
-      if (theme === DEFAULT_THEME) {
-        window.localStorage.removeItem(THEME_STORAGE_KEY);
-      } else {
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-      }
-    } catch (_) {}
+    return TERMINAL_THEME;
   }
 
   function syncThemeInUrl() {
     const currentUrl = new URL(window.location.href);
-    if (state.theme === DEFAULT_THEME) {
-      currentUrl.searchParams.delete("theme");
-    } else {
-      currentUrl.searchParams.set("theme", state.theme);
-    }
+    currentUrl.searchParams.delete("theme");
     const nextUrl = `${currentUrl.pathname}${currentUrl.search}`;
     window.history.replaceState(window.history.state || { route: getCurrentRoute() }, "", nextUrl);
   }
 
   function withCurrentTheme(url) {
     const nextUrl = new URL(url, window.location.origin);
-    if (state.theme === DEFAULT_THEME) {
-      nextUrl.searchParams.delete("theme");
-    } else {
-      nextUrl.searchParams.set("theme", state.theme);
-    }
+    nextUrl.searchParams.delete("theme");
     return nextUrl.toString();
-  }
-
-  function updateThemeToggleLabel() {
-    if (!themeToggleEl) return;
-    const terminalEnabled = state.theme === TERMINAL_THEME;
-    themeToggleEl.textContent = terminalEnabled ? "Default theme" : "Terminal preview";
-    themeToggleEl.setAttribute("aria-pressed", terminalEnabled ? "true" : "false");
   }
 
   function setTheme(theme, options) {
     state.theme = normalizeTheme(theme);
     document.documentElement.setAttribute("data-theme", state.theme);
-    persistTheme(state.theme);
     syncThemeInUrl();
-    updateThemeToggleLabel();
     applyTelegramChrome();
     if (options && options.rerender && state.session) {
       renderRoute();
@@ -159,21 +118,7 @@
   }
 
   function initializeTheme() {
-    const themeFromQuery = new URLSearchParams(window.location.search).get("theme");
-    const initialTheme = themeFromQuery ? normalizeTheme(themeFromQuery) : readStoredTheme();
-    setTheme(initialTheme, { rerender: false });
-  }
-
-  function bindThemeToggle() {
-    if (!themeToggleEl) return;
-    updateThemeToggleLabel();
-    themeToggleEl.addEventListener("click", () => {
-      tapFeedback();
-      setTheme(
-        state.theme === TERMINAL_THEME ? DEFAULT_THEME : TERMINAL_THEME,
-        { rerender: true }
-      );
-    });
+    setTheme(TERMINAL_THEME, { rerender: false });
   }
 
   function tapFeedback() {
@@ -293,16 +238,12 @@
     return `
       <section class="terminal-console">
         <div class="terminal-console-head">
-          <span class="terminal-led"></span>
-          <span class="terminal-led"></span>
-          <span class="terminal-led"></span>
           <span class="terminal-title">${escapeHtml(title)}</span>
         </div>
         <div class="terminal-console-body">
           ${visibleRows.map((row) => `
             <div class="terminal-line">
-              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}</span>
-              <span class="terminal-separator">::</span>
+              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}<span class="terminal-separator"> ::</span></span>
               <span class="terminal-value">${escapeHtml(row.value)}</span>
             </div>
           `).join("")}
@@ -860,7 +801,6 @@
     try {
       initializeTheme();
       bindTelegramRuntime();
-      bindThemeToggle();
       if (tg) {
         if (tg.BackButton && typeof tg.BackButton.hide === "function") {
           tg.BackButton.hide();

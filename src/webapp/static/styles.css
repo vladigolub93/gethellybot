@@ -199,7 +199,7 @@ html[data-theme="terminal"] body::before {
 }
 
 .topbar-actions {
-  margin-top: 12px;
+  display: none;
 }
 
 .theme-toggle {
@@ -261,10 +261,6 @@ html[data-theme="terminal"] body::before {
   flex: 1;
   min-height: 0;
   gap: 14px;
-}
-
-.app-root > .state-card:only-child {
-  margin-block: auto;
 }
 
 .stats-strip {
@@ -502,7 +498,7 @@ html[data-theme="terminal"] .card-note-terminal::before {
 .terminal-console-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
   min-height: 34px;
   padding: 0 12px;
@@ -511,17 +507,13 @@ html[data-theme="terminal"] .card-note-terminal::before {
 }
 
 .terminal-led {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(87, 255, 158, 0.42);
-  box-shadow: 0 0 10px rgba(87, 255, 158, 0.22);
+  display: none;
 }
 
 .terminal-title {
   flex: 1;
   min-width: 0;
-  margin-left: 4px;
+  margin-left: 0;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
@@ -541,7 +533,7 @@ html[data-theme="terminal"] .card-note-terminal::before {
 .terminal-line,
 .terminal-command-row {
   display: grid;
-  grid-template-columns: minmax(72px, 108px) max-content minmax(0, 1fr);
+  grid-template-columns: minmax(88px, 118px) minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   font-family:
@@ -560,6 +552,10 @@ html[data-theme="terminal"] .card-note-terminal::before {
 .terminal-key,
 .terminal-metric-key {
   color: var(--muted);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  white-space: nowrap;
   text-transform: lowercase;
 }
 
@@ -1049,7 +1045,7 @@ html[data-theme="terminal"] .app-shell {
 html[data-theme="terminal"] .topbar {
   position: relative;
   margin-bottom: 0;
-  padding: 52px 18px 18px;
+  padding: 42px 18px 18px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-bottom: 0;
   border-radius: 16px 16px 0 0;
@@ -1058,17 +1054,7 @@ html[data-theme="terminal"] .topbar {
 }
 
 html[data-theme="terminal"] .topbar::before {
-  content: "";
-  position: absolute;
-  top: 14px;
-  left: 16px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #ff5f57;
-  box-shadow:
-    20px 0 0 #febc2e,
-    40px 0 0 #28c840;
+  display: none;
 }
 
 html[data-theme="terminal"] .topbar-copy {
@@ -1079,7 +1065,7 @@ html[data-theme="terminal"] .topbar-kicker {
   position: absolute;
   top: 13px;
   left: 50%;
-  max-width: calc(100% - 180px);
+  max-width: calc(100% - 32px);
   overflow: hidden;
   transform: translateX(-50%);
   font-family:
@@ -1131,10 +1117,7 @@ html[data-theme="terminal"] .topbar-note::before {
 }
 
 html[data-theme="terminal"] .topbar-actions {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  margin: 0;
+  display: none;
 }
 
 html[data-theme="terminal"] .theme-toggle {
@@ -1358,7 +1341,7 @@ html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
   }
 
   .terminal-line {
-    grid-template-columns: minmax(64px, 88px) max-content minmax(0, 1fr);
+    grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
     gap: 6px;
   }
 
@@ -1368,11 +1351,11 @@ html[data-theme="terminal"] .detail-panel-terminal .terminal-section-head {
   }
 
   html[data-theme="terminal"] .topbar {
-    padding: 48px 14px 14px;
+    padding: 40px 14px 14px;
   }
 
   html[data-theme="terminal"] .topbar-kicker {
-    max-width: calc(100% - 164px);
+    max-width: calc(100% - 28px);
     font-size: 0.76rem;
   }
 

@@ -25,10 +25,10 @@
     "SF Pro Text",
     "Segoe UI",
     sans-serif;
-  --token-fill-correct: rgba(12, 12, 18, 0.92);
-  --token-fill-wrong: rgba(18, 12, 18, 0.92);
+  --token-fill-correct: rgba(18, 18, 22, 0.94);
+  --token-fill-wrong: rgba(18, 18, 22, 0.94);
   --token-stroke-correct: rgba(255, 255, 255, 0.08);
-  --token-stroke-wrong: rgba(255, 122, 133, 0.18);
+  --token-stroke-wrong: rgba(255, 255, 255, 0.08);
   --token-text: #f8f8fb;
 }
 
@@ -61,10 +61,10 @@ html[data-theme="terminal"] {
     Consolas,
     "Liberation Mono",
     monospace;
-  --token-fill-correct: rgba(7, 17, 11, 0.96);
-  --token-fill-wrong: rgba(20, 10, 14, 0.96);
-  --token-stroke-correct: rgba(87, 255, 158, 0.3);
-  --token-stroke-wrong: rgba(255, 125, 150, 0.24);
+  --token-fill-correct: rgba(40, 40, 44, 0.98);
+  --token-fill-wrong: rgba(40, 40, 44, 0.98);
+  --token-stroke-correct: rgba(255, 255, 255, 0.08);
+  --token-stroke-wrong: rgba(255, 255, 255, 0.08);
   --token-text: #d8ffe3;
 }
 
@@ -152,16 +152,8 @@ html[data-theme="terminal"] body::before {
   min-height: 0;
 }
 
-.challenge-shell > #app > .screen-card:only-child,
-.challenge-shell > #app > .locked-card:only-child,
-.challenge-shell > #app > .result-card:only-child {
-  margin-block: auto;
-}
-
 .challenge-utility {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
+  display: none;
 }
 
 .theme-toggle {
@@ -532,7 +524,7 @@ html[data-theme="terminal"] .canvas-hint::before {
 .terminal-console-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
   min-height: 34px;
   padding: 0 12px;
@@ -541,17 +533,13 @@ html[data-theme="terminal"] .canvas-hint::before {
 }
 
 .terminal-led {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(87, 255, 158, 0.42);
-  box-shadow: 0 0 10px rgba(87, 255, 158, 0.22);
+  display: none;
 }
 
 .terminal-title {
   flex: 1;
   min-width: 0;
-  margin-left: 4px;
+  margin-left: 0;
   overflow: hidden;
   color: var(--muted);
   font-size: 0.74rem;
@@ -570,7 +558,7 @@ html[data-theme="terminal"] .canvas-hint::before {
 
 .terminal-line {
   display: grid;
-  grid-template-columns: minmax(72px, 108px) max-content minmax(0, 1fr);
+  grid-template-columns: minmax(88px, 118px) minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   font-family:
@@ -588,6 +576,10 @@ html[data-theme="terminal"] .canvas-hint::before {
 
 .terminal-key {
   color: var(--muted);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  white-space: nowrap;
   text-transform: lowercase;
 }
 
@@ -606,8 +598,8 @@ html[data-theme="terminal"] .canvas-hint::before {
   color: var(--muted);
   font-size: 0.94rem;
   line-height: 1.5;
-  text-align: center;
-  padding: 0 8px 2px;
+  text-align: left;
+  padding: 0 2px 2px;
 }
 
 .result-card h2 {
@@ -687,9 +679,9 @@ html[data-theme="terminal"] {
     "Liberation Mono",
     monospace;
   --token-fill-correct: rgba(40, 40, 44, 0.98);
-  --token-fill-wrong: rgba(52, 42, 42, 0.98);
+  --token-fill-wrong: rgba(40, 40, 44, 0.98);
   --token-stroke-correct: rgba(255, 255, 255, 0.08);
-  --token-stroke-wrong: rgba(255, 59, 48, 0.22);
+  --token-stroke-wrong: rgba(255, 255, 255, 0.08);
   --token-text: #f5f5f7;
 }
 
@@ -720,28 +712,11 @@ html[data-theme="terminal"] .challenge-shell {
 }
 
 html[data-theme="terminal"] .challenge-utility {
-  position: relative;
-  justify-content: flex-end;
-  margin-bottom: 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-bottom: 0;
-  border-radius: 16px 16px 0 0;
-  background: linear-gradient(180deg, #3a3a3d, #2f2f32);
+  display: none;
 }
 
 html[data-theme="terminal"] .challenge-utility::before {
-  content: "";
-  position: absolute;
-  top: 13px;
-  left: 16px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #ff5f57;
-  box-shadow:
-    20px 0 0 #febc2e,
-    40px 0 0 #28c840;
+  display: none;
 }
 
 html[data-theme="terminal"] .challenge-shell > #app {
@@ -751,34 +726,9 @@ html[data-theme="terminal"] .challenge-shell > #app {
   min-height: 0;
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-top: 0;
-  border-radius: 0 0 16px 16px;
+  border-radius: 16px;
   background: #1c1c1e;
   box-shadow: var(--shadow);
-}
-
-html[data-theme="terminal"] .theme-toggle {
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f5f5f7;
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "SF Pro Text",
-    "Segoe UI",
-    sans-serif;
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
-html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.14);
 }
 
 html[data-theme="terminal"] .screen-card,
@@ -882,19 +832,7 @@ html[data-theme="terminal"] .terminal-console-head {
 }
 
 html[data-theme="terminal"] .terminal-led {
-  box-shadow: none;
-}
-
-html[data-theme="terminal"] .terminal-led:nth-child(1) {
-  background: #ff5f57;
-}
-
-html[data-theme="terminal"] .terminal-led:nth-child(2) {
-  background: #febc2e;
-}
-
-html[data-theme="terminal"] .terminal-led:nth-child(3) {
-  background: #28c840;
+  display: none;
 }
 
 html[data-theme="terminal"] .terminal-title {
@@ -957,7 +895,7 @@ html[data-theme="terminal"] .game-shell > .terminal-console {
   }
 
   .terminal-line {
-    grid-template-columns: minmax(62px, 84px) max-content minmax(0, 1fr);
+    grid-template-columns: minmax(72px, 92px) minmax(0, 1fr);
     gap: 6px;
   }
 
@@ -974,10 +912,6 @@ html[data-theme="terminal"] .game-shell > .terminal-console {
     top: 8px;
     padding: 7px 10px;
     font-size: 0.76rem;
-  }
-
-  html[data-theme="terminal"] .challenge-utility {
-    padding: 10px;
   }
 
   html[data-theme="terminal"] .challenge-shell > #app {
