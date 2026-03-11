@@ -540,7 +540,7 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "match_record" : "Opportunity detail"}</p>
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
-        <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
+        <p>Current opportunity, profile and interview context.</p>
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
@@ -548,9 +548,7 @@
         { label: "Score", value: formatScore(payload.evaluation.finalScore) }
       ])}
       ${renderDetailSection("Match", [
-        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
-        { label: "Interview", value: payload.interview.stateLabel || "Not started" },
         { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
       ])}
       ${renderDetailSection("Vacancy", [
@@ -568,10 +566,8 @@
         { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true }
       ])}
       ${renderDetailSection("Interview outcome", [
-        { label: "Interview state", value: payload.interview.stateLabel || "Not started" },
         { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
         { label: "Recommendation", value: payload.evaluation.recommendation || "Not available" },
-        { label: "Final score", value: payload.evaluation.finalScore == null ? "Not available" : String(payload.evaluation.finalScore) },
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
       ])}
@@ -593,7 +589,7 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${escapeHtml(isTerminalTheme() ? `${rolePrefix}_vacancy_record` : `${rolePrefix} vacancy`)}</p>
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
-        <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
+        <p>${rolePrefix === "manager" ? "Candidate pipeline and saved vacancy context." : "Cross-role vacancy overview and candidate pipeline."}</p>
       </section>
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
@@ -649,7 +645,7 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Match detail"}</p>
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
-        <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
+        <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • review snapshot</p>
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
@@ -665,10 +661,7 @@
         { label: "Skills", value: listChips((payload.candidate.summary || {}).skills || []), raw: true, full: true }
       ])}
       ${renderDetailSection("Interview", [
-        { label: "State", value: payload.interview.stateLabel || "Not started" },
         { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
-        { label: "Recommendation", value: payload.evaluation.recommendation || "Not available" },
-        { label: "Final score", value: payload.evaluation.finalScore == null ? "Not available" : String(payload.evaluation.finalScore) },
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
       ])}
