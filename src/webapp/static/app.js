@@ -233,15 +233,30 @@
 
   function updateBackButton() {
     if (!tg || !tg.BackButton) return;
-    if (!location.hash || location.hash === "#home") {
+    if (getCurrentRoute() === "home") {
       tg.BackButton.hide();
       return;
     }
     tg.BackButton.show();
   }
 
+  function sanitizeRoute(route) {
+    return route && route !== "#" ? String(route).replace(/^#/, "") : "home";
+  }
+
+  function getCurrentRoute() {
+    return sanitizeRoute((window.history.state && window.history.state.route) || "home");
+  }
+
+  function applyRoute(route, options) {
+    const nextRoute = sanitizeRoute(route);
+    const method = options && options.replace ? "replaceState" : "pushState";
+    window.history[method]({ route: nextRoute }, "", window.location.pathname + window.location.search);
+    renderRoute();
+  }
+
   function pushRoute(route) {
-    location.hash = route;
+    applyRoute(route, { replace: false });
   }
 
   async function renderHome() {
@@ -553,15 +568,15 @@
 
   async function renderRoute() {
     updateBackButton();
-    const hash = (location.hash || "#home").replace(/^#/, "");
+    const currentRoute = getCurrentRoute();
     if (!state.session) return;
     try {
-      if (hash === "home") {
+      if (currentRoute === "home") {
         await renderHome();
         return;
       }
 
-      const parts = hash.split(":");
+      const parts = currentRoute.split(":");
       if (parts.length !== 2) {
         await renderHome();
         return;
@@ -583,6 +598,9 @@
     try {
       bindTelegramRuntime();
       if (tg) {
+        if (tg.BackButton && typeof tg.BackButton.hide === "function") {
+          tg.BackButton.hide();
+        }
         if (typeof tg.ready === "function") {
           tg.ready();
         }
@@ -593,7 +611,15 @@
           tg.enableVerticalSwipes();
         }
         if (tg.BackButton) {
-          tg.BackButton.onClick(() => window.history.back());
+          tg.BackButton.onClick(() => {
+            if (getCurrentRoute() === "home") {
+              if (typeof tg.close === "function") {
+                tg.close();
+              }
+              return;
+            }
+            window.history.back();
+          });
         }
       }
 
@@ -620,11 +646,10 @@
 
       const sessionPayload = await api("/webapp/api/session");
       state.session = sessionPayload.session;
-      if (!location.hash) {
-        location.hash = "home";
-      }
+      const initialRoute = sanitizeRoute(window.location.hash || "home");
+      window.history.replaceState({ route: initialRoute }, "", window.location.pathname + window.location.search);
       await renderRoute();
-      window.addEventListener("hashchange", renderRoute);
+      window.addEventListener("popstate", renderRoute);
     } catch (error) {
       renderError("Unable to open Helly Dashboard", error.message || "Unknown error.");
     }
