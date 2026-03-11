@@ -448,6 +448,204 @@ html[data-theme="terminal"] .empty-state {
   background: rgba(87, 255, 158, 0.04);
 }
 
+html[data-theme="terminal"] .topbar-kicker,
+html[data-theme="terminal"] .topbar-note,
+html[data-theme="terminal"] .screen-header p,
+html[data-theme="terminal"] .footer-note,
+html[data-theme="terminal"] .card-note {
+  max-width: none;
+  letter-spacing: 0;
+}
+
+html[data-theme="terminal"] .screen-header-terminal h2,
+html[data-theme="terminal"] .state-card h2,
+html[data-theme="terminal"] .card h3,
+html[data-theme="terminal"] .section-title {
+  letter-spacing: 0;
+}
+
+html[data-theme="terminal"] .screen-header-terminal h2::before {
+  content: "> ";
+  color: var(--accent-soft);
+}
+
+html[data-theme="terminal"] .screen-header-terminal p:last-child::before,
+html[data-theme="terminal"] .topbar-note::before,
+html[data-theme="terminal"] .footer-note::before,
+html[data-theme="terminal"] .card-note-terminal::before {
+  content: "$ ";
+  color: var(--accent-soft);
+}
+
+.terminal-console {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(87, 255, 158, 0.18);
+  border-radius: 14px;
+  background: rgba(4, 9, 7, 0.92);
+  box-shadow: 0 0 0 1px rgba(87, 255, 158, 0.04);
+}
+
+.terminal-console-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(87, 255, 158, 0.14);
+  background: rgba(87, 255, 158, 0.04);
+}
+
+.terminal-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(87, 255, 158, 0.42);
+  box-shadow: 0 0 10px rgba(87, 255, 158, 0.22);
+}
+
+.terminal-title {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-console-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.terminal-line,
+.terminal-command-row {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.terminal-key,
+.terminal-metric-key {
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.terminal-separator,
+.terminal-prompt {
+  color: var(--accent-soft);
+}
+
+.terminal-value,
+.terminal-command,
+.terminal-section-title,
+.terminal-metric-value {
+  color: var(--text);
+}
+
+.terminal-stat-card {
+  border-radius: 12px;
+}
+
+.card-terminal {
+  border-radius: 12px;
+}
+
+.terminal-command-row {
+  margin-top: 12px;
+}
+
+.terminal-command-row-card {
+  padding-top: 10px;
+  border-top: 1px dashed rgba(87, 255, 158, 0.16);
+}
+
+.terminal-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.terminal-metric {
+  display: grid;
+  grid-template-columns: minmax(0, 130px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(87, 255, 158, 0.12);
+  border-radius: 10px;
+  background: rgba(4, 9, 7, 0.88);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.detail-panel-terminal .section-title {
+  display: none;
+}
+
+.terminal-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(87, 255, 158, 0.16);
+  margin-bottom: 8px;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.84rem;
+  text-transform: lowercase;
+}
+
+html[data-theme="terminal"] .detail-grid-terminal div {
+  border-top: 1px dashed rgba(87, 255, 158, 0.12);
+}
+
+html[data-theme="terminal"] .detail-grid-terminal dt,
+html[data-theme="terminal"] .detail-grid-terminal dd {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
+html[data-theme="terminal"] .detail-grid-terminal dd {
+  line-height: 1.7;
+}
+
 .state-card {
   padding: 20px 18px;
 }

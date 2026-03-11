@@ -275,15 +275,51 @@
     return String(value);
   }
 
+  function isTerminalTheme() {
+    return state.theme === TERMINAL_THEME;
+  }
+
+  function terminalToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "value";
+  }
+
+  function renderTerminalConsole(title, rows) {
+    if (!isTerminalTheme()) return "";
+    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
+    if (!visibleRows.length) return "";
+    return `
+      <section class="terminal-console">
+        <div class="terminal-console-head">
+          <span class="terminal-led"></span>
+          <span class="terminal-led"></span>
+          <span class="terminal-led"></span>
+          <span class="terminal-title">${escapeHtml(title)}</span>
+        </div>
+        <div class="terminal-console-body">
+          ${visibleRows.map((row) => `
+            <div class="terminal-line">
+              <span class="terminal-key">${escapeHtml(terminalToken(row.label))}</span>
+              <span class="terminal-separator">::</span>
+              <span class="terminal-value">${escapeHtml(row.value)}</span>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function renderStatsStrip(items) {
     const visibleItems = (items || []).filter((item) => item && item.value !== null && item.value !== undefined && item.value !== "");
     if (!visibleItems.length) return "";
     return `
       <section class="stats-strip">
         ${visibleItems.map((item) => `
-          <article class="stat-card">
+          <article class="stat-card ${isTerminalTheme() ? "terminal-stat-card" : ""}">
             <span class="stat-value">${escapeHtml(item.value)}</span>
-            <span class="stat-label">${escapeHtml(item.label)}</span>
+            <span class="stat-label">${escapeHtml(isTerminalTheme() ? terminalToken(item.label) : item.label)}</span>
           </article>
         `).join("")}
       </section>
@@ -293,6 +329,18 @@
   function renderCardMetrics(metrics) {
     const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
     if (!visibleMetrics.length) return "";
+    if (isTerminalTheme()) {
+      return `
+        <div class="terminal-metrics">
+          ${visibleMetrics.map((metric) => `
+            <div class="terminal-metric">
+              <span class="terminal-metric-key">${escapeHtml(terminalToken(metric.label))}</span>
+              <span class="terminal-metric-value">${escapeHtml(metric.value)}</span>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
     return `
       <div class="card-metrics">
         ${visibleMetrics.map((metric) => `
@@ -307,33 +355,45 @@
 
   function renderCardNote(value) {
     if (!value) return "";
-    return `<p class="card-note">${escapeHtml(value)}</p>`;
+    return `<p class="card-note ${isTerminalTheme() ? "card-note-terminal" : ""}">${escapeHtml(value)}</p>`;
   }
 
   function renderActionPanel(challenge) {
     if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
     return `
-      <section class="detail-panel action-panel">
+      <section class="detail-panel action-panel ${isTerminalTheme() ? "action-panel-terminal" : ""}">
         <div class="action-panel-copy">
-          <p class="eyebrow">While you wait</p>
-          <h3 class="section-title">Play Helly CV Challenge</h3>
+          <p class="eyebrow">${isTerminalTheme() ? "idle_mode" : "While you wait"}</p>
+          <h3 class="section-title">${isTerminalTheme() ? "run helly.cv_challenge" : "Play Helly CV Challenge"}</h3>
           <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
         </div>
-        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">Play challenge</button>
+        ${isTerminalTheme() ? `
+          <div class="terminal-command-row">
+            <span class="terminal-prompt">&gt;</span>
+            <span class="terminal-command">launch /cv-challenge --profile current</span>
+          </div>
+        ` : ""}
+        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">${isTerminalTheme() ? "Run challenge" : "Play challenge"}</button>
       </section>
     `;
   }
 
   function renderDetailSection(title, rows) {
     return `
-      <section class="detail-panel">
+      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
+        ${isTerminalTheme() ? `
+          <div class="terminal-section-head">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-section-title">${escapeHtml(terminalToken(title))}</span>
+          </div>
+        ` : ""}
         <h3 class="section-title">${escapeHtml(title)}</h3>
-        <dl class="detail-grid">
+        <dl class="detail-grid ${isTerminalTheme() ? "detail-grid-terminal" : ""}">
           ${rows
             .filter((row) => row.value !== null && row.value !== undefined && row.value !== "")
             .map((row) => `
               <div class="${row.full ? "span-full" : ""}">
-                <dt>${escapeHtml(row.label)}</dt>
+                <dt>${escapeHtml(isTerminalTheme() ? terminalToken(row.label) : row.label)}</dt>
                 <dd>${row.raw ? row.value : escapeHtml(row.value)}</dd>
               </div>
             `)
@@ -399,11 +459,17 @@
         includesAny(item.interviewStateLabel, ["completed"])
       ).length;
       appEl.innerHTML = `
-        <section class="screen-header">
-          <p class="eyebrow">Candidate view</p>
+        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+          <p class="eyebrow">${isTerminalTheme() ? "candidate_session" : "Candidate view"}</p>
           <h2>My Opportunities</h2>
-          <p>Your current matches, interview progress and saved profile context.</p>
+          <p>${isTerminalTheme() ? "Read-only shell over your current match queue, interview state and saved profile context." : "Your current matches, interview progress and saved profile context."}</p>
         </section>
+        ${renderTerminalConsole("candidate.runtime", [
+          { label: "profile state", value: payload.profile.state || "unknown" },
+          { label: "records loaded", value: String(items.length) },
+          { label: "active interviews", value: String(activeInterviewCount) },
+          { label: "cv challenge", value: payload.cvChallenge && payload.cvChallenge.eligible ? "available" : (payload.cvChallenge && payload.cvChallenge.reasonCode) || "locked" }
+        ])}
         ${renderStatsStrip([
           { label: "Opportunities", value: String(items.length) },
           { label: "In interview", value: String(activeInterviewCount) },
@@ -421,14 +487,20 @@
         </section>
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card" data-route="candidate-match:${item.id}">
+            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="candidate-match:${item.id}">
               <div class="card-head">
                 <div>
-                  <p class="eyebrow">Opportunity</p>
+                  <p class="eyebrow">${isTerminalTheme() ? "opportunity_record" : "Opportunity"}</p>
                   <h3>${escapeHtml(item.roleTitle || "Untitled role")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
+              ${isTerminalTheme() ? `
+                <div class="terminal-command-row terminal-command-row-card">
+                  <span class="terminal-prompt">&gt;</span>
+                  <span class="terminal-command">inspect /matches/${escapeHtml(item.id)}</span>
+                </div>
+              ` : ""}
               ${renderCardMetrics([
                 { label: "Budget", value: item.budget || "Not set" },
                 { label: "Interview", value: item.interviewStateLabel || "Not started" },
@@ -451,11 +523,17 @@
       const totalActivePipelineCount = sumBy(items, "activePipelineCount");
       const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
       appEl.innerHTML = `
-        <section class="screen-header">
-          <p class="eyebrow">Manager view</p>
+        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+          <p class="eyebrow">${isTerminalTheme() ? "manager_session" : "Manager view"}</p>
           <h2>My Vacancies</h2>
-          <p>One clean view of your live candidate pipeline and interview progress.</p>
+          <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate pipeline depth and interview throughput." : "One clean view of your live candidate pipeline and interview progress."}</p>
         </section>
+        ${renderTerminalConsole("manager.runtime", [
+          { label: "vacancies", value: String(items.length) },
+          { label: "candidate records", value: String(totalCandidateCount) },
+          { label: "pipeline active", value: String(totalActivePipelineCount) },
+          { label: "interviews completed", value: String(totalCompletedInterviewCount) }
+        ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
@@ -464,14 +542,20 @@
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card" data-route="manager-vacancy:${item.id}">
+            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="manager-vacancy:${item.id}">
               <div class="card-head">
                 <div>
-                  <p class="eyebrow">Vacancy</p>
+                  <p class="eyebrow">${isTerminalTheme() ? "vacancy_record" : "Vacancy"}</p>
                   <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
+              ${isTerminalTheme() ? `
+                <div class="terminal-command-row terminal-command-row-card">
+                  <span class="terminal-prompt">&gt;</span>
+                  <span class="terminal-command">inspect /vacancies/${escapeHtml(item.id)}</span>
+                </div>
+              ` : ""}
               ${renderCardMetrics([
                 { label: "Candidates", value: String(item.candidateCount) },
                 { label: "In pipeline", value: String(item.activePipelineCount) },
@@ -492,11 +576,16 @@
       const totalCandidateCount = sumBy(items, "candidateCount");
       const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
       appEl.innerHTML = `
-        <section class="screen-header">
-          <p class="eyebrow">Admin view</p>
+        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+          <p class="eyebrow">${isTerminalTheme() ? "admin_session" : "Admin view"}</p>
           <h2>All Vacancies</h2>
-          <p>Read-only visibility across the full Helly production pipeline.</p>
+          <p>${isTerminalTheme() ? "Production-wide read-only shell across all live vacancy records." : "Read-only visibility across the full Helly production pipeline."}</p>
         </section>
+        ${renderTerminalConsole("admin.runtime", [
+          { label: "vacancies", value: String(items.length) },
+          { label: "candidate records", value: String(totalCandidateCount) },
+          { label: "interviews completed", value: String(totalCompletedInterviewCount) }
+        ])}
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
@@ -504,14 +593,20 @@
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
-            <article class="card" data-route="admin-vacancy:${item.id}">
+            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="admin-vacancy:${item.id}">
               <div class="card-head">
                 <div>
-                  <p class="eyebrow">Vacancy</p>
+                  <p class="eyebrow">${isTerminalTheme() ? "vacancy_record" : "Vacancy"}</p>
                   <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
               </div>
+              ${isTerminalTheme() ? `
+                <div class="terminal-command-row terminal-command-row-card">
+                  <span class="terminal-prompt">&gt;</span>
+                  <span class="terminal-command">inspect /admin/vacancies/${escapeHtml(item.id)}</span>
+                </div>
+              ` : ""}
               ${renderCardMetrics([
                 { label: "Manager", value: item.managerName || "Unknown" },
                 { label: "Candidates", value: String(item.candidateCount) },
@@ -529,11 +624,17 @@
   async function renderCandidateMatch(matchId) {
     const payload = await api(`/webapp/api/candidate/opportunities/${matchId}`);
     appEl.innerHTML = `
-      <section class="screen-header">
-        <p class="eyebrow">Opportunity detail</p>
+      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+        <p class="eyebrow">${isTerminalTheme() ? "match_record" : "Opportunity detail"}</p>
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
         <p>${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
+      ${renderTerminalConsole("match.inspect", [
+        { label: "match id", value: payload.match.id || matchId },
+        { label: "status", value: payload.match.statusLabel || "unknown" },
+        { label: "interview", value: payload.interview.stateLabel || "not_started" },
+        { label: "score", value: formatScore(payload.evaluation.finalScore) }
+      ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Interview", value: payload.interview.stateLabel || "Not started" },
@@ -582,11 +683,17 @@
     const stats = detail.stats;
     const items = matchesPayload.items || [];
     appEl.innerHTML = `
-      <section class="screen-header">
-        <p class="eyebrow">${escapeHtml(rolePrefix)} vacancy</p>
+      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+        <p class="eyebrow">${escapeHtml(isTerminalTheme() ? `${rolePrefix}_vacancy_record` : `${rolePrefix} vacancy`)}</p>
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
         <p>${escapeHtml(vacancy.state || "Unknown")} • ${escapeHtml(stats.candidateCount)} candidates</p>
       </section>
+      ${renderTerminalConsole(`${rolePrefix}.vacancy.inspect`, [
+        { label: "vacancy id", value: vacancy.id || vacancyId },
+        { label: "state", value: vacancy.state || "unknown" },
+        { label: "candidates", value: String(stats.candidateCount) },
+        { label: "pipeline", value: String(stats.activePipelineCount) }
+      ])}
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
         { label: "Candidates", value: String(stats.candidateCount) },
@@ -601,18 +708,30 @@
         { label: "Project", value: vacancy.projectDescription || "Not specified", full: true },
         { label: "Summary", value: (vacancy.summary || {}).approvalSummaryText || "No stored summary.", full: true }
       ])}
-      <section class="detail-panel">
+      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
+        ${isTerminalTheme() ? `
+          <div class="terminal-section-head">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-section-title">candidate_pipeline</span>
+          </div>
+        ` : ""}
         <h3 class="section-title">Candidate pipeline</h3>
         <div class="list">
           ${items.length ? items.map((item) => `
-            <article class="card" data-route="${rolePrefix}-match:${item.id}">
+            <article class="card ${isTerminalTheme() ? "card-terminal" : ""}" data-route="${rolePrefix}-match:${item.id}">
               <div class="card-head">
                 <div>
-                  <p class="eyebrow">Candidate</p>
+                  <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Candidate"}</p>
                   <h3>${escapeHtml(item.candidateName || "Candidate")}</h3>
                 </div>
                 <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
               </div>
+              ${isTerminalTheme() ? `
+                <div class="terminal-command-row terminal-command-row-card">
+                  <span class="terminal-prompt">&gt;</span>
+                  <span class="terminal-command">inspect /matches/${escapeHtml(item.id)}</span>
+                </div>
+              ` : ""}
               ${renderCardMetrics([
                 { label: "Location", value: item.location || "Not set" },
                 { label: "Salary", value: item.salaryExpectation || "Not set" },
@@ -633,11 +752,17 @@
       : `/webapp/api/admin/matches/${matchId}`;
     const payload = await api(path);
     appEl.innerHTML = `
-      <section class="screen-header">
-        <p class="eyebrow">Match detail</p>
+      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+        <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Match detail"}</p>
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
         <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • ${escapeHtml(payload.match.statusLabel || "Unknown stage")}</p>
       </section>
+      ${renderTerminalConsole(`${rolePrefix}.match.inspect`, [
+        { label: "match id", value: payload.match.id || matchId },
+        { label: "candidate", value: payload.candidate.name || "candidate" },
+        { label: "recommendation", value: payload.evaluation.recommendation || "n_a" },
+        { label: "score", value: formatScore(payload.evaluation.finalScore) }
+      ])}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
         { label: "Interview", value: payload.interview.stateLabel || "Not started" },

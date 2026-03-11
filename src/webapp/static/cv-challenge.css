@@ -479,6 +479,100 @@ html[data-theme="terminal"] .stage-banner {
   background: rgba(4, 9, 7, 0.86);
 }
 
+html[data-theme="terminal"] .screen-card h1,
+html[data-theme="terminal"] .locked-card h1,
+html[data-theme="terminal"] .result-card h1,
+html[data-theme="terminal"] .result-card h2 {
+  letter-spacing: 0;
+}
+
+html[data-theme="terminal"] .screen-card h1::before,
+html[data-theme="terminal"] .locked-card h1::before {
+  content: "";
+}
+
+html[data-theme="terminal"] .screen-card .copy::before,
+html[data-theme="terminal"] .locked-card .copy::before,
+html[data-theme="terminal"] .result-copy::before,
+html[data-theme="terminal"] .canvas-hint::before {
+  content: "$ ";
+  color: var(--accent-soft);
+}
+
+.terminal-console {
+  position: relative;
+  overflow: hidden;
+  margin-top: 18px;
+  border: 1px solid rgba(87, 255, 158, 0.18);
+  border-radius: 12px;
+  background: rgba(4, 9, 7, 0.92);
+  box-shadow: 0 0 0 1px rgba(87, 255, 158, 0.04);
+}
+
+.terminal-console-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(87, 255, 158, 0.14);
+  background: rgba(87, 255, 158, 0.04);
+}
+
+.terminal-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(87, 255, 158, 0.42);
+  box-shadow: 0 0 10px rgba(87, 255, 158, 0.22);
+}
+
+.terminal-title {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-console-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.terminal-line {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.terminal-key {
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.terminal-separator {
+  color: var(--accent-soft);
+}
+
+.terminal-value {
+  color: var(--text);
+}
+
 .canvas-hint {
   color: var(--muted);
   font-size: 0.94rem;
