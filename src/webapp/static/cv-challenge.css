@@ -14,6 +14,58 @@
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 16px;
+  --canvas-bg-start: #11111a;
+  --canvas-bg-end: #09090d;
+  --canvas-glow: rgba(140, 40, 255, 0.14);
+  --canvas-grid: rgba(255, 255, 255, 0.04);
+  --canvas-font:
+    700 18px ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
+  --token-fill-correct: rgba(12, 12, 18, 0.92);
+  --token-fill-wrong: rgba(18, 12, 18, 0.92);
+  --token-stroke-correct: rgba(255, 255, 255, 0.08);
+  --token-stroke-wrong: rgba(255, 122, 133, 0.18);
+  --token-text: #f8f8fb;
+}
+
+html[data-theme="terminal"] {
+  --bg: #020503;
+  --panel: #07110b;
+  --panel-strong: #0a160f;
+  --line: rgba(87, 255, 158, 0.18);
+  --text: #d8ffe3;
+  --muted: #7eab8d;
+  --accent: #a24dff;
+  --accent-soft: #57ff9e;
+  --good: #57ff9e;
+  --bad: #ff7d96;
+  --warn: #ffd166;
+  --shadow: 0 0 0 1px rgba(87, 255, 158, 0.04), 0 18px 42px rgba(0, 0, 0, 0.42);
+  --radius-xl: 18px;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --canvas-bg-start: #07110b;
+  --canvas-bg-end: #040806;
+  --canvas-glow: rgba(87, 255, 158, 0.1);
+  --canvas-grid: rgba(87, 255, 158, 0.08);
+  --canvas-font:
+    600 17px ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  --token-fill-correct: rgba(7, 17, 11, 0.96);
+  --token-fill-wrong: rgba(20, 10, 14, 0.96);
+  --token-stroke-correct: rgba(87, 255, 158, 0.3);
+  --token-stroke-wrong: rgba(255, 125, 150, 0.24);
+  --token-text: #d8ffe3;
 }
 
 * {
@@ -41,6 +93,22 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+html[data-theme="terminal"] body {
+  background:
+    radial-gradient(circle at top left, rgba(87, 255, 158, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(162, 77, 255, 0.08), transparent 32%),
+    linear-gradient(180deg, #020503, #030705 72%);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -49,6 +117,19 @@ body::before {
     linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 28%),
     radial-gradient(circle at 16% 14%, rgba(140, 40, 255, 0.14), transparent 18%);
   pointer-events: none;
+}
+
+html[data-theme="terminal"] body::before {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(108, 255, 173, 0.05) 0,
+      rgba(108, 255, 173, 0.05) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 20%),
+    radial-gradient(circle at 16% 14%, rgba(87, 255, 158, 0.09), transparent 18%);
 }
 
 .challenge-shell {
@@ -60,6 +141,40 @@ body::before {
     calc(16px + max(env(safe-area-inset-right), var(--tg-content-safe-area-inset-right, 0px)))
     calc(24px + max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px)))
     calc(16px + max(env(safe-area-inset-left), var(--tg-content-safe-area-inset-left, 0px)));
+}
+
+.challenge-utility {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.theme-toggle {
+  appearance: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.theme-toggle[aria-pressed="true"] {
+  border-color: rgba(187, 121, 255, 0.36);
+  background: rgba(140, 40, 255, 0.14);
 }
 
 .screen-card,
@@ -87,6 +202,13 @@ body::before {
   width: min(120px, 36%);
   height: 1px;
   background: linear-gradient(90deg, rgba(140, 40, 255, 0.92), rgba(140, 40, 255, 0));
+}
+
+html[data-theme="terminal"] .screen-card::before,
+html[data-theme="terminal"] .game-shell::before,
+html[data-theme="terminal"] .result-card::before,
+html[data-theme="terminal"] .locked-card::before {
+  background: linear-gradient(90deg, rgba(87, 255, 158, 0.92), rgba(87, 255, 158, 0));
 }
 
 .screen-card,
@@ -139,6 +261,12 @@ p {
   color: var(--accent);
 }
 
+html[data-theme="terminal"] .brand-angle,
+html[data-theme="terminal"] .brand-tail {
+  color: var(--accent-soft);
+  text-shadow: 0 0 14px rgba(87, 255, 158, 0.34);
+}
+
 .screen-card p:last-child,
 .locked-card p:last-child {
   margin-top: 16px;
@@ -167,6 +295,23 @@ p {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .screen-card,
+html[data-theme="terminal"] .game-shell,
+html[data-theme="terminal"] .result-card,
+html[data-theme="terminal"] .locked-card {
+  background:
+    linear-gradient(180deg, rgba(87, 255, 158, 0.03), rgba(87, 255, 158, 0.01)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="terminal"] .meta-card,
+html[data-theme="terminal"] .result-meta-card {
+  border-color: rgba(87, 255, 158, 0.14);
+  border-radius: 10px;
+  background: rgba(4, 9, 7, 0.86);
 }
 
 .meta-value,
@@ -205,16 +350,41 @@ p {
   cursor: pointer;
 }
 
+html[data-theme="terminal"] .button,
+html[data-theme="terminal"] .ghost-button,
+html[data-theme="terminal"] .theme-toggle {
+  color: var(--text);
+  box-shadow: none;
+}
+
 .button {
   background: linear-gradient(90deg, var(--accent), var(--accent-soft));
   color: white;
   box-shadow: 0 16px 36px rgba(140, 40, 255, 0.28);
 }
 
+html[data-theme="terminal"] .button {
+  border: 1px solid rgba(87, 255, 158, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(87, 255, 158, 0.14), rgba(162, 77, 255, 0.12));
+}
+
 .ghost-button {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="terminal"] .ghost-button,
+html[data-theme="terminal"] .theme-toggle {
+  border-radius: 10px;
+  border-color: rgba(87, 255, 158, 0.16);
+  background: rgba(4, 9, 7, 0.86);
+}
+
+html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
+  border-color: rgba(87, 255, 158, 0.3);
+  background: rgba(87, 255, 158, 0.08);
 }
 
 .game-shell {
@@ -235,6 +405,13 @@ p {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .hud-card,
+html[data-theme="terminal"] .missed-item {
+  border-color: rgba(87, 255, 158, 0.14);
+  border-radius: 10px;
+  background: rgba(4, 9, 7, 0.86);
 }
 
 .hud-value {
@@ -264,6 +441,14 @@ p {
     #09090d;
 }
 
+html[data-theme="terminal"] .canvas-wrap {
+  border-color: rgba(87, 255, 158, 0.18);
+  background:
+    radial-gradient(circle at top center, rgba(87, 255, 158, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0)),
+    #040806;
+}
+
 .game-canvas {
   display: block;
   width: 100%;
@@ -286,6 +471,12 @@ p {
   font-weight: 700;
   backdrop-filter: blur(8px);
   pointer-events: none;
+}
+
+html[data-theme="terminal"] .stage-banner {
+  border-radius: 10px;
+  border-color: rgba(87, 255, 158, 0.16);
+  background: rgba(4, 9, 7, 0.86);
 }
 
 .canvas-hint {

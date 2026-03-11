@@ -17,6 +17,25 @@
   --shadow: 0 20px 56px rgba(0, 0, 0, 0.34);
 }
 
+html[data-theme="terminal"] {
+  --bg: #020503;
+  --bg-soft: #040907;
+  --panel: #07110b;
+  --panel-strong: #0b160f;
+  --text: #d8ffe3;
+  --muted: #7eab8d;
+  --line: rgba(87, 255, 158, 0.18);
+  --accent: #a24dff;
+  --accent-soft: #57ff9e;
+  --good: #57ff9e;
+  --warn: #ffd166;
+  --bad: #ff7d96;
+  --radius-xl: 18px;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --shadow: 0 0 0 1px rgba(87, 255, 158, 0.04), 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
 * {
   box-sizing: border-box;
   min-width: 0;
@@ -46,6 +65,22 @@ body {
     sans-serif;
 }
 
+html[data-theme="terminal"] body {
+  background:
+    radial-gradient(circle at top left, rgba(87, 255, 158, 0.12), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(162, 77, 255, 0.08), transparent 30%),
+    linear-gradient(180deg, #020503, #030705 72%);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -54,6 +89,20 @@ body::before {
     linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 28%),
     radial-gradient(circle at 18% 14%, rgba(140, 40, 255, 0.12), transparent 18%);
   pointer-events: none;
+}
+
+html[data-theme="terminal"] body::before {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(108, 255, 173, 0.05) 0,
+      rgba(108, 255, 173, 0.05) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 20%),
+    radial-gradient(circle at 18% 14%, rgba(87, 255, 158, 0.09), transparent 18%);
+  opacity: 0.72;
 }
 
 .app-shell {
@@ -145,6 +194,39 @@ body::before {
   color: var(--muted);
   font-size: 0.98rem;
   line-height: 1.55;
+}
+
+.topbar-actions {
+  margin-top: 12px;
+}
+
+.theme-toggle {
+  appearance: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.theme-toggle[aria-pressed="true"] {
+  border-color: rgba(187, 121, 255, 0.36);
+  background: rgba(140, 40, 255, 0.14);
 }
 
 .topbar-kicker,
@@ -261,6 +343,109 @@ body::before {
   width: min(110px, 34%);
   height: 1px;
   background: linear-gradient(90deg, rgba(140, 40, 255, 0.92), rgba(140, 40, 255, 0));
+}
+
+html[data-theme="terminal"] .topbar-divider,
+html[data-theme="terminal"] .stat-card::before,
+html[data-theme="terminal"] .state-card::before,
+html[data-theme="terminal"] .card::before,
+html[data-theme="terminal"] .detail-panel::before {
+  background: linear-gradient(90deg, rgba(87, 255, 158, 0.92), rgba(87, 255, 158, 0));
+}
+
+html[data-theme="terminal"] .brand-angle,
+html[data-theme="terminal"] .brand-tail {
+  color: var(--accent-soft);
+  text-shadow: 0 0 14px rgba(87, 255, 158, 0.34);
+}
+
+html[data-theme="terminal"] .brand-word {
+  color: #f4fff8;
+}
+
+html[data-theme="terminal"] .stat-card,
+html[data-theme="terminal"] .state-card,
+html[data-theme="terminal"] .card,
+html[data-theme="terminal"] .detail-panel {
+  background:
+    linear-gradient(180deg, rgba(87, 255, 158, 0.03), rgba(87, 255, 158, 0.01)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="terminal"] .card:hover,
+html[data-theme="terminal"] .card:focus-visible {
+  border-color: rgba(87, 255, 158, 0.42);
+  background:
+    linear-gradient(180deg, rgba(87, 255, 158, 0.06), rgba(87, 255, 158, 0.02)),
+    var(--panel-strong);
+}
+
+html[data-theme="terminal"] .card:focus-visible {
+  box-shadow:
+    var(--shadow),
+    0 0 0 1px rgba(87, 255, 158, 0.28);
+}
+
+html[data-theme="terminal"] .metric,
+html[data-theme="terminal"] .badge,
+html[data-theme="terminal"] .chip,
+html[data-theme="terminal"] .theme-toggle {
+  border-radius: 10px;
+}
+
+html[data-theme="terminal"] .metric,
+html[data-theme="terminal"] .chip,
+html[data-theme="terminal"] .badge {
+  border-color: rgba(87, 255, 158, 0.14);
+  background: rgba(4, 9, 7, 0.86);
+}
+
+html[data-theme="terminal"] .badge[data-tone="accent"] {
+  background: rgba(87, 255, 158, 0.08);
+  border-color: rgba(87, 255, 158, 0.24);
+}
+
+html[data-theme="terminal"] .badge[data-tone="good"] {
+  background: rgba(87, 255, 158, 0.12);
+  border-color: rgba(87, 255, 158, 0.28);
+}
+
+html[data-theme="terminal"] .badge[data-tone="warn"] {
+  background: rgba(255, 209, 102, 0.12);
+  border-color: rgba(255, 209, 102, 0.28);
+}
+
+html[data-theme="terminal"] .badge[data-tone="bad"] {
+  background: rgba(255, 125, 150, 0.12);
+  border-color: rgba(255, 125, 150, 0.28);
+}
+
+html[data-theme="terminal"] .action-button,
+html[data-theme="terminal"] .theme-toggle {
+  color: var(--text);
+  box-shadow: none;
+}
+
+html[data-theme="terminal"] .action-button {
+  border: 1px solid rgba(87, 255, 158, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(87, 255, 158, 0.14), rgba(162, 77, 255, 0.12));
+}
+
+html[data-theme="terminal"] .theme-toggle {
+  border-color: rgba(87, 255, 158, 0.16);
+  background: rgba(4, 9, 7, 0.86);
+}
+
+html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
+  border-color: rgba(87, 255, 158, 0.3);
+  background: rgba(87, 255, 158, 0.08);
+}
+
+html[data-theme="terminal"] .empty-state {
+  border-color: rgba(87, 255, 158, 0.24);
+  background: rgba(87, 255, 158, 0.04);
 }
 
 .state-card {
