@@ -304,7 +304,7 @@
       <section class="detail-panel action-panel ${isTerminalTheme() ? "action-panel-terminal" : ""}">
         <div class="action-panel-copy">
           <p class="eyebrow">${isTerminalTheme() ? "idle_mode" : "While you wait"}</p>
-          <h3 class="section-title">${isTerminalTheme() ? "run helly.cv_challenge" : "Play Helly CV Challenge"}</h3>
+          <h3 class="section-title">${isTerminalTheme() ? "CV Challenge" : "Play Helly CV Challenge"}</h3>
           <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
         </div>
         ${isTerminalTheme() ? `
@@ -319,6 +319,8 @@
   }
 
   function renderDetailSection(title, rows) {
+    const visibleRows = (rows || []).filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
+    if (!visibleRows.length) return "";
     return `
       <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
         ${isTerminalTheme() ? `
@@ -327,10 +329,9 @@
             <span class="terminal-section-title">${escapeHtml(terminalToken(title))}</span>
           </div>
         ` : ""}
-        <h3 class="section-title">${escapeHtml(title)}</h3>
+        ${isTerminalTheme() ? "" : `<h3 class="section-title">${escapeHtml(title)}</h3>`}
         <dl class="detail-grid ${isTerminalTheme() ? "detail-grid-terminal" : ""}">
-          ${rows
-            .filter((row) => row.value !== null && row.value !== undefined && row.value !== "")
+          ${visibleRows
             .map((row) => `
               <div class="${row.full ? "span-full" : ""}">
                 <dt>${escapeHtml(isTerminalTheme() ? terminalToken(row.label) : row.label)}</dt>
@@ -406,7 +407,6 @@
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "candidate_session" : "Candidate view"}</p>
           <h2>My Opportunities</h2>
-          <p>Your current matches, approval state and saved profile context.</p>
         </section>
         ${renderStatsStrip([
           { label: "Opportunities", value: String(items.length) },
@@ -415,12 +415,11 @@
         ])}
         ${renderActionPanel(payload.cvChallenge)}
         <section class="detail-panel">
-          <h3 class="section-title">Profile Snapshot</h3>
+          <h3 class="section-title">Profile</h3>
           <dl class="detail-grid">
             <div><dt>Location</dt><dd>${escapeHtml(payload.profile.location || "Not set")}</dd></div>
             <div><dt>Work format</dt><dd>${escapeHtml(payload.profile.workFormat || "Not set")}</dd></div>
             <div><dt>Salary</dt><dd>${escapeHtml(payload.profile.salaryExpectation || "Not set")}</dd></div>
-            <div class="span-full"><dt>Summary</dt><dd>${escapeHtml(truncateText((payload.profile.summary || {}).approvalSummaryText || "No summary yet.", 220))}</dd></div>
           </dl>
         </section>
         <section class="list">
@@ -434,13 +433,11 @@
               </div>
               ${renderInlineMetrics([
                 { label: "Budget", value: item.budget || "Not set" },
-                { label: "Status", value: item.stageLabel || "Unknown" },
                 { label: "Updated", value: formatRelativeTime(item.updatedAt) }
               ])}
             </article>
           `).join("") : `<div class="empty-state">No opportunities yet. Once Helly creates matches for you, they will appear here.</div>`}
         </section>
-        <p class="footer-note">Read-only mode. Apply, skip and connect actions still happen in the bot chat.</p>
       `;
       bindCards();
       bindActionButtons();
@@ -457,7 +454,6 @@
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "manager_session" : "Manager view"}</p>
           <h2>My Vacancies</h2>
-          <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate approvals and direct handoffs." : "One clean view of your live candidate pipeline and direct connection flow."}</p>
         </section>
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
@@ -497,7 +493,6 @@
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "admin_session" : "Admin view"}</p>
           <h2>All Vacancies</h2>
-          <p>${isTerminalTheme() ? "Production-wide read-only shell across live vacancy queues and direct handoffs." : "Read-only visibility across the full Helly direct-contact pipeline."}</p>
         </section>
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
@@ -539,7 +534,6 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "match_record" : "Opportunity detail"}</p>
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
-        <p>Current opportunity and saved profile context.</p>
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
@@ -547,19 +541,16 @@
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
       ${renderDetailSection("Match", [
-        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
         { label: "Your reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
         { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
       ])}
       ${renderDetailSection("Vacancy", [
-        { label: "Budget", value: payload.vacancy.budget || "Not specified" },
         { label: "Work format", value: payload.vacancy.workFormat || "Not specified" },
         { label: "Allowed countries", value: (payload.vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
         { label: "Tech stack", value: (payload.vacancy.primaryTechStack || []).join(", ") || "Not specified", full: true },
         { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
       ])}
-      ${renderDetailSection("Your profile snapshot", [
-        { label: "Name", value: payload.candidate.name || "Candidate" },
+      ${renderDetailSection("Your profile", [
         { label: "Location", value: payload.candidate.location || "Not specified" },
         { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
         { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
@@ -590,7 +581,6 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${escapeHtml(isTerminalTheme() ? `${rolePrefix}_vacancy_record` : `${rolePrefix} vacancy`)}</p>
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
-        <p>${rolePrefix === "manager" ? "Candidate pipeline and saved vacancy context." : "Cross-role vacancy overview and direct-contact pipeline."}</p>
       </section>
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
@@ -598,7 +588,7 @@
         { label: "In pipeline", value: String(stats.activePipelineCount) },
         { label: "Connected", value: String(stats.connectedCount || 0) }
       ])}
-      ${renderDetailSection("Vacancy snapshot", [
+      ${renderDetailSection("Vacancy", [
         { label: "Budget", value: vacancy.budget || "Not specified" },
         { label: "Work format", value: vacancy.workFormat || "Not specified" },
         { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
@@ -613,7 +603,7 @@
             <span class="terminal-section-title">candidate_pipeline</span>
           </div>
         ` : ""}
-        <h3 class="section-title">Candidate pipeline</h3>
+        ${isTerminalTheme() ? "" : `<h3 class="section-title">Candidate pipeline</h3>`}
         <div class="list">
           ${items.length ? items.map((item) => `
             <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="${rolePrefix}-match:${item.id}">
@@ -625,7 +615,6 @@
               </div>
               ${renderInlineMetrics([
                 { label: "Location", value: item.location || "Not set" },
-                { label: "Status", value: item.stageLabel || "Unknown" },
                 { label: "Salary", value: item.salaryExpectation || "Not set" }
               ], "inline-metrics-compact")}
               ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 96), "card-note-compact")}
@@ -652,7 +641,6 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Match detail"}</p>
         <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
-        <p>${escapeHtml(payload.vacancy.roleTitle || "Vacancy")} • review snapshot</p>
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
@@ -661,14 +649,11 @@
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
       ${renderDetailSection("Match", [
-        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
         { label: "Candidate reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
         { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
       ])}
       ${renderDetailSection("Candidate", [
         { label: "Location", value: payload.candidate.location || "Not specified" },
-        { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
-        { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
         { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true },
         { label: "Skills", value: listChips((payload.candidate.summary || {}).skills || []), raw: true, full: true }
       ])}
@@ -679,8 +664,7 @@
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
       ]) : ""}
-      ${renderDetailSection("Vacancy context", [
-        { label: "Role", value: payload.vacancy.roleTitle || "Not specified" },
+      ${renderDetailSection("Vacancy", [
         { label: "Budget", value: payload.vacancy.budget || "Not specified" },
         { label: "Work format", value: payload.vacancy.workFormat || "Not specified" },
         { label: "Tech stack", value: (payload.vacancy.primaryTechStack || []).join(", ") || "Not specified", full: true },
