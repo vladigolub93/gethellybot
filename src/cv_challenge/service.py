@@ -17,9 +17,9 @@ from src.db.repositories.users import UsersRepository
 MIN_CV_CHALLENGE_SKILL_COUNT = 3
 CV_CHALLENGE_TOTAL_LIVES = 3
 CV_CHALLENGE_STAGE_CONFIG = (
-    {"index": 1, "label": "Stage 1", "durationMs": 18000, "spawnIntervalMs": 1300, "speedMin": 72, "speedMax": 92},
-    {"index": 2, "label": "Stage 2", "durationMs": 18000, "spawnIntervalMs": 1000, "speedMin": 98, "speedMax": 124},
-    {"index": 3, "label": "Stage 3", "durationMs": 18000, "spawnIntervalMs": 760, "speedMin": 130, "speedMax": 162},
+    {"index": 1, "label": "Stage 1", "durationMs": 18000, "spawnIntervalMs": 1050, "speedMin": 74, "speedMax": 96},
+    {"index": 2, "label": "Stage 2", "durationMs": 18000, "spawnIntervalMs": 840, "speedMin": 102, "speedMax": 128},
+    {"index": 3, "label": "Stage 3", "durationMs": 18000, "spawnIntervalMs": 640, "speedMin": 134, "speedMax": 168},
 )
 CV_CHALLENGE_DISTRACTOR_POOL = (
     "Java",
