@@ -602,24 +602,6 @@
       ctx.stroke();
     }
 
-    const dropZoneHeight = Math.max(72, Math.min(108, height * 0.2));
-    const dropZoneTop = height - dropZoneHeight;
-    const dropGradient = ctx.createLinearGradient(0, dropZoneTop, 0, height);
-    dropGradient.addColorStop(0, "rgba(255,255,255,0)");
-    dropGradient.addColorStop(1, "rgba(255,255,255,0.035)");
-    ctx.fillStyle = dropGradient;
-    ctx.fillRect(0, dropZoneTop, width, dropZoneHeight);
-    ctx.strokeStyle = "rgba(255,255,255,0.09)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, dropZoneTop);
-    ctx.lineTo(width, dropZoneTop);
-    ctx.stroke();
-    ctx.font = '600 12px "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Monaco, Consolas, monospace';
-    ctx.fillStyle = "rgba(245,245,247,0.42)";
-    ctx.textBaseline = "top";
-    ctx.fillText("miss line", 14, dropZoneTop + 10);
-
     state.objects.forEach((item) => {
       roundRect(ctx, item.x, item.y, item.width, item.height, 16);
       ctx.fillStyle = item.correct

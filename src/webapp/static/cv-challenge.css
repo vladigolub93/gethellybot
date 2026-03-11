@@ -416,7 +416,6 @@ html[data-theme="terminal"] .theme-toggle[aria-pressed="true"] {
 .game-shell {
   display: flex;
   flex-direction: column;
-  min-height: clamp(560px, calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 72px), 900px);
   gap: 10px;
   padding: 12px;
 }
@@ -458,8 +457,8 @@ html[data-theme="terminal"] .missed-item {
 
 .canvas-wrap {
   position: relative;
-  flex: 1 1 auto;
-  min-height: clamp(380px, 60dvh, 620px);
+  flex: 0 0 auto;
+  height: clamp(360px, 52dvh, 520px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -481,7 +480,7 @@ html[data-theme="terminal"] .canvas-wrap {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: clamp(380px, 60dvh, 620px);
+  min-height: 0;
   touch-action: manipulation;
 }
 
@@ -750,17 +749,11 @@ html[data-theme="terminal"] .result-copy::before {
 }
 
 html[data-theme="terminal"] .app-mode-game .game-shell {
-  min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 32px);
   gap: 10px;
 }
 
 html[data-theme="terminal"] .app-mode-game .canvas-wrap {
-  min-height: clamp(380px, 62dvh, 620px);
-}
-
-html[data-theme="terminal"] .app-mode-game .game-canvas {
-  height: clamp(380px, 62dvh, 620px);
-  min-height: 380px;
+  height: clamp(360px, 50dvh, 500px);
 }
 
 @media (max-width: 420px) {
@@ -771,7 +764,6 @@ html[data-theme="terminal"] .app-mode-game .game-canvas {
   }
 
   .game-shell {
-    min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 76px);
     gap: 10px;
     padding: 12px;
   }
@@ -794,12 +786,11 @@ html[data-theme="terminal"] .app-mode-game .game-canvas {
   }
 
   .canvas-wrap {
-    min-height: clamp(280px, 42dvh, 380px);
+    height: clamp(320px, 44dvh, 400px);
   }
 
   .game-canvas {
-    height: clamp(280px, 42dvh, 380px);
-    min-height: 280px;
+    min-height: 0;
   }
 
   .stage-banner {
@@ -817,17 +808,11 @@ html[data-theme="terminal"] .app-mode-game .game-canvas {
   }
 
   html[data-theme="terminal"] .app-mode-game .game-shell {
-    min-height: calc(var(--tg-viewport-stable-height, var(--app-height, 100dvh)) - 20px);
     gap: 8px;
     padding: 12px;
   }
 
   html[data-theme="terminal"] .app-mode-game .canvas-wrap {
-    min-height: clamp(360px, 56dvh, 500px);
-  }
-
-  html[data-theme="terminal"] .app-mode-game .game-canvas {
-    height: clamp(360px, 56dvh, 500px);
-    min-height: 360px;
+    height: clamp(320px, 48dvh, 420px);
   }
 }
