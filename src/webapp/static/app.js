@@ -3,10 +3,20 @@
     sessionToken: null,
     session: null,
     apiCache: new Map(),
+    backButtonHandlerBound: false,
   };
 
   const appEl = document.getElementById("app");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  const handleTelegramBack = () => {
+    if (getCurrentRoute() === "home") {
+      if (tg && typeof tg.close === "function") {
+        tg.close();
+      }
+      return;
+    }
+    window.history.back();
+  };
 
   function escapeHtml(value) {
     return String(value || "")
@@ -234,8 +244,16 @@
   function updateBackButton() {
     if (!tg || !tg.BackButton) return;
     if (getCurrentRoute() === "home") {
+      if (state.backButtonHandlerBound && typeof tg.BackButton.offClick === "function") {
+        tg.BackButton.offClick(handleTelegramBack);
+        state.backButtonHandlerBound = false;
+      }
       tg.BackButton.hide();
       return;
+    }
+    if (!state.backButtonHandlerBound && typeof tg.BackButton.onClick === "function") {
+      tg.BackButton.onClick(handleTelegramBack);
+      state.backButtonHandlerBound = true;
     }
     tg.BackButton.show();
   }
@@ -609,17 +627,6 @@
         }
         if (typeof tg.enableVerticalSwipes === "function") {
           tg.enableVerticalSwipes();
-        }
-        if (tg.BackButton) {
-          tg.BackButton.onClick(() => {
-            if (getCurrentRoute() === "home") {
-              if (typeof tg.close === "function") {
-                tg.close();
-              }
-              return;
-            }
-            window.history.back();
-          });
         }
       }
 
