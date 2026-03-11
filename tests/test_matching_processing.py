@@ -373,8 +373,8 @@ def test_matching_processing_notifies_manager_when_vacancy_cap_blocks_new_batch(
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
     assert "found strong candidates" in text
-    assert "active interview pipeline" in text
-    assert "wait until one finishes or drops out" in text
+    assert "active candidates in this vacancy pipeline" in text
+    assert "active decisions" in text
 
 
 def test_matching_processing_notifies_manager_when_candidates_already_presented() -> None:

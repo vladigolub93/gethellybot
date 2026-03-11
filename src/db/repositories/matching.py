@@ -12,6 +12,7 @@ from src.matching.policy import (
     MATCH_STATUS_CANDIDATE_APPLIED,
     MATCH_STATUS_FILTERED_OUT,
     MATCH_STATUS_INTERVIEW_QUEUED,
+    MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
     PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES,
     PRE_INTERVIEW_MANAGER_REVIEW_STATUSES,
 )
@@ -174,6 +175,7 @@ class MatchingRepository:
         return list(self.session.execute(stmt).scalars().all())
 
     def list_pre_interview_review_for_candidate(self, candidate_profile_id, *, limit: int = 3) -> list[Match]:
+        manager_approved_first = case((Match.status == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED, 0), else_=1)
         stmt = (
             select(Match)
             .where(
@@ -181,6 +183,7 @@ class MatchingRepository:
                 Match.status.in_(PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES),
             )
             .order_by(
+                manager_approved_first,
                 Match.llm_rank_score.desc().nulls_last(),
                 Match.deterministic_score.desc().nulls_last(),
                 Match.updated_at.desc(),

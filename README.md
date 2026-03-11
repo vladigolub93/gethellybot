@@ -11,12 +11,14 @@ This repository now contains:
 - Alembic migrations
 - Telegram webhook intake
 - candidate and vacancy onboarding flows
-- matching, interview, and evaluation foundations
+- matching and direct-contact foundations
+- dormant interview and evaluation foundations for future premium modes
 - Supabase and Telegram integration baseline
 - Railway deployment baseline
 
 ## Start Here
 
+- [docs/HELLY_V1_DIRECT_CONTACT_MATCHING_FLOW.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_DIRECT_CONTACT_MATCHING_FLOW.md)
 - [docs/README.md](/Users/vladigolub/Desktop/gethellybot/docs/README.md)
 - [docs/HELLY_V1_PROJECT_ARCHITECTURE.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_PROJECT_ARCHITECTURE.md)
 - [docs/HELLY_V1_MASTER_TASK_LIST.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_MASTER_TASK_LIST.md)

@@ -5,6 +5,7 @@ from typing import Optional
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
+from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
@@ -16,17 +17,17 @@ from src.notifications.rendering import render_notification_text
 from src.state.service import StateService
 from src.telegram.keyboards import (
     candidate_vacancy_inline_keyboard,
-    interview_invitation_inline_keyboard,
     manager_pre_interview_inline_keyboard,
 )
 from src.matching.policy import (
     CANDIDATE_ACTIVE_APPLICATION_STATUSES,
     MATCH_BATCH_SIZE,
+    MATCH_STATUS_APPROVED,
     MATCH_STATUS_CANDIDATE_APPLIED,
     MATCH_STATUS_CANDIDATE_DECISION_PENDING,
     MATCH_STATUS_CANDIDATE_SKIPPED,
-    MATCH_STATUS_INVITED,
     MATCH_STATUS_MANAGER_DECISION_PENDING,
+    MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
     MATCH_STATUS_MANAGER_SKIPPED,
     MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE,
     MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY,
@@ -51,6 +52,7 @@ class MatchingReviewService:
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
         self.verifications = CandidateVerificationsRepository(session)
+        self.evaluations = EvaluationsRepository(session)
         self.matches = MatchingRepository(session)
         self.notifications = NotificationsRepository(session)
         self.users = UsersRepository(session)
@@ -135,13 +137,70 @@ class MatchingReviewService:
             vacancy=vacancy,
             vacancy_summary=(vacancy_version.summary_json or {}) if vacancy_version else {},
         )
+        intro_text = None
+        if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+            intro_text = self._copy(
+                f"The hiring manager already approved you for {getattr(vacancy, 'role_title', None) or 'this role'}. "
+                "If you still want to move forward, tap Connect and I will share contacts right away."
+            )
         body = render_notification_text(
             template_key="candidate_vacancy_review_ready",
-            payload={"vacancy_package": package},
+            payload={
+                "text": intro_text,
+                "vacancy_package": package,
+            },
         )
         if slot_no is None:
             return body
         return f"{slot_no}.\n{body}"
+
+    @staticmethod
+    def _build_counterparty_payload(user) -> dict:
+        if user is None:
+            return {}
+        payload = {
+            "name": getattr(user, "display_name", None),
+            "username": getattr(user, "username", None),
+            "phone_number": getattr(user, "phone_number", None),
+        }
+        return {key: value for key, value in payload.items() if value}
+
+    def _share_contacts(
+        self,
+        *,
+        match,
+        candidate_user,
+        manager_user,
+        vacancy,
+        candidate_text: str,
+        manager_text: str,
+    ) -> None:
+        self.evaluations.create_introduction_event(
+            match_id=match.id,
+            candidate_user_id=getattr(candidate_user, "id", None),
+            manager_user_id=getattr(manager_user, "id", None),
+            introduction_mode="telegram_handoff",
+        )
+        self.notifications.create(
+            user_id=getattr(candidate_user, "id", None),
+            entity_type="match",
+            entity_id=match.id,
+            template_key="candidate_approved_introduction",
+            payload_json={
+                "text": candidate_text,
+                "counterparty": self._build_counterparty_payload(manager_user),
+            },
+        )
+        self.notifications.create(
+            user_id=getattr(manager_user, "id", None),
+            entity_type="match",
+            entity_id=match.id,
+            template_key="manager_candidate_approved",
+            payload_json={
+                "text": manager_text,
+                "counterparty": self._build_counterparty_payload(candidate_user),
+            },
+        )
 
     def _build_manager_batch_entries(self, *, vacancy, batch: list) -> list[dict]:
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
@@ -149,7 +208,7 @@ class MatchingReviewService:
             {
                 "text": self._copy(
                     f"I found {len(batch)} candidate matches for {role_title}. "
-                    "Review the candidate cards below and use the buttons under each profile to invite or skip."
+                    "Review the candidate cards below and use the buttons under each profile to connect or skip."
                 )
             }
         ]
@@ -176,10 +235,14 @@ class MatchingReviewService:
             }
         ]
         for match in batch:
+            primary_text = "Connect" if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED else "Apply"
             entries.append(
                 {
                     "text": self._render_vacancy_card_message(match=match, slot_no=None),
-                    "reply_markup": candidate_vacancy_inline_keyboard(match_id=str(match.id)),
+                    "reply_markup": candidate_vacancy_inline_keyboard(
+                        match_id=str(match.id),
+                        primary_text=primary_text,
+                    ),
                 }
             )
         return entries
@@ -233,8 +296,8 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates "
-                            "in the active interview pipeline for this vacancy. "
-                            "Wait until one finishes or drops out before I send more profiles."
+                            "waiting on this vacancy pipeline. "
+                            "Close one of the active decisions before I send more profiles."
                         ),
                     },
                     allow_duplicate=True,
@@ -352,7 +415,7 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"You already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
-                            "Wait for manager decisions before I send more roles."
+                            "Close one of the active decisions before I ask you to review more roles."
                         ),
                     },
                     allow_duplicate=True,
@@ -464,7 +527,6 @@ class MatchingReviewService:
         if candidate is None:
             return None
 
-        limit = self._candidate_batch_limit(candidate.id)
         batch = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=MATCH_BATCH_SIZE)
         match = self.matches.get_by_id(match_id) if match_id else None
         if match is not None:
@@ -504,52 +566,67 @@ class MatchingReviewService:
             return None
 
         role_title = getattr(vacancy, "role_title", None) or "this role"
+        manager_user = self.users.get_by_id(getattr(vacancy, "manager_user_id", None))
+        candidate_user = self.users.get_by_id(getattr(candidate, "user_id", None))
+        shared_contacts = False
 
         if action == "apply_to_vacancy":
-            if limit <= 0:
+            if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+                self.state_service.transition(
+                    entity_type="match",
+                    entity=match,
+                    to_state=MATCH_STATUS_APPROVED,
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=user.id,
+                    state_field="status",
+                    metadata_json={"vacancy_id": str(vacancy.id), "source": "candidate_direct_connect"},
+                )
+                self._share_contacts(
+                    match=match,
+                    candidate_user=candidate_user,
+                    manager_user=manager_user,
+                    vacancy=vacancy,
+                    candidate_text=self._copy(
+                        f"You and the hiring manager both approved {role_title}. Here is the manager contact for the next step."
+                    ),
+                    manager_text=self._copy(
+                        f"{candidate_user.display_name if candidate_user and getattr(candidate_user, 'display_name', None) else 'The candidate'} accepted the connection for {role_title}. Here is the candidate contact for the next step."
+                    ),
+                )
+                status = "approved"
+                shared_contacts = True
+            else:
+                self.state_service.transition(
+                    entity_type="match",
+                    entity=match,
+                    to_state=MATCH_STATUS_CANDIDATE_APPLIED,
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=user.id,
+                    state_field="status",
+                    metadata_json={"vacancy_id": str(vacancy.id), "source": "candidate_vacancy_review"},
+                )
                 self.notifications.create(
                     user_id=user.id,
-                    entity_type="candidate_profile",
-                    entity_id=candidate.id,
+                    entity_type="match",
+                    entity_id=match.id,
                     template_key="candidate_vacancy_review_ready",
                     payload_json={
                         "text": self._copy(
-                            f"You already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
-                            "Wait for manager decisions before applying to more roles."
+                            f"Applied to {role_title}. I sent your profile to the hiring manager for review."
                         ),
                     },
                     allow_duplicate=True,
                 )
-                return CandidateVacancyActionResult(status="candidate_cap_reached")
-            self.state_service.transition(
-                entity_type="match",
-                entity=match,
-                to_state=MATCH_STATUS_CANDIDATE_APPLIED,
-                trigger_type="user_action",
-                trigger_ref_id=raw_message_id,
-                actor_user_id=user.id,
-                state_field="status",
-                metadata_json={"vacancy_id": str(vacancy.id), "source": "candidate_vacancy_review"},
-            )
-            self.notifications.create(
-                user_id=user.id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="candidate_vacancy_review_ready",
-                payload_json={
-                    "text": self._copy(
-                        f"Applied to {role_title}. I sent your profile to the hiring manager for review."
-                    ),
-                },
-                allow_duplicate=True,
-            )
-            self.dispatch_manager_batch_for_vacancy(
-                vacancy_id=vacancy.id,
-                force=True,
-                trigger_type="user_action",
-            )
-            status = "applied"
+                self.dispatch_manager_batch_for_vacancy(
+                    vacancy_id=vacancy.id,
+                    force=True,
+                    trigger_type="user_action",
+                )
+                status = "applied"
         elif action == "skip_vacancy":
+            previous_status = getattr(match, "status", None)
             self.state_service.transition(
                 entity_type="match",
                 entity=match,
@@ -570,6 +647,19 @@ class MatchingReviewService:
                 },
                 allow_duplicate=True,
             )
+            if previous_status == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+                self.notifications.create(
+                    user_id=getattr(vacancy, "manager_user_id", None),
+                    entity_type="match",
+                    entity_id=match.id,
+                    template_key="manager_pre_interview_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            f"{candidate_user.display_name if candidate_user and getattr(candidate_user, 'display_name', None) else 'The candidate'} skipped the approved opportunity for {role_title}."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
             status = "skipped"
         else:
             return None
@@ -581,7 +671,7 @@ class MatchingReviewService:
         )
         if batch_result["status"] == "candidate_cap_reached":
             return CandidateVacancyActionResult(status=status)
-        if batch_result["batch_count"] == 0:
+        if batch_result["batch_count"] == 0 and not shared_contacts:
             self.notifications.create(
                 user_id=user.id,
                 entity_type="candidate_profile",
@@ -665,9 +755,11 @@ class MatchingReviewService:
         candidate_name = self._candidate_label(candidate)
         previous_status = getattr(match, "status", None)
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
+        candidate_user = self.users.get_by_id(candidate.user_id)
+        shared_contacts = False
 
         if action == "interview_candidate":
-            if self._manager_batch_limit(vacancy.id) <= 0:
+            if previous_status != MATCH_STATUS_CANDIDATE_APPLIED and self._manager_batch_limit(vacancy.id) <= 0:
                 self.notifications.create(
                     user_id=user.id,
                     entity_type="vacancy",
@@ -676,56 +768,87 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates "
-                            "in the active interview pipeline for this vacancy. "
-                            "Wait until one finishes or drops out before inviting another candidate."
+                            "already active on this vacancy. "
+                            "Close one of those active decisions before approving another candidate."
                         ),
                     },
                     allow_duplicate=True,
                 )
                 return ManagerPreInterviewActionResult(status="vacancy_cap_reached")
-            self.state_service.transition(
-                entity_type="match",
-                entity=match,
-                to_state=MATCH_STATUS_INVITED,
-                trigger_type="user_action",
-                trigger_ref_id=raw_message_id,
-                actor_user_id=user.id,
-                state_field="status",
-                metadata_json={"vacancy_id": str(vacancy.id), "source": "manager_pre_interview_review"},
-            )
-            self.notifications.create(
-                user_id=candidate.user_id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="candidate_interview_invitation",
-                payload_json={
-                    "message_entries": [
-                        {
-                            "text": self.messaging.compose_interview_invitation(
-                                role_title=getattr(vacancy, "role_title", None)
-                            ),
-                        },
-                        {
-                            "text": self._render_vacancy_card_message(match=match, slot_no=None),
-                            "reply_markup": interview_invitation_inline_keyboard(match_id=str(match.id)),
-                        },
-                    ],
-                },
-                allow_duplicate=True,
-            )
-            self.notifications.create(
-                user_id=user.id,
-                entity_type="match",
-                entity_id=match.id,
-                template_key="manager_pre_interview_review_ready",
-                payload_json={
-                    "text": self._copy(
-                        f"{candidate_name} is invited to interview. I will let you know when the candidate accepts or skips."
+            if previous_status == MATCH_STATUS_CANDIDATE_APPLIED:
+                manager_user = self.users.get_by_id(user.id)
+                self.state_service.transition(
+                    entity_type="match",
+                    entity=match,
+                    to_state=MATCH_STATUS_APPROVED,
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=user.id,
+                    state_field="status",
+                    metadata_json={"vacancy_id": str(vacancy.id), "source": "manager_direct_connect"},
+                )
+                self._share_contacts(
+                    match=match,
+                    candidate_user=candidate_user,
+                    manager_user=manager_user,
+                    vacancy=vacancy,
+                    candidate_text=self._copy(
+                        f"You and the hiring manager both approved {role_title}. Here is the manager contact for the next step."
                     ),
-                },
-                allow_duplicate=True,
-            )
-            status = "invited"
+                    manager_text=self._copy(
+                        f"You and {candidate_name} both approved this match for {role_title}. Here is the candidate contact for the next step."
+                    ),
+                )
+                status = "approved"
+                shared_contacts = True
+            else:
+                self.state_service.transition(
+                    entity_type="match",
+                    entity=match,
+                    to_state=MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+                    trigger_type="user_action",
+                    trigger_ref_id=raw_message_id,
+                    actor_user_id=user.id,
+                    state_field="status",
+                    metadata_json={"vacancy_id": str(vacancy.id), "source": "manager_pre_interview_review"},
+                )
+                self.notifications.create(
+                    user_id=candidate.user_id,
+                    entity_type="match",
+                    entity_id=match.id,
+                    template_key="candidate_vacancy_review_ready",
+                    payload_json={
+                        "message_entries": [
+                            {
+                                "text": self._copy(
+                                    f"The hiring manager already approved you for {role_title}. "
+                                    "If you still want to move forward, tap Connect and I will share contacts right away."
+                                ),
+                            },
+                            {
+                                "text": self._render_vacancy_card_message(match=match, slot_no=None),
+                                "reply_markup": candidate_vacancy_inline_keyboard(
+                                    match_id=str(match.id),
+                                    primary_text="Connect",
+                                ),
+                            },
+                        ],
+                    },
+                    allow_duplicate=True,
+                )
+                self.notifications.create(
+                    user_id=user.id,
+                    entity_type="match",
+                    entity_id=match.id,
+                    template_key="manager_pre_interview_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            f"{candidate_name} is approved on your side. I asked the candidate to confirm, and I'll share contacts if they agree."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
+                status = "awaiting_candidate"
         elif action == "skip_candidate":
             self.state_service.transition(
                 entity_type="match",
@@ -771,7 +894,7 @@ class MatchingReviewService:
         )
         if batch_result["status"] == "vacancy_cap_reached":
             return ManagerPreInterviewActionResult(status=status)
-        if batch_result["batch_count"] == 0:
+        if batch_result["batch_count"] == 0 and not shared_contacts:
             self.notifications.create(
                 user_id=user.id,
                 entity_type="vacancy",

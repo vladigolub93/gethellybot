@@ -118,18 +118,18 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Keep the candidate profile ready for matching.",
         allowed_actions=["wait_for_match", "find_matching_vacancies", "delete_profile"],
         assistance_prompt_slug="candidate_ready",
-        guidance_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again now.",
-        help_text="Your profile is ready. Helly will contact you when a strong match is found. You can also ask me to check open roles again right now.",
+        guidance_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again now.",
+        help_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again right now.",
     ),
     "VACANCY_REVIEW": StatePolicyDefinition(
         state="VACANCY_REVIEW",
-        goal="Review the current matched-vacancy batch and decide where to apply.",
+        goal="Review the current matched-vacancy batch and decide where to apply or connect.",
         allowed_actions=["apply_to_vacancy", "skip_vacancy"],
         assistance_prompt_slug="candidate_vacancy_review",
-        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role.",
+        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role. If a manager already approved one, the primary button will switch to Connect.",
         help_text=(
             "You are reviewing matched vacancies. "
-            "Use the Apply or Skip buttons under the vacancy cards in the current batch."
+            "Use the Apply or Skip buttons under the vacancy cards in the current batch. If a manager already approved one, use Connect or Skip under that card."
         ),
         missing_requirements=["candidate_vacancy_decision"],
     ),
@@ -201,6 +201,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         ),
         help_text=(
             "The vacancy is open. Helly is matching candidates and will only send qualified profiles. "
+            "If both sides approve the same match, Helly will share contacts directly. "
             "You can also ask me to look for candidates again, start another vacancy, or ask to see your active vacancies."
         ),
     ),
@@ -239,13 +240,13 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     ),
     "PRE_INTERVIEW_REVIEW": StatePolicyDefinition(
         state="PRE_INTERVIEW_REVIEW",
-        goal="Review matched candidates before interview and decide who should receive an interview invitation.",
+        goal="Review matched candidates and decide who should receive a direct contact approval request.",
         allowed_actions=["interview_candidate", "skip_candidate"],
         assistance_prompt_slug="pre_interview_review",
-        guidance_text="Review the current candidate cards and use the Interview or Skip buttons under each profile.",
+        guidance_text="Review the current candidate cards and use the Connect or Skip buttons under each profile.",
         help_text=(
-            "You are reviewing matched candidates before interview. "
-            "Use the Interview or Skip buttons under the candidate cards in the current batch."
+            "You are reviewing matched candidates before direct contact sharing. "
+            "Use the Connect or Skip buttons under the candidate cards in the current batch."
         ),
         missing_requirements=["pre_interview_manager_decision"],
     ),

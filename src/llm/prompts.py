@@ -120,19 +120,19 @@ def pre_interview_review_decision_prompt(
     current_step_guidance: str | None = None,
     recent_context: list[str] | None = None,
 ) -> str:
-    return f"""Task: decide what the hiring manager means in the pre-interview candidate review step.
+    return f"""Task: decide what the hiring manager means in the candidate review step before direct contact sharing.
 
 Valid outcomes:
 - help question or clarification
-- explicit interview-candidate intent for one numbered candidate
+- explicit connect-candidate intent for one numbered candidate
 - explicit skip-candidate intent for one numbered candidate
 
 Rules:
-- if the manager uses text instead of tapping buttons, they may still write things like `Interview 1`, `Skip 2`, or `Interview candidate 3`
-- only propose `interview_candidate` when the manager is clearly sending that numbered candidate to interview
+- if the manager uses text instead of tapping buttons, they may still write things like `Connect 1`, `Approve 2`, `Interview 1`, or `Skip 3`
+- only propose `interview_candidate` when the manager is clearly approving that numbered candidate for the next step
 - only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
 - extract the numbered candidate slot into `candidate_slot`
-- treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after interview?" as help
+- treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after connect?" as help
 - do not invent a slot number if the manager did not specify one
 - do not transition stages yourself
 
@@ -379,11 +379,11 @@ Valid outcomes:
 - explicit skip intent for one numbered vacancy
 
 Rules:
-- if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Skip 2`, or `Apply vacancy 3`
-- only propose `apply_to_vacancy` when the candidate is clearly applying to that numbered vacancy
+- if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Connect 1`, `Skip 2`, or `Apply vacancy 3`
+- only propose `apply_to_vacancy` when the candidate is clearly applying to or connecting with that numbered vacancy
 - only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
 - extract the numbered vacancy slot into `vacancy_slot`
-- treat questions like "what does this mean?", "what happens after I apply?", and "how does this work?" as help
+- treat questions like "what does this mean?", "what happens after I apply?", "what happens after I connect?", and "how does this work?" as help
 - do not invent a slot number if the candidate did not specify one
 - do not transition stages yourself
 

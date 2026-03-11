@@ -3,9 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from src.matching.policy import (
+    MATCH_STATUS_APPROVED,
     MATCH_STATUS_CANDIDATE_APPLIED,
     MATCH_STATUS_CANDIDATE_DECISION_PENDING,
-    MATCH_STATUS_INVITED,
     MATCH_STATUS_MANAGER_DECISION_PENDING,
     MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
 )
@@ -37,6 +37,16 @@ class FakeCandidateRepository:
 class FakeVerificationRepository:
     def get_latest_submitted_by_profile_id(self, profile_id):
         return None
+
+
+class FakeEvaluationsRepository:
+    def __init__(self):
+        self.rows = []
+
+    def create_introduction_event(self, **kwargs):
+        row = SimpleNamespace(**kwargs)
+        self.rows.append(row)
+        return row
 
 
 class FakeMatchingRepository:
@@ -185,6 +195,7 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(shortlisted_for_vacancy=[match])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Test Candidate"),
@@ -207,7 +218,7 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
     assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 candidate matches")
-    assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Interview"
+    assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
 
@@ -242,6 +253,7 @@ def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies(
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(shortlisted_for_candidate=[match], active_candidate=[])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository({candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate")})
     service.vacancies = FakeVacanciesRepository(
         vacancies={vacancy.id: vacancy},
@@ -296,6 +308,7 @@ def test_dispatch_manager_batch_for_vacancy_does_not_resend_existing_cards_on_fo
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_vacancy=[existing_match])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             "candidate-user-existing": SimpleNamespace(id="candidate-user-existing", display_name="Existing Candidate"),
@@ -349,6 +362,7 @@ def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refres
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_vacancy=[existing_match], shortlisted_for_vacancy=[new_match])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             existing_candidate.user_id: SimpleNamespace(id=existing_candidate.user_id, display_name="Existing Candidate"),
@@ -392,6 +406,7 @@ def test_dispatch_candidate_batch_for_profile_does_not_resend_existing_cards_on_
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_candidate=[existing_match], active_candidate=[])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository({candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate")})
     service.vacancies = FakeVacanciesRepository(
         vacancies={vacancy.id: vacancy},
@@ -423,6 +438,7 @@ def test_execute_candidate_pre_interview_action_accepts_match_id_from_inline_but
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_candidate=[match], active_candidate=[])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository({candidate_user.id: candidate_user})
     service.vacancies = FakeVacanciesRepository(vacancies={vacancy.id: vacancy})
     service.messaging = FakeMessagingService()
@@ -453,6 +469,7 @@ def test_dispatch_manager_batch_for_vacancy_reports_cap_reached() -> None:
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(active_vacancy=active_pipeline)
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository({vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id)})
     service.vacancies = FakeVacanciesRepository(
         vacancies={vacancy.id: vacancy},
@@ -465,7 +482,9 @@ def test_dispatch_manager_batch_for_vacancy_reports_cap_reached() -> None:
 
     assert result["status"] == "vacancy_cap_reached"
     assert len(service.notifications.rows) == 1
-    assert "active interview pipeline" in service.notifications.rows[0].payload_json["text"].lower()
+    text = service.notifications.rows[0].payload_json["text"].lower()
+    assert "vacancy pipeline" in text
+    assert "active decisions" in text
 
 
 def test_execute_candidate_pre_interview_action_applies_and_notifies_manager() -> None:
@@ -489,6 +508,7 @@ def test_execute_candidate_pre_interview_action_applies_and_notifies_manager() -
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_candidate=[match], active_candidate=[])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             candidate_user.id: candidate_user,
@@ -555,6 +575,7 @@ def test_execute_manager_pre_interview_action_accepts_match_id_from_inline_butto
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_vacancy=[match], active_vacancy=[])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Inline Candidate"),
@@ -576,16 +597,12 @@ def test_execute_manager_pre_interview_action_accepts_match_id_from_inline_butto
         match_id=match.id,
     )
 
-    assert result.status == "invited"
-    assert match.status == MATCH_STATUS_INVITED
+    assert result.status == "awaiting_candidate"
+    assert match.status == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED
     candidate_notification = service.notifications.rows[0]
-    assert candidate_notification.template_key == "candidate_interview_invitation"
-    assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == (
-        "Accept interview"
-    )
-    assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == (
-        "Skip opportunity"
-    )
+    assert candidate_notification.template_key == "candidate_vacancy_review_ready"
+    assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
+    assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
     assert "Vacancy package:" in candidate_notification.payload_json["message_entries"][1]["text"]
 
 
@@ -605,6 +622,7 @@ def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> 
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_vacancy=[match])
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate"),
@@ -662,6 +680,7 @@ def test_execute_candidate_pre_interview_apply_is_blocked_when_candidate_cap_rea
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_candidate=[pending_match], active_candidate=active_matches)
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository({candidate_user.id: candidate_user})
     service.vacancies = FakeVacanciesRepository(vacancies={vacancy.id: vacancy})
     service.messaging = FakeMessagingService()
@@ -675,9 +694,9 @@ def test_execute_candidate_pre_interview_apply_is_blocked_when_candidate_cap_rea
     )
 
     assert result is not None
-    assert result.status == "candidate_cap_reached"
-    assert pending_match.status == MATCH_STATUS_CANDIDATE_DECISION_PENDING
-    assert "active opportunities in progress" in service.notifications.rows[0].payload_json["text"].lower()
+    assert result.status == "applied"
+    assert pending_match.status == MATCH_STATUS_CANDIDATE_APPLIED
+    assert "active opportunities in progress" in service.notifications.rows[-1].payload_json["text"].lower()
 
 
 def test_execute_manager_pre_interview_invite_is_blocked_when_vacancy_cap_reached() -> None:
@@ -700,6 +719,7 @@ def test_execute_manager_pre_interview_invite_is_blocked_when_vacancy_cap_reache
     service.verifications = FakeVerificationRepository()
     service.matches = FakeMatchingRepository(pre_vacancy=[pending_match], active_vacancy=active_pipeline)
     service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
     service.users = FakeUsersRepository(
         {
             candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate"),
@@ -723,4 +743,124 @@ def test_execute_manager_pre_interview_invite_is_blocked_when_vacancy_cap_reache
     assert result is not None
     assert result.status == "vacancy_cap_reached"
     assert pending_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
-    assert "active interview pipeline" in service.notifications.rows[0].payload_json["text"].lower()
+    text = service.notifications.rows[0].payload_json["text"].lower()
+    assert "active on this vacancy" in text
+    assert "active decisions" in text
+
+
+def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_candidate_already_applied() -> None:
+    manager_user = SimpleNamespace(
+        id="manager-connect",
+        is_hiring_manager=True,
+        is_candidate=False,
+        display_name="Manager",
+        username="manager_connect",
+        phone_number="+380111111111",
+    )
+    candidate = SimpleNamespace(id="candidate-connect", user_id="candidate-user-connect")
+    vacancy = SimpleNamespace(id="vacancy-connect", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-connect",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-connect",
+        status=MATCH_STATUS_CANDIDATE_APPLIED,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-connect": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match], active_vacancy=[])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(
+                id=candidate.user_id,
+                display_name="Applied Candidate",
+                username="applied_candidate",
+                phone_number="+380222222222",
+            ),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_manager_pre_interview_action(
+        user=manager_user,
+        raw_message_id="raw-manager-connect",
+        action="interview_candidate",
+        candidate_slot=None,
+        match_id=match.id,
+    )
+
+    assert result.status == "approved"
+    assert match.status == MATCH_STATUS_APPROVED
+    assert len(service.evaluations.rows) == 1
+    assert len(service.notifications.rows) == 2
+    assert service.notifications.rows[0].template_key == "candidate_approved_introduction"
+    assert service.notifications.rows[1].template_key == "manager_candidate_approved"
+
+
+def test_execute_candidate_pre_interview_action_shares_contacts_immediately_when_manager_already_approved() -> None:
+    candidate_user = SimpleNamespace(
+        id="candidate-user-approved",
+        is_candidate=True,
+        is_hiring_manager=False,
+        display_name="Candidate",
+        username="candidate_connect",
+        phone_number="+380333333333",
+    )
+    candidate = SimpleNamespace(id="candidate-approved", user_id=candidate_user.id)
+    manager_user = SimpleNamespace(
+        id="manager-approved",
+        display_name="Manager",
+        username="manager_approved",
+        phone_number="+380444444444",
+    )
+    vacancy = SimpleNamespace(id="vacancy-approved", manager_user_id=manager_user.id, role_title="Backend Engineer")
+    match = SimpleNamespace(
+        id="match-approved",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        status=MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match], active_candidate=[])
+    service.notifications = FakeNotificationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate_user.id: candidate_user,
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(vacancies={vacancy.id: vacancy})
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_candidate_pre_interview_action(
+        user=candidate_user,
+        raw_message_id="raw-candidate-connect",
+        action="apply_to_vacancy",
+        vacancy_slot=None,
+        match_id=match.id,
+    )
+
+    assert result.status == "approved"
+    assert match.status == MATCH_STATUS_APPROVED
+    assert len(service.evaluations.rows) == 1
+    assert len(service.notifications.rows) == 2
+    assert service.notifications.rows[0].template_key == "candidate_approved_introduction"
+    assert service.notifications.rows[1].template_key == "manager_candidate_approved"

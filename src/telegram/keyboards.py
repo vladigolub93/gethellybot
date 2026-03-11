@@ -56,7 +56,7 @@ def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:
         "inline_keyboard": [
             [
                 {
-                    "text": "Interview",
+                    "text": "Connect",
                     "callback_data": f"mgr_pre:int:{match_id}",
                 },
                 {
@@ -68,16 +68,21 @@ def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:
     }
 
 
-def candidate_vacancy_inline_keyboard(*, match_id: str) -> dict:
+def candidate_vacancy_inline_keyboard(
+    *,
+    match_id: str,
+    primary_text: str = "Apply",
+    secondary_text: str = "Skip",
+) -> dict:
     return {
         "inline_keyboard": [
             [
                 {
-                    "text": "Apply",
+                    "text": primary_text,
                     "callback_data": f"cand_pre:apply:{match_id}",
                 },
                 {
-                    "text": "Skip",
+                    "text": secondary_text,
                     "callback_data": f"cand_pre:skip:{match_id}",
                 },
             ]

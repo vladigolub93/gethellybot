@@ -207,8 +207,8 @@ class MatchingProcessingService:
         if review_dispatch_result and review_dispatch_result.get("status") == "vacancy_cap_reached":
             text = (
                 "Matching refresh complete. I found strong candidates for this vacancy, "
-                f"but you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates in the active interview pipeline. "
-                "Wait until one finishes or drops out before I send more profiles."
+                f"but you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidates in this vacancy pipeline. "
+                "Close one of the active decisions before I send more profiles."
             )
         elif review_dispatch_result and review_dispatch_result.get("status") == "already_presented":
             batch_count = int(review_dispatch_result.get("batch_count") or 0)
@@ -229,7 +229,7 @@ class MatchingProcessingService:
             text = (
                 f"Matching refresh complete. I found {shortlisted_count} strong "
                 f"{self._pluralize_candidates(shortlisted_count)} for this vacancy and sent you "
-                f"{sent_count} new {self._pluralize_candidates(sent_count)} for pre-interview review."
+                f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
             )
         else:
             active_match_count = len(self.matching.list_active_for_vacancy(vacancy.id))

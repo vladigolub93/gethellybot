@@ -174,7 +174,7 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             "budget": "6000-7000 USD per month",
             "workFormat": "remote",
             "stage": "candidate_decision_pending",
-            "stageLabel": "Waiting for candidate reply",
+            "stageLabel": "Waiting for your reply",
             "interviewState": "INVITED",
             "interviewStateLabel": "Invited",
             "updatedAt": now.isoformat(),

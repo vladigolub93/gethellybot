@@ -1,5 +1,11 @@
 # HELLY v1 Two-Sided Matching and Interview Redesign Plan
 
+Superseded note:
+
+- This document is no longer the active product flow.
+- The active runtime is documented in [HELLY_V1_DIRECT_CONTACT_MATCHING_FLOW.md](/Users/vladigolub/Desktop/gethellybot/docs/HELLY_V1_DIRECT_CONTACT_MATCHING_FLOW.md).
+- The interview-heavy design below is kept only as historical design context for a future premium interview mode.
+
 Detailed Execution Plan for:
 
 - moving from auto-invite-after-match to manager/candidate pre-interview decisions

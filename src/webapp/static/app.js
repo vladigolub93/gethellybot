@@ -403,22 +403,20 @@
     if (role === "candidate") {
       const payload = await api("/webapp/api/candidate/opportunities");
       const items = payload.items || [];
-      const activeInterviewCount = items.filter((item) =>
-        includesAny(item.interviewStateLabel, ["queued", "active", "accepted", "started", "progress", "invited"])
+      const activeDecisionCount = items.filter((item) =>
+        ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
       ).length;
-      const completedInterviewCount = items.filter((item) =>
-        includesAny(item.interviewStateLabel, ["completed"])
-      ).length;
+      const connectedCount = items.filter((item) => item.stage === "approved").length;
       appEl.innerHTML = `
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "candidate_session" : "Candidate view"}</p>
           <h2>My Opportunities</h2>
-          <p>Your current matches, interview state and saved profile context.</p>
+          <p>Your current matches, approval state and saved profile context.</p>
         </section>
         ${renderStatsStrip([
           { label: "Opportunities", value: String(items.length) },
-          { label: "In interview", value: String(activeInterviewCount) },
-          { label: "Completed", value: String(completedInterviewCount) }
+          { label: "Waiting", value: String(activeDecisionCount) },
+          { label: "Connected", value: String(connectedCount) }
         ])}
         ${renderActionPanel(payload.cvChallenge)}
         <section class="detail-panel">
@@ -441,13 +439,13 @@
               </div>
               ${renderInlineMetrics([
                 { label: "Budget", value: item.budget || "Not set" },
-                { label: "Interview", value: item.interviewStateLabel || "Not started" },
+                { label: "Status", value: item.stageLabel || "Unknown" },
                 { label: "Updated", value: formatRelativeTime(item.updatedAt) }
               ])}
             </article>
           `).join("") : `<div class="empty-state">No opportunities yet. Once Helly creates matches for you, they will appear here.</div>`}
         </section>
-        <p class="footer-note">Read-only mode. Apply, skip and interview actions still happen in the bot chat.</p>
+        <p class="footer-note">Read-only mode. Apply, skip and connect actions still happen in the bot chat.</p>
       `;
       bindCards();
       bindActionButtons();
@@ -459,18 +457,18 @@
       const items = payload.items || [];
       const totalCandidateCount = sumBy(items, "candidateCount");
       const totalActivePipelineCount = sumBy(items, "activePipelineCount");
-      const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
+      const totalConnectedCount = sumBy(items, "connectedCount");
       appEl.innerHTML = `
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "manager_session" : "Manager view"}</p>
           <h2>My Vacancies</h2>
-          <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate pipeline depth and interview throughput." : "One clean view of your live candidate pipeline and interview progress."}</p>
+          <p>${isTerminalTheme() ? "Inspect live vacancy queues, candidate approvals and direct handoffs." : "One clean view of your live candidate pipeline and direct connection flow."}</p>
         </section>
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
           { label: "In pipeline", value: String(totalActivePipelineCount) },
-          { label: "Interviewed", value: String(totalCompletedInterviewCount) }
+          { label: "Connected", value: String(totalConnectedCount) }
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
@@ -484,7 +482,7 @@
               ${renderCardMetrics([
                 { label: "Candidates", value: String(item.candidateCount) },
                 { label: "In pipeline", value: String(item.activePipelineCount) },
-                { label: "Interviewed", value: String(item.completedInterviewCount) }
+                { label: "Connected", value: String(item.connectedCount || 0) }
               ])}
               ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
             </article>
@@ -499,17 +497,17 @@
       const payload = await api("/webapp/api/admin/vacancies");
       const items = payload.items || [];
       const totalCandidateCount = sumBy(items, "candidateCount");
-      const totalCompletedInterviewCount = sumBy(items, "completedInterviewCount");
+      const totalConnectedCount = sumBy(items, "connectedCount");
       appEl.innerHTML = `
         <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
           <p class="eyebrow">${isTerminalTheme() ? "admin_session" : "Admin view"}</p>
           <h2>All Vacancies</h2>
-          <p>${isTerminalTheme() ? "Production-wide read-only shell across all live vacancy records." : "Read-only visibility across the full Helly production pipeline."}</p>
+          <p>${isTerminalTheme() ? "Production-wide read-only shell across live vacancy queues and direct handoffs." : "Read-only visibility across the full Helly direct-contact pipeline."}</p>
         </section>
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
           { label: "Candidates", value: String(totalCandidateCount) },
-          { label: "Interviewed", value: String(totalCompletedInterviewCount) }
+          { label: "Connected", value: String(totalConnectedCount) }
         ])}
         <section class="list">
           ${items.length ? items.map((item) => `
@@ -523,7 +521,7 @@
               ${renderCardMetrics([
                 { label: "Manager", value: item.managerName || "Unknown" },
                 { label: "Candidates", value: String(item.candidateCount) },
-                { label: "Interviewed", value: String(item.completedInterviewCount) }
+                { label: "Connected", value: String(item.connectedCount || 0) }
               ])}
               ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
             </article>
@@ -536,19 +534,26 @@
 
   async function renderCandidateMatch(matchId) {
     const payload = await api(`/webapp/api/candidate/opportunities/${matchId}`);
+    const hasLegacyInterviewData = Boolean(
+      payload.interview.stateLabel ||
+      payload.evaluation.interviewSummary ||
+      (payload.evaluation.strengths || []).length ||
+      (payload.evaluation.risks || []).length
+    );
     appEl.innerHTML = `
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "match_record" : "Opportunity detail"}</p>
         <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
-        <p>Current opportunity, profile and interview context.</p>
+        <p>Current opportunity and saved profile context.</p>
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
-        { label: "Interview", value: payload.interview.stateLabel || "Not started" },
-        { label: "Score", value: formatScore(payload.evaluation.finalScore) }
+        { label: "Budget", value: payload.vacancy.budget || "Not specified" },
+        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
       ${renderDetailSection("Match", [
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) },
+        { label: "Your reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
         { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
       ])}
       ${renderDetailSection("Vacancy", [
@@ -565,12 +570,13 @@
         { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
         { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true }
       ])}
-      ${renderDetailSection("Interview outcome", [
+      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
+        { label: "State", value: payload.interview.stateLabel || "Not started" },
         { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
         { label: "Recommendation", value: payload.evaluation.recommendation || "Not available" },
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
-      ])}
+      ]) : ""}
     `;
   }
 
@@ -589,13 +595,13 @@
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${escapeHtml(isTerminalTheme() ? `${rolePrefix}_vacancy_record` : `${rolePrefix} vacancy`)}</p>
         <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
-        <p>${rolePrefix === "manager" ? "Candidate pipeline and saved vacancy context." : "Cross-role vacancy overview and candidate pipeline."}</p>
+        <p>${rolePrefix === "manager" ? "Candidate pipeline and saved vacancy context." : "Cross-role vacancy overview and direct-contact pipeline."}</p>
       </section>
       ${renderStatsStrip([
         { label: "State", value: vacancy.state || "Unknown" },
         { label: "Candidates", value: String(stats.candidateCount) },
         { label: "In pipeline", value: String(stats.activePipelineCount) },
-        { label: "Interviewed", value: String(stats.completedInterviewCount) }
+        { label: "Connected", value: String(stats.connectedCount || 0) }
       ])}
       ${renderDetailSection("Vacancy snapshot", [
         { label: "Budget", value: vacancy.budget || "Not specified" },
@@ -624,7 +630,7 @@
               </div>
               ${renderInlineMetrics([
                 { label: "Location", value: item.location || "Not set" },
-                { label: "Interview", value: item.interviewStateLabel || "Not started" },
+                { label: "Status", value: item.stageLabel || "Unknown" },
                 { label: "Salary", value: item.salaryExpectation || "Not set" }
               ], "inline-metrics-compact")}
               ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 96), "card-note-compact")}
@@ -641,6 +647,12 @@
       ? `/webapp/api/hiring-manager/matches/${matchId}`
       : `/webapp/api/admin/matches/${matchId}`;
     const payload = await api(path);
+    const hasLegacyInterviewData = Boolean(
+      payload.interview.stateLabel ||
+      payload.evaluation.interviewSummary ||
+      (payload.evaluation.strengths || []).length ||
+      (payload.evaluation.risks || []).length
+    );
     appEl.innerHTML = `
       <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
         <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Match detail"}</p>
@@ -649,8 +661,8 @@
       </section>
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
-        { label: "Interview", value: payload.interview.stateLabel || "Not started" },
-        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
+        { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
+        { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
         { label: "Score", value: formatScore(payload.evaluation.finalScore) }
       ])}
       ${renderDetailSection("Candidate", [
@@ -660,11 +672,13 @@
         { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true },
         { label: "Skills", value: listChips((payload.candidate.summary || {}).skills || []), raw: true, full: true }
       ])}
-      ${renderDetailSection("Interview", [
+      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
+        { label: "State", value: payload.interview.stateLabel || "Not started" },
+        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
         { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
-      ])}
+      ]) : ""}
       ${renderDetailSection("Vacancy context", [
         { label: "Role", value: payload.vacancy.roleTitle || "Not specified" },
         { label: "Budget", value: payload.vacancy.budget || "Not specified" },

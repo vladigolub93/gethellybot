@@ -2977,15 +2977,15 @@ def safe_candidate_vacancy_review_decision(
         "reason_code": "candidate_vacancy_review_help_fallback",
     }
 
-    match = re.search(r"\b(apply|skip)(?:\s+vacancy)?\s+(\d+)\b", command)
+    match = re.search(r"\b(apply|connect|skip)(?:\s+vacancy)?\s+(\d+)\b", command)
     if match is not None:
         verb = match.group(1)
         slot = int(match.group(2))
-        if verb == "apply":
+        if verb in {"apply", "connect"}:
             payload.update(
                 {
                     "intent": "apply_to_vacancy",
-                    "response_text": f"Understood. I will apply to vacancy {slot}.",
+                    "response_text": f"Understood. I will move forward with vacancy {slot}.",
                     "proposed_action": "apply_to_vacancy",
                     "vacancy_slot": slot,
                     "needs_follow_up": False,
@@ -3221,7 +3221,7 @@ def safe_pre_interview_review_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Review the current candidate cards and use the Interview or Skip buttons under each profile.",
+        or "Review the current candidate cards and use the Connect or Skip buttons under each profile.",
         "proposed_action": None,
         "candidate_slot": None,
         "keep_current_state": True,
@@ -3229,19 +3229,19 @@ def safe_pre_interview_review_decision(
         "reason_code": "pre_interview_review_help_fallback",
     }
 
-    match = re.search(r"\b(interview|skip)(?:\s+candidate)?\s+(\d+)\b", command)
+    match = re.search(r"\b(connect|approve|interview|skip)(?:\s+candidate)?\s+(\d+)\b", command)
     if match is not None:
         verb = match.group(1)
         slot = int(match.group(2))
-        if verb == "interview":
+        if verb in {"connect", "approve", "interview"}:
             payload.update(
                 {
                     "intent": "interview_candidate",
-                    "response_text": f"Understood. I will invite candidate {slot} to interview.",
+                    "response_text": f"Understood. I will approve candidate {slot} for the next step.",
                     "proposed_action": "interview_candidate",
                     "candidate_slot": slot,
                     "needs_follow_up": False,
-                    "reason_code": "pre_interview_review_interview_candidate",
+                    "reason_code": "pre_interview_review_connect_candidate",
                 }
             )
         else:
@@ -3261,7 +3261,7 @@ def safe_pre_interview_review_decision(
             "what does this mean",
             "how should i read",
             "why was candidate",
-            "what happens after interview",
+            "what happens after connect",
             "how does this work",
             "explain",
             "?",

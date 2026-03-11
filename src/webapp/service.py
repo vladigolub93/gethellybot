@@ -442,6 +442,7 @@ class WebAppService:
             ),
             "candidateCount": len(matches),
             "activePipelineCount": len([match for match in matches if match.status in self.matches.ACTIVE_MATCH_STATUSES]),
+            "connectedCount": len([match for match in matches if getattr(match, "status", None) == "approved"]),
             "completedInterviewCount": self.interviews.count_completed_for_match_ids(match_ids),
             "updatedAt": isoformat_or_none(vacancy.updated_at),
         }
