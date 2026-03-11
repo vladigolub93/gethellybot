@@ -2,6 +2,7 @@
   const state = {
     sessionToken: null,
     session: null,
+    apiCache: new Map(),
   };
 
   const appEl = document.getElementById("app");
@@ -20,6 +21,69 @@
     const text = String(value || "");
     if (!text || text.length <= maxLength) return text;
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
+  function updateThemeColorMeta(color) {
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+      themeMeta.setAttribute("content", color);
+    }
+  }
+
+  function applyViewportMetrics() {
+    const fallbackHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const stableHeight = tg && Number.isFinite(Number(tg.viewportStableHeight))
+      ? Number(tg.viewportStableHeight)
+      : fallbackHeight;
+    document.documentElement.style.setProperty("--app-height", `${Math.round(stableHeight)}px`);
+  }
+
+  function applyTelegramChrome() {
+    const backgroundColor = "#030304";
+    const surfaceColor = "#0d0d11";
+    updateThemeColorMeta(backgroundColor);
+    if (!tg) return;
+    try {
+      if (typeof tg.setHeaderColor === "function") {
+        tg.setHeaderColor(backgroundColor);
+      }
+    } catch (_) {}
+    try {
+      if (typeof tg.setBackgroundColor === "function") {
+        tg.setBackgroundColor(backgroundColor);
+      }
+    } catch (_) {}
+    try {
+      if (
+        typeof tg.setBottomBarColor === "function" &&
+        typeof tg.isVersionAtLeast === "function" &&
+        tg.isVersionAtLeast("7.10")
+      ) {
+        tg.setBottomBarColor(surfaceColor);
+      }
+    } catch (_) {}
+  }
+
+  function bindTelegramRuntime() {
+    applyViewportMetrics();
+    applyTelegramChrome();
+    window.addEventListener("resize", applyViewportMetrics);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", applyViewportMetrics);
+    }
+    if (!tg || typeof tg.onEvent !== "function") return;
+    tg.onEvent("themeChanged", applyTelegramChrome);
+    tg.onEvent("viewportChanged", applyViewportMetrics);
+    tg.onEvent("safeAreaChanged", applyViewportMetrics);
+    tg.onEvent("contentSafeAreaChanged", applyViewportMetrics);
+  }
+
+  function tapFeedback() {
+    try {
+      if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === "function") {
+        tg.HapticFeedback.impactOccurred("light");
+      }
+    } catch (_) {}
   }
 
   function badgeTone(value) {
@@ -64,16 +128,27 @@
   }
 
   async function api(path) {
-    const response = await fetch(path, {
+    if (state.apiCache.has(path)) {
+      return state.apiCache.get(path);
+    }
+    const request = fetch(path, {
       headers: state.sessionToken
         ? { Authorization: `Bearer ${state.sessionToken}` }
         : {},
+    }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Request failed.");
+      }
+      return data;
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.detail || "Request failed.");
+    state.apiCache.set(path, request);
+    try {
+      return await request;
+    } catch (error) {
+      state.apiCache.delete(path);
+      throw error;
     }
-    return data;
   }
 
   function listChips(values) {
@@ -462,10 +537,14 @@
       const route = node.getAttribute("data-route");
       node.setAttribute("tabindex", "0");
       node.setAttribute("role", "button");
-      node.addEventListener("click", () => pushRoute(route));
+      node.addEventListener("click", () => {
+        tapFeedback();
+        pushRoute(route);
+      });
       node.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
+          tapFeedback();
           pushRoute(route);
         }
       });
@@ -502,9 +581,17 @@
 
   async function boot() {
     try {
+      bindTelegramRuntime();
       if (tg) {
-        tg.ready();
-        tg.expand();
+        if (typeof tg.ready === "function") {
+          tg.ready();
+        }
+        if (typeof tg.expand === "function") {
+          tg.expand();
+        }
+        if (typeof tg.enableVerticalSwipes === "function") {
+          tg.enableVerticalSwipes();
+        }
         if (tg.BackButton) {
           tg.BackButton.onClick(() => window.history.back());
         }

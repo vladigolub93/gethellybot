@@ -37,7 +37,13 @@ body {
     radial-gradient(circle at bottom right, rgba(187, 121, 255, 0.1), transparent 32%),
     var(--bg);
   color: var(--text);
-  font-family: "Manrope", sans-serif;
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
 }
 
 body::before {
@@ -53,11 +59,13 @@ body::before {
 .app-shell {
   position: relative;
   width: min(100%, 720px);
+  min-height: var(--tg-viewport-stable-height, var(--app-height, 100dvh));
   margin: 0 auto;
   padding:
-    calc(18px + env(safe-area-inset-top))
-    16px
-    calc(28px + env(safe-area-inset-bottom));
+    calc(18px + max(env(safe-area-inset-top), var(--tg-content-safe-area-inset-top, 0px)))
+    calc(16px + max(env(safe-area-inset-right), var(--tg-content-safe-area-inset-right, 0px)))
+    calc(28px + max(env(safe-area-inset-bottom), var(--tg-content-safe-area-inset-bottom, 0px)))
+    calc(16px + max(env(safe-area-inset-left), var(--tg-content-safe-area-inset-left, 0px)));
 }
 
 .topbar {
@@ -73,7 +81,15 @@ body::before {
 .topbar-kicker,
 .eyebrow,
 .detail-grid dt {
-  font-family: "IBM Plex Mono", monospace;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
 }
 
 .topbar-kicker {
@@ -91,7 +107,15 @@ body::before {
   gap: 0.02em;
   margin: 0;
   max-width: 100%;
-  font-family: "IBM Plex Mono", monospace;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   font-size: clamp(2rem, 11vw, 3.6rem);
   font-weight: 500;
   line-height: 0.95;
@@ -199,7 +223,15 @@ body::before {
   display: block;
   margin-top: 6px;
   color: var(--muted);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -377,7 +409,15 @@ body::before {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
-  font-family: "IBM Plex Mono", monospace;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   font-size: 0.78rem;
   font-weight: 500;
   line-height: 1.25;
