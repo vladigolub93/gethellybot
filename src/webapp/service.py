@@ -107,6 +107,7 @@ class WebAppService:
 
     def list_candidate_opportunities(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
+        user_id = self._require_session_user_id(session_context)
         profile = self._require_candidate_profile(session_context)
         current_version = self.candidate_profiles.get_current_version(profile)
         matches = sorted(
