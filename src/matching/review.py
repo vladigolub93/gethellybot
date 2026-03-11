@@ -10,12 +10,13 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.evaluation.package_builder import build_candidate_package
+from src.evaluation.package_builder import build_vacancy_package
 from src.messaging.service import MessagingService
 from src.notifications.rendering import render_notification_text
 from src.state.service import StateService
 from src.telegram.keyboards import (
-    candidate_vacancy_review_keyboard,
-    interview_invitation_keyboard,
+    candidate_vacancy_inline_keyboard,
+    interview_invitation_inline_keyboard,
     manager_pre_interview_inline_keyboard,
 )
 from src.matching.policy import (
@@ -122,32 +123,25 @@ class MatchingReviewService:
             return text
         return f"{text[: limit - 3].rstrip()}..."
 
-    def _render_vacancy_card_message(self, *, match, slot_no: int) -> str:
+    def _render_vacancy_card_message(self, *, match, slot_no: int | None = None) -> str:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         if vacancy is None:
+            if slot_no is None:
+                return "Vacancy data is unavailable."
             return f"{slot_no}. Vacancy data is unavailable."
-        lines = [f"{slot_no}. {getattr(vacancy, 'role_title', None) or 'Open role'}"]
-        seniority = getattr(vacancy, "seniority_normalized", None)
-        if seniority:
-            lines.append(f"Seniority: {seniority}")
-        budget = self._vacancy_budget_label(vacancy)
-        if budget:
-            lines.append(f"Budget: {budget}")
-        work_format = getattr(vacancy, "work_format", None)
-        if work_format:
-            lines.append(f"Work format: {work_format}")
-        countries = getattr(vacancy, "countries_allowed_json", None) or []
-        if countries:
-            lines.append(f"Countries: {', '.join(str(item) for item in countries)}")
-        stack = getattr(vacancy, "primary_tech_stack_json", None) or []
-        if stack:
-            lines.append(f"Stack: {', '.join(str(item) for item in stack)}")
-        project = self._truncate_text(getattr(vacancy, "project_description", None))
-        if project:
-            lines.append("")
-            lines.append("Project:")
-            lines.append(project)
-        return "\n".join(lines)
+
+        vacancy_version = self.vacancies.get_version_by_id(getattr(match, "vacancy_version_id", None))
+        package = build_vacancy_package(
+            vacancy=vacancy,
+            vacancy_summary=(vacancy_version.summary_json or {}) if vacancy_version else {},
+        )
+        body = render_notification_text(
+            template_key="candidate_vacancy_review_ready",
+            payload={"vacancy_package": package},
+        )
+        if slot_no is None:
+            return body
+        return f"{slot_no}.\n{body}"
 
     def _build_manager_batch_entries(self, *, vacancy, batch: list) -> list[dict]:
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
@@ -172,22 +166,23 @@ class MatchingReviewService:
             )
         return entries
 
-    def _build_candidate_batch_messages(self, *, batch: list) -> list[str]:
-        messages = [
-            self._copy(
-                f"I found {len(batch)} matching roles for you. "
-                "Review this batch and use the numbered buttons below to apply or skip each vacancy."
-            )
+    def _build_candidate_batch_entries(self, *, batch: list) -> list[dict]:
+        entries = [
+            {
+                "text": self._copy(
+                    f"I found {len(batch)} matching roles for you. "
+                    "Review the vacancy cards below and use the buttons under each role to apply or skip."
+                )
+            }
         ]
-        for index, match in enumerate(batch, start=1):
-            messages.append(self._render_vacancy_card_message(match=match, slot_no=index))
-        messages.append(
-            self._copy(
-                "Use the numbered Apply or Skip buttons for the vacancies in this batch. "
-                "I will send the next roles after you review one from the current batch."
+        for match in batch:
+            entries.append(
+                {
+                    "text": self._render_vacancy_card_message(match=match, slot_no=None),
+                    "reply_markup": candidate_vacancy_inline_keyboard(match_id=str(match.id)),
+                }
             )
-        )
-        return messages
+        return entries
 
     def _candidate_active_application_count(self, candidate_profile_id) -> int:
         return sum(
@@ -422,8 +417,7 @@ class MatchingReviewService:
             entity_id=candidate.id,
             template_key="candidate_vacancy_review_ready",
             payload_json={
-                "messages": self._build_candidate_batch_messages(batch=current_batch),
-                "reply_markup": candidate_vacancy_review_keyboard(len(current_batch)),
+                "message_entries": self._build_candidate_batch_entries(batch=current_batch),
             },
             allow_duplicate=True,
         )
@@ -451,6 +445,7 @@ class MatchingReviewService:
         raw_message_id,
         action: str,
         vacancy_slot: Optional[int],
+        match_id: Optional[str] = None,
     ) -> Optional[CandidateVacancyActionResult]:
         if not getattr(user, "is_candidate", False):
             return None
@@ -461,21 +456,39 @@ class MatchingReviewService:
 
         limit = self._candidate_batch_limit(candidate.id)
         batch = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=MATCH_BATCH_SIZE)
-        if not batch or vacancy_slot is None or vacancy_slot < 1 or vacancy_slot > len(batch):
+        match = self.matches.get_by_id(match_id) if match_id else None
+        if match is not None:
+            if not batch or all(vacancy_match.id != match.id for vacancy_match in batch):
+                self.notifications.create(
+                    user_id=user.id,
+                    entity_type="candidate_profile",
+                    entity_id=candidate.id,
+                    template_key="candidate_vacancy_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            "That vacancy card is no longer active. Use the latest buttons under the current vacancy cards."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
+                return CandidateVacancyActionResult(status="invalid_match")
+        elif not batch or vacancy_slot is None or vacancy_slot < 1 or vacancy_slot > len(batch):
             self.notifications.create(
                 user_id=user.id,
                 entity_type="candidate_profile",
                 entity_id=candidate.id,
                 template_key="candidate_vacancy_review_ready",
                 payload_json={
-                    "text": self._copy("That option is no longer valid. Use the latest numbered buttons from the current vacancy batch."),
-                    "reply_markup": candidate_vacancy_review_keyboard(len(batch)),
+                    "text": self._copy(
+                        "That option is no longer valid. Use the latest buttons under the current vacancy cards."
+                    ),
                 },
                 allow_duplicate=True,
             )
             return CandidateVacancyActionResult(status="invalid_slot")
 
-        match = batch[vacancy_slot - 1]
+        if match is None:
+            match = batch[vacancy_slot - 1]
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         if vacancy is None:
             return None
@@ -494,7 +507,6 @@ class MatchingReviewService:
                             f"You already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
                             "Wait for manager decisions before applying to more roles."
                         ),
-                        "reply_markup": candidate_vacancy_review_keyboard(len(batch)),
                     },
                     allow_duplicate=True,
                 )
@@ -677,16 +689,17 @@ class MatchingReviewService:
                 entity_id=match.id,
                 template_key="candidate_interview_invitation",
                 payload_json={
-                    "text": self.messaging.compose_interview_invitation(
-                        role_title=getattr(vacancy, "role_title", None)
-                    ),
-                    "messages": [
-                        self.messaging.compose_interview_invitation(
-                            role_title=getattr(vacancy, "role_title", None)
-                        ),
-                        "If you want, we can do it right here in chat.",
+                    "message_entries": [
+                        {
+                            "text": self.messaging.compose_interview_invitation(
+                                role_title=getattr(vacancy, "role_title", None)
+                            ),
+                        },
+                        {
+                            "text": self._render_vacancy_card_message(match=match, slot_no=None),
+                            "reply_markup": interview_invitation_inline_keyboard(match_id=str(match.id)),
+                        },
                     ],
-                    "reply_markup": interview_invitation_keyboard(),
                 },
                 allow_duplicate=True,
             )

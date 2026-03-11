@@ -28,10 +28,8 @@ from src.jobs.queue import JobMessage
 from src.monitoring.telegram_alerts import TelegramErrorAlertService
 from src.shared.text import normalize_command_text
 from src.telegram.keyboards import (
-    candidate_vacancy_review_keyboard,
     contact_request_keyboard,
     deletion_confirmation_keyboard,
-    interview_invitation_keyboard,
     manager_review_keyboard,
     remove_keyboard,
     role_selection_keyboard,
@@ -505,6 +503,70 @@ class TelegramUpdateService:
             )
             return [] if result is not None else None
 
+        if callback_data.startswith("cand_pre:apply:"):
+            match_id = callback_data[len("cand_pre:apply:") :]
+            result = self.matching_review_service.execute_candidate_pre_interview_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="apply_to_vacancy",
+                vacancy_slot=None,
+                match_id=match_id,
+            )
+            return [] if result is not None else None
+
+        if callback_data.startswith("cand_pre:skip:"):
+            match_id = callback_data[len("cand_pre:skip:") :]
+            result = self.matching_review_service.execute_candidate_pre_interview_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="skip_vacancy",
+                vacancy_slot=None,
+                match_id=match_id,
+            )
+            return [] if result is not None else None
+
+        if callback_data.startswith("cand_inv:accept:"):
+            match_id = callback_data[len("cand_inv:accept:") :]
+            interview_result = self.interview_service.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="accept_interview",
+                match_id=match_id,
+            )
+            if interview_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=interview_result.notification_template,
+                    text=interview_result.notification_text,
+                    reply_markup=remove_keyboard()
+                    if interview_result.status in {"accepted", "skipped"}
+                    else None,
+                )
+            ]
+
+        if callback_data.startswith("cand_inv:skip:"):
+            match_id = callback_data[len("cand_inv:skip:") :]
+            interview_result = self.interview_service.execute_invitation_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="skip_opportunity",
+                match_id=match_id,
+            )
+            if interview_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=interview_result.notification_template,
+                    text=interview_result.notification_text,
+                    reply_markup=remove_keyboard()
+                    if interview_result.status in {"accepted", "skipped"}
+                    else None,
+                )
+            ]
+
         return []
 
     def _handle_manager_open_stage_action(
@@ -574,7 +636,7 @@ class TelegramUpdateService:
                         text=interview_result.notification_text,
                         reply_markup=remove_keyboard()
                         if interview_result.status in {"accepted", "skipped"}
-                        else interview_invitation_keyboard(),
+                        else None,
                     )
                 ]
             text = (
@@ -606,9 +668,9 @@ class TelegramUpdateService:
                     user_id=user.id,
                     template_key=interview_result.notification_template,
                     text=interview_result.notification_text,
-                    reply_markup=interview_invitation_keyboard()
-                    if interview_result.status == "invite_pending"
-                    else remove_keyboard(),
+                    reply_markup=remove_keyboard()
+                    if interview_result.status in {"accepted", "skipped"}
+                    else None,
                 )
             ]
         elif stage_result.stage != "INTERVIEW_IN_PROGRESS":
@@ -907,9 +969,9 @@ class TelegramUpdateService:
                 user_id=user.id,
                 template_key=interview_result.notification_template,
                 text=interview_result.notification_text,
-                reply_markup=interview_invitation_keyboard()
-                if interview_result.status == "invite_pending"
-                else remove_keyboard(),
+                reply_markup=remove_keyboard()
+                if interview_result.status in {"accepted", "skipped"}
+                else None,
             )
         ]
 
@@ -1123,15 +1185,11 @@ class TelegramUpdateService:
         if templates is not None:
             return templates
         if stage_result is not None and stage_result.stage == "VACANCY_REVIEW":
-            batch_size = self.matching_review_service.current_batch_size_for_candidate(
-                candidate_user_id=user.id,
-            )
             assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=latest_user_message,
                 user_id=user.id,
                 stage_result=stage_result,
-                reply_markup=candidate_vacancy_review_keyboard(batch_size) if batch_size else None,
             )
             if assistance_templates is not None:
                 return assistance_templates

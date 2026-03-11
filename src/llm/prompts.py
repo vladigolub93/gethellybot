@@ -379,7 +379,7 @@ Valid outcomes:
 - explicit skip intent for one numbered vacancy
 
 Rules:
-- numbered buttons look like `Apply 1`, `Skip 2`, `Apply 3`
+- if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Skip 2`, or `Apply vacancy 3`
 - only propose `apply_to_vacancy` when the candidate is clearly applying to that numbered vacancy
 - only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
 - extract the numbered vacancy slot into `vacancy_slot`
@@ -687,6 +687,7 @@ Rules:
 - treat questions like "what is this?", "how long will it take?", "can I answer by voice?", "what happens if I skip?", and "why was I invited?" as help, not as accept/skip
 - only propose `accept_interview` when the candidate is clearly accepting the interview
 - only propose `skip_opportunity` when the candidate is clearly declining or skipping the opportunity
+- if the candidate uses text instead of tapping buttons, they may still send `Accept interview` or `Skip opportunity`
 - do not invent interview details
 - do not transition stages yourself
 

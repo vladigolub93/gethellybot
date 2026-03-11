@@ -2751,7 +2751,7 @@ def safe_candidate_vacancy_review_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+        or "Review the current vacancy cards and use the Apply or Skip buttons under each role.",
         "proposed_action": None,
         "vacancy_slot": None,
         "keep_current_state": True,
@@ -2801,7 +2801,7 @@ def safe_candidate_vacancy_review_decision(
             {
                 "intent": "help",
                 "response_text": current_step_guidance
-                or "Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+                or "Review the current vacancy cards and use the Apply or Skip buttons under each role.",
                 "needs_follow_up": True,
                 "reason_code": "candidate_vacancy_review_help_question",
             }
@@ -4027,7 +4027,7 @@ def safe_build_interview_invitation_copy(session, *, role_title: str | None) -> 
             logger.warning("interview_invitation_copy_fallback_to_baseline", error=str(exc))
     role_text = f" for {role_title}" if role_title else ""
     return LLMResult(
-        payload={"message": f"We found a strong-fit opportunity{role_text}. The next step is a short AI interview. Reply 'Accept interview' or 'Skip opportunity'."},
+        payload={"message": f"We found a strong-fit opportunity{role_text}. The next step is a short AI interview. Review the vacancy card below and use Accept interview or Skip opportunity."},
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_invitation_copy_v1",
     )

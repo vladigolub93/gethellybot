@@ -126,10 +126,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Review the current matched-vacancy batch and decide where to apply.",
         allowed_actions=["apply_to_vacancy", "skip_vacancy"],
         assistance_prompt_slug="candidate_vacancy_review",
-        guidance_text="Review the current vacancy batch and use the numbered Apply or Skip buttons.",
+        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role.",
         help_text=(
             "You are reviewing matched vacancies. "
-            "Use the numbered Apply or Skip buttons for the vacancies in the current batch."
+            "Use the Apply or Skip buttons under the vacancy cards in the current batch."
         ),
         missing_requirements=["candidate_vacancy_decision"],
     ),
@@ -209,8 +209,8 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         goal="Get a clear accept or skip decision for the interview invitation.",
         allowed_actions=["accept_interview", "skip_opportunity"],
         assistance_prompt_slug="interview_invited",
-        guidance_text="You can accept the interview or skip this opportunity.",
-        help_text="You can accept the interview or skip this opportunity. The interview is short and happens inside Telegram.",
+        guidance_text="Review the vacancy card and use the Accept interview or Skip opportunity buttons under it.",
+        help_text="Use the Accept interview or Skip opportunity buttons under the vacancy card. The interview is short and happens inside Telegram.",
         missing_requirements=["interview_invitation_response"],
     ),
     "INTERVIEW_IN_PROGRESS": StatePolicyDefinition(

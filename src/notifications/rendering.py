@@ -99,6 +99,33 @@ def _render_candidate_package(candidate_package: dict) -> list[str]:
     return lines
 
 
+def _render_vacancy_package(vacancy_package: dict) -> list[str]:
+    lines = ["Vacancy package:"]
+    role_title = vacancy_package.get("vacancy_role_title")
+    if role_title:
+        lines.append(f"Role: {role_title}")
+    summary_text = vacancy_package.get("vacancy_summary_text")
+    if summary_text:
+        lines.append("")
+        lines.append("Role summary:")
+        lines.append(str(summary_text))
+    stack = vacancy_package.get("stack") or []
+    if stack:
+        lines.append("")
+        lines.append(f"Stack: {', '.join(str(item) for item in stack)}")
+    work_details = vacancy_package.get("work_details") or []
+    if work_details:
+        lines.append("")
+        lines.append("Work details:")
+        lines.extend(str(item) for item in work_details)
+    project_description = vacancy_package.get("project_description")
+    if project_description:
+        lines.append("")
+        lines.append("Project:")
+        lines.append(str(project_description))
+    return lines
+
+
 def render_notification_text(*, template_key: str, payload: dict) -> str:
     lines = []
     text = (payload or {}).get("text")
@@ -135,6 +162,11 @@ def render_notification_text(*, template_key: str, payload: dict) -> str:
     if isinstance(candidate_package, dict) and candidate_package:
         lines.append("")
         lines.extend(_render_candidate_package(candidate_package))
+
+    vacancy_package = (payload or {}).get("vacancy_package")
+    if isinstance(vacancy_package, dict) and vacancy_package:
+        lines.append("")
+        lines.extend(_render_vacancy_package(vacancy_package))
 
     candidate_summary = (payload or {}).get("candidate_summary")
     if isinstance(candidate_summary, dict) and candidate_summary:

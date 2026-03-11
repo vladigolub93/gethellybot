@@ -81,7 +81,7 @@ class FakeMatchingRepository:
 
     def get_by_id(self, match_id):
         for match in self.matches:
-            if match.id == match_id:
+            if str(match.id) == str(match_id):
                 return match
         return None
 
@@ -332,6 +332,25 @@ def test_accept_invitation_starts_interview() -> None:
     assert service.interviews.session is not None
     assert service.interviews.session.state == "IN_PROGRESS"
     assert len(service.interviews.questions) == 4
+
+
+def test_accept_invitation_starts_interview_when_match_id_is_provided() -> None:
+    service, candidate, match, _vacancy, _matching_run = _build_service()
+    service.matches.mark_invited(match)
+    user = SimpleNamespace(id=candidate.user_id)
+
+    result = service.execute_invitation_action(
+        user=user,
+        raw_message_id=uuid4(),
+        action="accept_interview",
+        match_id=str(match.id),
+    )
+
+    assert result is not None
+    assert result.status == "accepted"
+    assert match.status == "accepted"
+    assert service.interviews.session is not None
+    assert service.interviews.session.match_id == match.id
 
 
 def test_accept_invitation_notifies_manager() -> None:

@@ -34,7 +34,6 @@ from src.matching.policy import (
     MATCH_STATUS_INTERVIEW_QUEUED,
 )
 from src.state.service import StateService
-from src.telegram.keyboards import interview_invitation_keyboard
 
 
 @dataclass(frozen=True)
@@ -399,12 +398,17 @@ class InterviewService:
         user,
         raw_message_id,
         action: str | None,
+        match_id: Optional[str] = None,
     ) -> Optional[InterviewUserResult]:
         candidate = self.candidates.get_active_by_user_id(user.id)
         if candidate is None:
             return None
 
-        invited_match = self.matches.get_latest_invited_for_candidate(candidate.id)
+        invited_match = self.matches.get_by_id(match_id) if match_id else self.matches.get_latest_invited_for_candidate(candidate.id)
+        if invited_match is not None and getattr(invited_match, "candidate_profile_id", None) != candidate.id:
+            return None
+        if invited_match is not None and getattr(invited_match, "status", None) != "invited":
+            return None
         if invited_match is None:
             return None
 
@@ -449,7 +453,9 @@ class InterviewService:
         return InterviewUserResult(
             status="invite_pending",
             notification_template="candidate_interview_invitation_help",
-            notification_text=self._copy("Reply 'Accept interview' or 'Skip opportunity'."),
+            notification_text=self._copy(
+                "Use the Accept interview or Skip opportunity buttons under the vacancy card."
+            ),
         )
 
     def _accept_invitation(self, *, candidate, match, raw_message_id):

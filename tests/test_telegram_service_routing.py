@@ -350,7 +350,7 @@ class FakeInterviewService:
         self.result = SimpleNamespace(
             status="invite_pending",
             notification_template="candidate_interview_invitation_help",
-            notification_text="Reply 'Accept interview' or 'Skip opportunity'.",
+            notification_text="Use the Accept interview or Skip opportunity buttons under the vacancy card.",
         )
 
     def handle_candidate_message(self, **kwargs):
@@ -1827,13 +1827,13 @@ def test_graph_candidate_vacancy_review_stage_can_apply_to_vacancy() -> None:
     assert service.matching_review_service.candidate_calls[-1]["vacancy_slot"] == 2
 
 
-def test_candidate_vacancy_review_help_keeps_candidate_keyboard() -> None:
+def test_candidate_vacancy_review_help_does_not_attach_bottom_keyboard() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
         None,
         stage_result=StageAgentExecutionResult(
             stage="VACANCY_REVIEW",
-            reply_text="Review the vacancy batch and use the numbered Apply or Skip buttons.",
+            reply_text="Review the vacancy batch and use the buttons under each vacancy card.",
             stage_status="in_progress",
             proposed_action=None,
             action_accepted=False,
@@ -1862,8 +1862,7 @@ def test_candidate_vacancy_review_help_keeps_candidate_keyboard() -> None:
     )
 
     assert templates == ["state_aware_help"]
-    reply_markup = service.notifications_repo.calls[-1]["payload_json"]["reply_markup"]
-    assert reply_markup["keyboard"][0] == ["Apply 1", "Skip 1"]
+    assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is None
 
 
 def test_manager_pre_interview_callback_routes_action_by_match_id() -> None:
@@ -1892,6 +1891,98 @@ def test_manager_pre_interview_callback_routes_action_by_match_id() -> None:
     assert service.matching_review_service.manager_calls[-1]["action"] == "interview_candidate"
     assert service.matching_review_service.manager_calls[-1]["candidate_slot"] is None
     assert service.matching_review_service.manager_calls[-1]["match_id"] == "match-42"
+
+
+def test_candidate_vacancy_review_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5n",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5n",
+        build_update(content_type="callback", callback_data="cand_pre:apply:match-77"),
+    )
+
+    assert templates == []
+    assert service.matching_review_service.candidate_calls
+    assert service.matching_review_service.candidate_calls[-1]["action"] == "apply_to_vacancy"
+    assert service.matching_review_service.candidate_calls[-1]["vacancy_slot"] is None
+    assert service.matching_review_service.candidate_calls[-1]["match_id"] == "match-77"
+
+
+def test_candidate_interview_accept_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="accepted",
+        notification_template="candidate_interview_started",
+        notification_text="Interview started.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5o",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5o",
+        build_update(content_type="callback", callback_data="cand_inv:accept:match-88"),
+    )
+
+    assert templates == ["candidate_interview_started"]
+    assert service.interview_service.calls
+    assert service.interview_service.calls[-1]["action"] == "accept_interview"
+    assert service.interview_service.calls[-1]["match_id"] == "match-88"
+
+
+def test_candidate_interview_skip_callback_routes_action_by_match_id() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = SimpleNamespace(
+        status="skipped",
+        notification_template="candidate_interview_skipped",
+        notification_text="Opportunity skipped.",
+    )
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5p",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5p",
+        build_update(content_type="callback", callback_data="cand_inv:skip:match-89"),
+    )
+
+    assert templates == ["candidate_interview_skipped"]
+    assert service.interview_service.calls
+    assert service.interview_service.calls[-1]["action"] == "skip_opportunity"
+    assert service.interview_service.calls[-1]["match_id"] == "match-89"
 
 
 def test_interview_invite_help_is_intercepted_before_interview_handler() -> None:

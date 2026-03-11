@@ -35,32 +35,12 @@ def summary_review_keyboard(*, edit_allowed: bool = True) -> dict:
     }
 
 
-def interview_invitation_keyboard() -> dict:
-    return {
-        "keyboard": [["Accept interview", "Skip opportunity"]],
-        "resize_keyboard": True,
-        "one_time_keyboard": True,
-    }
-
-
 def manager_review_keyboard() -> dict:
     return {
         "keyboard": [["Approve candidate", "Reject candidate"]],
         "resize_keyboard": True,
         "one_time_keyboard": True,
     }
-
-
-def manager_pre_interview_review_keyboard(candidate_count: int) -> dict:
-    keyboard = []
-    for index in range(1, max(candidate_count, 0) + 1):
-        keyboard.append([f"Interview {index}", f"Skip {index}"])
-    return {
-        "keyboard": keyboard,
-        "resize_keyboard": True,
-        "one_time_keyboard": False,
-    }
-
 
 def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:
     return {
@@ -79,14 +59,37 @@ def manager_pre_interview_inline_keyboard(*, match_id: str) -> dict:
     }
 
 
-def candidate_vacancy_review_keyboard(vacancy_count: int) -> dict:
-    keyboard = []
-    for index in range(1, max(vacancy_count, 0) + 1):
-        keyboard.append([f"Apply {index}", f"Skip {index}"])
+def candidate_vacancy_inline_keyboard(*, match_id: str) -> dict:
     return {
-        "keyboard": keyboard,
-        "resize_keyboard": True,
-        "one_time_keyboard": False,
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Apply",
+                    "callback_data": f"cand_pre:apply:{match_id}",
+                },
+                {
+                    "text": "Skip",
+                    "callback_data": f"cand_pre:skip:{match_id}",
+                },
+            ]
+        ]
+    }
+
+
+def interview_invitation_inline_keyboard(*, match_id: str) -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "Accept interview",
+                    "callback_data": f"cand_inv:accept:{match_id}",
+                },
+                {
+                    "text": "Skip opportunity",
+                    "callback_data": f"cand_inv:skip:{match_id}",
+                },
+            ]
+        ]
     }
 
 
