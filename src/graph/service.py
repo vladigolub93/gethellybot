@@ -6,6 +6,7 @@ from typing import Any
 from src.candidate_profile.states import normalize_candidate_operational_state
 from src.config.logging import get_logger
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.cv_challenge import CandidateCvChallengeAttemptsRepository
 from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
@@ -87,6 +88,7 @@ class LangGraphStageAgentService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
+        self.cv_challenges = CandidateCvChallengeAttemptsRepository(session)
         self.evaluations = EvaluationsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matches = MatchingRepository(session)
@@ -438,6 +440,7 @@ class LangGraphStageAgentService:
             matches=self.matches,
             interviews=self.interviews,
             evaluations=self.evaluations,
+            cv_challenges=self.cv_challenges,
         )
         combined: list[str] = []
         for item in [*recent_turns, *memory]:

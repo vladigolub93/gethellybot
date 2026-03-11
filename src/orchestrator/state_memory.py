@@ -228,7 +228,56 @@ def _format_vacancy_brief(*, slot: int, vacancy) -> str | None:
     return "; ".join(parts)
 
 
-def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacancies, interviews) -> list[str]:
+def _candidate_cv_challenge_memory(*, stage: str | None, candidate, version, matches, cv_challenges) -> list[str]:
+    if candidate is None or stage != "READY":
+        return []
+
+    summary = getattr(version, "summary_json", None) or {}
+    saved_skills = _clean_list(summary.get("skills"), limit=20)
+    active_matches = _call_optional(matches, "list_active_for_candidate", candidate.id) or []
+    snippets: list[str] = []
+
+    if not active_matches and len(saved_skills) >= 3:
+        snippets.append(
+            "Saved waiting-state fact: there are no live opportunities right now and Helly CV Challenge is available in the WebApp dashboard while the candidate waits for matches."
+        )
+
+    active_attempt = _call_optional(cv_challenges, "get_latest_active_for_candidate_profile", candidate.id)
+    if active_attempt is not None and getattr(active_attempt, "finished_at", None) is None:
+        progress = getattr(active_attempt, "result_json", None) or {}
+        if progress:
+            parts = [
+                f"score {int(getattr(active_attempt, 'score', 0) or 0)}",
+                f"stage reached {int(getattr(active_attempt, 'stage_reached', 1) or 1)}",
+                f"lives left {int(getattr(active_attempt, 'lives_left', 0) or 0)}",
+            ]
+            snippets.append(
+                "Saved CV Challenge run in progress: "
+                + "; ".join(parts)
+                + ". The candidate can resume it in the WebApp dashboard."
+            )
+
+    completed_attempt = _call_optional(cv_challenges, "get_latest_completed_for_candidate_profile", candidate.id)
+    if completed_attempt is not None:
+        status_text = "won" if bool(getattr(completed_attempt, "won", False)) else "lost"
+        parts = [
+            f"last run {status_text}",
+            f"score {int(getattr(completed_attempt, 'score', 0) or 0)}",
+            f"stage reached {int(getattr(completed_attempt, 'stage_reached', 1) or 1)}",
+        ]
+        result = getattr(completed_attempt, "result_json", None) or {}
+        total_mistakes = result.get("totalMistakes")
+        if total_mistakes is not None:
+            parts.append(f"mistakes {int(total_mistakes)}")
+        snippets.append("Saved CV Challenge result: " + "; ".join(parts) + ".")
+        missed_skills = _clean_list(result.get("missedSkills"), limit=6)
+        if missed_skills:
+            snippets.append("Saved CV Challenge missed skills: " + "; ".join(missed_skills) + ".")
+
+    return _dedupe(snippets)
+
+
+def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacancies, interviews, cv_challenges) -> list[str]:
     candidate = _call_optional(candidates, "get_active_by_user_id", user_id)
     if candidate is None:
         return []
@@ -279,6 +328,16 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
                 "Current interview opportunity: "
                 + _strip_slot_prefix(current_vacancy_brief).strip()
             )
+
+    snippets.extend(
+        _candidate_cv_challenge_memory(
+            stage=stage,
+            candidate=candidate,
+            version=version,
+            matches=matches,
+            cv_challenges=cv_challenges,
+        )
+    )
 
     return _dedupe(snippets)
 
@@ -357,6 +416,7 @@ def build_state_memory(
     matches,
     interviews,
     evaluations,
+    cv_challenges,
 ) -> list[str]:
     if role == "candidate":
         return _candidate_memory(
@@ -366,6 +426,7 @@ def build_state_memory(
             matches=matches,
             vacancies=vacancies,
             interviews=interviews,
+            cv_challenges=cv_challenges,
         )
     if role == "hiring_manager":
         return _manager_memory(

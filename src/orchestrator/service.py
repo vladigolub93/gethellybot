@@ -4,6 +4,7 @@ import re
 
 from src.candidate_profile.states import normalize_candidate_operational_state
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
+from src.db.repositories.cv_challenge import CandidateCvChallengeAttemptsRepository
 from src.db.repositories.evaluations import EvaluationsRepository
 from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
@@ -20,6 +21,7 @@ class BotControllerService:
     def __init__(self, session):
         self.session = session
         self.candidates = CandidateProfilesRepository(session)
+        self.cv_challenges = CandidateCvChallengeAttemptsRepository(session)
         self.evaluations = EvaluationsRepository(session)
         self.interviews = InterviewsRepository(session)
         self.matching = MatchingRepository(session)
@@ -184,6 +186,7 @@ class BotControllerService:
             matches=self.matching,
             interviews=self.interviews,
             evaluations=self.evaluations,
+            cv_challenges=self.cv_challenges,
         )
 
     def _validate_action_from_result(self, *, context: ResolvedStateContext, source: str, action: str | None) -> None:

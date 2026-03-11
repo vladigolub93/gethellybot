@@ -63,6 +63,21 @@ class FakeMatchesRepository:
     def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
         return self.candidate_review_match
 
+    def list_active_for_candidate(self, candidate_profile_id):
+        return []
+
+
+class FakeCvChallengesRepository:
+    def __init__(self, *, completed_attempt=None, active_attempt=None):
+        self.completed_attempt = completed_attempt
+        self.active_attempt = active_attempt
+
+    def get_latest_completed_for_candidate_profile(self, candidate_profile_id):
+        return self.completed_attempt
+
+    def get_latest_active_for_candidate_profile(self, candidate_profile_id):
+        return self.active_attempt
+
 
 def test_graph_candidate_stage_help_receives_saved_profile_memory(monkeypatch) -> None:
     captured = {}
@@ -114,6 +129,7 @@ def test_graph_candidate_stage_help_receives_saved_profile_memory(monkeypatch) -
     )
     service.interviews = FakeInterviewsRepository()
     service.matches = FakeMatchesRepository()
+    service.cv_challenges = FakeCvChallengesRepository()
 
     user = SimpleNamespace(
         id="u-memory",
@@ -134,6 +150,79 @@ def test_graph_candidate_stage_help_receives_saved_profile_memory(monkeypatch) -
     assert "salary expectation 5500 USD per month" in combined_context
     assert "location Warsaw, Poland" in combined_context
     assert "work format remote" in combined_context
+
+
+def test_graph_candidate_ready_help_receives_cv_challenge_memory(monkeypatch) -> None:
+    captured = {}
+
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_ready_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": "Let me check your waiting-stage context.",
+                "reason_code": "help",
+            }
+        ),
+    )
+
+    def _fake_assistance(_session, *, context, latest_user_message, recent_context=None):
+        captured["recent_context"] = list(recent_context or [])
+        return SimpleNamespace(payload={"response_text": "Challenge note.", "suggested_action": None})
+
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_state_assistance_decision",
+        _fake_assistance,
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.raw_messages = FakeRawMessagesRepository(rows=[])
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp-ready-game",
+            state="READY",
+            current_version_id="cpv-ready-game",
+        ),
+        current_version=SimpleNamespace(
+            id="cpv-ready-game",
+            summary_json={
+                "approval_summary_text": "You are a senior JavaScript engineer.",
+                "skills": ["react", "node.js", "typescript", "docker"],
+            },
+        ),
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+    service.cv_challenges = FakeCvChallengesRepository(
+        completed_attempt=SimpleNamespace(
+            finished_at=SimpleNamespace(isoformat=lambda: "2026-03-11T10:10:00+00:00"),
+            won=False,
+            score=7,
+            stage_reached=2,
+            result_json={"totalMistakes": 3, "missedSkills": ["Docker", "GraphQL"]},
+        )
+    )
+
+    user = SimpleNamespace(
+        id="u-ready-game",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Что мне делать пока жду вакансии? И да, я опять проиграл в игру.",
+    )
+
+    assert reply == "Challenge note."
+    combined_context = " ".join(captured["recent_context"])
+    assert "Helly CV Challenge is available" in combined_context
+    assert "last run lost" in combined_context
+    assert "score 7" in combined_context
+    assert "missed skills: Docker; GraphQL" in combined_context
 
 
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:
