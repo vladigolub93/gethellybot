@@ -729,18 +729,6 @@
     applyRoute(route, { replace: false });
   }
 
-  function buildProfilePreview(profile) {
-    const summaryText = firstNonEmpty(
-      profile && profile.summary && profile.summary.approvalSummaryText,
-      [
-        profile && profile.location,
-        profile && profile.workFormat,
-        profile && profile.salaryExpectation,
-      ].filter(Boolean).join(" • ")
-    );
-    return truncateText(summaryText || "Review your saved profile details.", 120);
-  }
-
   function groupCandidateOpportunityItems(items) {
     const allItems = items || [];
     return {
@@ -760,6 +748,47 @@
         { label: "Budget", value: item.budget || "Not set" },
         { label: "Format", value: item.workFormat || "Not set" },
         { label: "Updated", value: formatRelativeTime(item.updatedAt) },
+      ],
+    });
+  }
+
+  function compactCompensation(value) {
+    return String(value || "")
+      .replace(/\s+per month$/i, "/mo")
+      .replace(/\s+per year$/i, "/yr")
+      .replace(/\s+per week$/i, "/wk")
+      .replace(/\s+per day$/i, "/day")
+      .replace(/\s+per hour$/i, "/hr")
+      .trim();
+  }
+
+  function renderCandidateProfileCard(profile) {
+    const rawTitle = firstNonEmpty(profile.headline, profile.targetRole, "Profile");
+    const title = truncateText(rawTitle, 44);
+    const noteParts = [];
+    if (profile.targetRole && profile.targetRole !== rawTitle) {
+      noteParts.push(profile.targetRole);
+    }
+    if (profile.summary && profile.summary.yearsExperience) {
+      noteParts.push(`${profile.summary.yearsExperience}+ years experience`);
+    }
+    if (profile.workFormat) {
+      noteParts.push(profile.workFormat);
+    }
+    const summaryFallback = firstNonEmpty(
+      profile.summary && profile.summary.approvalSummaryText,
+      profile.summary && profile.summary.experienceExcerpt,
+      "Review your saved profile details."
+    );
+
+    return renderShortcutCard({
+      route: "candidate-profile",
+      title,
+      kicker: "Profile",
+      note: truncateText(noteParts.join(" • ") || summaryFallback, 110),
+      metrics: [
+        { label: "Location", value: profile.location || "" },
+        { label: "Salary", value: compactCompensation(profile.salaryExpectation) || "" },
       ],
     });
   }
@@ -1050,17 +1079,7 @@
         ` : ""}
         <section class="list">
           ${renderActionPanel(payload.cvChallenge)}
-          ${renderShortcutCard({
-            route: "candidate-profile",
-            title: firstNonEmpty(profile.targetRole, profile.headline, "Profile"),
-            kicker: "Profile",
-            note: buildProfilePreview(profile),
-            metrics: [
-              { label: "Location", value: profile.location || "" },
-              { label: "Format", value: profile.workFormat || "" },
-              { label: "Salary", value: profile.salaryExpectation || "" },
-            ],
-          })}
+          ${renderCandidateProfileCard(profile)}
         </section>
         ${groups.inProgress.length ? `
           <section class="list">
