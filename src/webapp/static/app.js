@@ -539,12 +539,16 @@
 
   function renderActionPanel(challenge) {
     if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
+    const metrics = [
+      challenge.correctSkillCount ? { label: "CV skills", value: String(challenge.correctSkillCount) } : null,
+    ].filter(Boolean);
     return `
       <section class="detail-panel action-panel ${isTerminalTheme() ? "action-panel-terminal" : ""}">
         <div class="action-panel-copy">
-          <p class="eyebrow">${isTerminalTheme() ? "idle_mode" : "While you wait"}</p>
-          <h3 class="section-title">${isTerminalTheme() ? "CV Challenge" : "Play Helly CV Challenge"}</h3>
+          <p class="eyebrow">${isTerminalTheme() ? "game" : "Game"}</p>
+          <h3 class="section-title">${challenge.title || "Helly CV Challenge"}</h3>
           <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
+          ${metrics.length ? renderInlineMetrics(metrics, "inline-metrics-compact") : ""}
         </div>
         ${isTerminalTheme() ? `
           <div class="terminal-command-row">
@@ -552,7 +556,7 @@
             <span class="terminal-command">launch /cv-challenge --profile current</span>
           </div>
         ` : ""}
-        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">${isTerminalTheme() ? "Run challenge" : "Play challenge"}</button>
+        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">${isTerminalTheme() ? "Start challenge" : "Start challenge"}</button>
       </section>
     `;
   }
@@ -1045,14 +1049,7 @@
           </section>
         ` : ""}
         <section class="list">
-          ${payload.cvChallenge && payload.cvChallenge.eligible && payload.cvChallenge.launchUrl
-            ? renderShortcutCard({
-              openUrl: withCurrentTheme(payload.cvChallenge.launchUrl),
-              title: payload.cvChallenge.title || "CV Challenge",
-              kicker: "Game",
-              note: truncateText(payload.cvChallenge.body || "Take a quick skills challenge while you wait.", 120),
-            })
-            : ""}
+          ${renderActionPanel(payload.cvChallenge)}
           ${renderShortcutCard({
             route: "candidate-profile",
             title: firstNonEmpty(profile.targetRole, profile.headline, "Profile"),
