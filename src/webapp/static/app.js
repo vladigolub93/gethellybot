@@ -11,14 +11,6 @@
     managerVacancyPayloads: {},
   };
   const TERMINAL_THEME = "terminal";
-  const INTERVIEW_RELATED_STAGES = new Set([
-    "manager_interview_requested",
-    "interview_queued",
-    "invited",
-    "accepted",
-    "candidate_declined_interview",
-    "interview_completed",
-  ]);
   const CLOSED_MATCH_STAGES = new Set([
     "rejected",
     "manager_skipped",
@@ -348,10 +340,6 @@
     };
   }
 
-  function isInterviewStage(status) {
-    return INTERVIEW_RELATED_STAGES.has(String(status || ""));
-  }
-
   function isClosedMatchStage(status) {
     return CLOSED_MATCH_STAGES.has(String(status || ""));
   }
@@ -388,8 +376,6 @@
     switch (filterKey) {
       case "needs-review":
         return allItems.filter((item) => Number(item && item.needsReviewCount) > 0);
-      case "interview":
-        return allItems.filter((item) => Number(item && item.interviewCount) > 0);
       case "connected":
         return allItems.filter((item) => Number(item && item.connectedCount) > 0);
       case "closed":
@@ -423,8 +409,6 @@
     switch (filterKey) {
       case "needs-review":
         return allItems.filter((item) => item && item.needsAction);
-      case "interview":
-        return allItems.filter((item) => isInterviewStage(item && item.stage));
       case "connected":
         return allItems.filter((item) => item && item.stage === "approved");
       case "closed":
@@ -821,7 +805,6 @@
 
   function renderManagerVacancyCard(item) {
     const needsReviewCount = Number(item && item.needsReviewCount || 0);
-    const interviewCount = Number(item && item.interviewCount || 0);
     return renderShortcutCard({
       route: `manager-vacancy:${item.id}`,
       title: item.roleTitle || "Vacancy",
@@ -832,7 +815,7 @@
         : `Updated ${formatRelativeTime(item.updatedAt)}`,
       metrics: [
         { label: "Candidates", value: String(item.candidateCount || 0) },
-        { label: "Interview", value: String(interviewCount) },
+        { label: "Needs review", value: String(needsReviewCount) },
         { label: "Connected", value: String(item.connectedCount || 0) },
       ],
     });
@@ -867,7 +850,6 @@
     const totalConnectedCount = sumBy(items, "connectedCount");
     const emptyMessageByFilter = {
       "needs-review": "No vacancies need your review right now.",
-      interview: "No vacancies are in interview flow right now.",
       connected: "No vacancies have connected candidates yet.",
       closed: "No paused or closed vacancies yet.",
     };
@@ -888,7 +870,6 @@
           items: [
             { label: "All", value: "all" },
             { label: "Needs review", value: "needs-review" },
-            { label: "Interview", value: "interview" },
             { label: "Connected", value: "connected" },
             { label: "Closed", value: "closed" },
           ],
@@ -923,7 +904,6 @@
     const filteredItems = sortManagerCandidates(filterManagerCandidates(items, view.filter), view.sort);
     const emptyMessageByFilter = {
       "needs-review": "No candidates need your review in this vacancy right now.",
-      interview: "No candidates are in interview flow for this vacancy right now.",
       connected: "No connected candidates in this vacancy yet.",
       closed: "No closed candidates in this vacancy yet.",
     };
@@ -933,7 +913,6 @@
       ${renderStatsStrip([
         { label: "Candidates", value: String(stats.candidateCount) },
         { label: "Needs review", value: String(stats.needsReviewCount || 0) },
-        { label: "Interview", value: String(stats.interviewCount || 0) },
         { label: "Connected", value: String(stats.connectedCount || 0) }
       ])}
       <section class="list">
@@ -948,7 +927,6 @@
             items: [
               { label: "All", value: "all" },
               { label: "Needs review", value: "needs-review" },
-              { label: "Interview", value: "interview" },
               { label: "Connected", value: "connected" },
               { label: "Closed", value: "closed" },
             ],
