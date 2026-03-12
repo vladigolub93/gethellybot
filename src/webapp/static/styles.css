@@ -1002,6 +1002,50 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   box-shadow: 0 16px 36px rgba(140, 40, 255, 0.28);
 }
 
+.panel-toggle {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin-top: 12px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.panel-toggle:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.panel-toggle-target {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.panel-toggle-target.is-hidden {
+  display: none;
+}
+
 .detail-grid {
   display: grid;
   gap: 0;
@@ -1399,6 +1443,25 @@ html[data-theme="terminal"] .action-button {
   background: #0a84ff;
   color: white;
   box-shadow: none;
+}
+
+html[data-theme="terminal"] .panel-toggle {
+  min-height: 36px;
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f5f7;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+html[data-theme="terminal"] .panel-toggle:focus-visible {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="terminal"] .panel-toggle-target {
+  border-top-color: rgba(255, 255, 255, 0.08);
 }
 
 html[data-theme="terminal"] .empty-state {

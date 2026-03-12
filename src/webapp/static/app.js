@@ -4,6 +4,7 @@
     session: null,
     backButtonHandlerBound: false,
     theme: "terminal",
+    disclosureCounter: 0,
   };
   const TERMINAL_THEME = "terminal";
 
@@ -405,6 +406,36 @@
     );
   }
 
+  function renderExpandableTextPanel(title, value, emptyText, options) {
+    const text = String(value || "").trim();
+    if (!text && !emptyText) return "";
+    if (!text) return renderTextPanel(title, "", emptyText);
+    const previewLength = Number(options && options.previewLength) || 260;
+    if (text.length <= previewLength) {
+      return renderTextPanel(title, text, emptyText);
+    }
+    const disclosureId = `panel-disclosure-${state.disclosureCounter += 1}`;
+    const openLabel = isTerminalTheme() ? "show_full_text" : "Show full text";
+    const closeLabel = isTerminalTheme() ? "hide_full_text" : "Hide full text";
+    return renderPanel(
+      title,
+      `
+        <p class="card-note">${escapeHtml(truncateText(text, previewLength)).replace(/\n/g, "<br />")}</p>
+        <button
+          class="panel-toggle"
+          type="button"
+          data-toggle-section="${escapeHtml(disclosureId)}"
+          data-label-open="${escapeHtml(openLabel)}"
+          data-label-close="${escapeHtml(closeLabel)}"
+          aria-expanded="false"
+        >${escapeHtml(openLabel)}</button>
+        <div id="${escapeHtml(disclosureId)}" class="panel-toggle-target is-hidden">
+          <p class="card-note">${escapeHtml(text).replace(/\n/g, "<br />")}</p>
+        </div>
+      `
+    );
+  }
+
   function renderChipPanel(title, values, emptyText) {
     const items = values || [];
     if (!items.length && !emptyText) return "";
@@ -562,6 +593,7 @@
       profile.summary && profile.summary.approvalSummaryText,
       profile.summary && profile.summary.experienceExcerpt
     );
+    const skillsText = ((profile.summary && profile.summary.skills) || []).slice(0, 4).join(" • ");
     const answersText = [
       profile.answers && profile.answers.salaryExpectation,
       profile.answers && profile.answers.location,
@@ -574,6 +606,11 @@
           route: "candidate-profile-section:summary",
           title: "Summary",
           note: truncateText(summaryText || "No summary yet.", 120),
+        })}
+        ${renderShortcutCard({
+          route: "candidate-profile-section:skills",
+          title: "Skills",
+          note: truncateText(skillsText || "No skills yet.", 120),
         })}
         ${renderShortcutCard({
           route: "candidate-profile-section:answers",
@@ -604,6 +641,18 @@
         ])}
         ${renderChipPanel("Skills", (profile.summary && profile.summary.skills) || [], "")}
       `;
+      return;
+    }
+
+    if (sectionKey === "skills") {
+      appEl.innerHTML = `
+      ${renderScreenHeader("Skills", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "skills")}
+      ${renderChipPanel("Core skills", (profile.summary && profile.summary.skills) || [], "No skills yet.")}
+      ${renderDetailSection("Profile context", [
+        { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
+        { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
+      ])}
+    `;
       return;
     }
 
@@ -747,8 +796,9 @@
         { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
       ])}
       ${renderChipPanel("Tech stack", payload.vacancy.primaryTechStack || [], "")}
-      ${renderTextPanel("Job description", payload.vacancy.source && payload.vacancy.source.text, "")}
+      ${renderExpandableTextPanel("Job description", payload.vacancy.source && payload.vacancy.source.text, "")}
     `;
+    bindDisclosures();
   }
 
   async function renderManagerVacancy(vacancyId) {
@@ -787,15 +837,17 @@
         { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
       ])}
       ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
-      ${renderTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
+      ${renderExpandableTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
     `;
     bindCards();
+    bindDisclosures();
   }
 
   async function renderManagerCandidate(matchId) {
     const payload = await api(`/webapp/api/hiring-manager/matches/${matchId}`);
-    const hasLegacyInterviewData = Boolean(
+    const hasDecisionSupport = Boolean(
       payload.interview.stateLabel ||
+      payload.evaluation.recommendation ||
       payload.evaluation.interviewSummary ||
       (payload.evaluation.strengths || []).length ||
       (payload.evaluation.risks || []).length
@@ -816,6 +868,13 @@
         { label: "Candidate reply", value: payload.match.candidateRespondedAt ? formatEventTime(payload.match.candidateRespondedAt) : "" },
         { label: "Manager decision", value: payload.match.managerDecisionAt ? formatEventTime(payload.match.managerDecisionAt) : "" }
       ])}
+      ${hasDecisionSupport ? renderDetailSection("Decision support", [
+        { label: "Interview state", value: payload.interview.stateLabel || "Not started" },
+        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
+        { label: "Interview summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
+        { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
+        { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
+      ]) : ""}
       ${renderTextPanel(
         "Summary",
         firstNonEmpty(
@@ -824,6 +883,7 @@
         ),
         "No summary yet."
       )}
+      ${renderChipPanel("Skills", (payload.candidate.summary || {}).skills || [], "")}
       ${renderDetailSection("Answers", [
         { label: "Salary", value: payload.candidate.answers && payload.candidate.answers.salaryExpectation ? payload.candidate.answers.salaryExpectation : payload.candidate.salaryExpectation || "Not specified" },
         { label: "Location", value: payload.candidate.answers && payload.candidate.answers.location ? payload.candidate.answers.location : payload.candidate.location || "Not specified" },
@@ -831,16 +891,9 @@
         { label: "City", value: payload.candidate.answers && payload.candidate.answers.city ? payload.candidate.answers.city : payload.candidate.city || "" },
         { label: "Work format", value: payload.candidate.answers && payload.candidate.answers.workFormat ? payload.candidate.answers.workFormat : payload.candidate.workFormat || "Not specified" },
       ])}
-      ${renderChipPanel("Skills", (payload.candidate.summary || {}).skills || [], "")}
-      ${renderTextPanel("CV text", payload.candidate.source && payload.candidate.source.text, "")}
-      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
-        { label: "State", value: payload.interview.stateLabel || "Not started" },
-        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
-        { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
-        { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
-        { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
-      ]) : ""}
+      ${renderExpandableTextPanel("CV text", payload.candidate.source && payload.candidate.source.text, "")}
     `;
+    bindDisclosures();
   }
 
   function bindCards() {
@@ -881,6 +934,22 @@
       });
       node.addEventListener("click", () => {
         activate();
+      });
+    });
+  }
+
+  function bindDisclosures() {
+    Array.from(document.querySelectorAll("[data-toggle-section]")).forEach((node) => {
+      const targetId = node.getAttribute("data-toggle-section");
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) return;
+      node.addEventListener("click", () => {
+        const isHidden = target.classList.contains("is-hidden");
+        target.classList.toggle("is-hidden", !isHidden);
+        node.setAttribute("aria-expanded", isHidden ? "true" : "false");
+        node.textContent = isHidden
+          ? node.getAttribute("data-label-close") || "Hide full text"
+          : node.getAttribute("data-label-open") || "Show full text";
       });
     });
   }
