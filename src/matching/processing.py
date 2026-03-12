@@ -206,29 +206,29 @@ class MatchingProcessingService:
 
         if review_dispatch_result and review_dispatch_result.get("status") == "vacancy_cap_reached":
             text = (
-                "Matching refresh complete. I found strong candidates for this vacancy, "
-                f"but you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidates in this vacancy pipeline. "
-                "Close one of the active decisions before I send more profiles."
+                "I refreshed matching for this vacancy and found more strong candidates. "
+                f"Right now you already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidate decisions in this pipeline, "
+                "so review one of the current profiles first and I’ll send the next ones after that."
             )
         elif review_dispatch_result and review_dispatch_result.get("status") == "already_presented":
             batch_count = int(review_dispatch_result.get("batch_count") or 0)
             if batch_count > 0:
                 text = (
-                    "Matching refresh complete. I found more matching signals, but I didn't resend profiles because "
-                    f"you already have {batch_count} active "
-                    f"{self._pluralize_candidates(batch_count)} in the current review batch for this vacancy."
+                    "I refreshed matching and found more promising candidates, "
+                    f"but you already have {batch_count} active "
+                    f"{self._pluralize_candidates(batch_count)} waiting in the current review batch for this vacancy."
                 )
             else:
                 text = (
-                    "Matching refresh complete. I found more matching signals, but your current review batch is already active. "
+                    "I refreshed matching and found more promising candidates, but your current review batch is still active. "
                     "Review those profiles first and I’ll send the next candidates when the queue moves."
                 )
         elif shortlisted_count > 0:
             notified_count = max(int((review_dispatch_result or {}).get("notified_count") or 0), 0)
             sent_count = notified_count or min(shortlisted_count, MATCH_BATCH_SIZE)
             text = (
-                f"Matching refresh complete. I found {shortlisted_count} strong "
-                f"{self._pluralize_candidates(shortlisted_count)} for this vacancy and sent you "
+                f"I refreshed matching for this vacancy and found {shortlisted_count} strong "
+                f"{self._pluralize_candidates(shortlisted_count)}. I’ve sent "
                 f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
             )
         else:
@@ -236,15 +236,15 @@ class MatchingProcessingService:
             if active_match_count > 0:
                 verb = "is" if active_match_count == 1 else "are"
                 text = (
-                    "Matching refresh complete. I didn't find new strong candidates right now, "
-                    f"but there {verb} {active_match_count} "
-                    f"{self._pluralize_candidates(active_match_count)} already active in the current review pipeline "
-                    "for this vacancy. I'll send the next candidates as soon as this queue moves."
+                    "I didn’t find a new strong profile right now, "
+                    f"but there {verb} still {active_match_count} "
+                    f"{self._pluralize_candidates(active_match_count)} active in this review pipeline. "
+                    "I’ll send the next candidates as soon as that queue moves."
                 )
             else:
                 text = (
-                    "Matching refresh complete. I didn't find any strong candidates for this vacancy yet. "
-                    "I'll keep looking and send strong profiles here as soon as matching finds them."
+                    "I didn’t find any strong candidates for this vacancy just yet. "
+                    "I’ll keep looking and send strong profiles here as soon as matching finds them."
                 )
 
         self.notifications.create(
@@ -280,43 +280,44 @@ class MatchingProcessingService:
 
         if had_failed_jobs:
             text = (
-                "I rechecked current open roles for your profile, but I couldn't complete every search cleanly just now. "
+                "I rechecked current open roles for your profile, but one of the searches didn’t finish cleanly just now. "
                 "Nothing new is ready yet."
             )
         elif candidate_cap_reached:
             text = (
-                f"I found additional matching roles, but you already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
-                "Wait for manager decisions before I send more roles."
+                "I found more roles that could fit, "
+                f"but you already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
+                "Go through the current ones first and I’ll send the next roles as soon as there’s room."
             )
         elif total_shortlisted > 0 and already_presented:
             shown_count = current_batch_count or active_match_count
             if shown_count > 0:
                 noun = "opportunity card" if shown_count == 1 else "opportunity cards"
                 text = (
-                    "I checked current open roles again. I found more matching signals, "
-                    f"but I didn't resend anything because you already have {shown_count} active {noun} waiting in chat."
+                    "I checked current open roles again and found more roles worth a look, "
+                    f"but you already have {shown_count} active {noun} waiting in chat."
                 )
             else:
                 text = (
-                    "I checked current open roles again. I found more matching signals, "
-                    "but your current vacancy review batch is already active in chat, so I didn't resend it."
+                    "I checked current open roles again and found more matching signals, "
+                    "but your current vacancy review batch is still active in chat, so I didn’t resend it."
                 )
         elif active_match_count > 0:
             verb = "is" if active_match_count == 1 else "are"
             noun = "opportunity" if active_match_count == 1 else "opportunities"
             text = (
-                "I checked current open roles again. I didn't find any new matches for you right now, "
+                "I checked current open roles again. Nothing new is ready right now, "
                 f"but there {verb} already {active_match_count} active {noun} in progress."
             )
         else:
             text = (
-                "I checked current open roles again. I didn't find any new matches for your profile right now."
+                "I checked current open roles again. Nothing new is ready for your profile right now."
             )
 
         if challenge_payload is not None:
             text += " While you wait, you can open Helly CV Challenge and play a quick round."
         else:
-            text += " I'll keep watching and message you as soon as something strong appears."
+            text += " I’ll keep watching and message you as soon as something strong appears."
 
         self.notifications.create(
             user_id=profile.user_id,

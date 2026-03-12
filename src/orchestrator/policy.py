@@ -79,11 +79,13 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["approve_summary", "request_summary_change"],
         assistance_prompt_slug="candidate_summary_review",
         guidance_text=(
-            "Review the summary and either approve it or tell me exactly what is incorrect. "
-            "You can request one correction round."
+            "Review the summary and either approve it or tell me exactly what is incorrect in the summary itself. "
+            "This step is only about role, experience, stack, domains, and responsibilities. You can request one correction round."
         ),
         help_text=(
-            "Review the summary and either approve it or tell me exactly what is incorrect. "
+            "Review the summary and either approve it or tell me exactly what is incorrect in the summary itself. "
+            "Use this step for role, experience, stack, domains, or responsibility corrections only. "
+            "Salary, work format, location, English, and other preferences come later. "
             "You can request one correction round before final approval."
         ),
         missing_requirements=["summary_approval"],
@@ -94,10 +96,12 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["send_salary_location_work_format"],
         assistance_prompt_slug="candidate_questions_pending",
         guidance_text=(
-            "Answer the current profile question so I can save the right matching preferences."
+            "Answer the current profile question so I can save the right matching preferences. "
+            "You can also answer several of these in one message if that is easier."
         ),
         help_text=(
-            "I collect salary, work format, location, English level, domain preferences, and interview-process preferences one by one so matching stays clean."
+            "I collect salary, work format, location, English level, domain preferences, and assessment preferences one by one so matching stays clean. "
+            "If you prefer, you can answer several of them in one message."
         ),
         missing_requirements=["candidate_questions"],
     ),
@@ -162,11 +166,12 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["approve_summary", "request_summary_change"],
         assistance_prompt_slug="vacancy_summary_review",
         guidance_text=(
-            "Review the vacancy summary and either approve it or tell me exactly what should be corrected. "
-            "One correction round is available."
+            "Review the vacancy summary and either approve it or tell me exactly what should be corrected in the summary itself. "
+            "This step is only about the role, seniority, stack, product context, and scope. One correction round is available."
         ),
         help_text=(
-            "Review the vacancy summary and either approve it or tell me exactly what should be corrected. "
+            "Review the vacancy summary and either approve it or tell me exactly what should be corrected in the summary itself. "
+            "Budget, work format, city, English, assessments, and hiring stages come in the next step. "
             "One correction round is available before final approval."
         ),
         missing_requirements=["vacancy_summary_approval"],
@@ -177,10 +182,12 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["send_vacancy_clarifications"],
         assistance_prompt_slug="vacancy_clarification_qa",
         guidance_text=(
-            "Answer the current vacancy clarification question so I can keep moving."
+            "Answer the current vacancy clarification question so I can keep moving. "
+            "You can also send several remaining vacancy details in one message."
         ),
         help_text=(
-            "I collect the vacancy basics one by one before opening it: budget, work format, hiring location, English requirement, assessments, hiring stages, team context, and main stack."
+            "I collect the vacancy basics one by one before opening it: budget, work format, hiring location, English requirement, assessments, hiring stages, team context, project context, and main stack. "
+            "If you already know several of them, you can send them together in one message."
         ),
         missing_requirements=["vacancy_clarifications"],
     ),

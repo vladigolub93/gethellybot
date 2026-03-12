@@ -435,13 +435,13 @@ class CandidateProfileService:
             return CandidateQuestionsResult(
                 status="queued",
                 notification_template="candidate_questions_processing",
-                notification_text="Answer received. Processing your mandatory profile details.",
+                notification_text="Got it. I’m processing those profile details now.",
             )
 
         return CandidateQuestionsResult(
             status="unsupported",
             notification_template="candidate_questions_unsupported",
-            notification_text="Reply in text, voice, or video.",
+            notification_text="Reply in text, voice, or video and I’ll parse it.",
         )
 
     def process_question_answer_text(
@@ -541,7 +541,7 @@ class CandidateProfileService:
                 status="completed",
                 notification_template="candidate_questions_completed",
                 notification_text=(
-                    "Nice, that part is done. "
+                    "Great, I have the matching basics. "
                     f"Next, send a short video and say: '{verification.phrase_text}'."
                 ),
             )

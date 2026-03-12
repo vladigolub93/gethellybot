@@ -41,17 +41,17 @@ def question_prompt(
     has_take_home_task: bool | None = None,
 ) -> str:
     prompts = {
-        "budget": "Nice. First, what budget are you hiring with for this role?",
-        "work_format": "Got it. Is this remote, office, or hybrid?",
-        "office_city": "For office or hybrid hiring, what city should the candidate be based in?",
-        "countries": "Which countries are you open to hiring from?",
-        "english_level": "What English level does the candidate need here? For example: B1, B2, or C1.",
+        "budget": "Let’s lock in the basics. What budget range are you hiring with for this role?",
+        "work_format": "What work setup is this role: remote, office, or hybrid?",
+        "office_city": "If it is office or hybrid, which city should the candidate be based in?",
+        "countries": "Which countries are you open to hiring from for this role?",
+        "english_level": "What English level does the candidate need to do this role well? For example: B1, B2, or C1.",
         "assessment": "Will this hiring process include a take-home task, live coding, both, or neither?",
         "take_home_paid": "If there is a take-home task, will it be paid or unpaid?",
-        "hiring_stages": "What hiring stages will the candidate go through? For example recruiter screen, manager call, technical interview, final.",
-        "team_size": "What is the size of the team this person would join?",
+        "hiring_stages": "What hiring stages should the candidate expect? A short list is enough, for example recruiter screen, manager call, technical interview, final.",
+        "team_size": "What team would this person join? A rough size is enough.",
         "project_description": "What is the project about? One or two clear sentences is enough.",
-        "primary_tech_stack": "And what is the main stack? What should I prioritize first when matching?",
+        "primary_tech_stack": "What is the main stack for this role? Tell me the technologies I should prioritize in matching.",
     }
     if question_key == "countries" and work_format in {"office", "hybrid"}:
         prompts["countries"] = "Which countries are you open to hiring from for this office or hybrid role?"
@@ -67,17 +67,17 @@ def follow_up_prompt(
     has_take_home_task: bool | None = None,
 ) -> str:
     prompts = {
-        "budget": "Please clarify the budget range with amount, currency, and period.",
-        "work_format": "Please clarify the work format: remote, hybrid, or office.",
-        "office_city": "Please clarify the office or hybrid city for this role.",
-        "countries": "Please clarify which countries are allowed for hiring.",
-        "english_level": "Please clarify the required English level in a simple format like B1, B2, or C1.",
-        "assessment": "Please clarify whether this process includes a take-home task, live coding, both, or neither.",
-        "take_home_paid": "Please clarify whether the take-home task is paid or unpaid.",
-        "hiring_stages": "Please clarify the hiring stages candidates should expect.",
-        "team_size": "Please clarify the team size.",
-        "project_description": "Please clarify the project description in one or two sentences.",
-        "primary_tech_stack": "Please clarify the primary tech stack.",
+        "budget": "Quick clarification: share the budget range with amount, currency, and period.",
+        "work_format": "Quick clarification: tell me if the role is remote, hybrid, or office.",
+        "office_city": "Quick clarification: which office or hybrid city should I use for this role?",
+        "countries": "Quick clarification: which countries are allowed for hiring here?",
+        "english_level": "Quick clarification: share the required English level in a format like B1, B2, or C1.",
+        "assessment": "Quick clarification: does this process include a take-home task, live coding, both, or neither?",
+        "take_home_paid": "Quick clarification: is the take-home task paid or unpaid?",
+        "hiring_stages": "Quick clarification: what hiring stages should candidates expect?",
+        "team_size": "Quick clarification: what is the team size?",
+        "project_description": "Quick clarification: describe the project in one or two sentences.",
+        "primary_tech_stack": "Quick clarification: what is the primary tech stack?",
     }
     if question_key == "countries" and work_format in {"office", "hybrid"}:
         prompts["countries"] = "Please clarify which countries are allowed for this office or hybrid role."

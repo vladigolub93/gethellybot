@@ -217,8 +217,22 @@ Valid outcomes:
 - explicit summary correction request
 - request for clarification because the candidate said they want to edit but gave no details
 
-Current step guidance: {current_step_guidance or ""}
-Recent context: {recent_context or []}
+Rules:
+- this step is only about the generated summary of the candidate's role, experience, stack, domains, or responsibilities
+- treat questions like "what happens next?", "why do you need approval?", "where did this come from?", and "what should I change?" as help
+- treat messages about salary, work format, location, English level, domain preferences, assessment preferences, or verification as help, not as summary edits
+- only propose `approve_summary` when the candidate is clearly approving the current summary
+- only propose `request_summary_change` when the candidate is clearly correcting facts in the summary itself
+- if the candidate says "edit it", "change it", or similar but gives no concrete correction, return the clarification outcome
+- if the candidate is clearly requesting a correction, include the exact correction request in `edit_text`
+- do not invent corrections
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
 
 Latest user message:
 {latest_user_message}
@@ -321,9 +335,13 @@ Valid outcomes:
 - real profile answer that should be parsed for salary, work format, location, English level, domain preferences, or assessment preferences
 
 Rules:
-- treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", and "how should I answer?" as help, not as final profile answers
-- only propose `send_salary_location_work_format` when the candidate is actually providing their profile details
+- this stage collects matching preferences one question at a time, but the candidate may answer several of them in one message
+- treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", "how should I answer?", and "can I answer later?" as help, not as final profile answers
+- treat short coordination-only messages like "ok", "next", "continue", or "got it" as help, not as profile answers
+- only propose `send_salary_location_work_format` when the candidate is actually providing profile details for the current question or intentionally giving multiple matching-preference fields at once
 - if the candidate is clearly answering, include the original answer in `answer_text`
+- if the candidate is clearly answering the location question for office or hybrid work, city and country matter more than a vague location string
+- do not assume missing profile values and do not convert generic agreement into structured data
 - do not invent profile values here
 - do not transition stages yourself
 
@@ -487,8 +505,22 @@ Valid outcomes:
 - explicit summary correction request
 - request for clarification because the manager said they want to edit but gave no details
 
-Current step guidance: {current_step_guidance or ""}
-Recent context: {recent_context or []}
+Rules:
+- this step is only about the generated vacancy summary of the role, seniority, stack, product context, or delivery scope
+- treat questions like "what happens next?", "why do you need approval?", "where did this come from?", and "what should I change?" as help
+- treat messages about budget, work format, office city, countries, English level, assessments, hiring stages, team details, or project clarifications as help, not as summary edits
+- only propose `approve_summary` when the manager is clearly approving the current vacancy summary
+- only propose `request_summary_change` when the manager is clearly correcting facts in the summary itself
+- if the manager says "edit it", "change it", or similar but gives no concrete correction, return the clarification outcome
+- if the manager is clearly requesting a correction, include the exact correction request in `edit_text`
+- do not invent corrections
+- do not transition stages yourself
+
+Current step guidance:
+{current_step_guidance or ""}
+
+Recent context:
+{recent_context or []}
 
 Latest user message:
 {latest_user_message}
@@ -567,9 +599,13 @@ Valid outcomes:
 - real clarification answer that should be parsed for vacancy details
 
 Rules:
-- treat questions like "what exactly do you still need?", "gross or net?", "which currency?", "what countries?", "what should I include?", "how should I answer?", and "what happens next?" as help, not as final clarification answers
-- only propose `send_vacancy_clarifications` when the manager is actually providing vacancy details
+- this stage collects the remaining vacancy constraints one question at a time, but the manager may answer several of them in one message
+- the possible fields here include budget, work format, office city, countries, required English, assessment steps, take-home payment, hiring stages, team size, project context, and primary stack
+- treat questions like "what exactly do you still need?", "gross or net?", "which currency?", "what countries?", "what should I include?", "how should I answer?", "are approximate values okay?", and "what happens next?" as help, not as final clarification answers
+- treat short coordination-only messages like "ok", "next", "continue", or "got it" as help, not as clarification answers
+- only propose `send_vacancy_clarifications` when the manager is actually providing vacancy details for the current question or intentionally giving multiple vacancy constraints at once
 - if the manager is clearly answering, include the original answer in `answer_text`
+- do not assume missing vacancy values and do not convert generic agreement into structured data
 - do not invent vacancy details
 - do not transition stages yourself
 

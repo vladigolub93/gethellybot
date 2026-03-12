@@ -302,7 +302,7 @@ def test_matching_processing_notifies_manager_after_manual_refresh_with_new_cand
     assert notification.template_key == "vacancy_open"
     assert notification.allow_duplicate is True
     assert "found 2 strong candidates" in notification.payload_json["text"].lower()
-    assert "sent you 2 new candidates" in notification.payload_json["text"].lower()
+    assert "sent 2 new candidates for review" in notification.payload_json["text"].lower()
     assert len(service.review_service.manager_calls) == 1
     assert service.review_service.manager_calls[0]["force"] is True
     assert service.review_service.candidate_calls == []
@@ -337,8 +337,8 @@ def test_matching_processing_notifies_manager_when_no_new_candidates_but_active_
 
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "didn't find new strong candidates" in text
-    assert "there are 2 candidates already active in the current review pipeline" in text
+    assert "didn’t find a new strong profile" in text
+    assert "2 candidates active in this review pipeline" in text
     assert service.review_service.manager_calls == []
     assert service.review_service.candidate_calls == []
 
@@ -372,9 +372,9 @@ def test_matching_processing_notifies_manager_when_vacancy_cap_blocks_new_batch(
 
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "found strong candidates" in text
-    assert "active candidates in this vacancy pipeline" in text
-    assert "active decisions" in text
+    assert "found more strong candidates" in text
+    assert "10 active candidate decisions" in text
+    assert "review one of the current profiles first" in text
 
 
 def test_matching_processing_notifies_manager_when_candidates_already_presented() -> None:
@@ -406,8 +406,8 @@ def test_matching_processing_notifies_manager_when_candidates_already_presented(
 
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "didn't resend profiles" in text
-    assert "2 active candidates in the current review batch" in text
+    assert "found more promising candidates" in text
+    assert "2 active candidates waiting in the current review batch" in text
 
 
 def test_matching_processing_notifies_candidate_after_manual_refresh_when_no_new_roles() -> None:
@@ -457,8 +457,8 @@ def test_matching_processing_notifies_candidate_after_manual_refresh_when_no_new
     assert notification.template_key == "candidate_ready"
     assert notification.allow_duplicate is True
     text = notification.payload_json["text"].lower()
-    assert "didn't find any new matches" in text
-    assert "already 1 active opportunity in progress" in text
+    assert "nothing new is ready right now" in text
+    assert "1 active opportunity in progress" in text
     assert "helly cv challenge" in text
     assert notification.payload_json["reply_markup"]["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
 
@@ -559,7 +559,7 @@ def test_matching_processing_notifies_candidate_when_roles_exist_but_cards_are_a
     assert len(service.notifications.rows) == 1
     notification = service.notifications.rows[0]
     text = notification.payload_json["text"].lower()
-    assert "didn't resend anything" in text
+    assert "found more roles worth a look" in text
     assert "2 active opportunity cards waiting in chat" in text
     assert "helly cv challenge" in text
 
@@ -605,5 +605,5 @@ def test_matching_processing_notifies_candidate_when_cap_blocks_new_roles() -> N
 
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "found additional matching roles" in text
+    assert "found more roles that could fit" in text
     assert "10 active opportunities in progress" in text

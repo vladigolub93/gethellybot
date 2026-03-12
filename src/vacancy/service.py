@@ -505,7 +505,9 @@ class VacancyService:
             return VacancyClarificationResult(
                 status="completed",
                 notification_template="vacancy_open",
-                notification_text=self._copy("Vacancy is now open and ready for matching."),
+                notification_text=self._copy(
+                    "Perfect, the vacancy is now open. I’ll start matching and send strong candidates here."
+                ),
             )
 
         next_question_key = missing_keys[0]

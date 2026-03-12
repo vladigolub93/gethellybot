@@ -543,9 +543,8 @@ class MatchingReviewService:
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
                         "text": self._copy(
-                            f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates "
-                            "waiting on this vacancy pipeline. "
-                            "Close one of the active decisions before I send more profiles."
+                            f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidate decisions "
+                            "open on this vacancy. Review one of the current profiles first and I’ll send more as soon as there’s room."
                         ),
                     },
                     allow_duplicate=True,
@@ -675,7 +674,7 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"You already have {MAX_ACTIVE_APPLICATIONS_PER_CANDIDATE} active opportunities in progress. "
-                            "Close one of the active decisions before I ask you to review more roles."
+                            "Review one of the current role decisions first and I’ll send more as soon as there’s room."
                         ),
                     },
                     allow_duplicate=True,
@@ -798,7 +797,7 @@ class MatchingReviewService:
                     template_key="candidate_vacancy_review_ready",
                     payload_json={
                         "text": self._copy(
-                            "That vacancy card is no longer active. Use the latest buttons under the current vacancy cards."
+                            "That vacancy card is no longer active. Use the latest buttons under the current role cards in chat and I’ll keep the queue moving from there."
                         ),
                     },
                     allow_duplicate=True,
@@ -812,7 +811,7 @@ class MatchingReviewService:
                 template_key="candidate_vacancy_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That option is no longer valid. Use the latest buttons under the current vacancy cards."
+                        "That option is out of date. Use the latest buttons under the current role cards in chat."
                     ),
                 },
                 allow_duplicate=True,
@@ -939,7 +938,7 @@ class MatchingReviewService:
                 template_key="candidate_vacancy_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That was the last vacancy in the current batch. I will send more roles as soon as matching produces them."
+                        "That was the last role in your current batch. I’ll send the next ones as soon as matching produces them."
                     ),
                 },
                 allow_duplicate=True,
@@ -985,7 +984,7 @@ class MatchingReviewService:
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
                         "text": self._copy(
-                            "That candidate card is no longer active. Use the latest buttons under the current candidate cards."
+                            "That candidate card is no longer active. Use the latest buttons under the current candidate cards in chat and I’ll keep the queue moving from there."
                         ),
                     },
                     allow_duplicate=True,
@@ -999,7 +998,7 @@ class MatchingReviewService:
                 template_key="manager_pre_interview_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That option is no longer valid. Use the latest buttons under the current candidate cards."
+                        "That option is out of date. Use the latest buttons under the current candidate cards in chat."
                     ),
                 },
                 allow_duplicate=True,
@@ -1027,9 +1026,8 @@ class MatchingReviewService:
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
                         "text": self._copy(
-                            f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} candidates "
-                            "already active on this vacancy. "
-                            "Close one of those active decisions before approving another candidate."
+                            f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidate decisions "
+                            "on this vacancy. Move one of the current profiles forward or close it, then I can approve another."
                         ),
                     },
                     allow_duplicate=True,

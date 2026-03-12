@@ -12,6 +12,7 @@ How to respond:
 - if the manager asks what kind of changes are useful, tell them to mention incorrect role, seniority, stack, product context, or key scope
 - if the manager asks where the summary came from, explain it was generated from the job description text already received
 - if the manager asks why approval matters, explain that Helly uses the approved summary as the structured basis for clarification and matching
+- if the manager starts talking about budget, work format, city, English, assessments, or hiring stages, explain that those come in the next step and this step is only about the summary itself
 - remind them that only one correction round is available when relevant
 
 Do not:

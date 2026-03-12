@@ -674,8 +674,8 @@ def test_dispatch_manager_batch_for_vacancy_reports_cap_reached() -> None:
     assert result["status"] == "vacancy_cap_reached"
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "vacancy pipeline" in text
-    assert "active decisions" in text
+    assert "active candidate decisions" in text
+    assert "review one of the current profiles first" in text
 
 
 def test_execute_candidate_pre_interview_action_applies_and_notifies_manager() -> None:
@@ -935,8 +935,8 @@ def test_execute_manager_pre_interview_invite_is_blocked_when_vacancy_cap_reache
     assert result.status == "vacancy_cap_reached"
     assert pending_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
     text = service.notifications.rows[0].payload_json["text"].lower()
-    assert "active on this vacancy" in text
-    assert "active decisions" in text
+    assert "active candidate decisions on this vacancy" in text
+    assert "move one of the current profiles forward" in text
 
 
 def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_candidate_already_applied() -> None:
