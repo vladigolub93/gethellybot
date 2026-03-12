@@ -29,7 +29,6 @@
     trapHitCount: 0,
     totalMistakes: 0,
     startedAt: 0,
-    stageBannerEl: null,
     hudScoreEl: null,
     hudLivesEl: null,
     hudStageEl: null,
@@ -37,8 +36,6 @@
     lastProgressSavedAt: 0,
     recentCorrectTexts: [],
     recentWrongTexts: [],
-    bannerText: "",
-    bannerUntil: 0,
     latestRunIsBest: false,
     rngState: 0,
     practiceMode: false,
@@ -252,24 +249,6 @@
 
   function currentStageNumber() {
     return integerOr(state.stageIndex, 0) + 1;
-  }
-
-  function defaultBannerText() {
-    const comboText = isTerminalTheme() ? `combo_x${state.multiplier}` : `Combo x${state.multiplier}`;
-    const stageText = state.practiceMode
-      ? (isTerminalTheme()
-        ? `endless_${String(currentStageNumber()).padStart(2, "0")}`
-        : `Endless ${currentStageNumber()}`)
-      : (isTerminalTheme()
-        ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
-        : (currentStageConfig() && currentStageConfig().label) || `Stage ${currentStageNumber()}`);
-    return isTerminalTheme() ? `[ ${stageText} | ${comboText} ]` : `${stageText} • ${comboText}`;
-  }
-
-  function setBannerMessage(text, durationMs) {
-    state.bannerText = text;
-    state.bannerUntil = performance.now() + durationMs;
-    updateHud();
   }
 
   function hashSeedString(value) {
@@ -573,7 +552,6 @@
           </article>
         </header>
         <section class="canvas-wrap">
-          <div id="stage-banner" class="stage-banner"></div>
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
         <footer class="game-footer" aria-label="How to play">
@@ -587,7 +565,6 @@
     `;
     state.canvas = document.getElementById("game-canvas");
     state.ctx = state.canvas.getContext("2d");
-    state.stageBannerEl = document.getElementById("stage-banner");
     state.hudScoreEl = document.getElementById("hud-score");
     state.hudLivesEl = document.getElementById("hud-lives");
     state.hudStageEl = document.getElementById("hud-stage");
@@ -822,18 +799,11 @@
           state.score += scoreValueForItem(item) * state.multiplier;
           if (item.kind === "bonus") {
             state.bonusTapCount += 1;
-            setBannerMessage(isTerminalTheme() ? `[ bonus +${2 * state.multiplier} ]` : `Bonus +${2 * state.multiplier}`, 1100);
           } else if (item.kind === "shield") {
             state.shieldTapCount += 1;
             state.livesLeft = Math.min(
               state.livesLeft + 1,
               integerOr(state.bootstrap && state.bootstrap.challenge && state.bootstrap.challenge.totalLives, 3)
-            );
-            setBannerMessage(isTerminalTheme() ? "[ shield +1 life ]" : "Shield +1 life", 1100);
-          } else if (state.multiplier > 1) {
-            setBannerMessage(
-              isTerminalTheme() ? `[ combo_x${state.multiplier} ]` : `Combo x${state.multiplier}`,
-              900
             );
           }
           tapFeedback("success");
@@ -859,15 +829,8 @@
     state.livesLeft = Math.max(state.livesLeft - damage, 0);
     if (options && options.missedSkill) {
       state.missedCorrect.add(options.missedSkill);
-      setBannerMessage(
-        isTerminalTheme() ? `[ missed ${options.missedSkill} ]` : `Missed ${options.missedSkill}`,
-        1200
-      );
     } else if (options && options.reason === "trap") {
       state.trapHitCount += 1;
-      setBannerMessage(isTerminalTheme() ? "[ trap -2 lives ]" : "Trap -2 lives", 1200);
-    } else {
-      setBannerMessage(isTerminalTheme() ? "[ -1 life ]" : "Wrong tap -1 life", 900);
     }
     if (state.livesLeft <= 0) {
       finishGame(false);
@@ -1010,15 +973,6 @@
           ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
           : `${currentStageNumber()} / ${baseStageCount()}`);
     }
-    if (state.stageBannerEl) {
-      if (state.bannerText && performance.now() < state.bannerUntil) {
-        state.stageBannerEl.textContent = state.bannerText;
-      } else {
-        state.bannerText = "";
-        state.bannerUntil = 0;
-        state.stageBannerEl.textContent = defaultBannerText();
-      }
-    }
   }
 
   function roundRect(ctx, x, y, width, height, radius) {
@@ -1140,12 +1094,6 @@
       state.stageStartedAt = now;
       state.stageEndsAt = now + currentStageConfig().durationMs;
       state.lastSpawnAt = now;
-      setBannerMessage(
-        state.practiceMode
-          ? (isTerminalTheme() ? `[ endless_${String(currentStageNumber()).padStart(2, "0")} ]` : `Endless ${currentStageNumber()}`)
-          : (isTerminalTheme() ? `[ ${currentStageConfig().label.toLowerCase().replace(/\s+/g, "_")} ]` : currentStageConfig().label),
-        1200
-      );
       updateHud();
     }
 
@@ -1209,8 +1157,6 @@
     state.lastProgressSavedAt = 0;
     state.recentCorrectTexts = [];
     state.recentWrongTexts = [];
-    state.bannerText = "";
-    state.bannerUntil = 0;
     state.latestRunIsBest = false;
     seedRandom((dailyRunData() && dailyRunData().seed) || currentAttemptId() || "helly");
     if (resumeSnapshot && Object.keys(resumeSnapshot).length) {
