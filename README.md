@@ -49,3 +49,18 @@ bash scripts/start-api.sh
 bash scripts/start-worker.sh
 bash scripts/start-scheduler.sh
 ```
+
+## CV Challenge Launch Modes
+
+Helly CV Challenge keeps the same HTML5 runtime and supports 2 launch transports:
+
+- fallback mode: Telegram `web_app` button to `/webapp/cv-challenge`
+- preferred mode: Telegram Game via `sendGame`
+
+To enable Telegram Game transport, set:
+
+```bash
+TELEGRAM_CV_CHALLENGE_GAME_SHORT_NAME=<botfather_game_short_name>
+```
+
+If this env var is empty, Helly automatically falls back to the old WebApp button flow.

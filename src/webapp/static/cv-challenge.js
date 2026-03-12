@@ -757,26 +757,34 @@
         if (tg.BackButton && typeof tg.BackButton.hide === "function") tg.BackButton.hide();
       }
 
-      const initDataFromQuery = new URLSearchParams(window.location.search).get("initData");
+      const params = new URLSearchParams(window.location.search);
+      const sessionTokenFromQuery = params.get("session_token") || params.get("sessionToken");
+      if (sessionTokenFromQuery) {
+        state.sessionToken = sessionTokenFromQuery;
+      }
+
+      const initDataFromQuery = params.get("initData");
       const initData = (tg && tg.initData) || initDataFromQuery;
-      if (!initData) {
+      if (!state.sessionToken && !initData) {
         renderLocked(
           "Open this challenge from Helly",
-          "This screen needs Telegram Mini App auth. Open it from the Helly bot button inside Telegram."
+          "This screen needs a Helly-issued Telegram session. Open it from the Helly bot inside Telegram."
         );
         return;
       }
 
-      const authResponse = await fetch("/webapp/api/auth/telegram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData }),
-      });
-      const authPayload = await authResponse.json().catch(() => ({}));
-      if (!authResponse.ok) {
-        throw new Error(authPayload.detail || "Telegram authentication failed.");
+      if (!state.sessionToken) {
+        const authResponse = await fetch("/webapp/api/auth/telegram", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        });
+        const authPayload = await authResponse.json().catch(() => ({}));
+        if (!authResponse.ok) {
+          throw new Error(authPayload.detail || "Telegram authentication failed.");
+        }
+        state.sessionToken = authPayload.sessionToken;
       }
-      state.sessionToken = authPayload.sessionToken;
 
       renderLoading("Syncing your candidate profile", "Preparing the skills Helly extracted from your CV.");
       const bootstrap = await refreshBootstrap();

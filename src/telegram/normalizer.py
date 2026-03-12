@@ -47,11 +47,13 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
     callback_query = update.get("callback_query")
     callback_query_id = None
     callback_data = None
+    callback_game_short_name = None
     sender = None
 
     if isinstance(callback_query, dict):
         callback_query_id = callback_query.get("id")
         callback_data = callback_query.get("data")
+        callback_game_short_name = callback_query.get("game_short_name")
         message = callback_query.get("message")
         sender = callback_query.get("from")
     else:
@@ -116,4 +118,5 @@ def normalize_telegram_update(update: Dict[str, Any]) -> NormalizedTelegramUpdat
         chat_title=chat.get("title"),
         callback_query_id=callback_query_id,
         callback_data=callback_data,
+        callback_game_short_name=callback_game_short_name,
     )

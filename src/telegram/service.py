@@ -226,15 +226,19 @@ class TelegramUpdateService:
         template_key: str,
         text: str,
         reply_markup=None,
+        message_entries: list[dict] | None = None,
         allow_duplicate: bool = False,
     ) -> str:
+        payload = {
+            "text": text,
+            "reply_markup": reply_markup,
+        }
+        if message_entries:
+            payload["message_entries"] = list(message_entries)
         return self._notify(
             user_id,
             template_key,
-            {
-                "text": text,
-                "reply_markup": reply_markup,
-            },
+            payload,
             allow_duplicate=allow_duplicate,
         )
 
@@ -306,6 +310,7 @@ class TelegramUpdateService:
                         template_key=ready_result.notification_template,
                         text=ready_result.notification_text,
                         reply_markup=getattr(ready_result, "reply_markup", None),
+                        message_entries=getattr(ready_result, "message_entries", None),
                         allow_duplicate=True,
                     )
                 ]
@@ -474,6 +479,14 @@ class TelegramUpdateService:
         if normalized_update.content_type != "callback":
             return None
 
+        callback_game_short_name = (normalized_update.callback_game_short_name or "").strip()
+        if callback_game_short_name:
+            return self._handle_game_callback_action(
+                user=user,
+                normalized_update=normalized_update,
+                callback_game_short_name=callback_game_short_name,
+            )
+
         callback_data = (normalized_update.callback_data or "").strip()
         if not callback_data:
             return []
@@ -602,6 +615,38 @@ class TelegramUpdateService:
                 )
             ]
 
+        return []
+
+    def _handle_game_callback_action(
+        self,
+        *,
+        user,
+        normalized_update: NormalizedTelegramUpdate,
+        callback_game_short_name: str,
+    ) -> List[str] | None:
+        configured_short_name = self.candidate_service.cv_challenge.game_short_name
+        callback_query_id = getattr(normalized_update, "callback_query_id", None)
+        if not callback_query_id:
+            return []
+        if not configured_short_name or callback_game_short_name != configured_short_name:
+            self._answer_callback_query(
+                callback_query_id=callback_query_id,
+                text="This game is not available right now.",
+                show_alert=True,
+            )
+            return []
+        launch_result = self.candidate_service.cv_challenge.build_game_launch_result(user.id)
+        if not launch_result.get("eligible") or not launch_result.get("url"):
+            self._answer_callback_query(
+                callback_query_id=callback_query_id,
+                text=str(launch_result.get("title") or "Challenge unavailable."),
+                show_alert=True,
+            )
+            return []
+        self._answer_callback_query(
+            callback_query_id=callback_query_id,
+            url=str(launch_result["url"]),
+        )
         return []
 
     def _handle_manager_open_stage_action(
@@ -1930,14 +1975,38 @@ class TelegramUpdateService:
             user_id=str(user_id),
         )
 
+    def _answer_callback_query(
+        self,
+        *,
+        callback_query_id: str,
+        text: str | None = None,
+        url: str | None = None,
+        show_alert: bool | None = None,
+    ) -> None:
+        try:
+            TelegramBotClient().answer_callback_query(
+                callback_query_id=callback_query_id,
+                text=text,
+                url=url,
+                show_alert=show_alert,
+            )
+            setattr(self, "_callback_query_answered", True)
+            if isinstance(getattr(self.session, "info", None), dict):
+                self.session.info["telegram_callback_query_answered"] = True
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning("telegram_callback_query_ack_failed", error=str(exc))
+
     def _acknowledge_callback_query(self, normalized_update: NormalizedTelegramUpdate) -> None:
         callback_query_id = getattr(normalized_update, "callback_query_id", None)
         if not callback_query_id:
             return
-        try:
-            TelegramBotClient().answer_callback_query(callback_query_id=callback_query_id)
-        except Exception as exc:  # noqa: BLE001
-            self.logger.warning("telegram_callback_query_ack_failed", error=str(exc))
+        if getattr(self, "_callback_query_answered", False):
+            setattr(self, "_callback_query_answered", False)
+            return
+        if isinstance(getattr(self.session, "info", None), dict):
+            if self.session.info.pop("telegram_callback_query_answered", False):
+                return
+        self._answer_callback_query(callback_query_id=callback_query_id)
 
     def process(self, normalized_update: NormalizedTelegramUpdate) -> ProcessedTelegramUpdate:
         session_info = getattr(self.session, "info", None)
@@ -1978,8 +2047,10 @@ class TelegramUpdateService:
                 notification_templates=notification_templates,
             )
         finally:
+            setattr(self, "_callback_query_answered", False)
             if isinstance(session_info, dict):
                 session_info.pop("telegram_reply_chat_id", None)
+                session_info.pop("telegram_callback_query_answered", None)
 
     def _apply_identity_flow(
         self,

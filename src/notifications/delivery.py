@@ -76,10 +76,11 @@ class NotificationDeliveryService:
                 messages_to_send = [
                     {
                         "text": str(entry.get("text") or "").strip(),
+                        "game_short_name": str(entry.get("game_short_name") or "").strip(),
                         "reply_markup": entry.get("reply_markup"),
                     }
                     for entry in message_entries
-                    if str(entry.get("text") or "").strip()
+                    if str(entry.get("text") or "").strip() or str(entry.get("game_short_name") or "").strip()
                 ]
             else:
                 messages = render_notification_messages(
@@ -99,12 +100,23 @@ class NotificationDeliveryService:
                 ]
             telegram_results = []
             for entry in messages_to_send:
-                text = entry["text"]
-                telegram_result = self.telegram.send_text_message(
-                    chat_id=target_chat_id,
-                    text=text,
-                    reply_markup=entry.get("reply_markup"),
-                )
+                text = entry.get("text") or ""
+                game_short_name = entry.get("game_short_name") or ""
+                if game_short_name:
+                    telegram_result = self.telegram.send_game(
+                        chat_id=target_chat_id,
+                        game_short_name=game_short_name,
+                    )
+                    content_type = "game"
+                    text_content = None
+                else:
+                    telegram_result = self.telegram.send_text_message(
+                        chat_id=target_chat_id,
+                        text=text,
+                        reply_markup=entry.get("reply_markup"),
+                    )
+                    content_type = "text"
+                    text_content = text
                 telegram_results.append(telegram_result)
                 self.raw_messages.create(
                     user_id=user.id,
@@ -112,9 +124,9 @@ class NotificationDeliveryService:
                     telegram_message_id=telegram_result.get("message_id"),
                     telegram_chat_id=target_chat_id,
                     direction="outbound",
-                    content_type="text",
+                    content_type=content_type,
                     payload_json=telegram_result,
-                    text_content=text,
+                    text_content=text_content,
                     correlation_id=notification.id,
                 )
             self.notifications.mark_sent(notification)
