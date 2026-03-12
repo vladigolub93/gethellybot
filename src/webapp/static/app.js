@@ -414,9 +414,13 @@
       : `data-open-url="${escapeHtml(options.openUrl)}"`;
     const metrics = options.metrics || [];
     const visibleMetrics = metrics.filter((metric) => metric && metric.value);
+    const headerClassName = options.badge
+      ? "card-head card-head-compact has-badge"
+      : "card-head card-head-compact";
     return `
       <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" ${actionAttr}>
-        <div class="card-head card-head-compact">
+        ${options.kicker ? `<p class="card-kicker">${escapeHtml(options.kicker)}</p>` : ""}
+        <div class="${headerClassName}">
           <div class="card-title-wrap">
             <h3>${escapeHtml(options.title || "Open")}</h3>
           </div>
@@ -542,19 +546,11 @@
         ${renderShortcutCard({
           route: "candidate-profile-section:summary",
           title: "Summary",
-          badge: "Profile",
           note: truncateText(summaryText || "No summary yet.", 120),
-        })}
-        ${renderShortcutCard({
-          route: "candidate-profile-section:cv",
-          title: "CV text",
-          badge: "CV",
-          note: truncateText((profile.source && profile.source.text) || "No CV text yet.", 120),
         })}
         ${renderShortcutCard({
           route: "candidate-profile-section:answers",
           title: "Answers",
-          badge: "Answers",
           note: truncateText(answersText || "No saved answers yet.", 120),
         })}
       </section>
@@ -584,15 +580,8 @@
       return;
     }
 
-    if (sectionKey === "cv") {
+    if (sectionKey === "answers") {
       appEl.innerHTML = `
-        ${renderScreenHeader("CV text", profile.name || "Profile", "cv_text")}
-        ${renderTextPanel("Saved CV text", profile.source && profile.source.text, "No CV text yet.")}
-      `;
-      return;
-    }
-
-    appEl.innerHTML = `
       ${renderScreenHeader("Answers", profile.name || "Profile", "answers")}
       ${renderDetailSection("Saved answers", [
         { label: "Salary", value: profile.answers && profile.answers.salaryExpectation ? profile.answers.salaryExpectation : "Not set" },
@@ -602,6 +591,10 @@
         { label: "Work format", value: profile.answers && profile.answers.workFormat ? profile.answers.workFormat : "Not set" },
       ])}
     `;
+      return;
+    }
+
+    renderCandidateProfileHome(profile);
   }
 
   async function renderHome() {
@@ -630,14 +623,14 @@
             ? renderShortcutCard({
               openUrl: withCurrentTheme(payload.cvChallenge.launchUrl),
               title: payload.cvChallenge.title || "CV Challenge",
-              badge: "Game",
+              kicker: "Game",
               note: truncateText(payload.cvChallenge.body || "Open the game.", 120),
             })
             : ""}
           ${renderShortcutCard({
             route: "candidate-profile",
             title: firstNonEmpty(profile.targetRole, profile.headline, "Profile"),
-            badge: "Profile",
+            kicker: "Profile",
             note: buildProfilePreview(profile),
             metrics: [
               { label: "Location", value: profile.location || "" },

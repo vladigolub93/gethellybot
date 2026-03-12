@@ -781,8 +781,16 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   gap: 8px;
 }
 
+.card-head-compact.has-badge {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .card-title-wrap {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .card h3 {
@@ -798,6 +806,22 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
 
 .card-compact h3 {
   font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.card-kicker {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.8rem;
   line-height: 1.2;
 }
 
@@ -900,9 +924,9 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
 .badge {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
+  min-height: 26px;
   max-width: 100%;
-  padding: 0 11px;
+  padding: 0 9px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.05);
@@ -915,9 +939,10 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
     Consolas,
     "Liberation Mono",
     monospace;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 500;
   line-height: 1.25;
+  white-space: nowrap;
 }
 
 .badge[data-tone="accent"] {
@@ -1321,6 +1346,7 @@ html[data-theme="terminal"] .metric-label,
 html[data-theme="terminal"] .detail-grid dt,
 html[data-theme="terminal"] .chip,
 html[data-theme="terminal"] .badge,
+html[data-theme="terminal"] .card-kicker,
 html[data-theme="terminal"] .terminal-title {
   text-transform: none;
   letter-spacing: 0;
@@ -1347,8 +1373,8 @@ html[data-theme="terminal"] .inline-metric-label {
 }
 
 html[data-theme="terminal"] .badge[data-tone="accent"] {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 html[data-theme="terminal"] .badge[data-tone="good"] {
