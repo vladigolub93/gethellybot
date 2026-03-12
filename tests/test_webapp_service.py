@@ -219,7 +219,9 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             "budget": "6000-7000 USD per month",
             "workFormat": "remote",
             "stage": "candidate_decision_pending",
-            "stageLabel": "Waiting for your reply",
+            "stageLabel": "Your reply",
+            "stageDescription": "Your reply is needed to keep this opportunity moving.",
+            "needsAction": True,
             "updatedAt": now.isoformat(),
         }
     ]
@@ -498,7 +500,9 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "salaryExpectation": "5000-6000 USD per month",
             "workFormat": "remote",
             "stage": "approved",
-            "stageLabel": "Contacts shared",
+            "stageLabel": "Connected",
+            "stageDescription": "Contacts were shared and this candidate moved into direct communication.",
+            "needsAction": False,
             "summary": {
                 "headline": None,
                 "approvalSummaryText": "Built scalable Node.js backends.",
@@ -510,7 +514,10 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "updatedAt": now.isoformat(),
         }
     ]
-    assert match_detail_payload["match"]["statusLabel"] == "Contacts shared"
+    assert match_detail_payload["match"]["statusLabel"] == "Connected"
+    assert match_detail_payload["match"]["statusDescription"] == "Contacts were shared and this candidate moved into direct communication."
+    assert match_detail_payload["match"]["needsCandidateAction"] is False
+    assert match_detail_payload["match"]["needsManagerAction"] is False
     assert match_detail_payload["vacancy"]["source"]["text"] == "Senior Node.js role for a realtime pricing platform."
     assert match_detail_payload["candidate"]["answers"]["city"] == "Kyiv"
     assert match_detail_payload["candidate"]["source"]["text"] == "Built scalable Node.js backends for product teams."

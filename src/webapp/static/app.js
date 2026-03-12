@@ -2,7 +2,6 @@
   const state = {
     sessionToken: null,
     session: null,
-    apiCache: new Map(),
     backButtonHandlerBound: false,
     theme: "terminal",
   };
@@ -141,7 +140,7 @@
 
   function badgeTone(value) {
     const text = String(value || "").toLowerCase();
-    if (text.includes("approved") || text.includes("completed") || text.includes("accepted")) return "good";
+    if (text.includes("approved") || text.includes("completed") || text.includes("accepted") || text.includes("connected")) return "good";
     if (text.includes("reject") || text.includes("declined") || text.includes("expired")) return "bad";
     if (text.includes("queued") || text.includes("review") || text.includes("waiting")) return "warn";
     return "accent";
@@ -160,12 +159,42 @@
     return rtf.format(Math.round(diffSeconds / 86400), "day");
   }
 
+  function formatAbsoluteTime(isoValue) {
+    if (!isoValue) return "Unknown";
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) return isoValue;
+    return new Intl.DateTimeFormat("en", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  }
+
+  function formatEventTime(isoValue, fallback) {
+    if (!isoValue) return fallback !== undefined ? fallback : "Pending";
+    const relative = formatRelativeTime(isoValue);
+    const absolute = formatAbsoluteTime(isoValue);
+    return relative === absolute ? absolute : `${relative} · ${absolute}`;
+  }
+
   function renderRoleCheck(note) {
     appEl.innerHTML = `
       <section class="state-card loading-card">
         <p class="eyebrow">Loading</p>
         <h2>Checking your role</h2>
         <p>${escapeHtml(note)}</p>
+      </section>
+    `;
+  }
+
+  function renderLoadingState(title, body, eyebrow) {
+    appEl.innerHTML = `
+      <section class="state-card loading-card">
+        <p class="eyebrow">${escapeHtml(eyebrow || "Loading")}</p>
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(body)}</p>
       </section>
     `;
   }
@@ -191,27 +220,16 @@
   }
 
   async function api(path) {
-    if (state.apiCache.has(path)) {
-      return state.apiCache.get(path);
-    }
-    const request = fetch(path, {
+    const response = await fetch(path, {
       headers: state.sessionToken
         ? { Authorization: `Bearer ${state.sessionToken}` }
         : {},
-    }).then(async (response) => {
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || "Request failed.");
-      }
-      return data;
     });
-    state.apiCache.set(path, request);
-    try {
-      return await request;
-    } catch (error) {
-      state.apiCache.delete(path);
-      throw error;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "Request failed.");
     }
+    return data;
   }
 
   function listChips(values) {
@@ -486,6 +504,15 @@
     return truncateText(summaryText || "Open your profile.", 120);
   }
 
+  function groupCandidateOpportunityItems(items) {
+    const allItems = items || [];
+    return {
+      needsAction: allItems.filter((item) => item && item.needsAction),
+      connected: allItems.filter((item) => item && item.stage === "approved"),
+      inProgress: allItems.filter((item) => item && !item.needsAction && item.stage !== "approved"),
+    };
+  }
+
   function renderCandidateVacancyCard(item) {
     return renderShortcutCard({
       route: `candidate-vacancy:${item.id}`,
@@ -608,16 +635,19 @@
       const payload = await api("/webapp/api/candidate/opportunities");
       const items = payload.items || [];
       const profile = payload.profile || {};
-      const activeDecisionCount = items.filter((item) =>
-        ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
-      ).length;
-      const connectedCount = items.filter((item) => item.stage === "approved").length;
+      const groups = groupCandidateOpportunityItems(items);
       appEl.innerHTML = `
         ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
-          { label: "Waiting", value: String(activeDecisionCount) },
-          { label: "Connected", value: String(connectedCount) }
+          { label: "Needs action", value: String(groups.needsAction.length) },
+          { label: "Connected", value: String(groups.connected.length) }
         ])}
+        ${groups.needsAction.length ? `
+          <section class="list">
+            <p class="footer-note">Needs your reply</p>
+            ${groups.needsAction.map(renderCandidateVacancyCard).join("")}
+          </section>
+        ` : ""}
         <section class="list">
           ${payload.cvChallenge && payload.cvChallenge.eligible && payload.cvChallenge.launchUrl
             ? renderShortcutCard({
@@ -639,10 +669,23 @@
             ],
           })}
         </section>
-        <section class="list">
-          <p class="footer-note">Vacancies</p>
-          ${items.length ? items.map(renderCandidateVacancyCard).join("") : `<div class="empty-state">No vacancies yet.</div>`}
-        </section>
+        ${groups.inProgress.length ? `
+          <section class="list">
+            <p class="footer-note">In progress</p>
+            ${groups.inProgress.map(renderCandidateVacancyCard).join("")}
+          </section>
+        ` : ""}
+        ${groups.connected.length ? `
+          <section class="list">
+            <p class="footer-note">Connected</p>
+            ${groups.connected.map(renderCandidateVacancyCard).join("")}
+          </section>
+        ` : ""}
+        ${items.length ? "" : `
+          <section class="list">
+            <div class="empty-state">No vacancies yet. Helly will show new matches here as soon as a role fits your profile.</div>
+          </section>
+        `}
       `;
       bindCards();
       bindActionButtons();
@@ -664,7 +707,7 @@
           { label: "Connected", value: String(totalConnectedCount) }
         ])}
         <section class="list">
-          ${items.length ? items.map(renderManagerVacancyCard).join("") : `<div class="empty-state">No vacancies yet.</div>`}
+          ${items.length ? items.map(renderManagerVacancyCard).join("") : `<div class="empty-state">No vacancies yet. Open a role and candidates will start appearing here.</div>`}
         </section>
       `;
       bindCards();
@@ -682,9 +725,11 @@
         { label: "Format", value: payload.vacancy.workFormat || "Not specified" },
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
-      ${renderDetailSection("Match", [
-        { label: "Your reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
-        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
+      ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
+      ${renderDetailSection("Timeline", [
+        { label: "Last updated", value: formatEventTime(payload.match.updatedAt) },
+        { label: "Your reply", value: formatEventTime(payload.match.candidateRespondedAt, "Pending") },
+        { label: "Manager decision", value: formatEventTime(payload.match.managerDecisionAt, "Pending") }
       ])}
       ${renderTextPanel(
         "Summary",
@@ -721,6 +766,10 @@
         { label: "Connected", value: String(stats.connectedCount || 0) },
         { label: "Budget", value: vacancy.budget || "Not specified" }
       ])}
+      <section class="list">
+        <p class="footer-note">Candidates</p>
+        ${items.length ? items.map(renderManagerCandidateCard).join("") : `<div class="empty-state">No candidates yet. As soon as Helly finds matches, they will appear here.</div>`}
+      </section>
       ${renderTextPanel(
         "Summary",
         firstNonEmpty(
@@ -734,15 +783,11 @@
         { label: "Work format", value: vacancy.workFormat || "Not specified" },
         { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
         { label: "Team size", value: vacancy.teamSize || "" },
-        { label: "Opened", value: vacancy.openedAt ? formatRelativeTime(vacancy.openedAt) : "" },
+        { label: "Opened", value: vacancy.openedAt ? formatEventTime(vacancy.openedAt) : "" },
         { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
       ])}
       ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
       ${renderTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
-      <section class="list">
-        <p class="footer-note">Candidates</p>
-        ${items.length ? items.map(renderManagerCandidateCard).join("") : `<div class="empty-state">No candidates yet.</div>`}
-      </section>
     `;
     bindCards();
   }
@@ -763,6 +808,13 @@
         { label: "Location", value: payload.candidate.location || "Not specified" },
         { label: "Format", value: payload.candidate.workFormat || "Not specified" },
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
+      ])}
+      ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
+      ${renderDetailSection("Timeline", [
+        { label: "Last updated", value: formatEventTime(payload.match.updatedAt) },
+        { label: "Invitation sent", value: payload.match.invitationSentAt ? formatEventTime(payload.match.invitationSentAt) : "" },
+        { label: "Candidate reply", value: payload.match.candidateRespondedAt ? formatEventTime(payload.match.candidateRespondedAt) : "" },
+        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatEventTime(payload.match.managerDecisionAt) : "" }
       ])}
       ${renderTextPanel(
         "Summary",
@@ -840,29 +892,43 @@
     if (!state.session) return;
     try {
       if (currentRoute === "home") {
+        renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
         await renderHome();
         return;
       }
 
       const parts = currentRoute.split(":");
       if (currentRoute === "candidate-profile") {
+        renderLoadingState("Opening profile", "Loading your latest profile snapshot.");
         const payload = await api("/webapp/api/candidate/profile");
         renderCandidateProfileHome(payload.profile || {});
         return;
       }
       if (parts.length !== 2) {
+        renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
         await renderHome();
         return;
       }
       const route = parts[0];
       const id = parts[1];
       if (route === "candidate-profile-section") {
+        renderLoadingState("Opening profile", "Loading your latest profile snapshot.");
         const payload = await api("/webapp/api/candidate/profile");
         return renderCandidateProfileSection(payload.profile || {}, id);
       }
-      if (route === "candidate-vacancy") return await renderCandidateVacancy(id);
-      if (route === "manager-vacancy") return await renderManagerVacancy(id);
-      if (route === "manager-candidate") return await renderManagerCandidate(id);
+      if (route === "candidate-vacancy") {
+        renderLoadingState("Opening vacancy", "Loading the latest role details.");
+        return await renderCandidateVacancy(id);
+      }
+      if (route === "manager-vacancy") {
+        renderLoadingState("Opening vacancy", "Loading the latest vacancy and candidate data.");
+        return await renderManagerVacancy(id);
+      }
+      if (route === "manager-candidate") {
+        renderLoadingState("Opening candidate", "Loading the latest candidate snapshot.");
+        return await renderManagerCandidate(id);
+      }
+      renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
       await renderHome();
     } catch (error) {
       renderError("Dashboard request failed", error.message || "Unable to load this screen.");

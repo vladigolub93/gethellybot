@@ -26,6 +26,8 @@ from src.webapp.presenters import (
     format_money_range,
     interview_state_label,
     isoformat_or_none,
+    match_requires_action,
+    match_status_description,
     match_status_label,
     source_text_snapshot,
     vacancy_summary_snapshot,
@@ -189,7 +191,7 @@ class WebAppService:
         match = self._require_match(match_id)
         if str(match.candidate_profile_id) != str(profile.id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
-        return self._serialize_match_detail(match)
+        return self._serialize_match_detail(match, session_context=session_context)
 
     def get_candidate_profile_detail(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
@@ -253,7 +255,7 @@ class WebAppService:
         if vacancy is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vacancy not found.")
         self._assert_manager_owns_vacancy(session_context, vacancy)
-        return self._serialize_match_detail(match)
+        return self._serialize_match_detail(match, session_context=session_context)
 
     def list_admin_vacancies(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_ADMIN})
@@ -299,7 +301,7 @@ class WebAppService:
     ) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_ADMIN})
         match = self._require_match(match_id)
-        return self._serialize_match_detail(match)
+        return self._serialize_match_detail(match, session_context=session_context)
 
     def _build_session_context(
         self,
@@ -468,7 +470,9 @@ class WebAppService:
             ),
             "workFormat": getattr(vacancy, "work_format", None),
             "stage": match.status,
-            "stageLabel": match_status_label(match.status),
+            "stageLabel": match_status_label(match.status, perspective="candidate"),
+            "stageDescription": match_status_description(match.status, perspective="candidate"),
+            "needsAction": match_requires_action(match.status, perspective="candidate"),
             "updatedAt": isoformat_or_none(match.updated_at),
         }
 
@@ -543,12 +547,14 @@ class WebAppService:
             ),
             "workFormat": getattr(profile, "work_format", None),
             "stage": match.status,
-            "stageLabel": match_status_label(match.status),
+            "stageLabel": match_status_label(match.status, perspective="manager"),
+            "stageDescription": match_status_description(match.status, perspective="manager"),
+            "needsAction": match_requires_action(match.status, perspective="manager"),
             "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
             "updatedAt": isoformat_or_none(match.updated_at),
         }
 
-    def _serialize_match_detail(self, match) -> Dict[str, Any]:
+    def _serialize_match_detail(self, match, *, session_context: WebAppSessionContext) -> Dict[str, Any]:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         vacancy_version = self.vacancies.get_current_version(vacancy) if vacancy is not None else None
         candidate_profile = self.candidate_profiles.get_by_id(match.candidate_profile_id)
@@ -567,7 +573,24 @@ class WebAppService:
             "match": {
                 "id": str(match.id),
                 "status": match.status,
-                "statusLabel": match_status_label(match.status),
+                "statusLabel": match_status_label(
+                    match.status,
+                    perspective=(
+                        "candidate"
+                        if session_context.role == WEBAPP_ROLE_CANDIDATE
+                        else "manager" if session_context.role == WEBAPP_ROLE_HIRING_MANAGER else "generic"
+                    ),
+                ),
+                "statusDescription": match_status_description(
+                    match.status,
+                    perspective=(
+                        "candidate"
+                        if session_context.role == WEBAPP_ROLE_CANDIDATE
+                        else "manager" if session_context.role == WEBAPP_ROLE_HIRING_MANAGER else "generic"
+                    ),
+                ),
+                "needsCandidateAction": match_requires_action(match.status, perspective="candidate"),
+                "needsManagerAction": match_requires_action(match.status, perspective="manager"),
                 "updatedAt": isoformat_or_none(match.updated_at),
                 "invitationSentAt": isoformat_or_none(match.invitation_sent_at),
                 "candidateRespondedAt": isoformat_or_none(match.candidate_response_at),

@@ -483,7 +483,7 @@
         <p class="copy">${escapeHtml(title)}</p>
         <p>${escapeHtml(body)}</p>
         <div class="action-row">
-          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /home" : "Open home"}</button>
           <button id="close-app" class="button" type="button">${isTerminalTheme() ? "exit" : "Close"}</button>
         </div>
       </section>
@@ -540,7 +540,7 @@
         ` : ""}
         <div class="action-row">
           <button id="start-challenge" class="button" type="button">${canResume ? (isTerminalTheme() ? "resume run" : "Resume challenge") : (isTerminalTheme() ? "run challenge" : "Start challenge")}</button>
-          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Back to dashboard"}</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /home" : "Back to home"}</button>
         </div>
       </section>
     `;
@@ -659,7 +659,7 @@
         <div class="action-row">
           ${showEndlessButton ? `<button id="continue-endless" class="ghost-button" type="button">${isTerminalTheme() ? "continue endless" : "Continue endless"}</button>` : ""}
           <button id="try-again" class="button" type="button">${isTerminalTheme() ? "rerun" : "Try again"}</button>
-          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
+          <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /home" : "Open home"}</button>
         </div>
       </section>
     `;

@@ -6,22 +6,82 @@ from typing import Any, Dict, Iterable, List, Optional
 
 MATCH_STATUS_LABELS = {
     "shortlisted": "Matched",
-    "manager_decision_pending": "Waiting for manager review",
-    "candidate_applied": "Waiting for manager reply",
-    "candidate_decision_pending": "Waiting for your reply",
-    "manager_interview_requested": "Manager approved, waiting for candidate",
+    "manager_decision_pending": "Manager review",
+    "candidate_applied": "Manager reply",
+    "candidate_decision_pending": "Candidate reply",
+    "manager_interview_requested": "Interview reply",
     "interview_queued": "Interview queued",
-    "invited": "Interview invited",
+    "invited": "Interview invite",
     "accepted": "Interview accepted",
     "interview_completed": "Interview completed",
-    "manager_review": "Manager review",
-    "approved": "Contacts shared",
+    "manager_review": "Under review",
+    "approved": "Connected",
     "rejected": "Rejected",
-    "manager_skipped": "Skipped by manager",
-    "candidate_skipped": "Skipped by candidate",
-    "candidate_declined_interview": "Candidate declined interview",
+    "manager_skipped": "Skipped",
+    "candidate_skipped": "Skipped",
+    "candidate_declined_interview": "Interview declined",
     "filtered_out": "Filtered out",
     "expired": "Expired",
+}
+
+MATCH_STATUS_LABELS_BY_PERSPECTIVE = {
+    "candidate": {
+        "candidate_decision_pending": "Your reply",
+        "candidate_applied": "Manager reply",
+        "manager_interview_requested": "Interview reply",
+    },
+    "manager": {
+        "manager_decision_pending": "Your review",
+        "candidate_applied": "Your reply",
+        "candidate_decision_pending": "Candidate reply",
+        "manager_interview_requested": "Candidate reply",
+        "invited": "Candidate reply",
+    },
+}
+
+MATCH_STATUS_DESCRIPTIONS = {
+    "shortlisted": "Helly found a promising match between this candidate and this role.",
+    "manager_decision_pending": "The hiring manager is reviewing this match now.",
+    "candidate_applied": "The candidate already replied. The manager has the next move.",
+    "candidate_decision_pending": "A candidate reply is needed before this match can move forward.",
+    "manager_interview_requested": "The next interview step is ready, but a candidate reply is still needed.",
+    "interview_queued": "The interview is being prepared and scheduling is in progress.",
+    "invited": "An interview invite was sent and is waiting for a response.",
+    "accepted": "The interview invite was accepted and the session can move forward.",
+    "interview_completed": "The interview finished and the result is ready for review.",
+    "manager_review": "This match is still under manager review.",
+    "approved": "Contacts were shared and this match moved into direct communication.",
+    "rejected": "This match was closed and will not continue.",
+    "manager_skipped": "The manager chose not to continue with this match.",
+    "candidate_skipped": "The candidate chose not to continue with this match.",
+    "candidate_declined_interview": "The candidate declined the interview step.",
+    "filtered_out": "This match was filtered out and is no longer active.",
+    "expired": "This match expired without the next step being completed.",
+}
+
+MATCH_STATUS_DESCRIPTIONS_BY_PERSPECTIVE = {
+    "candidate": {
+        "manager_decision_pending": "Your profile is with the hiring manager. You are waiting for their review.",
+        "candidate_applied": "You already replied. The manager has the next move.",
+        "candidate_decision_pending": "Your reply is needed to keep this opportunity moving.",
+        "manager_interview_requested": "The manager approved the next step. Your reply is needed before the interview moves forward.",
+        "invited": "An interview invite was sent. Please respond to continue.",
+        "approved": "Your contact details were shared and the role moved into direct communication.",
+    },
+    "manager": {
+        "manager_decision_pending": "This candidate is waiting for your review.",
+        "candidate_applied": "The candidate already replied. Your decision is needed now.",
+        "candidate_decision_pending": "The candidate still needs to reply before this match can continue.",
+        "manager_interview_requested": "You approved the next step. The candidate still needs to reply.",
+        "invited": "An interview invite was sent. The candidate still needs to respond.",
+        "approved": "Contacts were shared and this candidate moved into direct communication.",
+        "interview_completed": "The interview is complete and ready for your review.",
+    },
+}
+
+MATCH_ACTION_STATUSES_BY_PERSPECTIVE = {
+    "candidate": frozenset({"candidate_decision_pending", "manager_interview_requested", "invited"}),
+    "manager": frozenset({"manager_decision_pending", "candidate_applied", "interview_completed"}),
 }
 
 INTERVIEW_STATE_LABELS = {
@@ -134,10 +194,30 @@ def evaluation_snapshot(evaluation) -> Dict[str, Any]:
     }
 
 
-def match_status_label(status: Optional[str]) -> Optional[str]:
+def match_status_label(status: Optional[str], perspective: str = "generic") -> Optional[str]:
     if status is None:
         return None
-    return MATCH_STATUS_LABELS.get(status, status.replace("_", " ").title())
+    return (
+        MATCH_STATUS_LABELS_BY_PERSPECTIVE.get(perspective, {}).get(status)
+        or MATCH_STATUS_LABELS.get(status)
+        or status.replace("_", " ").title()
+    )
+
+
+def match_status_description(status: Optional[str], perspective: str = "generic") -> Optional[str]:
+    if status is None:
+        return None
+    return (
+        MATCH_STATUS_DESCRIPTIONS_BY_PERSPECTIVE.get(perspective, {}).get(status)
+        or MATCH_STATUS_DESCRIPTIONS.get(status)
+        or match_status_label(status, perspective)
+    )
+
+
+def match_requires_action(status: Optional[str], perspective: str = "generic") -> bool:
+    if status is None:
+        return False
+    return status in MATCH_ACTION_STATUSES_BY_PERSPECTIVE.get(perspective, frozenset())
 
 
 def interview_state_label(state: Optional[str]) -> Optional[str]:
