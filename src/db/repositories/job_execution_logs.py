@@ -27,9 +27,9 @@ class JobExecutionLogsRepository:
             select(JobExecutionLog)
             .where(
                 JobExecutionLog.job_type == "matching_run_for_vacancy_v1",
-                JobExecutionLog.payload_json["trigger_type"].astext == "candidate_manual_request",
-                JobExecutionLog.payload_json["trigger_candidate_profile_id"].astext == str(candidate_profile_id),
-                JobExecutionLog.payload_json["candidate_manual_request_id"].astext == str(request_id),
+                JobExecutionLog.payload_json["trigger_type"].as_string() == "candidate_manual_request",
+                JobExecutionLog.payload_json["trigger_candidate_profile_id"].as_string() == str(candidate_profile_id),
+                JobExecutionLog.payload_json["candidate_manual_request_id"].as_string() == str(request_id),
             )
             .order_by(JobExecutionLog.queued_at.asc())
         )

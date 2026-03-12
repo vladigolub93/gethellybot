@@ -165,10 +165,13 @@ class MatchingProcessingService:
         if not candidate_profile_id or not request_id:
             return
 
-        related_jobs = self.job_logs.list_candidate_manual_request_jobs(
-            candidate_profile_id=str(candidate_profile_id),
-            request_id=str(request_id),
-        )
+        try:
+            related_jobs = self.job_logs.list_candidate_manual_request_jobs(
+                candidate_profile_id=str(candidate_profile_id),
+                request_id=str(request_id),
+            )
+        except Exception:
+            related_jobs = [job]
         current_job_id = str(getattr(job, "id", ""))
         if any(
             str(getattr(row, "id", "")) != current_job_id and getattr(row, "status", None) in {"queued", "running"}

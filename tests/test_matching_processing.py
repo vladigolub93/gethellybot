@@ -85,6 +85,11 @@ class FakeJobExecutionLogsRepository:
         ]
 
 
+class RaisingJobExecutionLogsRepository:
+    def list_candidate_manual_request_jobs(self, *, candidate_profile_id, request_id):
+        raise RuntimeError("job log lookup failed")
+
+
 class FakeReviewService:
     def __init__(self, *, manager_result=None, candidate_result=None):
         self.manager_calls = []
@@ -607,3 +612,48 @@ def test_matching_processing_notifies_candidate_when_cap_blocks_new_roles() -> N
     text = service.notifications.rows[0].payload_json["text"].lower()
     assert "found additional matching roles" in text
     assert "10 active opportunities in progress" in text
+
+
+def test_matching_processing_notifies_candidate_even_if_job_log_lookup_fails() -> None:
+    profile_id = uuid4()
+    current_job = SimpleNamespace(
+        id="job-1",
+        job_type="matching_run_for_vacancy_v1",
+        status="running",
+        payload_json={
+            "vacancy_id": "vacancy-1",
+            "trigger_type": "candidate_manual_request",
+            "trigger_candidate_profile_id": str(profile_id),
+            "candidate_manual_request_id": "req-5",
+        },
+        result_json=None,
+    )
+
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(id=profile_id, user_id="candidate-user-5")
+    )
+    service.job_logs = RaisingJobExecutionLogsRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.matching = FakeMatchingRepository(active_candidate_matches=[])
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService(
+        result={
+            "matching_run_id": "run-9",
+            "candidate_pool_count": 0,
+            "hard_filtered_count": 0,
+            "shortlisted_count": 0,
+        }
+    )
+    service.review_service = FakeReviewService()
+    service.cv_challenge = FakeCvChallengeService(
+        invitation={"launchUrl": "https://helly.test/webapp/cv-challenge"}
+    )
+
+    service.process_job(current_job)
+
+    assert len(service.notifications.rows) == 1
+    text = service.notifications.rows[0].payload_json["text"].lower()
+    assert "didn't find any new matches" in text
+    assert "helly cv challenge" in text
