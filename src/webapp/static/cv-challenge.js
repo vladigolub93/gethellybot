@@ -15,12 +15,18 @@
     score: 0,
     livesLeft: 3,
     stageIndex: 0,
+    streak: 0,
+    maxStreak: 0,
+    multiplier: 1,
     stageStartedAt: 0,
     stageEndsAt: 0,
     lastSpawnAt: 0,
     missedCorrect: new Set(),
     correctTapCount: 0,
     wrongTapCount: 0,
+    bonusTapCount: 0,
+    shieldTapCount: 0,
+    trapHitCount: 0,
     totalMistakes: 0,
     startedAt: 0,
     stageBannerEl: null,
@@ -29,6 +35,11 @@
     hudStageEl: null,
     progressSaveInFlight: false,
     lastProgressSavedAt: 0,
+    recentCorrectTexts: [],
+    recentWrongTexts: [],
+    bannerText: "",
+    bannerUntil: 0,
+    latestRunIsBest: false,
   };
   const TERMINAL_THEME = "terminal";
 
@@ -179,6 +190,150 @@
     return state.bootstrap && state.bootstrap.attempt ? state.bootstrap.attempt.id : null;
   }
 
+  function integerOr(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.round(parsed) : fallback;
+  }
+
+  function resultPayload(result) {
+    return result && typeof result.result === "object" && result.result ? result.result : {};
+  }
+
+  function resultMistakes(result) {
+    return integerOr(resultPayload(result).totalMistakes, 10 ** 6);
+  }
+
+  function compareResults(left, right) {
+    if (!left && !right) return 0;
+    if (left && !right) return 1;
+    if (!left && right) return -1;
+
+    const leftScore = integerOr(left.score, 0);
+    const rightScore = integerOr(right.score, 0);
+    if (leftScore !== rightScore) return leftScore > rightScore ? 1 : -1;
+
+    const leftStage = integerOr(left.stageReached, 1);
+    const rightStage = integerOr(right.stageReached, 1);
+    if (leftStage !== rightStage) return leftStage > rightStage ? 1 : -1;
+
+    const leftMistakes = resultMistakes(left);
+    const rightMistakes = resultMistakes(right);
+    if (leftMistakes !== rightMistakes) return leftMistakes < rightMistakes ? 1 : -1;
+
+    return 0;
+  }
+
+  function isSameResult(left, right) {
+    if (!left || !right) return false;
+    if (left.id && right.id) return left.id === right.id;
+    return compareResults(left, right) === 0;
+  }
+
+  function comboMultiplier(streak) {
+    if (streak >= 6) return 3;
+    if (streak >= 3) return 2;
+    return 1;
+  }
+
+  function scoreValueForItem(item) {
+    return item && item.kind === "bonus" ? 2 : 1;
+  }
+
+  function damageValueForItem(item) {
+    return item && item.kind === "trap" ? 2 : 1;
+  }
+
+  function canSpawnShieldToken() {
+    const totalLives = integerOr(state.bootstrap && state.bootstrap.challenge && state.bootstrap.challenge.totalLives, 3);
+    return state.livesLeft < totalLives;
+  }
+
+  function currentStageNumber() {
+    return integerOr(state.stageIndex, 0) + 1;
+  }
+
+  function defaultBannerText() {
+    const comboText = isTerminalTheme() ? `combo_x${state.multiplier}` : `Combo x${state.multiplier}`;
+    const stageText = isTerminalTheme()
+      ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
+      : (currentStageConfig() && currentStageConfig().label) || `Stage ${currentStageNumber()}`;
+    return isTerminalTheme() ? `[ ${stageText} | ${comboText} ]` : `${stageText} • ${comboText}`;
+  }
+
+  function setBannerMessage(text, durationMs) {
+    state.bannerText = text;
+    state.bannerUntil = performance.now() + durationMs;
+    updateHud();
+  }
+
+  function rememberRecent(array, value) {
+    if (!value) return;
+    array.push(value);
+    while (array.length > 2) {
+      array.shift();
+    }
+  }
+
+  function pickRandomAvoidRecent(list, recentValues) {
+    if (!list || !list.length) return null;
+    if (list.length === 1) return list[0];
+    const recentSet = new Set(recentValues || []);
+    const filtered = list.filter((item) => !recentSet.has(item));
+    return pickRandom(filtered.length ? filtered : list);
+  }
+
+  function buildTokenLabel(text, kind) {
+    if (kind === "bonus") return isTerminalTheme() ? `[ +2 ${text} ]` : `+2 ${text}`;
+    if (kind === "shield") return isTerminalTheme() ? `[ +1 ${text} ]` : `+1 ${text}`;
+    if (kind === "trap") return isTerminalTheme() ? `[ !! ${text} ]` : `!! ${text}`;
+    return isTerminalTheme() ? `[ ${text} ]` : text;
+  }
+
+  function buildCurrentAttemptResult(won) {
+    return {
+      score: state.score,
+      stageReached: currentStageNumber(),
+      won: Boolean(won),
+      result: {
+        correctTapCount: state.correctTapCount,
+        wrongTapCount: state.wrongTapCount,
+        bonusTapCount: state.bonusTapCount,
+        shieldTapCount: state.shieldTapCount,
+        trapHitCount: state.trapHitCount,
+        maxStreak: state.maxStreak,
+        totalMistakes: state.totalMistakes,
+        missedSkills: Array.from(state.missedCorrect),
+        durationMs: Math.max(Date.now() - state.startedAt, 0),
+      },
+    };
+  }
+
+  function renderAttemptMetrics(result, options) {
+    if (!result) return "";
+    const resultData = resultPayload(result);
+    return `
+      <div class="result-meta">
+        <article class="result-meta-card">
+          <span class="result-meta-value">${escapeHtml(integerOr(result.score, 0))}</span>
+          <span class="result-meta-label">${isTerminalTheme() ? "score" : "Score"}</span>
+        </article>
+        <article class="result-meta-card">
+          <span class="result-meta-value">${escapeHtml(integerOr(result.stageReached, 1))}</span>
+          <span class="result-meta-label">${isTerminalTheme() ? "stage_reached" : "Stage reached"}</span>
+        </article>
+        <article class="result-meta-card">
+          <span class="result-meta-value">${escapeHtml(integerOr(resultData.maxStreak, 0))}</span>
+          <span class="result-meta-label">${isTerminalTheme() ? "max_streak" : "Max streak"}</span>
+        </article>
+        <article class="result-meta-card">
+          <span class="result-meta-value">${escapeHtml(integerOr(resultData.totalMistakes, 0))}</span>
+          <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
+        </article>
+      </div>
+      ${options && options.note ? `<p class="history-note">${escapeHtml(options.note)}</p>` : ""}
+    `;
+  }
+
   async function api(path, options) {
     const response = await fetch(path, {
       ...options,
@@ -234,7 +389,11 @@
     const challenge = state.bootstrap.challenge;
     const attempt = state.bootstrap.attempt || null;
     const lastResult = state.bootstrap.lastResult || null;
+    const bestResult = state.bootstrap.bestResult || lastResult || null;
     const canResume = Boolean(attempt && attempt.resumable && attempt.progress);
+    const historyNote = lastResult && bestResult && !isSameResult(lastResult, bestResult)
+      ? `Last run: ${integerOr(lastResult.score, 0)} points, stage ${integerOr(lastResult.stageReached, 1)}.`
+      : "";
     appEl.innerHTML = `
       <section class="screen-card">
         <p class="eyebrow">${isTerminalTheme() ? "cv_challenge_runtime" : "CV Challenge"}</p>
@@ -254,27 +413,10 @@
             <span class="meta-label">${isTerminalTheme() ? "stages" : "Stages"}</span>
           </article>
         </div>
-        ${lastResult ? `
+        ${bestResult ? `
           <div class="result-history">
-            <p class="eyebrow">${isTerminalTheme() ? "last_run" : "Last result"}</p>
-            <div class="result-meta">
-              <article class="result-meta-card">
-                <span class="result-meta-value">${escapeHtml(lastResult.score)}</span>
-                <span class="result-meta-label">${isTerminalTheme() ? "score" : "Score"}</span>
-              </article>
-              <article class="result-meta-card">
-                <span class="result-meta-value">${escapeHtml(lastResult.stageReached)}</span>
-                <span class="result-meta-label">${isTerminalTheme() ? "stage_reached" : "Stage reached"}</span>
-              </article>
-              <article class="result-meta-card">
-                <span class="result-meta-value">${escapeHtml(lastResult.won ? (isTerminalTheme() ? "won" : "Won") : (isTerminalTheme() ? "failed" : "Failed"))}</span>
-                <span class="result-meta-label">${isTerminalTheme() ? "status" : "Status"}</span>
-              </article>
-              <article class="result-meta-card">
-                <span class="result-meta-value">${escapeHtml((lastResult.result && lastResult.result.totalMistakes) || 0)}</span>
-                <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
-              </article>
-            </div>
+            <p class="eyebrow">${isTerminalTheme() ? "best_run" : "Best result"}</p>
+            ${renderAttemptMetrics(bestResult, { note: historyNote })}
           </div>
         ` : ""}
         <div class="action-row">
@@ -312,18 +454,22 @@
           </article>
         </header>
         <section class="canvas-wrap">
+          <div id="stage-banner" class="stage-banner"></div>
           <canvas id="game-canvas" class="game-canvas"></canvas>
         </section>
         <footer class="game-footer" aria-label="How to play">
           <span class="game-footer-chip">${isTerminalTheme() ? "tap cv skills" : "Tap CV skills"}</span>
-          <span class="game-footer-chip">${isTerminalTheme() ? "wrong tap = -1 life" : "Wrong tap = -1 life"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "combo = more score" : "Combo = more score"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "+2 token = bonus" : "+2 token = bonus"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "+1 token = restore life" : "+1 token = restore life"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "trap = -2 lives" : "Trap = -2 lives"}</span>
           <span class="game-footer-chip">${isTerminalTheme() ? "missed real skill = -1 life" : "Missed real skill = -1 life"}</span>
         </footer>
       </section>
     `;
     state.canvas = document.getElementById("game-canvas");
     state.ctx = state.canvas.getContext("2d");
-    state.stageBannerEl = null;
+    state.stageBannerEl = document.getElementById("stage-banner");
     state.hudScoreEl = document.getElementById("hud-score");
     state.hudLivesEl = document.getElementById("hud-lives");
     state.hudStageEl = document.getElementById("hud-stage");
@@ -335,19 +481,30 @@
   function renderResult(won) {
     setAppMode("panel");
     const missed = Array.from(state.missedCorrect).slice(0, 12);
+    const currentResult = buildCurrentAttemptResult(won);
+    const bestResult = state.bootstrap && state.bootstrap.bestResult ? state.bootstrap.bestResult : currentResult;
+    const isNewBest = Boolean(state.latestRunIsBest);
     appEl.innerHTML = `
       <section class="result-card">
         <p class="eyebrow">${won ? (isTerminalTheme() ? "run_complete" : "Challenge complete") : (isTerminalTheme() ? "run_failed" : "Game over")}</p>
         <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
-        <p class="result-copy">${won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."}</p>
+        <p class="result-copy">${isNewBest ? "New best run saved." : (won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile.")}</p>
         <div class="result-meta">
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.score)}</span>
             <span class="result-meta-label">${isTerminalTheme() ? "score" : "Score"}</span>
           </article>
           <article class="result-meta-card">
-            <span class="result-meta-value">${escapeHtml(state.stageIndex + 1)}</span>
+            <span class="result-meta-value">${escapeHtml(integerOr(bestResult.score, state.score))}</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "best_score" : "Best score"}</span>
+          </article>
+          <article class="result-meta-card">
+            <span class="result-meta-value">${escapeHtml(currentStageNumber())}</span>
             <span class="result-meta-label">${isTerminalTheme() ? "stage_reached" : "Stage reached"}</span>
+          </article>
+          <article class="result-meta-card">
+            <span class="result-meta-value">${escapeHtml(state.maxStreak)}</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "max_streak" : "Max streak"}</span>
           </article>
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.correctTapCount)}</span>
@@ -388,17 +545,26 @@
       livesLeft: state.livesLeft,
       stageIndex: state.stageIndex,
       stageReached: state.stageIndex + 1,
+      streak: state.streak,
+      maxStreak: state.maxStreak,
+      multiplier: state.multiplier,
       stageRemainingMs,
       nextSpawnRemainingMs,
       elapsedMs: Math.max(Date.now() - state.startedAt, 0),
       missedSkills: Array.from(state.missedCorrect),
       correctTapCount: state.correctTapCount,
       wrongTapCount: state.wrongTapCount,
+      bonusTapCount: state.bonusTapCount,
+      shieldTapCount: state.shieldTapCount,
+      trapHitCount: state.trapHitCount,
       totalMistakes: state.totalMistakes,
+      recentCorrectTexts: state.recentCorrectTexts.slice(),
+      recentWrongTexts: state.recentWrongTexts.slice(),
       objects: state.objects.map((item) => ({
         text: item.text,
         displayText: item.displayText,
         correct: Boolean(item.correct),
+        kind: item.kind || (item.correct ? "correct" : "wrong"),
         width: item.width,
         height: item.height,
         x: item.x,
@@ -442,6 +608,7 @@
       text: item.text,
       displayText: item.displayText || item.text,
       correct: Boolean(item.correct),
+      kind: item.kind || (item.correct ? "correct" : "wrong"),
       width: item.width,
       height: item.height,
       x: item.x,
@@ -451,10 +618,18 @@
     state.score = Number(snapshot.score || 0);
     state.livesLeft = Number(snapshot.livesLeft || state.bootstrap.challenge.totalLives);
     state.stageIndex = Math.min(Number(snapshot.stageIndex || 0), state.bootstrap.challenge.stages.length - 1);
+    state.streak = integerOr(snapshot.streak, 0);
+    state.maxStreak = integerOr(snapshot.maxStreak, 0);
+    state.multiplier = integerOr(snapshot.multiplier, comboMultiplier(state.streak));
     state.missedCorrect = new Set(snapshot.missedSkills || []);
     state.correctTapCount = Number(snapshot.correctTapCount || 0);
     state.wrongTapCount = Number(snapshot.wrongTapCount || 0);
+    state.bonusTapCount = Number(snapshot.bonusTapCount || 0);
+    state.shieldTapCount = Number(snapshot.shieldTapCount || 0);
+    state.trapHitCount = Number(snapshot.trapHitCount || 0);
     state.totalMistakes = Number(snapshot.totalMistakes || 0);
+    state.recentCorrectTexts = Array.isArray(snapshot.recentCorrectTexts) ? snapshot.recentCorrectTexts.slice(-2) : [];
+    state.recentWrongTexts = Array.isArray(snapshot.recentWrongTexts) ? snapshot.recentWrongTexts.slice(-2) : [];
     state.startedAt = Date.now() - Math.max(Number(snapshot.elapsedMs || 0), 0);
     const now = performance.now();
     const stageRemainingMs = Math.max(Number(snapshot.stageRemainingMs || currentStage.durationMs), 0);
@@ -496,12 +671,34 @@
       if (x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height) {
         state.objects.splice(index, 1);
         if (item.correct) {
-          state.score += 1;
           state.correctTapCount += 1;
+          state.streak += 1;
+          state.maxStreak = Math.max(state.maxStreak, state.streak);
+          state.multiplier = comboMultiplier(state.streak);
+          state.score += scoreValueForItem(item) * state.multiplier;
+          if (item.kind === "bonus") {
+            state.bonusTapCount += 1;
+            setBannerMessage(isTerminalTheme() ? `[ bonus +${2 * state.multiplier} ]` : `Bonus +${2 * state.multiplier}`, 1100);
+          } else if (item.kind === "shield") {
+            state.shieldTapCount += 1;
+            state.livesLeft = Math.min(
+              state.livesLeft + 1,
+              integerOr(state.bootstrap && state.bootstrap.challenge && state.bootstrap.challenge.totalLives, 3)
+            );
+            setBannerMessage(isTerminalTheme() ? "[ shield +1 life ]" : "Shield +1 life", 1100);
+          } else if (state.multiplier > 1) {
+            setBannerMessage(
+              isTerminalTheme() ? `[ combo_x${state.multiplier} ]` : `Combo x${state.multiplier}`,
+              900
+            );
+          }
           tapFeedback("success");
         } else {
           state.wrongTapCount += 1;
-          registerMistake();
+          registerMistake({
+            damage: damageValueForItem(item),
+            reason: item.kind || "wrong",
+          });
           tapFeedback("error");
         }
         updateHud();
@@ -510,11 +707,23 @@
     }
   }
 
-  function registerMistake(missedSkill) {
+  function registerMistake(options) {
+    const damage = Math.max(integerOr(options && options.damage, 1), 1);
     state.totalMistakes += 1;
-    state.livesLeft = Math.max(state.livesLeft - 1, 0);
-    if (missedSkill) {
-      state.missedCorrect.add(missedSkill);
+    state.streak = 0;
+    state.multiplier = 1;
+    state.livesLeft = Math.max(state.livesLeft - damage, 0);
+    if (options && options.missedSkill) {
+      state.missedCorrect.add(options.missedSkill);
+      setBannerMessage(
+        isTerminalTheme() ? `[ missed ${options.missedSkill} ]` : `Missed ${options.missedSkill}`,
+        1200
+      );
+    } else if (options && options.reason === "trap") {
+      state.trapHitCount += 1;
+      setBannerMessage(isTerminalTheme() ? "[ trap -2 lives ]" : "Trap -2 lives", 1200);
+    } else {
+      setBannerMessage(isTerminalTheme() ? "[ -1 life ]" : "Wrong tap -1 life", 900);
     }
     if (state.livesLeft <= 0) {
       finishGame(false);
@@ -532,11 +741,27 @@
   function spawnItem() {
     const challenge = state.bootstrap.challenge;
     const stage = currentStageConfig();
-    const correct = Math.random() >= 0.5;
-    const text = pickRandom(correct ? challenge.correctSkills : challenge.distractorSkills);
+    const correctChance = Number(stage && stage.correctChance);
+    const correct = Math.random() < (Number.isFinite(correctChance) ? correctChance : 0.5);
+    const sourceList = correct ? challenge.correctSkills : challenge.distractorSkills;
+    const text = pickRandomAvoidRecent(sourceList, correct ? state.recentCorrectTexts : state.recentWrongTexts);
     if (!text) return;
+    let kind = correct ? "correct" : "wrong";
+    if (correct) {
+      const shieldChance = canSpawnShieldToken() ? Number(stage && stage.shieldChance) : 0;
+      const bonusChance = Number(stage && stage.bonusChance);
+      const roll = Math.random();
+      if (roll < (Number.isFinite(shieldChance) ? shieldChance : 0)) {
+        kind = "shield";
+      } else if (roll < (Number.isFinite(shieldChance) ? shieldChance : 0) + (Number.isFinite(bonusChance) ? bonusChance : 0.12)) {
+        kind = "bonus";
+      }
+    } else if (Math.random() < (Number.isFinite(Number(stage && stage.trapChance)) ? Number(stage.trapChance) : 0.1)) {
+      kind = "trap";
+    }
+
     state.ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
-    const displayText = isTerminalTheme() ? `[ ${text} ]` : text;
+    const displayText = buildTokenLabel(text, kind);
     const textWidth = state.ctx.measureText(displayText).width;
     const width = Math.min(state.canvas.clientWidth - 24, textWidth + 28);
     const height = 46;
@@ -546,12 +771,14 @@
       text,
       displayText,
       correct,
+      kind,
       width,
       height,
       x: 12 + Math.random() * Math.max(maxX - 12, 1),
       y: -height - 12,
       speed: stage.speedMin + Math.random() * (stage.speedMax - stage.speedMin),
     });
+    rememberRecent(correct ? state.recentCorrectTexts : state.recentWrongTexts, text);
   }
 
   function updateHud() {
@@ -563,9 +790,13 @@
         : `${state.stageIndex + 1} / ${state.bootstrap.challenge.stages.length}`;
     }
     if (state.stageBannerEl) {
-      state.stageBannerEl.textContent = isTerminalTheme()
-        ? `[ stage_${String(state.stageIndex + 1).padStart(2, "0")} ]`
-        : currentStageConfig().label;
+      if (state.bannerText && performance.now() < state.bannerUntil) {
+        state.stageBannerEl.textContent = state.bannerText;
+      } else {
+        state.bannerText = "";
+        state.bannerUntil = 0;
+        state.stageBannerEl.textContent = defaultBannerText();
+      }
     }
   }
 
@@ -616,10 +847,18 @@
         ? cssVar("--token-fill-correct", "rgba(12,12,18,0.92)")
         : cssVar("--token-fill-wrong", "rgba(12,12,18,0.92)");
       ctx.fill();
-      ctx.strokeStyle = item.correct
-        ? cssVar("--token-stroke-correct", "rgba(255,255,255,0.08)")
-        : cssVar("--token-stroke-wrong", "rgba(255,255,255,0.08)");
-      ctx.lineWidth = 1;
+      if (item.kind === "bonus") {
+        ctx.strokeStyle = cssVar("--warn", "#f2c15d");
+      } else if (item.kind === "shield") {
+        ctx.strokeStyle = cssVar("--good", "#42cf8d");
+      } else if (item.kind === "trap") {
+        ctx.strokeStyle = cssVar("--bad", "#ff7a85");
+      } else {
+        ctx.strokeStyle = item.correct
+          ? cssVar("--token-stroke-correct", "rgba(255,255,255,0.08)")
+          : cssVar("--token-stroke-wrong", "rgba(255,255,255,0.08)");
+      }
+      ctx.lineWidth = item.kind === "correct" || item.kind === "wrong" ? 1 : 1.4;
       ctx.stroke();
       ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
       ctx.fillStyle = cssVar("--token-text", "#f8f8fb");
@@ -634,6 +873,15 @@
     if (state.frameId) {
       window.cancelAnimationFrame(state.frameId);
       state.frameId = null;
+    }
+    const currentResult = buildCurrentAttemptResult(won);
+    if (state.bootstrap) {
+      const previousBest = state.bootstrap.bestResult || null;
+      state.latestRunIsBest = !previousBest || compareResults(currentResult, previousBest) > 0;
+      state.bootstrap.lastResult = currentResult;
+      if (compareResults(currentResult, state.bootstrap.bestResult) >= 0) {
+        state.bootstrap.bestResult = currentResult;
+      }
     }
     submitResult(won).finally(() => {
       renderResult(won);
@@ -655,6 +903,10 @@
           result: {
             correctTapCount: state.correctTapCount,
             wrongTapCount: state.wrongTapCount,
+            bonusTapCount: state.bonusTapCount,
+            shieldTapCount: state.shieldTapCount,
+            trapHitCount: state.trapHitCount,
+            maxStreak: state.maxStreak,
             totalMistakes: state.totalMistakes,
             missedSkills: Array.from(state.missedCorrect),
             durationMs: Date.now() - state.startedAt,
@@ -683,6 +935,10 @@
       state.stageStartedAt = now;
       state.stageEndsAt = now + currentStageConfig().durationMs;
       state.lastSpawnAt = now;
+      setBannerMessage(
+        isTerminalTheme() ? `[ ${currentStageConfig().label.toLowerCase().replace(/\s+/g, "_")} ]` : currentStageConfig().label,
+        1200
+      );
       updateHud();
     }
 
@@ -698,7 +954,11 @@
       item.y += item.speed * deltaSeconds;
       if (item.y > state.canvas.clientHeight + item.height) {
         if (item.correct) {
-          registerMistake(item.text);
+          registerMistake({
+            damage: 1,
+            missedSkill: item.text,
+            reason: item.kind || "correct",
+          });
         }
         return false;
       }
@@ -722,6 +982,9 @@
     state.score = 0;
     state.livesLeft = state.bootstrap.challenge.totalLives;
     state.stageIndex = 0;
+    state.streak = 0;
+    state.maxStreak = 0;
+    state.multiplier = 1;
     state.stageStartedAt = 0;
     state.stageEndsAt = 0;
     state.lastSpawnAt = 0;
@@ -729,10 +992,18 @@
     state.missedCorrect = new Set();
     state.correctTapCount = 0;
     state.wrongTapCount = 0;
+    state.bonusTapCount = 0;
+    state.shieldTapCount = 0;
+    state.trapHitCount = 0;
     state.totalMistakes = 0;
     state.startedAt = Date.now();
     state.progressSaveInFlight = false;
     state.lastProgressSavedAt = 0;
+    state.recentCorrectTexts = [];
+    state.recentWrongTexts = [];
+    state.bannerText = "";
+    state.bannerUntil = 0;
+    state.latestRunIsBest = false;
     if (resumeSnapshot && Object.keys(resumeSnapshot).length) {
       restoreProgressSnapshot(resumeSnapshot);
     }

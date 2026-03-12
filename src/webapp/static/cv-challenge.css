@@ -311,6 +311,17 @@ html[data-theme="terminal"] .brand-tail {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.result-history {
+  margin-top: 20px;
+}
+
+.history-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
 html[data-theme="terminal"] .screen-card,
 html[data-theme="terminal"] .game-shell,
 html[data-theme="terminal"] .result-card,

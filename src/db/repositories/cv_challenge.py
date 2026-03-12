@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -72,6 +71,39 @@ class CandidateCvChallengeAttemptsRepository:
             .limit(1)
         )
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def get_best_completed_for_candidate_profile(self, candidate_profile_id) -> Optional[CandidateCvChallengeAttempt]:
+        stmt = (
+            select(CandidateCvChallengeAttempt)
+            .where(
+                CandidateCvChallengeAttempt.candidate_profile_id == candidate_profile_id,
+                CandidateCvChallengeAttempt.finished_at.is_not(None),
+            )
+        )
+        attempts = list(self.session.execute(stmt).scalars().all())
+        if not attempts:
+            return None
+
+        def sort_key(attempt: CandidateCvChallengeAttempt) -> tuple:
+            result_json = attempt.result_json if isinstance(attempt.result_json, dict) else {}
+            total_mistakes = result_json.get("totalMistakes")
+            try:
+                parsed_mistakes = int(total_mistakes)
+            except (TypeError, ValueError):
+                parsed_mistakes = 10**9
+
+            finished_at_ts = attempt.finished_at.timestamp() if attempt.finished_at else 0
+            created_at_ts = attempt.created_at.timestamp() if attempt.created_at else 0
+            return (
+                -max(int(attempt.score or 0), 0),
+                -max(int(attempt.stage_reached or 1), 1),
+                parsed_mistakes,
+                -finished_at_ts,
+                -created_at_ts,
+            )
+
+        attempts.sort(key=sort_key)
+        return attempts[0]
 
     def save_progress(
         self,

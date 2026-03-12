@@ -67,6 +67,26 @@ class FakeAttemptsRepository:
         ]
         return attempts[-1] if attempts else None
 
+    def get_best_completed_for_candidate_profile(self, candidate_profile_id):
+        attempts = [
+            row
+            for row in self.rows.values()
+            if str(row.candidate_profile_id) == str(candidate_profile_id) and row.finished_at is not None
+        ]
+        if not attempts:
+            return None
+
+        def sort_key(attempt):
+            result_json = attempt.result_json or {}
+            return (
+                -int(attempt.score or 0),
+                -int(attempt.stage_reached or 1),
+                int(result_json.get("totalMistakes", 10**9)),
+            )
+
+        attempts.sort(key=sort_key)
+        return attempts[0]
+
     def save_progress(self, attempt, **kwargs):
         attempt.score = kwargs["score"]
         attempt.lives_left = kwargs["lives_left"]
@@ -117,6 +137,7 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["attempt"]["id"]
     assert bootstrap["attempt"]["status"] == "started"
     assert bootstrap["lastResult"] is None
+    assert bootstrap["bestResult"] is None
 
 
 def test_cv_challenge_service_rejects_candidate_with_blocking_active_matches() -> None:
@@ -191,7 +212,40 @@ def test_cv_challenge_service_reuses_unfinished_attempt_and_shows_last_result() 
 
     assert next_bootstrap["attempt"]["id"] != first["attempt"]["id"]
     assert next_bootstrap["lastResult"]["score"] == 7
+    assert next_bootstrap["bestResult"]["score"] == 7
     assert next_bootstrap["lastResult"]["result"]["totalMistakes"] == 3
+
+
+def test_cv_challenge_service_returns_best_completed_result_not_only_latest() -> None:
+    service, profile = _build_service()
+
+    first = service.bootstrap_for_candidate(profile.user_id)
+    service.finish_attempt(
+        user_id=profile.user_id,
+        attempt_id=first["attempt"]["id"],
+        score=5,
+        lives_left=1,
+        stage_reached=3,
+        won=False,
+        result_json={"totalMistakes": 1},
+    )
+
+    second = service.bootstrap_for_candidate(profile.user_id)
+    service.finish_attempt(
+        user_id=profile.user_id,
+        attempt_id=second["attempt"]["id"],
+        score=3,
+        lives_left=0,
+        stage_reached=2,
+        won=False,
+        result_json={"totalMistakes": 4},
+    )
+
+    third_bootstrap = service.bootstrap_for_candidate(profile.user_id)
+
+    assert third_bootstrap["lastResult"]["score"] == 3
+    assert third_bootstrap["bestResult"]["score"] == 5
+    assert third_bootstrap["bestResult"]["result"]["totalMistakes"] == 1
 
 
 def test_cv_challenge_service_blocks_foreign_attempt() -> None:

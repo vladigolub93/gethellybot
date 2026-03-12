@@ -25,9 +25,42 @@ from src.matching.policy import (
 MIN_CV_CHALLENGE_SKILL_COUNT = 3
 CV_CHALLENGE_TOTAL_LIVES = 3
 CV_CHALLENGE_STAGE_CONFIG = (
-    {"index": 1, "label": "Stage 1", "durationMs": 18000, "spawnIntervalMs": 1050, "speedMin": 74, "speedMax": 96},
-    {"index": 2, "label": "Stage 2", "durationMs": 18000, "spawnIntervalMs": 840, "speedMin": 102, "speedMax": 128},
-    {"index": 3, "label": "Stage 3", "durationMs": 18000, "spawnIntervalMs": 640, "speedMin": 134, "speedMax": 168},
+    {
+        "index": 1,
+        "label": "Stage 1",
+        "durationMs": 18000,
+        "spawnIntervalMs": 1050,
+        "speedMin": 74,
+        "speedMax": 96,
+        "correctChance": 0.65,
+        "bonusChance": 0.12,
+        "shieldChance": 0.06,
+        "trapChance": 0.08,
+    },
+    {
+        "index": 2,
+        "label": "Stage 2",
+        "durationMs": 18000,
+        "spawnIntervalMs": 840,
+        "speedMin": 102,
+        "speedMax": 128,
+        "correctChance": 0.5,
+        "bonusChance": 0.14,
+        "shieldChance": 0.05,
+        "trapChance": 0.1,
+    },
+    {
+        "index": 3,
+        "label": "Stage 3",
+        "durationMs": 18000,
+        "spawnIntervalMs": 640,
+        "speedMin": 134,
+        "speedMax": 168,
+        "correctChance": 0.38,
+        "bonusChance": 0.16,
+        "shieldChance": 0.04,
+        "trapChance": 0.14,
+    },
 )
 CV_CHALLENGE_DISTRACTOR_POOL = (
     "Java",
@@ -310,6 +343,7 @@ class CandidateCvChallengeService:
         profile_id = UUID(eligibility.candidate_profile_id)
         active_attempt = self.attempts.get_latest_active_for_candidate_profile(profile_id)
         last_completed = self.attempts.get_latest_completed_for_candidate_profile(profile_id)
+        best_completed = self.attempts.get_best_completed_for_candidate_profile(profile_id)
 
         if active_attempt is None:
             active_attempt = self.attempts.create(
@@ -331,6 +365,11 @@ class CandidateCvChallengeService:
             "lastResult": (
                 self._serialize_attempt(last_completed, include_progress=False)
                 if last_completed is not None
+                else None
+            ),
+            "bestResult": (
+                self._serialize_attempt(best_completed, include_progress=False)
+                if best_completed is not None
                 else None
             ),
             "challenge": {
