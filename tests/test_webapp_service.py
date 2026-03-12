@@ -225,6 +225,71 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
     ]
 
 
+def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> None:
+    user_id = uuid4()
+    profile_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    service = WebAppService(session=object())
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(
+            id=profile_id,
+            user_id=user_id,
+            state="READY",
+            location_text="Kyiv",
+            country_code="UA",
+            city="Kyiv",
+            work_format="remote",
+            salary_min=5000,
+            salary_max=6000,
+            salary_currency="USD",
+            salary_period="month",
+            ready_at=now,
+            updated_at=now,
+        ),
+        version=SimpleNamespace(
+            source_type="cv_file",
+            extracted_text="Senior backend engineer with Node.js and PostgreSQL background.",
+            transcript_text=None,
+            summary_json={
+                "headline": "Senior Backend Engineer",
+                "approval_summary_text": "Built scalable backend products.",
+                "skills": ["Node.js", "PostgreSQL"],
+                "years_experience": 8,
+                "target_role": "Backend Engineer",
+            },
+        ),
+    )
+    service.users = FakeUsersRepository(
+        {
+            str(user_id): SimpleNamespace(
+                id=user_id,
+                display_name="Candidate Name",
+                username="candidate_name",
+            )
+        }
+    )
+
+    payload = service.get_candidate_profile_detail(
+        SimpleNamespace(
+            role="candidate",
+            user_id=str(user_id),
+        )
+    )
+
+    assert payload["profile"]["name"] == "Candidate Name"
+    assert payload["profile"]["summary"]["approvalSummaryText"] == "Built scalable backend products."
+    assert payload["profile"]["answers"] == {
+        "salaryExpectation": "5000-6000 USD per month",
+        "location": "Kyiv",
+        "countryCode": "UA",
+        "city": "Kyiv",
+        "workFormat": "remote",
+    }
+    assert payload["profile"]["source"]["sourceType"] == "cv_file"
+    assert payload["profile"]["source"]["text"] == "Senior backend engineer with Node.js and PostgreSQL background."
+
+
 def test_bootstrap_candidate_cv_challenge_commits_only_for_eligible_attempts() -> None:
     session = FakeSession()
     user_id = uuid4()
@@ -342,6 +407,9 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
     service.vacancies = FakeVacanciesRepository(
         vacancy=vacancy,
         version=SimpleNamespace(
+            source_type="job_description",
+            extracted_text="Senior Node.js role for a realtime pricing platform.",
+            transcript_text=None,
             summary_json={
                 "approval_summary_text": "Build and run a pricing platform.",
                 "headline": "Senior Node.js role",
@@ -369,6 +437,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             user_id=candidate_user_id,
             location_text="Kyiv",
             country_code="UA",
+            city="Kyiv",
             work_format="remote",
             salary_min=5000,
             salary_max=6000,
@@ -376,6 +445,9 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             salary_period="month",
         ),
         version=SimpleNamespace(
+            source_type="cv_file",
+            extracted_text="Built scalable Node.js backends for product teams.",
+            transcript_text=None,
             summary_json={
                 "approval_summary_text": "Built scalable Node.js backends.",
                 "skills": ["Node.js", "TypeScript"],
@@ -433,10 +505,14 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
                 "skills": ["Node.js", "TypeScript"],
                 "yearsExperience": None,
                 "targetRole": None,
+                "experienceExcerpt": None,
             },
             "updatedAt": now.isoformat(),
         }
     ]
     assert match_detail_payload["match"]["statusLabel"] == "Contacts shared"
+    assert match_detail_payload["vacancy"]["source"]["text"] == "Senior Node.js role for a realtime pricing platform."
+    assert match_detail_payload["candidate"]["answers"]["city"] == "Kyiv"
+    assert match_detail_payload["candidate"]["source"]["text"] == "Built scalable Node.js backends for product teams."
     assert match_detail_payload["interview"]["state"] is None
     assert match_detail_payload["evaluation"]["interviewSummary"] is None

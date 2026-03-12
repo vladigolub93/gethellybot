@@ -57,6 +57,15 @@ class FakeWebAppService:
             "items": [{"id": "match-1"}],
         }
 
+    def get_candidate_profile_detail(self, _session_context):
+        return {
+            "profile": {
+                "id": "profile-1",
+                "name": "Vlad Golub",
+                "summary": {"approvalSummaryText": "Backend engineer"},
+            }
+        }
+
     def bootstrap_candidate_cv_challenge(self, _session_context):
         return {
             "eligible": True,
@@ -114,7 +123,7 @@ def test_webapp_index_route_serves_html() -> None:
     response = client.get("/webapp")
 
     assert response.status_code == 200
-    assert "Helly Dashboard" in response.text
+    assert "<title>Helly</title>" in response.text
 
 
 def test_cv_challenge_route_serves_html() -> None:
@@ -137,6 +146,10 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
     session_response = client.get("/webapp/api/session", headers={"Authorization": "Bearer token-1"})
     candidate_response = client.get(
         "/webapp/api/candidate/opportunities",
+        headers={"Authorization": "Bearer token-1"},
+    )
+    profile_response = client.get(
+        "/webapp/api/candidate/profile",
         headers={"Authorization": "Bearer token-1"},
     )
     challenge_bootstrap_response = client.get(
@@ -173,6 +186,8 @@ def test_webapp_auth_and_candidate_routes(monkeypatch) -> None:
     assert session_response.json()["capabilities"]["candidateDashboard"] is True
     assert candidate_response.status_code == 200
     assert candidate_response.json()["items"][0]["id"] == "match-1"
+    assert profile_response.status_code == 200
+    assert profile_response.json()["profile"]["id"] == "profile-1"
     assert challenge_bootstrap_response.status_code == 200
     assert challenge_bootstrap_response.json()["attempt"]["id"] == "attempt-1"
     assert challenge_progress_response.status_code == 200

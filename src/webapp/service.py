@@ -27,6 +27,7 @@ from src.webapp.presenters import (
     interview_state_label,
     isoformat_or_none,
     match_status_label,
+    source_text_snapshot,
     vacancy_summary_snapshot,
 )
 from src.webapp.session import (
@@ -190,6 +191,20 @@ class WebAppService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
         return self._serialize_match_detail(match)
 
+    def get_candidate_profile_detail(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
+        self._require_role(session_context, {WEBAPP_ROLE_CANDIDATE})
+        profile = self._require_candidate_profile(session_context)
+        current_version = self.candidate_profiles.get_current_version(profile)
+        user = self.users.get_by_id(profile.user_id)
+        return {
+            "profile": self._serialize_candidate_profile_detail(
+                profile,
+                current_version,
+                candidate_user=user,
+                include_identity=True,
+            ),
+        }
+
     def list_manager_vacancies(self, session_context: WebAppSessionContext) -> Dict[str, Any]:
         self._require_role(session_context, {WEBAPP_ROLE_HIRING_MANAGER})
         user_id = self._require_session_user_id(session_context)
@@ -304,8 +319,6 @@ class WebAppService:
         )
 
     def _resolve_role(self, user: Optional[User], telegram_user_id: int) -> str:
-        if telegram_user_id in self.settings.webapp_admin_telegram_user_ids:
-            return WEBAPP_ROLE_ADMIN
         if user is None:
             return WEBAPP_ROLE_UNKNOWN
         if getattr(user, "is_hiring_manager", False):
@@ -346,7 +359,7 @@ class WebAppService:
         return {
             "candidateDashboard": role == WEBAPP_ROLE_CANDIDATE,
             "managerDashboard": role == WEBAPP_ROLE_HIRING_MANAGER,
-            "adminDashboard": role == WEBAPP_ROLE_ADMIN,
+            "adminDashboard": False,
             "candidateCvChallenge": role == WEBAPP_ROLE_CANDIDATE,
         }
 
@@ -389,22 +402,57 @@ class WebAppService:
         return match
 
     def _serialize_candidate_profile(self, profile, current_version) -> Dict[str, Any]:
+        summary = candidate_summary_snapshot(getattr(current_version, "summary_json", None))
         return {
             "id": str(profile.id),
-            "state": profile.state,
-            "location": profile.location_text,
-            "countryCode": profile.country_code,
-            "workFormat": profile.work_format,
+            "state": getattr(profile, "state", None),
+            "headline": summary.get("headline"),
+            "targetRole": summary.get("targetRole") or getattr(profile, "target_role", None),
+            "location": getattr(profile, "location_text", None),
+            "countryCode": getattr(profile, "country_code", None),
+            "workFormat": getattr(profile, "work_format", None),
             "salaryExpectation": format_money_range(
-                profile.salary_min,
-                profile.salary_max,
-                profile.salary_currency,
-                profile.salary_period,
+                getattr(profile, "salary_min", None),
+                getattr(profile, "salary_max", None),
+                getattr(profile, "salary_currency", None),
+                getattr(profile, "salary_period", None),
             ),
-            "summary": candidate_summary_snapshot(getattr(current_version, "summary_json", None)),
-            "readyAt": isoformat_or_none(profile.ready_at),
-            "updatedAt": isoformat_or_none(profile.updated_at),
+            "summary": summary,
+            "readyAt": isoformat_or_none(getattr(profile, "ready_at", None)),
+            "updatedAt": isoformat_or_none(getattr(profile, "updated_at", None)),
         }
+
+    def _serialize_candidate_profile_detail(
+        self,
+        profile,
+        current_version,
+        *,
+        candidate_user=None,
+        include_identity: bool = False,
+    ) -> Dict[str, Any]:
+        summary = candidate_summary_snapshot(getattr(current_version, "summary_json", None))
+        response = {
+            **self._serialize_candidate_profile(profile, current_version),
+            "profileId": str(profile.id),
+            "city": getattr(profile, "city", None),
+            "source": source_text_snapshot(current_version),
+            "answers": {
+                "salaryExpectation": format_money_range(
+                    profile.salary_min,
+                    profile.salary_max,
+                    profile.salary_currency,
+                    profile.salary_period,
+                ),
+                "location": getattr(profile, "location_text", None),
+                "countryCode": getattr(profile, "country_code", None),
+                "city": getattr(profile, "city", None),
+                "workFormat": getattr(profile, "work_format", None),
+            },
+            "summary": summary,
+        }
+        if include_identity:
+            response["name"] = self._display_name(candidate_user, "Candidate")
+        return response
 
     def _serialize_candidate_opportunity_card(self, match) -> Dict[str, Any]:
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
@@ -448,6 +496,7 @@ class WebAppService:
 
     def _serialize_vacancy_detail(self, vacancy, include_manager: bool = False) -> Dict[str, Any]:
         version = self.vacancies.get_current_version(vacancy)
+        summary = vacancy_summary_snapshot(getattr(version, "summary_json", None))
         response = {
             "vacancy": {
                 "id": str(vacancy.id),
@@ -465,7 +514,8 @@ class WebAppService:
                 "teamSize": vacancy.team_size,
                 "projectDescription": vacancy.project_description,
                 "primaryTechStack": list(vacancy.primary_tech_stack_json or []),
-                "summary": vacancy_summary_snapshot(getattr(version, "summary_json", None)),
+                "summary": summary,
+                "source": source_text_snapshot(version),
                 "openedAt": isoformat_or_none(vacancy.opened_at),
                 "updatedAt": isoformat_or_none(vacancy.updated_at),
             },
@@ -511,6 +561,7 @@ class WebAppService:
         manager_user = self.users.get_by_id(vacancy.manager_user_id) if vacancy is not None else None
         interview = self.interviews.get_session_by_match_id(match.id)
         evaluation = self.evaluations.get_by_match_id(match.id)
+        vacancy_summary = vacancy_summary_snapshot(getattr(vacancy_version, "summary_json", None))
 
         return {
             "match": {
@@ -537,23 +588,37 @@ class WebAppService:
                 "teamSize": getattr(vacancy, "team_size", None),
                 "projectDescription": getattr(vacancy, "project_description", None),
                 "primaryTechStack": list(getattr(vacancy, "primary_tech_stack_json", None) or []),
-                "summary": vacancy_summary_snapshot(getattr(vacancy_version, "summary_json", None)),
+                "summary": vacancy_summary,
+                "source": source_text_snapshot(vacancy_version),
                 "managerName": self._display_name(manager_user, None),
             },
-            "candidate": {
-                "profileId": str(candidate_profile.id) if candidate_profile is not None else None,
-                "name": self._display_name(candidate_user, "Candidate"),
-                "location": getattr(candidate_profile, "location_text", None),
-                "countryCode": getattr(candidate_profile, "country_code", None),
-                "workFormat": getattr(candidate_profile, "work_format", None),
-                "salaryExpectation": format_money_range(
-                    getattr(candidate_profile, "salary_min", None),
-                    getattr(candidate_profile, "salary_max", None),
-                    getattr(candidate_profile, "salary_currency", None),
-                    getattr(candidate_profile, "salary_period", None),
-                ),
-                "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
-            },
+            "candidate": (
+                self._serialize_candidate_profile_detail(
+                    candidate_profile,
+                    candidate_version,
+                    candidate_user=candidate_user,
+                    include_identity=True,
+                )
+                if candidate_profile is not None
+                else {
+                    "profileId": None,
+                    "name": self._display_name(candidate_user, "Candidate"),
+                    "location": None,
+                    "countryCode": None,
+                    "city": None,
+                    "workFormat": None,
+                    "salaryExpectation": None,
+                    "source": source_text_snapshot(candidate_version),
+                    "answers": {
+                        "salaryExpectation": None,
+                        "location": None,
+                        "countryCode": None,
+                        "city": None,
+                        "workFormat": None,
+                    },
+                    "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
+                }
+            ),
             "interview": {
                 "sessionId": str(interview.id) if interview is not None else None,
                 "state": getattr(interview, "state", None),

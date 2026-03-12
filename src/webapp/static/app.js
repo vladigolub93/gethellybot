@@ -4,22 +4,11 @@
     session: null,
     apiCache: new Map(),
     backButtonHandlerBound: false,
-    theme: "terminal",
   };
-  const TERMINAL_THEME = "terminal";
 
   const appEl = document.getElementById("app");
-  const appShellEl = document.querySelector(".app-shell");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  const handleTelegramBack = () => {
-    if (getCurrentRoute() === "home") {
-      if (tg && typeof tg.close === "function") {
-        tg.close();
-      }
-      return;
-    }
-    window.history.back();
-  };
+  const HOME_ROUTE = "home";
 
   function escapeHtml(value) {
     return String(value || "")
@@ -31,9 +20,27 @@
   }
 
   function truncateText(value, maxLength) {
-    const text = String(value || "");
+    const text = String(value || "").trim();
     if (!text || text.length <= maxLength) return text;
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
+  function firstNonEmpty() {
+    for (let index = 0; index < arguments.length; index += 1) {
+      const value = arguments[index];
+      if (value === null || value === undefined) continue;
+      if (String(value).trim()) return value;
+    }
+    return "";
+  }
+
+  function humanize(value) {
+    if (!value) return "";
+    return String(value)
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (character) => character.toUpperCase());
   }
 
   function updateThemeColorMeta(color) {
@@ -52,8 +59,7 @@
   }
 
   function applyTelegramChrome() {
-    const backgroundColor = "#141415";
-    const surfaceColor = "#1c1c1e";
+    const backgroundColor = "#f4efe7";
     updateThemeColorMeta(backgroundColor);
     if (!tg) return;
     try {
@@ -72,7 +78,7 @@
         typeof tg.isVersionAtLeast === "function" &&
         tg.isVersionAtLeast("7.10")
       ) {
-        tg.setBottomBarColor(surfaceColor);
+        tg.setBottomBarColor(backgroundColor);
       }
     } catch (_) {}
   }
@@ -91,37 +97,6 @@
     tg.onEvent("contentSafeAreaChanged", applyViewportMetrics);
   }
 
-  function normalizeTheme(value) {
-    return TERMINAL_THEME;
-  }
-
-  function syncThemeInUrl() {
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete("theme");
-    const nextUrl = `${currentUrl.pathname}${currentUrl.search}`;
-    window.history.replaceState(window.history.state || { route: getCurrentRoute() }, "", nextUrl);
-  }
-
-  function withCurrentTheme(url) {
-    const nextUrl = new URL(url, window.location.origin);
-    nextUrl.searchParams.delete("theme");
-    return nextUrl.toString();
-  }
-
-  function setTheme(theme, options) {
-    state.theme = normalizeTheme(theme);
-    document.documentElement.setAttribute("data-theme", state.theme);
-    syncThemeInUrl();
-    applyTelegramChrome();
-    if (options && options.rerender && state.session) {
-      renderRoute();
-    }
-  }
-
-  function initializeTheme() {
-    setTheme(TERMINAL_THEME, { rerender: false });
-  }
-
   function tapFeedback() {
     try {
       if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === "function") {
@@ -132,9 +107,9 @@
 
   function badgeTone(value) {
     const text = String(value || "").toLowerCase();
-    if (text.includes("approved") || text.includes("completed") || text.includes("accepted")) return "good";
-    if (text.includes("reject") || text.includes("declined") || text.includes("expired")) return "bad";
-    if (text.includes("queued") || text.includes("review") || text.includes("waiting")) return "warn";
+    if (text.includes("approved") || text.includes("completed") || text.includes("shared")) return "good";
+    if (text.includes("reject") || text.includes("declined") || text.includes("expired") || text.includes("closed")) return "bad";
+    if (text.includes("waiting") || text.includes("review") || text.includes("queued") || text.includes("pending")) return "warn";
     return "accent";
   }
 
@@ -151,24 +126,88 @@
     return rtf.format(Math.round(diffSeconds / 86400), "day");
   }
 
-  function renderBlocked(title, body) {
+  function sanitizeRoute(route) {
+    return route && route !== "#" ? String(route).replace(/^#/, "") : HOME_ROUTE;
+  }
+
+  function splitRoute(route) {
+    const normalized = sanitizeRoute(route);
+    const separatorIndex = normalized.indexOf(":");
+    if (separatorIndex === -1) {
+      return { name: normalized, param: null };
+    }
+    return {
+      name: normalized.slice(0, separatorIndex),
+      param: normalized.slice(separatorIndex + 1),
+    };
+  }
+
+  function getCurrentRoute() {
+    return sanitizeRoute((window.history.state && window.history.state.route) || HOME_ROUTE);
+  }
+
+  function applyRoute(route, options) {
+    const nextRoute = sanitizeRoute(route);
+    const method = options && options.replace ? "replaceState" : "pushState";
+    window.history[method]({ route: nextRoute }, "", window.location.pathname + window.location.search);
+    renderRoute();
+  }
+
+  function pushRoute(route) {
+    applyRoute(route, { replace: false });
+  }
+
+  function handleTelegramBack() {
+    if (getCurrentRoute() === HOME_ROUTE) {
+      if (tg && typeof tg.close === "function") {
+        tg.close();
+      }
+      return;
+    }
+    window.history.back();
+  }
+
+  function updateBackButton() {
+    if (!tg || !tg.BackButton) return;
+    if (getCurrentRoute() === HOME_ROUTE) {
+      if (state.backButtonHandlerBound && typeof tg.BackButton.offClick === "function") {
+        tg.BackButton.offClick(handleTelegramBack);
+        state.backButtonHandlerBound = false;
+      }
+      tg.BackButton.hide();
+      return;
+    }
+    if (!state.backButtonHandlerBound && typeof tg.BackButton.onClick === "function") {
+      tg.BackButton.onClick(handleTelegramBack);
+      state.backButtonHandlerBound = true;
+    }
+    tg.BackButton.show();
+  }
+
+  function renderStatusScreen(title, note, options) {
+    const compact = options && options.compact;
+    const titleMarkup = title && String(title).trim()
+      ? `<h1 class="status-title">${escapeHtml(title)}</h1>`
+      : "";
     appEl.innerHTML = `
-      <section class="state-card">
-        <p class="eyebrow">Access</p>
-        <h2>${escapeHtml(title)}</h2>
-        <p>${escapeHtml(body)}</p>
+      <section class="${compact ? "loading-shell" : "status-shell"}">
+        <div class="brand-mark">Helly</div>
+        ${titleMarkup}
+        <p class="status-note">${escapeHtml(note)}</p>
       </section>
     `;
   }
 
-  function renderError(title, body) {
-    appEl.innerHTML = `
-      <section class="state-card">
-        <p class="eyebrow">Error</p>
-        <h2>${escapeHtml(title)}</h2>
-        <p>${escapeHtml(body)}</p>
-      </section>
-    `;
+  function renderLoading(note) {
+    renderStatusScreen("", note || "Checking access and loading your screen.", { compact: true });
+  }
+
+  function renderBlocked(title, note) {
+    renderStatusScreen(title, note, { compact: false });
+  }
+
+  function renderError(title, note) {
+    renderStatusScreen(title, note, { compact: false });
   }
 
   async function api(path) {
@@ -195,546 +234,628 @@
     }
   }
 
-  function listChips(values) {
-    if (!values || !values.length) {
-      return `<div class="empty-state">No data yet.</div>`;
-    }
-    return `<div class="list-chips">${values
-      .map((value) => `<span class="chip">${escapeHtml(value)}</span>`)
-      .join("")}</div>`;
+  function renderBadge(value) {
+    if (!value) return "";
+    return `<span class="badge" data-tone="${badgeTone(value)}">${escapeHtml(value)}</span>`;
   }
 
-  function includesAny(value, fragments) {
-    const text = String(value || "").toLowerCase();
-    return fragments.some((fragment) => text.includes(fragment));
-  }
-
-  function sumBy(items, key) {
-    return (items || []).reduce((total, item) => {
-      const value = Number(item && item[key]);
-      return total + (Number.isFinite(value) ? value : 0);
-    }, 0);
-  }
-
-  function isTerminalTheme() {
-    return state.theme === TERMINAL_THEME;
-  }
-
-  function terminalToken(value) {
-    return String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "") || "value";
-  }
-
-  function renderStatsStrip(items) {
+  function renderStatsGrid(items) {
     const visibleItems = (items || []).filter((item) => item && item.value !== null && item.value !== undefined && item.value !== "");
     if (!visibleItems.length) return "";
     return `
-      <section class="stats-strip">
-        ${visibleItems.map((item) => {
-          const rawValue = String(item.value);
-          const isLongValue = rawValue.length > 18;
-          const displayValue = isLongValue ? truncateText(rawValue, 28) : rawValue;
-          return `
-          <article class="stat-card ${isTerminalTheme() ? "terminal-stat-card" : ""}">
-            <span class="stat-value ${isLongValue ? "stat-value-long" : ""}" title="${escapeHtml(rawValue)}">${escapeHtml(displayValue)}</span>
-            <span class="stat-label">${escapeHtml(isTerminalTheme() ? terminalToken(item.label) : item.label)}</span>
+      <section class="stats-grid">
+        ${visibleItems.map((item) => `
+          <article class="metric-card">
+            <span class="metric-value">${escapeHtml(String(item.value))}</span>
+            <span class="metric-label">${escapeHtml(item.label)}</span>
           </article>
-        `;
-        }).join("")}
+        `).join("")}
       </section>
     `;
   }
 
-  function renderCardMetrics(metrics) {
-    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
-    if (!visibleMetrics.length) return "";
-    if (isTerminalTheme()) {
-      return `
-        <div class="terminal-metrics">
-          ${visibleMetrics.map((metric) => `
-            <div class="terminal-metric">
-              <span class="terminal-metric-key">${escapeHtml(terminalToken(metric.label))}</span>
-              <span class="terminal-metric-value">${escapeHtml(metric.value)}</span>
-            </div>
-          `).join("")}
-        </div>
-      `;
-    }
+  function renderMetaStrip(items) {
+    const visibleItems = (items || []).filter((item) => item && String(item).trim());
+    if (!visibleItems.length) return "";
     return `
-      <div class="card-metrics">
-        ${visibleMetrics.map((metric) => `
-          <div class="metric">
-            <span class="metric-label">${escapeHtml(metric.label)}</span>
-            <span class="metric-value">${escapeHtml(metric.value)}</span>
-          </div>
+      <div class="meta-strip">
+        ${visibleItems.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+      </div>
+    `;
+  }
+
+  function renderPills(values) {
+    const items = (values || []).filter((value) => value && String(value).trim());
+    if (!items.length) return "";
+    return `
+      <div class="pill-list">
+        ${items.map((value) => `<span class="pill">${escapeHtml(value)}</span>`).join("")}
+      </div>
+    `;
+  }
+
+  function renderPageHeader(title, note) {
+    const safeTitle = escapeHtml(title || "Untitled");
+    const safeNote = note ? `<p class="page-note">${escapeHtml(note)}</p>` : "";
+    return `
+      <header class="page-header">
+        <h1>${safeTitle}</h1>
+        ${safeNote}
+      </header>
+    `;
+  }
+
+  function renderSectionBar(title, count) {
+    const countMarkup = count === null || count === undefined ? "" : `<span class="section-count">${escapeHtml(String(count))}</span>`;
+    return `
+      <div class="section-bar">
+        <h2>${escapeHtml(title)}</h2>
+        ${countMarkup}
+      </div>
+    `;
+  }
+
+  function renderEmptyState(message) {
+    return `<div class="empty-state">${escapeHtml(message)}</div>`;
+  }
+
+  function renderPreviewMetrics(items) {
+    const visibleItems = (items || []).filter((item) => item && item.value && String(item.value).trim());
+    if (!visibleItems.length) return "";
+    return `
+      <div class="mini-metrics">
+        ${visibleItems.map((item) => `
+          <span class="mini-metric">
+            <span class="mini-metric-label">${escapeHtml(item.label)}</span>
+            <span class="mini-metric-value">${escapeHtml(item.value)}</span>
+          </span>
         `).join("")}
       </div>
     `;
   }
 
-  function renderCardNote(value, extraClass) {
-    if (!value) return "";
-    const classes = ["card-note"];
-    if (isTerminalTheme()) classes.push("card-note-terminal");
-    if (extraClass) classes.push(extraClass);
-    return `<p class="${classes.join(" ")}">${escapeHtml(value)}</p>`;
-  }
-
-  function renderInlineMetrics(metrics, extraClass) {
-    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
-    const className = extraClass ? `inline-metrics ${extraClass}` : "inline-metrics";
-    if (!visibleMetrics.length) return "";
+  function renderNavCard(options) {
+    const actionAttr = options.route
+      ? `data-route="${escapeHtml(options.route)}"`
+      : `data-open-url="${escapeHtml(options.openUrl)}"`;
     return `
-      <div class="${className}">
-        ${visibleMetrics.map((metric) => `
-          <div class="inline-metric">
-            <span class="inline-metric-label">${escapeHtml(isTerminalTheme() ? terminalToken(metric.label) : metric.label)}</span>
-            <span class="inline-metric-value">${escapeHtml(metric.value)}</span>
+      <article class="nav-card" ${actionAttr}>
+        <div class="card-head">
+          <div class="card-head-copy">
+            <span class="card-label">${escapeHtml(options.label || "")}</span>
+            <h3 class="card-title">${escapeHtml(options.title || "Open")}</h3>
           </div>
-        `).join("")}
-      </div>
-    `;
-  }
-
-  function renderActionPanel(challenge) {
-    if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
-    return `
-      <section class="detail-panel action-panel ${isTerminalTheme() ? "action-panel-terminal" : ""}">
-        <div class="action-panel-copy">
-          <p class="eyebrow">${isTerminalTheme() ? "idle_mode" : "While you wait"}</p>
-          <h3 class="section-title">${isTerminalTheme() ? "CV Challenge" : "Play Helly CV Challenge"}</h3>
-          <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
+          ${renderBadge(options.badge)}
         </div>
-        ${isTerminalTheme() ? `
-          <div class="terminal-command-row">
-            <span class="terminal-prompt">&gt;</span>
-            <span class="terminal-command">launch /cv-challenge --profile current</span>
-          </div>
-        ` : ""}
-        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">${isTerminalTheme() ? "Run challenge" : "Play challenge"}</button>
-      </section>
+        ${options.note ? `<p class="card-note">${escapeHtml(options.note)}</p>` : ""}
+        ${renderPreviewMetrics(options.metrics)}
+      </article>
     `;
   }
 
-  function renderDetailSection(title, rows) {
-    const visibleRows = (rows || []).filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
+  function renderInfoCard(title, rows) {
+    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
     if (!visibleRows.length) return "";
     return `
-      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
-        ${isTerminalTheme() ? `
-          <div class="terminal-section-head">
-            <span class="terminal-prompt">$</span>
-            <span class="terminal-section-title">${escapeHtml(terminalToken(title))}</span>
-          </div>
-        ` : ""}
-        ${isTerminalTheme() ? "" : `<h3 class="section-title">${escapeHtml(title)}</h3>`}
-        <dl class="detail-grid ${isTerminalTheme() ? "detail-grid-terminal" : ""}">
-          ${visibleRows
-            .map((row) => `
-              <div class="${row.full ? "span-full" : ""}">
-                <dt>${escapeHtml(isTerminalTheme() ? terminalToken(row.label) : row.label)}</dt>
-                <dd>${row.raw ? row.value : escapeHtml(row.value)}</dd>
-              </div>
-            `)
-            .join("")}
+      <section class="detail-card">
+        <h2 class="detail-title">${escapeHtml(title)}</h2>
+        <dl class="detail-list">
+          ${visibleRows.map((row) => `
+            <div class="detail-row">
+              <dt>${escapeHtml(row.label)}</dt>
+              <dd>${row.raw ? row.value : escapeHtml(row.value)}</dd>
+            </div>
+          `).join("")}
         </dl>
       </section>
     `;
   }
 
-  function updateBackButton() {
-    if (!tg || !tg.BackButton) return;
-    if (getCurrentRoute() === "home") {
-      if (state.backButtonHandlerBound && typeof tg.BackButton.offClick === "function") {
-        tg.BackButton.offClick(handleTelegramBack);
-        state.backButtonHandlerBound = false;
-      }
-      tg.BackButton.hide();
-      return;
-    }
-    if (!state.backButtonHandlerBound && typeof tg.BackButton.onClick === "function") {
-      tg.BackButton.onClick(handleTelegramBack);
-      state.backButtonHandlerBound = true;
-    }
-    tg.BackButton.show();
-  }
-
-  function updateTopbar(route) {
-    if (!appShellEl) return;
-    const compact = sanitizeRoute(route) !== "home";
-    appShellEl.classList.toggle("topbar-compact", compact);
-  }
-
-  function sanitizeRoute(route) {
-    return route && route !== "#" ? String(route).replace(/^#/, "") : "home";
-  }
-
-  function getCurrentRoute() {
-    return sanitizeRoute((window.history.state && window.history.state.route) || "home");
-  }
-
-  function applyRoute(route, options) {
-    const nextRoute = sanitizeRoute(route);
-    const method = options && options.replace ? "replaceState" : "pushState";
-    window.history[method]({ route: nextRoute }, "", window.location.pathname + window.location.search);
-    renderRoute();
-  }
-
-  function pushRoute(route) {
-    applyRoute(route, { replace: false });
-  }
-
-  async function renderHome() {
-    const role = state.session.role;
-    if (role === "unknown") {
-      renderBlocked(
-        "Dashboard is locked",
-        "Continue with Helly in Telegram first. Once your role is identified, this dashboard will unlock."
-      );
-      return;
-    }
-
-    if (role === "candidate") {
-      const payload = await api("/webapp/api/candidate/opportunities");
-      const items = payload.items || [];
-      const activeDecisionCount = items.filter((item) =>
-        ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
-      ).length;
-      const connectedCount = items.filter((item) => item.stage === "approved").length;
-      appEl.innerHTML = `
-        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-          <p class="eyebrow">${isTerminalTheme() ? "candidate_session" : "Candidate view"}</p>
-          <h2>My Opportunities</h2>
-        </section>
-        ${renderStatsStrip([
-          { label: "Opportunities", value: String(items.length) },
-          { label: "Waiting", value: String(activeDecisionCount) },
-          { label: "Connected", value: String(connectedCount) }
-        ])}
-        ${renderActionPanel(payload.cvChallenge)}
-        <section class="detail-panel">
-          <h3 class="section-title">Profile</h3>
-          <dl class="detail-grid">
-            <div><dt>Location</dt><dd>${escapeHtml(payload.profile.location || "Not set")}</dd></div>
-            <div><dt>Work format</dt><dd>${escapeHtml(payload.profile.workFormat || "Not set")}</dd></div>
-            <div><dt>Salary</dt><dd>${escapeHtml(payload.profile.salaryExpectation || "Not set")}</dd></div>
-          </dl>
-        </section>
-        <section class="list">
-          ${items.length ? items.map((item) => `
-            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="candidate-match:${item.id}">
-              <div class="card-head card-head-compact">
-                <div class="card-title-wrap">
-                  <h3>${escapeHtml(item.roleTitle || "Untitled role")}</h3>
-                </div>
-                <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
-              </div>
-              ${renderInlineMetrics([
-                { label: "Budget", value: item.budget || "Not set" },
-                { label: "Updated", value: formatRelativeTime(item.updatedAt) }
-              ])}
-            </article>
-          `).join("") : `<div class="empty-state">No opportunities yet. Once Helly creates matches for you, they will appear here.</div>`}
-        </section>
-      `;
-      bindCards();
-      bindActionButtons();
-      return;
-    }
-
-    if (role === "hiring_manager") {
-      const payload = await api("/webapp/api/hiring-manager/vacancies");
-      const items = payload.items || [];
-      const totalCandidateCount = sumBy(items, "candidateCount");
-      const totalActivePipelineCount = sumBy(items, "activePipelineCount");
-      const totalConnectedCount = sumBy(items, "connectedCount");
-      appEl.innerHTML = `
-        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-          <p class="eyebrow">${isTerminalTheme() ? "manager_session" : "Manager view"}</p>
-          <h2>My Vacancies</h2>
-        </section>
-        ${renderStatsStrip([
-          { label: "Vacancies", value: String(items.length) },
-          { label: "Candidates", value: String(totalCandidateCount) },
-          { label: "In pipeline", value: String(totalActivePipelineCount) },
-          { label: "Connected", value: String(totalConnectedCount) }
-        ])}
-        <section class="list">
-          ${items.length ? items.map((item) => `
-            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="manager-vacancy:${item.id}">
-              <div class="card-head card-head-compact">
-                <div class="card-title-wrap">
-                  <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
-                </div>
-                <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
-              </div>
-              ${renderCardMetrics([
-                { label: "Candidates", value: String(item.candidateCount) },
-                { label: "In pipeline", value: String(item.activePipelineCount) },
-                { label: "Connected", value: String(item.connectedCount || 0) }
-              ])}
-              ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
-            </article>
-          `).join("") : `<div class="empty-state">No vacancies yet. Open a vacancy in the Telegram bot and it will show up here.</div>`}
-        </section>
-      `;
-      bindCards();
-      return;
-    }
-
-    if (role === "admin") {
-      const payload = await api("/webapp/api/admin/vacancies");
-      const items = payload.items || [];
-      const totalCandidateCount = sumBy(items, "candidateCount");
-      const totalConnectedCount = sumBy(items, "connectedCount");
-      appEl.innerHTML = `
-        <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-          <p class="eyebrow">${isTerminalTheme() ? "admin_session" : "Admin view"}</p>
-          <h2>All Vacancies</h2>
-        </section>
-        ${renderStatsStrip([
-          { label: "Vacancies", value: String(items.length) },
-          { label: "Candidates", value: String(totalCandidateCount) },
-          { label: "Connected", value: String(totalConnectedCount) }
-        ])}
-        <section class="list">
-          ${items.length ? items.map((item) => `
-            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="admin-vacancy:${item.id}">
-              <div class="card-head card-head-compact">
-                <div class="card-title-wrap">
-                  <h3>${escapeHtml(item.roleTitle || "Untitled vacancy")}</h3>
-                </div>
-                <span class="badge" data-tone="${badgeTone(item.state)}">${escapeHtml(item.state || "Unknown")}</span>
-              </div>
-              ${renderCardMetrics([
-                { label: "Manager", value: item.managerName || "Unknown" },
-                { label: "Candidates", value: String(item.candidateCount) },
-                { label: "Connected", value: String(item.connectedCount || 0) }
-              ])}
-              ${renderCardNote(`Updated ${formatRelativeTime(item.updatedAt)}`)}
-            </article>
-          `).join("") : `<div class="empty-state">No vacancies found.</div>`}
-        </section>
-      `;
-      bindCards();
-    }
-  }
-
-  async function renderCandidateMatch(matchId) {
-    const payload = await api(`/webapp/api/candidate/opportunities/${matchId}`);
-    const hasLegacyInterviewData = Boolean(
-      payload.interview.stateLabel ||
-      payload.evaluation.interviewSummary ||
-      (payload.evaluation.strengths || []).length ||
-      (payload.evaluation.risks || []).length
-    );
-    appEl.innerHTML = `
-      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-        <p class="eyebrow">${isTerminalTheme() ? "match_record" : "Opportunity detail"}</p>
-        <h2>${escapeHtml(payload.vacancy.roleTitle || "Opportunity")}</h2>
+  function renderTextCard(title, text, emptyText) {
+    const content = String(firstNonEmpty(text, emptyText)).trim();
+    if (!content) return "";
+    return `
+      <section class="detail-card">
+        <h2 class="detail-title">${escapeHtml(title)}</h2>
+        <div class="text-block">${escapeHtml(content).replace(/\n/g, "<br />")}</div>
       </section>
-      ${renderStatsStrip([
-        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
-        { label: "Budget", value: payload.vacancy.budget || "Not specified" },
-        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
-      ])}
-      ${renderDetailSection("Match", [
-        { label: "Your reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
-        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
-      ])}
-      ${renderDetailSection("Vacancy", [
-        { label: "Work format", value: payload.vacancy.workFormat || "Not specified" },
-        { label: "Allowed countries", value: (payload.vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
-        { label: "Tech stack", value: (payload.vacancy.primaryTechStack || []).join(", ") || "Not specified", full: true },
-        { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
-      ])}
-      ${renderDetailSection("Your profile", [
-        { label: "Location", value: payload.candidate.location || "Not specified" },
-        { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
-        { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
-        { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true }
-      ])}
-      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
-        { label: "State", value: payload.interview.stateLabel || "Not started" },
-        { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
-        { label: "Recommendation", value: payload.evaluation.recommendation || "Not available" },
-        { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
-        { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
-      ]) : ""}
     `;
   }
 
-  async function renderVacancy(rolePrefix, vacancyId) {
-    const detailPath = rolePrefix === "manager"
-      ? `/webapp/api/hiring-manager/vacancies/${vacancyId}`
-      : `/webapp/api/admin/vacancies/${vacancyId}`;
-    const matchesPath = rolePrefix === "manager"
-      ? `/webapp/api/hiring-manager/vacancies/${vacancyId}/matches`
-      : `/webapp/api/admin/vacancies/${vacancyId}/matches`;
-    const [detail, matchesPayload] = await Promise.all([api(detailPath), api(matchesPath)]);
-    const vacancy = detail.vacancy;
-    const stats = detail.stats;
+  function renderSkillCard(title, skills) {
+    const pills = renderPills(skills);
+    if (!pills) return "";
+    return `
+      <section class="detail-card">
+        <h2 class="detail-title">${escapeHtml(title)}</h2>
+        ${pills}
+      </section>
+    `;
+  }
+
+  function renderCandidateVacancyCard(item) {
+    return `
+      <article class="entity-card" data-route="candidate-vacancy:${escapeHtml(item.id)}">
+        <div class="card-head">
+          <div class="card-head-copy">
+            <h3 class="card-title">${escapeHtml(item.roleTitle || "Vacancy")}</h3>
+          </div>
+          ${renderBadge(item.stageLabel || humanize(item.stage))}
+        </div>
+        ${renderMetaStrip([
+          item.budget || "Budget not set",
+          item.workFormat ? humanize(item.workFormat) : "Format not set",
+          item.updatedAt ? `Updated ${formatRelativeTime(item.updatedAt)}` : "",
+        ])}
+      </article>
+    `;
+  }
+
+  function renderManagerVacancyCard(item) {
+    return `
+      <article class="entity-card" data-route="manager-vacancy:${escapeHtml(item.id)}">
+        <div class="card-head">
+          <div class="card-head-copy">
+            <h3 class="card-title">${escapeHtml(item.roleTitle || "Vacancy")}</h3>
+          </div>
+          ${renderBadge(humanize(item.state))}
+        </div>
+        ${renderPreviewMetrics([
+          { label: "Candidates", value: String(item.candidateCount || 0) },
+          { label: "Pipeline", value: String(item.activePipelineCount || 0) },
+          { label: "Connected", value: String(item.connectedCount || 0) },
+        ])}
+        ${renderMetaStrip([
+          item.budget || "Budget not set",
+          item.updatedAt ? `Updated ${formatRelativeTime(item.updatedAt)}` : "",
+        ])}
+      </article>
+    `;
+  }
+
+  function renderManagerCandidateCard(item) {
+    return `
+      <article class="entity-card" data-route="manager-candidate:${escapeHtml(item.id)}">
+        <div class="card-head">
+          <div class="card-head-copy">
+            <h3 class="card-title">${escapeHtml(item.candidateName || "Candidate")}</h3>
+          </div>
+          ${renderBadge(item.stageLabel || humanize(item.stage))}
+        </div>
+        ${item.summary && item.summary.approvalSummaryText
+          ? `<p class="card-note">${escapeHtml(truncateText(item.summary.approvalSummaryText, 140))}</p>`
+          : ""}
+        ${renderMetaStrip([
+          item.location || "Location not set",
+          item.salaryExpectation || "Salary not set",
+          item.workFormat ? humanize(item.workFormat) : "",
+        ])}
+      </article>
+    `;
+  }
+
+  function renderReviewCard(interview, evaluation) {
+    const hasInterviewInfo = Boolean(interview && (interview.stateLabel || interview.completedAt || interview.acceptedAt));
+    const hasEvaluationInfo = Boolean(
+      evaluation && (
+        evaluation.interviewSummary ||
+        evaluation.recommendation ||
+        (evaluation.strengths || []).length ||
+        (evaluation.risks || []).length
+      )
+    );
+    if (!hasInterviewInfo && !hasEvaluationInfo) return "";
+    const summaryText = evaluation && evaluation.interviewSummary
+      ? `
+        <div class="detail-card-embedded">
+          <h3 class="detail-subtitle">Interview summary</h3>
+          <div class="text-block">${escapeHtml(evaluation.interviewSummary).replace(/\n/g, "<br />")}</div>
+        </div>
+      `
+      : "";
+    const strengthsMarkup = (evaluation && evaluation.strengths && evaluation.strengths.length)
+      ? `
+        <div class="detail-card-embedded">
+          <h3 class="detail-subtitle">Strengths</h3>
+          ${renderPills(evaluation.strengths)}
+        </div>
+      `
+      : "";
+    const risksMarkup = (evaluation && evaluation.risks && evaluation.risks.length)
+      ? `
+        <div class="detail-card-embedded">
+          <h3 class="detail-subtitle">Risks</h3>
+          ${renderPills(evaluation.risks)}
+        </div>
+      `
+      : "";
+    return `
+      <section class="detail-card">
+        <h2 class="detail-title">Review</h2>
+        ${renderInfoCard("Status", [
+          { label: "Interview", value: interview && interview.stateLabel ? interview.stateLabel : "" },
+          { label: "Recommendation", value: evaluation && evaluation.recommendation ? evaluation.recommendation : "" },
+        ]).replace('<section class="detail-card">', '<div class="detail-card-embedded">').replace("</section>", "</div>")}
+        ${summaryText}
+        ${strengthsMarkup}
+        ${risksMarkup}
+      </section>
+    `;
+  }
+
+  function buildAnswerPreview(answers) {
+    return [
+      answers && answers.salaryExpectation,
+      answers && answers.location,
+      answers && answers.workFormat ? humanize(answers.workFormat) : "",
+    ].filter((value) => value && String(value).trim()).join(" • ");
+  }
+
+  function normalizeProfileAnswers(profile) {
+    return profile && profile.answers ? profile.answers : {
+      salaryExpectation: profile && profile.salaryExpectation,
+      location: profile && profile.location,
+      countryCode: profile && profile.countryCode,
+      city: profile && profile.city,
+      workFormat: profile && profile.workFormat,
+    };
+  }
+
+  function renderCandidateHome(payload) {
+    const items = payload.items || [];
+    const profile = payload.profile || {};
+    const waitingCount = items.filter((item) =>
+      ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
+    ).length;
+    const connectedCount = items.filter((item) => item.stage === "approved").length;
+    const challenge = payload.cvChallenge || {};
+
+    appEl.innerHTML = `
+      <div class="page">
+        ${renderStatsGrid([
+          { label: "Vacancies", value: String(items.length) },
+          { label: "Waiting", value: String(waitingCount) },
+          { label: "Connected", value: String(connectedCount) },
+        ])}
+        <section class="hero-grid">
+          ${challenge.eligible && challenge.launchUrl ? renderNavCard({
+            label: "Game",
+            title: challenge.title || "CV Challenge",
+            note: truncateText(challenge.body || "Open the game.", 120),
+            openUrl: challenge.launchUrl,
+          }) : ""}
+          ${renderNavCard({
+            label: "Profile",
+            title: firstNonEmpty(profile.targetRole, profile.headline, "Open profile"),
+            note: truncateText(firstNonEmpty(
+              profile.summary && profile.summary.approvalSummaryText,
+              buildAnswerPreview(normalizeProfileAnswers(profile)),
+              "Open your profile details."
+            ), 140),
+            route: "candidate-profile",
+            metrics: [
+              { label: "Location", value: profile.location || "" },
+              { label: "Format", value: profile.workFormat ? humanize(profile.workFormat) : "" },
+              { label: "Salary", value: profile.salaryExpectation || "" },
+            ],
+          })}
+        </section>
+        <section class="stack">
+          ${renderSectionBar("Vacancies", items.length)}
+          ${items.length ? items.map(renderCandidateVacancyCard).join("") : renderEmptyState("No vacancies yet.")}
+        </section>
+      </div>
+    `;
+    bindInteractiveNodes();
+  }
+
+  function renderCandidateProfile(profile) {
+    const answers = normalizeProfileAnswers(profile);
+    appEl.innerHTML = `
+      <div class="page">
+        ${renderPageHeader("Profile", firstNonEmpty(profile.targetRole, profile.headline, profile.name))}
+        ${renderStatsGrid([
+          { label: "Location", value: profile.location || "Not set" },
+          { label: "Format", value: profile.workFormat ? humanize(profile.workFormat) : "Not set" },
+          { label: "Salary", value: profile.salaryExpectation || "Not set" },
+        ])}
+        <section class="stack">
+          ${renderNavCard({
+            label: "Summary",
+            title: "Saved summary",
+            note: truncateText(firstNonEmpty(
+              profile.summary && profile.summary.approvalSummaryText,
+              profile.summary && profile.summary.experienceExcerpt,
+              "No summary yet."
+            ), 180),
+            route: "candidate-profile-section:summary",
+          })}
+          ${renderNavCard({
+            label: "CV",
+            title: "CV text",
+            note: truncateText(firstNonEmpty(profile.source && profile.source.text, "No CV text yet."), 180),
+            route: "candidate-profile-section:cv",
+          })}
+          ${renderNavCard({
+            label: "Answers",
+            title: "Question answers",
+            note: truncateText(firstNonEmpty(buildAnswerPreview(answers), "No saved answers yet."), 180),
+            route: "candidate-profile-section:answers",
+          })}
+        </section>
+      </div>
+    `;
+    bindInteractiveNodes();
+  }
+
+  function renderCandidateProfileSection(profile, sectionKey) {
+    const answers = normalizeProfileAnswers(profile);
+    if (sectionKey === "summary") {
+      appEl.innerHTML = `
+        <div class="page">
+          ${renderPageHeader("Summary", firstNonEmpty(profile.targetRole, profile.headline, profile.name))}
+          ${renderTextCard("Summary", firstNonEmpty(
+            profile.summary && profile.summary.approvalSummaryText,
+            profile.summary && profile.summary.experienceExcerpt
+          ), "No summary yet.")}
+          <div class="panel-grid">
+            ${renderInfoCard("Profile", [
+              { label: "Headline", value: profile.summary && profile.summary.headline ? profile.summary.headline : "" },
+              { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
+              { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
+            ])}
+            ${renderSkillCard("Skills", profile.summary && profile.summary.skills)}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    if (sectionKey === "cv") {
+      appEl.innerHTML = `
+        <div class="page">
+          ${renderPageHeader("CV text", profile.name || "Profile")}
+          ${renderTextCard("Saved CV text", profile.source && profile.source.text, "No CV text yet.")}
+        </div>
+      `;
+      return;
+    }
+
+    appEl.innerHTML = `
+      <div class="page">
+        ${renderPageHeader("Question answers", profile.name || "Profile")}
+        ${renderInfoCard("Answers", [
+          { label: "Salary", value: answers.salaryExpectation || "Not set" },
+          { label: "Location", value: answers.location || "Not set" },
+          { label: "Country", value: answers.countryCode || "" },
+          { label: "City", value: answers.city || "" },
+          { label: "Work format", value: answers.workFormat ? humanize(answers.workFormat) : "Not set" },
+        ])}
+      </div>
+    `;
+  }
+
+  function renderCandidateVacancy(payload) {
+    const vacancy = payload.vacancy || {};
+    const match = payload.match || {};
+    appEl.innerHTML = `
+      <div class="page">
+        ${renderPageHeader(vacancy.roleTitle || "Vacancy", match.statusLabel || "")}
+        ${renderStatsGrid([
+          { label: "Stage", value: match.statusLabel || "Unknown" },
+          { label: "Budget", value: vacancy.budget || "Not set" },
+          { label: "Format", value: vacancy.workFormat ? humanize(vacancy.workFormat) : "Not set" },
+          { label: "Updated", value: match.updatedAt ? formatRelativeTime(match.updatedAt) : "Unknown" },
+        ])}
+        <div class="panel-grid">
+          ${renderTextCard("Summary", firstNonEmpty(
+            vacancy.summary && vacancy.summary.approvalSummaryText,
+            vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
+            vacancy.projectDescription
+          ), "No summary yet.")}
+          ${renderInfoCard("Details", [
+            { label: "Seniority", value: vacancy.seniority ? humanize(vacancy.seniority) : "" },
+            { label: "Countries", value: (vacancy.countriesAllowed || []).join(", ") || "" },
+            { label: "Team size", value: vacancy.teamSize || "" },
+          ])}
+        </div>
+        ${renderSkillCard("Tech stack", vacancy.primaryTechStack)}
+        ${renderTextCard("Job description", vacancy.source && vacancy.source.text, "")}
+      </div>
+    `;
+  }
+
+  function renderManagerHome(payload) {
+    const items = payload.items || [];
+    const totalCandidates = items.reduce((sum, item) => sum + Number(item.candidateCount || 0), 0);
+    const totalPipeline = items.reduce((sum, item) => sum + Number(item.activePipelineCount || 0), 0);
+    const totalConnected = items.reduce((sum, item) => sum + Number(item.connectedCount || 0), 0);
+    appEl.innerHTML = `
+      <div class="page">
+        ${renderStatsGrid([
+          { label: "Vacancies", value: String(items.length) },
+          { label: "Candidates", value: String(totalCandidates) },
+          { label: "Pipeline", value: String(totalPipeline) },
+          { label: "Connected", value: String(totalConnected) },
+        ])}
+        <section class="stack">
+          ${renderSectionBar("Vacancies", items.length)}
+          ${items.length ? items.map(renderManagerVacancyCard).join("") : renderEmptyState("No vacancies yet.")}
+        </section>
+      </div>
+    `;
+    bindInteractiveNodes();
+  }
+
+  function renderManagerVacancy(detail, matchesPayload) {
+    const vacancy = detail.vacancy || {};
+    const stats = detail.stats || {};
     const items = matchesPayload.items || [];
     appEl.innerHTML = `
-      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-        <p class="eyebrow">${escapeHtml(isTerminalTheme() ? `${rolePrefix}_vacancy_record` : `${rolePrefix} vacancy`)}</p>
-        <h2>${escapeHtml(vacancy.roleTitle || "Vacancy")}</h2>
-      </section>
-      ${renderStatsStrip([
-        { label: "State", value: vacancy.state || "Unknown" },
-        { label: "Candidates", value: String(stats.candidateCount) },
-        { label: "In pipeline", value: String(stats.activePipelineCount) },
-        { label: "Connected", value: String(stats.connectedCount || 0) }
-      ])}
-      ${renderDetailSection("Vacancy", [
-        { label: "Budget", value: vacancy.budget || "Not specified" },
-        { label: "Work format", value: vacancy.workFormat || "Not specified" },
-        { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
-        { label: "Tech stack", value: (vacancy.primaryTechStack || []).join(", ") || "Not specified", full: true },
-        { label: "Project", value: vacancy.projectDescription || "Not specified", full: true },
-        { label: "Summary", value: (vacancy.summary || {}).approvalSummaryText || "No stored summary.", full: true }
-      ])}
-      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
-        ${isTerminalTheme() ? `
-          <div class="terminal-section-head">
-            <span class="terminal-prompt">$</span>
-            <span class="terminal-section-title">candidate_pipeline</span>
-          </div>
-        ` : ""}
-        ${isTerminalTheme() ? "" : `<h3 class="section-title">Candidate pipeline</h3>`}
-        <div class="list">
-          ${items.length ? items.map((item) => `
-            <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" data-route="${rolePrefix}-match:${item.id}">
-              <div class="card-head card-head-compact">
-                <div class="card-title-wrap">
-                  <h3>${escapeHtml(item.candidateName || "Candidate")}</h3>
-                </div>
-                <span class="badge" data-tone="${badgeTone(item.stageLabel)}">${escapeHtml(item.stageLabel || "Unknown")}</span>
-              </div>
-              ${renderInlineMetrics([
-                { label: "Location", value: item.location || "Not set" },
-                { label: "Salary", value: item.salaryExpectation || "Not set" }
-              ], "inline-metrics-compact")}
-              ${renderCardNote(truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 96), "card-note-compact")}
-            </article>
-          `).join("") : `<div class="empty-state">No candidates are attached to this vacancy yet.</div>`}
+      <div class="page">
+        ${renderPageHeader(vacancy.roleTitle || "Vacancy", humanize(vacancy.state))}
+        ${renderStatsGrid([
+          { label: "Candidates", value: String(stats.candidateCount || 0) },
+          { label: "Pipeline", value: String(stats.activePipelineCount || 0) },
+          { label: "Connected", value: String(stats.connectedCount || 0) },
+          { label: "Budget", value: vacancy.budget || "Not set" },
+        ])}
+        <div class="panel-grid">
+          ${renderTextCard("Summary", firstNonEmpty(
+            vacancy.summary && vacancy.summary.approvalSummaryText,
+            vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
+            vacancy.projectDescription
+          ), "No summary yet.")}
+          ${renderInfoCard("Details", [
+            { label: "Work format", value: vacancy.workFormat ? humanize(vacancy.workFormat) : "" },
+            { label: "Countries", value: (vacancy.countriesAllowed || []).join(", ") || "" },
+            { label: "Team size", value: vacancy.teamSize || "" },
+            { label: "Opened", value: vacancy.openedAt ? formatRelativeTime(vacancy.openedAt) : "" },
+          ])}
         </div>
-      </section>
+        ${renderSkillCard("Tech stack", vacancy.primaryTechStack)}
+        ${renderTextCard("Job description", vacancy.source && vacancy.source.text, "")}
+        <section class="stack">
+          ${renderSectionBar("Candidates", items.length)}
+          ${items.length ? items.map(renderManagerCandidateCard).join("") : renderEmptyState("No candidates yet.")}
+        </section>
+      </div>
     `;
-    bindCards();
+    bindInteractiveNodes();
   }
 
-  async function renderManagerMatch(rolePrefix, matchId) {
-    const path = rolePrefix === "manager"
-      ? `/webapp/api/hiring-manager/matches/${matchId}`
-      : `/webapp/api/admin/matches/${matchId}`;
-    const payload = await api(path);
-    const hasLegacyInterviewData = Boolean(
-      payload.interview.stateLabel ||
-      payload.evaluation.interviewSummary ||
-      (payload.evaluation.strengths || []).length ||
-      (payload.evaluation.risks || []).length
-    );
+  function renderManagerCandidate(payload) {
+    const candidate = payload.candidate || {};
+    const answers = normalizeProfileAnswers(candidate);
+    const summary = candidate.summary || {};
     appEl.innerHTML = `
-      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
-        <p class="eyebrow">${isTerminalTheme() ? "candidate_record" : "Match detail"}</p>
-        <h2>${escapeHtml(payload.candidate.name || "Candidate")}</h2>
-      </section>
-      ${renderStatsStrip([
-        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
-        { label: "Work format", value: payload.candidate.workFormat || "Not specified" },
-        { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
-        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
-      ])}
-      ${renderDetailSection("Match", [
-        { label: "Candidate reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
-        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
-      ])}
-      ${renderDetailSection("Candidate", [
-        { label: "Location", value: payload.candidate.location || "Not specified" },
-        { label: "Summary", value: (payload.candidate.summary || {}).approvalSummaryText || "No saved summary.", full: true },
-        { label: "Skills", value: listChips((payload.candidate.summary || {}).skills || []), raw: true, full: true }
-      ])}
-      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
-        { label: "State", value: payload.interview.stateLabel || "Not started" },
-        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
-        { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
-        { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
-        { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
-      ]) : ""}
-      ${renderDetailSection("Vacancy", [
-        { label: "Budget", value: payload.vacancy.budget || "Not specified" },
-        { label: "Work format", value: payload.vacancy.workFormat || "Not specified" },
-        { label: "Tech stack", value: (payload.vacancy.primaryTechStack || []).join(", ") || "Not specified", full: true },
-        { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
-      ])}
+      <div class="page">
+        ${renderPageHeader(candidate.name || "Candidate", payload.vacancy && payload.vacancy.roleTitle ? payload.vacancy.roleTitle : "")}
+        ${renderStatsGrid([
+          { label: "Stage", value: payload.match && payload.match.statusLabel ? payload.match.statusLabel : "Unknown" },
+          { label: "Salary", value: candidate.salaryExpectation || "Not set" },
+          { label: "Format", value: candidate.workFormat ? humanize(candidate.workFormat) : "Not set" },
+          { label: "Location", value: candidate.location || "Not set" },
+        ])}
+        <div class="panel-grid">
+          ${renderTextCard("Summary", firstNonEmpty(
+            summary.approvalSummaryText,
+            summary.experienceExcerpt
+          ), "No summary yet.")}
+          ${renderInfoCard("Answers", [
+            { label: "Location", value: answers.location || "Not set" },
+            { label: "Country", value: answers.countryCode || "" },
+            { label: "City", value: answers.city || "" },
+            { label: "Work format", value: answers.workFormat ? humanize(answers.workFormat) : "Not set" },
+          ])}
+        </div>
+        ${renderSkillCard("Skills", summary.skills)}
+        ${renderTextCard("CV text", candidate.source && candidate.source.text, "")}
+        ${renderReviewCard(payload.interview || {}, payload.evaluation || {})}
+      </div>
     `;
   }
 
-  function bindCards() {
-    Array.from(document.querySelectorAll("[data-route]")).forEach((node) => {
+  function bindInteractiveNodes() {
+    Array.from(document.querySelectorAll("[data-route], [data-open-url]")).forEach((node) => {
       const route = node.getAttribute("data-route");
-      node.setAttribute("tabindex", "0");
-      node.setAttribute("role", "button");
-      node.addEventListener("click", () => {
+      const openUrl = node.getAttribute("data-open-url");
+      const isButton = node.tagName === "BUTTON";
+      if (!isButton) {
+        node.setAttribute("tabindex", "0");
+        node.setAttribute("role", "button");
+      }
+      const activate = () => {
         tapFeedback();
-        pushRoute(route);
-      });
+        if (route) {
+          pushRoute(route);
+          return;
+        }
+        if (openUrl) {
+          window.location.assign(openUrl);
+        }
+      };
+      node.addEventListener("click", activate);
       node.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          tapFeedback();
-          pushRoute(route);
+          activate();
         }
       });
     });
   }
 
-  function bindActionButtons() {
-    Array.from(document.querySelectorAll("[data-open-url]")).forEach((node) => {
-      const targetUrl = node.getAttribute("data-open-url");
-      node.addEventListener("click", () => {
-        tapFeedback();
-        window.location.assign(targetUrl);
-      });
-    });
+  async function renderHome() {
+    if (!state.session) return;
+    if (state.session.role === "candidate") {
+      const payload = await api("/webapp/api/candidate/opportunities");
+      renderCandidateHome(payload);
+      return;
+    }
+    if (state.session.role === "hiring_manager") {
+      const payload = await api("/webapp/api/hiring-manager/vacancies");
+      renderManagerHome(payload);
+      return;
+    }
+    renderBlocked(
+      "Screen unavailable",
+      "This WebApp now supports candidate and manager screens only."
+    );
   }
 
   async function renderRoute() {
-    const currentRoute = getCurrentRoute();
-    updateBackButton();
-    updateTopbar(currentRoute);
     if (!state.session) return;
+    updateBackButton();
     try {
-      if (currentRoute === "home") {
+      const route = splitRoute(getCurrentRoute());
+      if (route.name === HOME_ROUTE) {
         await renderHome();
         return;
       }
 
-      const parts = currentRoute.split(":");
-      if (parts.length !== 2) {
-        await renderHome();
+      if (route.name === "candidate-profile") {
+        const payload = await api("/webapp/api/candidate/profile");
+        renderCandidateProfile(payload.profile || {});
         return;
       }
-      const route = parts[0];
-      const id = parts[1];
-      if (route === "candidate-match") return await renderCandidateMatch(id);
-      if (route === "manager-vacancy") return await renderVacancy("manager", id);
-      if (route === "manager-match") return await renderManagerMatch("manager", id);
-      if (route === "admin-vacancy") return await renderVacancy("admin", id);
-      if (route === "admin-match") return await renderManagerMatch("admin", id);
+
+      if (route.name === "candidate-profile-section") {
+        const payload = await api("/webapp/api/candidate/profile");
+        renderCandidateProfileSection(payload.profile || {}, route.param || "summary");
+        return;
+      }
+
+      if (route.name === "candidate-vacancy" && route.param) {
+        const payload = await api(`/webapp/api/candidate/opportunities/${route.param}`);
+        renderCandidateVacancy(payload);
+        return;
+      }
+
+      if (route.name === "manager-vacancy" && route.param) {
+        const [detail, matchesPayload] = await Promise.all([
+          api(`/webapp/api/hiring-manager/vacancies/${route.param}`),
+          api(`/webapp/api/hiring-manager/vacancies/${route.param}/matches`),
+        ]);
+        renderManagerVacancy(detail, matchesPayload);
+        return;
+      }
+
+      if (route.name === "manager-candidate" && route.param) {
+        const payload = await api(`/webapp/api/hiring-manager/matches/${route.param}`);
+        renderManagerCandidate(payload);
+        return;
+      }
+
       await renderHome();
     } catch (error) {
-      renderError("Dashboard request failed", error.message || "Unable to load this screen.");
+      renderError("Unable to load screen", error.message || "Unknown error.");
     }
   }
 
   async function boot() {
     try {
-      initializeTheme();
       bindTelegramRuntime();
+      renderLoading("Checking access and loading your screen.");
       if (tg) {
         if (tg.BackButton && typeof tg.BackButton.hide === "function") {
           tg.BackButton.hide();
@@ -755,7 +876,7 @@
       if (!initData) {
         renderBlocked(
           "Open this inside Helly",
-          "This WebApp needs Telegram Mini App auth. Open it from the Helly bot button inside Telegram."
+          "This WebApp requires Telegram Mini App authentication."
         );
         return;
       }
@@ -769,16 +890,17 @@
       if (!authResponse.ok) {
         throw new Error(authPayload.detail || "Telegram authentication failed.");
       }
-      state.sessionToken = authPayload.sessionToken;
 
+      state.sessionToken = authPayload.sessionToken;
       const sessionPayload = await api("/webapp/api/session");
       state.session = sessionPayload.session;
-      const initialRoute = sanitizeRoute(window.location.hash || "home");
+
+      const initialRoute = sanitizeRoute(window.location.hash || HOME_ROUTE);
       window.history.replaceState({ route: initialRoute }, "", window.location.pathname + window.location.search);
       await renderRoute();
       window.addEventListener("popstate", renderRoute);
     } catch (error) {
-      renderError("Unable to open Helly Dashboard", error.message || "Unknown error.");
+      renderError("Unable to open Helly", error.message || "Unknown error.");
     }
   }
 

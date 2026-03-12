@@ -82,6 +82,13 @@ def clean_list(values: Iterable[Any], limit: Optional[int] = None) -> List[str]:
     return result
 
 
+def clean_text(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
+    return text or None
+
+
 def candidate_summary_snapshot(summary_json: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     summary = summary_json or {}
     return {
@@ -90,6 +97,7 @@ def candidate_summary_snapshot(summary_json: Optional[Dict[str, Any]]) -> Dict[s
         "skills": clean_list(summary.get("skills"), limit=12),
         "yearsExperience": summary.get("years_experience"),
         "targetRole": summary.get("target_role"),
+        "experienceExcerpt": clean_text(summary.get("experience_excerpt")),
     }
 
 
@@ -99,6 +107,18 @@ def vacancy_summary_snapshot(summary_json: Optional[Dict[str, Any]]) -> Dict[str
         "approvalSummaryText": summary.get("approval_summary_text"),
         "headline": summary.get("headline"),
         "skills": clean_list(summary.get("skills"), limit=12),
+        "projectDescriptionExcerpt": clean_text(summary.get("project_description_excerpt")),
+    }
+
+
+def source_text_snapshot(version) -> Dict[str, Any]:
+    extracted_text = clean_text(getattr(version, "extracted_text", None))
+    transcript_text = clean_text(getattr(version, "transcript_text", None))
+    return {
+        "sourceType": getattr(version, "source_type", None),
+        "text": extracted_text or transcript_text,
+        "extractedText": extracted_text,
+        "transcriptText": transcript_text,
     }
 
 

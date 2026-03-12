@@ -82,6 +82,14 @@ def candidate_opportunities(
     return service.list_candidate_opportunities(session_context)
 
 
+@router.get("/api/candidate/profile")
+def candidate_profile_detail(
+    session_context=Depends(_session_context),
+    service: WebAppService = Depends(_service),
+):
+    return service.get_candidate_profile_detail(session_context)
+
+
 @router.get("/api/candidate/opportunities/{match_id}")
 def candidate_opportunity_detail(
     match_id: str,
