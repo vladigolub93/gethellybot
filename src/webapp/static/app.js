@@ -160,26 +160,17 @@
     return rtf.format(Math.round(diffSeconds / 86400), "day");
   }
 
-  function setTopbarVisibility(visible, compact) {
-    if (!appShellEl) return;
-    appShellEl.classList.toggle("topbar-hidden", !visible);
-    appShellEl.classList.toggle("topbar-compact", Boolean(visible && compact));
-  }
-
   function renderRoleCheck(note) {
-    setTopbarVisibility(false, false);
     appEl.innerHTML = `
-      <section class="state-card state-card-center role-check-card">
-        <h1 class="brand-lockup" aria-label="Helly">
-          <span class="brand-angle">&gt;</span><span class="brand-word">helly</span><span class="brand-tail">_</span>
-        </h1>
-        <p class="topbar-note role-check-note">${escapeHtml(note)}</p>
+      <section class="state-card loading-card">
+        <p class="eyebrow">Loading</p>
+        <h2>Checking your role</h2>
+        <p>${escapeHtml(note)}</p>
       </section>
     `;
   }
 
   function renderBlocked(title, body) {
-    setTopbarVisibility(false, false);
     appEl.innerHTML = `
       <section class="state-card">
         <p class="eyebrow">Access</p>
@@ -190,7 +181,6 @@
   }
 
   function renderError(title, body) {
-    setTopbarVisibility(false, false);
     appEl.innerHTML = `
       <section class="state-card">
         <p class="eyebrow">Error</p>
@@ -393,7 +383,7 @@
     if (!text && !emptyText) return "";
     return renderPanel(
       title,
-      `<div class="text-panel">${escapeHtml(text || emptyText).replace(/\n/g, "<br />")}</div>`
+      `<p class="card-note">${escapeHtml(text || emptyText).replace(/\n/g, "<br />")}</p>`
     );
   }
 
@@ -456,7 +446,9 @@
   }
 
   function updateTopbar(route) {
-    setTopbarVisibility(false, false);
+    if (!appShellEl) return;
+    const compact = sanitizeRoute(route) !== "home";
+    appShellEl.classList.toggle("topbar-compact", compact);
   }
 
   function sanitizeRoute(route) {

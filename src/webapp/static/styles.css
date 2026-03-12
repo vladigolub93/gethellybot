@@ -215,10 +215,6 @@ html[data-theme="terminal"] body::before {
   display: none;
 }
 
-.app-shell.topbar-hidden .topbar {
-  display: none;
-}
-
 .topbar-actions {
   display: none;
 }
@@ -282,14 +278,6 @@ html[data-theme="terminal"] body::before {
   flex: 1;
   min-height: 0;
   gap: 14px;
-}
-
-.app-shell.topbar-hidden .app-root {
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
 }
 
 .stats-strip {
@@ -697,24 +685,6 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   padding: 20px 18px;
 }
 
-.state-card-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  min-height: min(62dvh, 520px);
-}
-
-.role-check-card .brand-lockup {
-  justify-content: center;
-}
-
-.role-check-note {
-  margin-top: 14px;
-  text-align: center;
-}
-
 .state-card h2,
 .state-card p,
 .screen-header h2,
@@ -1038,12 +1008,6 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   white-space: pre-wrap;
 }
 
-.text-panel {
-  color: var(--text);
-  line-height: 1.62;
-  white-space: pre-wrap;
-}
-
 .list-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1304,11 +1268,6 @@ html[data-theme="terminal"] .app-root {
   border-radius: 0 0 16px 16px;
   background: #1c1c1e;
   box-shadow: var(--shadow);
-}
-
-html[data-theme="terminal"] .app-shell.topbar-hidden .app-root {
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 16px;
 }
 
 html[data-theme="terminal"] .stats-strip {

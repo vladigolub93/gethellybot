@@ -123,7 +123,7 @@ def test_webapp_index_route_serves_html() -> None:
     response = client.get("/webapp")
 
     assert response.status_code == 200
-    assert "<title>Helly</title>" in response.text
+    assert "<title>Helly Dashboard</title>" in response.text
 
 
 def test_cv_challenge_route_serves_html() -> None:
