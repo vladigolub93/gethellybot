@@ -35,6 +35,22 @@ class MatchingService:
         self.vacancies = VacanciesRepository(session)
         self.matching = MatchingRepository(session)
 
+    @staticmethod
+    def _recent_feedback_categories(context_json: dict | None, *, key: str) -> list[str]:
+        current = dict(context_json or {})
+        matching_feedback = dict(current.get("matching_feedback") or {})
+        events = list(matching_feedback.get(key) or [])
+        seen: set[str] = set()
+        categories: list[str] = []
+        for item in reversed(events[-4:]):
+            for value in item.get("categories") or []:
+                normalized = str(value or "").strip().lower()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                categories.append(normalized)
+        return categories
+
     def _build_vacancy_skill_universe(self, vacancy, vacancy_version) -> list[str]:
         vacancy_summary = getattr(vacancy_version, "summary_json", None) or {}
         vacancy_source_text = (
@@ -129,6 +145,10 @@ class MatchingService:
             vacancy=vacancy,
             vacancy_skills=vacancy_skills,
             vacancy_domain_text=vacancy_domain_text,
+        )
+        vacancy_feedback_categories = self._recent_feedback_categories(
+            getattr(vacancy, "questions_context_json", None),
+            key="manager_feedback_events",
         )
 
         preloaded_candidates = None
@@ -252,6 +272,10 @@ class MatchingService:
             candidate_core_skills = normalize_skill_list(candidate_summary.get("skills") or [])
             candidate_full_skills = candidate_version_full_hard_skills(candidate_version)
             candidate_years_experience = candidate_summary.get("years_experience")
+            candidate_feedback_categories = self._recent_feedback_categories(
+                getattr(candidate, "questions_context_json", None),
+                key="candidate_feedback_events",
+            )
             if preloaded is not None:
                 embedding_score = preloaded["embedding_score"]
             else:
@@ -286,6 +310,12 @@ class MatchingService:
                 vacancy_take_home_paid=getattr(vacancy, "take_home_paid", None),
                 vacancy_has_live_coding=getattr(vacancy, "has_live_coding", None),
                 vacancy_hiring_stages=getattr(vacancy, "hiring_stages_json", None),
+                candidate_salary_min=getattr(candidate, "salary_min", None),
+                candidate_salary_max=getattr(candidate, "salary_max", None),
+                vacancy_budget_min=getattr(vacancy, "budget_min", None),
+                vacancy_budget_max=getattr(vacancy, "budget_max", None),
+                candidate_feedback_categories=candidate_feedback_categories,
+                vacancy_feedback_categories=vacancy_feedback_categories,
             )
             scored.append(
                 {
@@ -294,6 +324,7 @@ class MatchingService:
                     "embedding_score": embedding_score,
                     "deterministic_score": deterministic_score,
                     "score_breakdown": score_breakdown,
+                    "candidate_feedback_categories": candidate_feedback_categories,
                 }
             )
 
@@ -321,6 +352,7 @@ class MatchingService:
                     "show_take_home_task_roles": getattr(item["candidate"], "show_take_home_task_roles", None),
                     "show_live_coding_roles": getattr(item["candidate"], "show_live_coding_roles", None),
                 },
+                "candidate_feedback_categories": item.get("candidate_feedback_categories") or [],
                 "embedding_score": item["embedding_score"],
                 "deterministic_score": item["deterministic_score"],
                 "score_breakdown": item["score_breakdown"],
@@ -376,6 +408,7 @@ class MatchingService:
                     "llm_rationale": rerank_item.get("rationale"),
                     "matched_signals": rerank_item.get("matched_signals") or [],
                     "concerns": rerank_item.get("concerns") or [],
+                    "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
             )
 
@@ -405,6 +438,7 @@ class MatchingService:
                     "llm_rationale": rerank_item.get("rationale"),
                     "matched_signals": rerank_item.get("matched_signals") or [],
                     "concerns": rerank_item.get("concerns") or [],
+                    "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
             )
 
@@ -427,6 +461,7 @@ class MatchingService:
                     "fit_band_label": fit_band_label("not_fit"),
                     "gap_signals": gap_signals,
                     "score_breakdown": item["score_breakdown"],
+                    "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
             )
 

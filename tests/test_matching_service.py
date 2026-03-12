@@ -362,6 +362,51 @@ def test_execute_for_vacancy_uses_hybrid_vector_pool_and_skill_rescue(
     assert candidate_skill.id in shortlisted_ids
 
 
+def test_execute_for_vacancy_carries_feedback_categories_into_rationale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vacancy = make_vacancy(
+        questions_context_json={
+            "matching_feedback": {
+                "manager_feedback_events": [
+                    {"categories": ["stack", "english"], "text": "Need stronger stack and English."}
+                ]
+            }
+        }
+    )
+    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
+
+    candidate = make_candidate(
+        questions_context_json={
+            "matching_feedback": {
+                "candidate_feedback_events": [
+                    {"categories": ["process"], "text": "I keep skipping heavy processes."}
+                ]
+            }
+        }
+    )
+    candidate_versions = {
+        candidate.id: make_candidate_version(core_skills=["python", "postgresql"], full_skills=["python", "postgresql"])
+    }
+
+    service = MatchingService(FakeSession())
+    service.candidates = FakeCandidateRepository([candidate], candidate_versions)
+    service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
+    service.matching = FakeMatchingRepository()
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: make_identity_rerank([candidate]),
+    )
+
+    service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="vacancy_open")
+
+    shortlisted = [match for match in service.matching.matches if match.status == "shortlisted"]
+    assert len(shortlisted) == 1
+    rationale = shortlisted[0].rationale_json
+    assert rationale["feedback_categories"] == ["process", "stack", "english"]
+    assert rationale["score_breakdown"]["feedback_fit"] > 0.0
+
+
 def test_execute_for_vacancy_skips_candidate_seen_for_same_versions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

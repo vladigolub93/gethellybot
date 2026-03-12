@@ -45,6 +45,22 @@ def _clean_list(values, *, limit: int = 6) -> list[str]:
     return result
 
 
+def _feedback_category_summary(events, *, label_map: dict[str, str], limit: int = 3) -> list[str]:
+    categories: list[str] = []
+    seen: set[str] = set()
+    for item in reversed(list(events or [])[-4:]):
+        for value in item.get("categories") or []:
+            normalized = str(value or "").strip().lower()
+            label = label_map.get(normalized)
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            categories.append(label)
+            if len(categories) >= limit:
+                return categories
+    return categories
+
+
 _CANDIDATE_BLOCKER_LABELS = {
     "location_mismatch": "your location is outside the allowed countries on many open roles",
     "work_format_mismatch": "many open roles use a different work format",
@@ -67,6 +83,26 @@ _MANAGER_BLOCKER_LABELS = {
     "live_coding_preference_mismatch": "some candidates hide live-coding roles",
 }
 
+_CANDIDATE_FEEDBACK_LABELS = {
+    "compensation": "compensation",
+    "location": "location or work format",
+    "english": "English level",
+    "domain": "domain",
+    "process": "hiring process",
+    "stack": "stack",
+    "role": "role level",
+}
+
+_MANAGER_FEEDBACK_LABELS = {
+    "compensation": "compensation",
+    "location": "location or work format",
+    "english": "English level",
+    "domain": "domain",
+    "process": "hiring process",
+    "stack": "stack",
+    "role": "role level",
+}
+
 
 def _top_matching_blockers(reason_counts: dict[str, int], *, labels: dict[str, str], limit: int = 2) -> list[str]:
     ranked = sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))
@@ -85,6 +121,8 @@ def _join_reasons(reasons: list[str]) -> str:
         return ""
     if len(reasons) == 1:
         return reasons[0]
+    if len(reasons) == 2:
+        return f"{reasons[0]} and {reasons[1]}"
     return f"{', '.join(reasons[:-1])}, and {reasons[-1]}"
 
 
@@ -117,6 +155,14 @@ def _candidate_matching_blockers_memory(*, stage: str | None, candidate, vacanci
             snippets.append(
                 f"Current matching blockers: across {len(open_vacancies)} open roles, the biggest blockers right now are {_join_reasons(blockers)}."
             )
+    current = dict(getattr(candidate, "questions_context_json", None) or {})
+    matching_feedback = dict(current.get("matching_feedback") or {})
+    events = list(matching_feedback.get("candidate_feedback_events") or [])
+    themes = _feedback_category_summary(events, label_map=_CANDIDATE_FEEDBACK_LABELS)
+    if themes:
+        snippets.append(
+            f"Recent matching feedback signal: your recent mismatch feedback keeps pointing to {_join_reasons(themes)}, so Helly now prefers roles that look stronger on those points."
+        )
     return snippets
 
 
@@ -149,6 +195,14 @@ def _manager_matching_blockers_memory(*, stage: str | None, vacancy, candidates)
             snippets.append(
                 f"Current matching blockers: across {len(ready_candidates)} ready candidates, the biggest blockers right now are {_join_reasons(blockers)}."
             )
+    current = dict(getattr(vacancy, "questions_context_json", None) or {})
+    matching_feedback = dict(current.get("matching_feedback") or {})
+    events = list(matching_feedback.get("manager_feedback_events") or [])
+    themes = _feedback_category_summary(events, label_map=_MANAGER_FEEDBACK_LABELS)
+    if themes:
+        snippets.append(
+            f"Recent matching feedback signal: your recent skip feedback keeps pointing to {_join_reasons(themes)}, so Helly now prefers candidates who look stronger on those points."
+        )
     return snippets
 
 

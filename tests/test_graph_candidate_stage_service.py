@@ -269,6 +269,17 @@ def test_graph_candidate_ready_help_explains_matching_blockers(monkeypatch) -> N
             work_format="remote",
             english_level="b1",
             preferred_domains_json=["fintech"],
+            questions_context_json={
+                "matching_feedback": {
+                    "candidate_feedback_events": [
+                        {
+                            "text": "These roles keep missing on compensation and hiring process.",
+                            "categories": ["compensation", "process"],
+                            "source_stage": "VACANCY_REVIEW",
+                        }
+                    ]
+                }
+            },
         ),
         current_version=SimpleNamespace(
             id="cpv-blockers",
@@ -316,6 +327,8 @@ def test_graph_candidate_ready_help_explains_matching_blockers(monkeypatch) -> N
     assert "matching blockers" in lowered
     assert "salary floor is above many vacancy budgets" in lowered
     assert "higher english level" in lowered
+    assert "recent mismatch feedback" in lowered
+    assert "compensation and hiring process" in lowered
 
 
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:

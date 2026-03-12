@@ -178,6 +178,17 @@ def test_graph_manager_open_help_explains_matching_blockers(monkeypatch) -> None
         hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
         primary_tech_stack_json=["python", "postgresql"],
         project_description="Backend APIs for a hiring product.",
+        questions_context_json={
+            "matching_feedback": {
+                "manager_feedback_events": [
+                    {
+                        "text": "These candidates keep missing on stack and English.",
+                        "categories": ["stack", "english"],
+                        "source_stage": "PRE_INTERVIEW_REVIEW",
+                    }
+                ]
+            }
+        },
     )
 
     service = LangGraphStageAgentService(session=object())
@@ -226,6 +237,8 @@ def test_graph_manager_open_help_explains_matching_blockers(monkeypatch) -> None
     assert "matching blockers" in lowered
     assert "salary floors are above the current budget" in lowered
     assert "english requirement is too high" in lowered
+    assert "recent skip feedback" in lowered
+    assert "stack and english level" in lowered
 
 
 def test_graph_manager_stage_handles_intake_pending_help() -> None:

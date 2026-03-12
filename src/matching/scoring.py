@@ -31,6 +31,18 @@ def _normalize_hiring_stages(values) -> list[str]:
     return stages
 
 
+def _normalize_feedback_categories(values) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        text = str(value or "").strip().lower()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        normalized.append(text)
+    return normalized
+
+
 FIT_BAND_PRIORITY = {
     "strong": 0,
     "medium": 1,
@@ -94,8 +106,109 @@ def _compute_process_fit(
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def _compute_compensation_fit(
+    *,
+    candidate_salary_min,
+    candidate_salary_max,
+    vacancy_budget_min,
+    vacancy_budget_max,
+) -> float:
+    candidate_floor = candidate_salary_min if candidate_salary_min is not None else candidate_salary_max
+    candidate_ceiling = candidate_salary_max if candidate_salary_max is not None else candidate_salary_min
+    vacancy_floor = vacancy_budget_min if vacancy_budget_min is not None else vacancy_budget_max
+    vacancy_ceiling = vacancy_budget_max if vacancy_budget_max is not None else vacancy_budget_min
+
+    if candidate_floor is None or vacancy_ceiling is None:
+        return 0.5
+
+    if float(candidate_floor) > float(vacancy_ceiling):
+        return 0.0
+
+    if candidate_ceiling is not None and vacancy_ceiling is not None and float(candidate_ceiling) <= float(vacancy_ceiling):
+        candidate_gap = float(vacancy_ceiling) - float(candidate_ceiling)
+    else:
+        candidate_gap = float(vacancy_ceiling) - float(candidate_floor)
+
+    headroom_ratio = candidate_gap / max(float(vacancy_ceiling), 1.0)
+    if headroom_ratio >= 0.2:
+        return 1.0
+    if headroom_ratio >= 0.1:
+        return 0.85
+    if headroom_ratio >= 0.0:
+        return 0.65
+
+    if vacancy_floor is not None and float(candidate_floor) <= float(vacancy_floor):
+        return 1.0
+    return 0.5
+
+
+def _compute_feedback_fit(
+    *,
+    candidate_feedback_categories,
+    vacancy_feedback_categories,
+    core_overlap_ratio: float,
+    full_overlap_ratio: float,
+    experience_score: float,
+    seniority_fit: float,
+    role_fit: float,
+    work_format_fit: float,
+    location_fit: float,
+    english_fit: float,
+    domain_fit: float,
+    process_fit: float,
+    compensation_fit: float,
+) -> tuple[float, list[str]]:
+    categories = _normalize_feedback_categories(
+        [*(candidate_feedback_categories or []), *(vacancy_feedback_categories or [])]
+    )
+    if not categories:
+        return 0.5, []
+
+    category_scores: list[float] = []
+    for category in categories:
+        if category == "compensation":
+            category_scores.append(compensation_fit)
+        elif category == "location":
+            category_scores.append(round((work_format_fit + location_fit) / 2.0, 4))
+        elif category == "english":
+            category_scores.append(english_fit)
+        elif category == "domain":
+            category_scores.append(domain_fit)
+        elif category == "process":
+            category_scores.append(process_fit)
+        elif category == "stack":
+            category_scores.append(round((core_overlap_ratio + full_overlap_ratio) / 2.0, 4))
+        elif category == "role":
+            category_scores.append(round((role_fit + seniority_fit + experience_score) / 3.0, 4))
+
+    if not category_scores:
+        return 0.5, categories
+
+    feedback_fit = sum(category_scores) / len(category_scores)
+    return round(max(0.0, min(1.0, feedback_fit)), 4), categories
+
+
 def build_gap_signals(*, score_breakdown: dict) -> list[str]:
     gaps: list[str] = []
+    feedback_categories = set(_normalize_feedback_categories(score_breakdown.get("feedback_categories") or []))
+    if "process" in feedback_categories and float(score_breakdown.get("process_fit") or 0.0) < 0.7:
+        gaps.append("This role still misses saved hiring-process preferences.")
+    if "compensation" in feedback_categories and float(score_breakdown.get("compensation_fit") or 0.0) < 0.75:
+        gaps.append("Compensation still looks close to a saved mismatch point.")
+    if "location" in feedback_categories and (
+        float(score_breakdown.get("work_format_fit") or 0.0) < 1.0
+        or float(score_breakdown.get("location_fit") or 0.0) < 0.75
+    ):
+        gaps.append("Location or work-format fit still misses saved preferences.")
+    if "english" in feedback_categories and float(score_breakdown.get("english_fit") or 0.0) < 1.0:
+        gaps.append("English fit still looks weaker than recent feedback suggests.")
+    if "stack" in feedback_categories and float(score_breakdown.get("full_skill_overlap_ratio") or 0.0) < 0.65:
+        gaps.append("Stack overlap still misses a recent feedback theme.")
+    if "role" in feedback_categories and float(score_breakdown.get("role_fit") or 0.0) < 0.55:
+        gaps.append("Role alignment still misses a recent feedback theme.")
+    if "domain" in feedback_categories and float(score_breakdown.get("domain_fit") or 0.0) < 0.45:
+        gaps.append("Domain fit still looks weaker than recent feedback suggests.")
+
     if float(score_breakdown.get("core_skill_overlap_ratio") or 0.0) < 0.65:
         gaps.append("Core stack overlap is partial.")
     if float(score_breakdown.get("role_fit") or 0.0) < 0.45:
@@ -213,6 +326,12 @@ def compute_deterministic_score(
     vacancy_take_home_paid=None,
     vacancy_has_live_coding=None,
     vacancy_hiring_stages=None,
+    candidate_salary_min=None,
+    candidate_salary_max=None,
+    vacancy_budget_min=None,
+    vacancy_budget_max=None,
+    candidate_feedback_categories=None,
+    vacancy_feedback_categories=None,
 ) -> tuple[float, dict]:
     candidate_core_set = _as_set(candidate_core_skills)
     candidate_full_set = _as_set(candidate_full_skills) | candidate_core_set
@@ -272,18 +391,40 @@ def compute_deterministic_score(
         vacancy_has_live_coding=vacancy_has_live_coding,
         vacancy_hiring_stages=vacancy_hiring_stages,
     )
+    compensation_fit = _compute_compensation_fit(
+        candidate_salary_min=candidate_salary_min,
+        candidate_salary_max=candidate_salary_max,
+        vacancy_budget_min=vacancy_budget_min,
+        vacancy_budget_max=vacancy_budget_max,
+    )
+    feedback_fit, feedback_categories = _compute_feedback_fit(
+        candidate_feedback_categories=candidate_feedback_categories,
+        vacancy_feedback_categories=vacancy_feedback_categories,
+        core_overlap_ratio=core_overlap_ratio,
+        full_overlap_ratio=full_overlap_ratio,
+        experience_score=experience_score,
+        seniority_fit=seniority_fit,
+        role_fit=role_fit,
+        work_format_fit=work_format_fit,
+        location_fit=location_fit,
+        english_fit=english_fit,
+        domain_fit=domain_fit,
+        process_fit=process_fit,
+        compensation_fit=compensation_fit,
+    )
 
     total_score = round(
-        (core_overlap_ratio * 0.32)
-        + (full_overlap_ratio * 0.20)
-        + (experience_score * 0.13)
+        (core_overlap_ratio * 0.30)
+        + (full_overlap_ratio * 0.19)
+        + (experience_score * 0.12)
         + (seniority_fit * 0.10)
         + (role_fit * 0.10)
         + (work_format_fit * 0.03)
         + (location_fit * 0.02)
         + (english_fit * 0.03)
         + (domain_fit * 0.04)
-        + (process_fit * 0.03),
+        + (process_fit * 0.02)
+        + (feedback_fit * 0.05),
         4,
     )
     return total_score, {
@@ -297,4 +438,7 @@ def compute_deterministic_score(
         "english_fit": round(english_fit, 4),
         "domain_fit": round(domain_fit, 4),
         "process_fit": round(process_fit, 4),
+        "compensation_fit": round(compensation_fit, 4),
+        "feedback_fit": round(feedback_fit, 4),
+        "feedback_categories": feedback_categories,
     }

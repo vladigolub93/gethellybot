@@ -4309,18 +4309,22 @@ def safe_state_assistance_decision(
     reason_code = "state_help_fallback"
     suggested_action = None
 
-    matching_snapshot = None
+    matching_hints: list[str] = []
     for item in recent_context or []:
         normalized_item = " ".join(str(item or "").split()).strip()
-        if normalized_item.startswith("Current matching blockers:") or normalized_item.startswith("Matching blocker snapshot:"):
-            matching_snapshot = normalized_item
-            break
+        if (
+            normalized_item.startswith("Current matching blockers:")
+            or normalized_item.startswith("Matching blocker snapshot:")
+            or normalized_item.startswith("Recent matching feedback signal:")
+        ):
+            if normalized_item not in matching_hints:
+                matching_hints.append(normalized_item)
 
     if any(token in text for token in ["hi", "hello", "hey", "thanks", "thank you"]):
         intent = "small_talk"
         reason_code = "small_talk_redirect"
         response_text = f"Happy to help. {context.guidance_text or response_text}"
-    elif matching_snapshot and any(
+    elif matching_hints and any(
         token in text
         for token in [
             "why no",
@@ -4338,7 +4342,7 @@ def safe_state_assistance_decision(
     ):
         intent = "support_request"
         reason_code = "matching_blocker_snapshot"
-        response_text = matching_snapshot
+        response_text = " ".join(matching_hints[:3])
     elif context.allowed_actions:
         suggested_action = context.allowed_actions[0]
 

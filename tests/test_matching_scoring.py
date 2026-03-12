@@ -130,6 +130,75 @@ def test_compute_deterministic_score_rewards_cleaner_process() -> None:
     assert paid_breakdown["process_fit"] > unpaid_breakdown["process_fit"]
 
 
+def test_compute_deterministic_score_uses_saved_feedback_categories() -> None:
+    aligned_score, aligned_breakdown = compute_deterministic_score(
+        candidate_core_skills=["python"],
+        candidate_full_skills=["python", "django", "postgresql"],
+        vacancy_skills=["python", "postgresql"],
+        candidate_years_experience=6,
+        vacancy_seniority="senior",
+        candidate_seniority="senior",
+        candidate_target_role="Senior Python Backend Developer",
+        vacancy_role_title="Senior Python Engineer",
+        candidate_work_format="remote",
+        vacancy_work_format="remote",
+        candidate_country_code="PL",
+        candidate_city="Warsaw",
+        candidate_english_level="C1",
+        candidate_preferred_domains=["saas"],
+        vacancy_countries_allowed=["PL"],
+        vacancy_office_city=None,
+        vacancy_required_english_level="B2",
+        vacancy_project_description="B2B SaaS platform for developer analytics.",
+        candidate_show_take_home_task_roles=True,
+        candidate_show_live_coding_roles=True,
+        vacancy_has_take_home_task=False,
+        vacancy_take_home_paid=None,
+        vacancy_has_live_coding=False,
+        vacancy_hiring_stages=["recruiter_screen", "technical_interview"],
+        candidate_salary_min=5000,
+        candidate_salary_max=5500,
+        vacancy_budget_min=6500,
+        vacancy_budget_max=7500,
+        candidate_feedback_categories=["process", "compensation"],
+    )
+    mismatch_score, mismatch_breakdown = compute_deterministic_score(
+        candidate_core_skills=["python"],
+        candidate_full_skills=["python", "django", "postgresql"],
+        vacancy_skills=["python", "postgresql"],
+        candidate_years_experience=6,
+        vacancy_seniority="senior",
+        candidate_seniority="senior",
+        candidate_target_role="Senior Python Backend Developer",
+        vacancy_role_title="Senior Python Engineer",
+        candidate_work_format="remote",
+        vacancy_work_format="remote",
+        candidate_country_code="PL",
+        candidate_city="Warsaw",
+        candidate_english_level="C1",
+        candidate_preferred_domains=["saas"],
+        vacancy_countries_allowed=["PL"],
+        vacancy_office_city=None,
+        vacancy_required_english_level="B2",
+        vacancy_project_description="B2B SaaS platform for developer analytics.",
+        candidate_show_take_home_task_roles=True,
+        candidate_show_live_coding_roles=True,
+        vacancy_has_take_home_task=True,
+        vacancy_take_home_paid=False,
+        vacancy_has_live_coding=True,
+        vacancy_hiring_stages=["recruiter_screen", "technical_interview", "live_coding", "final"],
+        candidate_salary_min=5000,
+        candidate_salary_max=5500,
+        vacancy_budget_min=5000,
+        vacancy_budget_max=5600,
+        candidate_feedback_categories=["process", "compensation"],
+    )
+
+    assert aligned_score > mismatch_score
+    assert aligned_breakdown["feedback_fit"] > mismatch_breakdown["feedback_fit"]
+    assert aligned_breakdown["feedback_categories"] == ["process", "compensation"]
+
+
 def test_classify_fit_band_and_gap_signals() -> None:
     fit_band = classify_fit_band(
         deterministic_score=0.66,
@@ -160,6 +229,22 @@ def test_classify_fit_band_and_gap_signals() -> None:
         "Role alignment is not exact.",
         "Experience level is closer to the lower bound of the role.",
     ]
+
+
+def test_build_gap_signals_prioritizes_feedback_themes() -> None:
+    gaps = build_gap_signals(
+        score_breakdown={
+            "core_skill_overlap_ratio": 0.75,
+            "full_skill_overlap_ratio": 0.8,
+            "role_fit": 0.7,
+            "experience_score": 0.75,
+            "domain_fit": 0.7,
+            "process_fit": 0.45,
+            "feedback_categories": ["process"],
+        }
+    )
+
+    assert gaps[0] == "This role still misses saved hiring-process preferences."
 
 
 def test_compute_vector_similarity() -> None:
