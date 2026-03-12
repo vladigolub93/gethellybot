@@ -932,6 +932,41 @@ def test_graph_candidate_stage_accepts_find_matching_vacancies_intent() -> None:
     assert result.reply_text is None
 
 
+def test_graph_candidate_stage_accepts_ready_preference_update_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8prefs", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u11prefs",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Now only remote roles from 5000 USD, B2 English, fintech only, and no live coding.",
+    )
+
+    assert result is not None
+    assert result.stage == "READY"
+    assert result.action_accepted is True
+    assert result.proposed_action == "update_matching_preferences"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["salary_min"] == 5000
+    assert result.structured_payload["salary_max"] == 5000
+    assert result.structured_payload["work_format"] == "remote"
+    assert result.structured_payload["english_level"] == "b2"
+    assert result.structured_payload["preferred_domains_json"] == ["fintech"]
+    assert result.structured_payload["show_live_coding_roles"] is False
+
+
 def test_graph_candidate_stage_handles_vacancy_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

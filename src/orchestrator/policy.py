@@ -120,10 +120,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "READY": StatePolicyDefinition(
         state="READY",
         goal="Keep the candidate profile ready for matching.",
-        allowed_actions=["wait_for_match", "find_matching_vacancies", "delete_profile"],
+        allowed_actions=["wait_for_match", "find_matching_vacancies", "update_matching_preferences", "delete_profile"],
         assistance_prompt_slug="candidate_ready",
-        guidance_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again now.",
-        help_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again right now.",
+        guidance_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again now or update your matching preferences without restarting onboarding.",
+        help_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again right now or update salary, format, location, English, domain, and assessment preferences here.",
     ),
     "VACANCY_REVIEW": StatePolicyDefinition(
         state="VACANCY_REVIEW",
@@ -197,6 +197,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=[
             "wait_for_matches",
             "find_matching_candidates",
+            "update_vacancy_preferences",
             "create_new_vacancy",
             "list_open_vacancies",
             "delete_vacancy",
@@ -204,12 +205,12 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         assistance_prompt_slug="vacancy_open",
         guidance_text=(
             "The vacancy is open. Helly is matching candidates. You can ask what happens next, "
-            "ask me to look for candidates again, start another vacancy, or ask to see your active vacancies."
+            "ask me to look for candidates again, update the vacancy constraints, start another vacancy, or ask to see your active vacancies."
         ),
         help_text=(
             "The vacancy is open. Helly is matching candidates and will only send qualified profiles. "
             "If both sides approve the same match, Helly will share contacts directly. "
-            "You can also ask me to look for candidates again, start another vacancy, or ask to see your active vacancies."
+            "You can also ask me to look for candidates again, update budget, format, English, process, or stack, start another vacancy, or ask to see your active vacancies."
         ),
     ),
     "INTERVIEW_INVITED": StatePolicyDefinition(

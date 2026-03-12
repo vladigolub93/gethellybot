@@ -689,10 +689,70 @@ class CandidateProfileService:
         user,
         raw_message_id,
         action: str | None,
+        structured_payload: dict | None = None,
     ) -> Optional[CandidateReadyActionResult]:
         profile = self.repo.get_active_by_user_id(user.id)
         if profile is None:
             return None
+
+        if action == "update_matching_preferences":
+            parsed = dict(structured_payload or {})
+            if not parsed:
+                return CandidateReadyActionResult(
+                    status="preferences_update_missing",
+                    notification_template="candidate_ready",
+                    notification_text=self._copy(
+                        "Tell me exactly what you want to change in salary, format, location, English, domains, or assessment preferences."
+                    ),
+                )
+            self.repo.update_question_answers(profile, **parsed)
+            updated_labels = self._describe_ready_updates(parsed)
+            missing_keys = self._missing_question_keys(profile)
+            if missing_keys:
+                next_key = missing_keys[0]
+                questions_context = self._ensure_questions_context(profile)
+                questions_context["current_question_key"] = next_key
+                self.repo.update_questions_context(profile, questions_context)
+                lead = (
+                    f"I updated your {', '.join(updated_labels)}."
+                    if updated_labels
+                    else "I updated your matching preferences."
+                )
+                return CandidateReadyActionResult(
+                    status="preferences_updated_needs_follow_up",
+                    notification_template="candidate_ready",
+                    notification_text=self._copy(
+                        f"{lead} To use this cleanly in matching, I still need one more thing: "
+                        f"{question_prompt(next_key, work_format=getattr(profile, 'work_format', None))}"
+                    ),
+                )
+            open_vacancies = self.vacancies.get_open_vacancies()
+            if not open_vacancies:
+                return CandidateReadyActionResult(
+                    status="preferences_updated_no_open_vacancies",
+                    notification_template="candidate_ready",
+                    notification_text=self._copy(
+                        (
+                            f"I updated your {', '.join(updated_labels)}."
+                            if updated_labels
+                            else "I updated your matching preferences."
+                        )
+                        + " There are no open roles right now, but I’ll use these settings as soon as new ones appear."
+                    ),
+                )
+            self._enqueue_ready_matching(profile=profile, raw_message_id=raw_message_id)
+            return CandidateReadyActionResult(
+                status="preferences_updated_matching_requested",
+                notification_template="candidate_ready",
+                notification_text=self._copy(
+                    (
+                        f"I updated your {', '.join(updated_labels)}."
+                        if updated_labels
+                        else "I updated your matching preferences."
+                    )
+                    + " I’m rechecking open roles for your profile now."
+                ),
+            )
 
         if action != "find_matching_vacancies":
             return None
@@ -718,7 +778,16 @@ class CandidateProfileService:
                 ),
             )
 
-        for vacancy in open_vacancies:
+        self._enqueue_ready_matching(profile=profile, raw_message_id=raw_message_id)
+
+        return CandidateReadyActionResult(
+            status="matching_requested",
+            notification_template="candidate_ready",
+            notification_text=self._copy("Got it. I’m checking current open roles for your profile now."),
+        )
+
+    def _enqueue_ready_matching(self, *, profile, raw_message_id) -> None:
+        for vacancy in self.vacancies.get_open_vacancies():
             self.queue.enqueue(
                 JobMessage(
                     job_type="matching_run_for_vacancy_v1",
@@ -734,11 +803,21 @@ class CandidateProfileService:
                 )
             )
 
-        return CandidateReadyActionResult(
-            status="matching_requested",
-            notification_template="candidate_ready",
-            notification_text=self._copy("Got it. I’m checking current open roles for your profile now."),
-        )
+    def _describe_ready_updates(self, parsed: dict) -> list[str]:
+        labels = []
+        if any(key in parsed for key in {"salary_min", "salary_max", "salary_currency", "salary_period"}):
+            labels.append("salary preferences")
+        if "work_format" in parsed:
+            labels.append("work format")
+        if any(key in parsed for key in {"location_text", "country_code", "city"}):
+            labels.append("location")
+        if "english_level" in parsed:
+            labels.append("English preference")
+        if "preferred_domains_json" in parsed:
+            labels.append("domain preferences")
+        if any(key in parsed for key in {"show_take_home_task_roles", "show_live_coding_roles"}):
+            labels.append("assessment preferences")
+        return labels
 
     def _ensure_deletion_context(self, profile) -> dict:
         current = dict(profile.questions_context_json or {})

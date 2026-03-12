@@ -15,13 +15,52 @@ ENGLISH_LEVEL_ORDER = {
 }
 
 _ENGLISH_LEVEL_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("a1", ("a1", "beginner english")),
-    ("a2", ("a2", "elementary", "pre intermediate", "pre-intermediate", "basic english")),
-    ("b1", ("b1", "intermediate", "conversational english")),
-    ("b2", ("b2", "upper intermediate", "upper-intermediate")),
-    ("c1", ("c1", "advanced", "fluent", "professional working proficiency")),
-    ("c2", ("c2", "proficient", "full professional proficiency")),
-    ("native", ("native", "native english", "mother tongue")),
+    ("a1", ("a1", "beginner english", "початковий", "начальный")),
+    (
+        "a2",
+        ("a2", "elementary", "pre intermediate", "pre-intermediate", "basic english", "базовый", "базовий"),
+    ),
+    (
+        "b1",
+        (
+            "b1",
+            "intermediate",
+            "conversational english",
+            "средний",
+            "середній",
+            "розмовний",
+            "разговорный",
+        ),
+    ),
+    (
+        "b2",
+        (
+            "b2",
+            "upper intermediate",
+            "upper-intermediate",
+            "вище середнього",
+            "выше среднего",
+        ),
+    ),
+    (
+        "c1",
+        (
+            "c1",
+            "advanced",
+            "fluent",
+            "professional working proficiency",
+            "advanced english",
+            "свободный",
+            "вільний",
+            "просунутий",
+            "продвинутый",
+        ),
+    ),
+    (
+        "c2",
+        ("c2", "proficient", "full professional proficiency", "near native", "майже як носій"),
+    ),
+    ("native", ("native", "native english", "mother tongue", "носитель", "носій", "рідна", "родной")),
 )
 
 ENGLISH_LEVEL_DISPLAY = {
@@ -35,20 +74,36 @@ ENGLISH_LEVEL_DISPLAY = {
 }
 
 DOMAIN_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("fintech", ("fintech", "finance", "payments", "banking")),
-    ("healthtech", ("healthtech", "health tech", "healthcare", "medtech", "medical")),
-    ("edtech", ("edtech", "education", "education tech")),
-    ("ecommerce", ("ecommerce", "e-commerce", "retail")),
-    ("saas", ("saas", "b2b saas", "software as a service")),
-    ("ai_ml", ("ai", "ml", "machine learning", "artificial intelligence", "llm")),
-    ("gaming", ("gaming", "games", "gamedev", "game dev")),
-    ("devtools", ("devtools", "developer tools", "developer infrastructure")),
-    ("cybersecurity", ("cybersecurity", "security", "infosec")),
-    ("web3", ("web3", "crypto", "blockchain")),
-    ("logistics", ("logistics", "supply chain", "transport")),
-    ("marketplace", ("marketplace", "classifieds")),
-    ("adtech", ("adtech", "advertising")),
-    ("martech", ("martech", "marketing tech", "crm")),
+    ("fintech", ("fintech", "finance", "payments", "banking", "финтех", "фінтех", "платежи", "платежі")),
+    (
+        "healthtech",
+        ("healthtech", "health tech", "healthcare", "medtech", "medical", "медтех", "health care"),
+    ),
+    ("edtech", ("edtech", "education", "education tech", "едтех", "освіта", "образование")),
+    ("ecommerce", ("ecommerce", "e-commerce", "retail", "ecommerce platform", "е-коммерция", "e-commerce")),
+    ("saas", ("saas", "b2b saas", "software as a service", "саас")),
+    (
+        "ai_ml",
+        (
+            "ai",
+            "ml",
+            "machine learning",
+            "artificial intelligence",
+            "llm",
+            "штучний інтелект",
+            "искусственный интеллект",
+            "машинное обучение",
+            "машинне навчання",
+        ),
+    ),
+    ("gaming", ("gaming", "games", "gamedev", "game dev", "геймдев", "игры", "ігри")),
+    ("devtools", ("devtools", "developer tools", "developer infrastructure", "dev tools")),
+    ("cybersecurity", ("cybersecurity", "security", "infosec", "кібербезпека", "кибербезопасность")),
+    ("web3", ("web3", "crypto", "blockchain", "крипто", "блокчейн")),
+    ("logistics", ("logistics", "supply chain", "transport", "логистика", "логістика")),
+    ("marketplace", ("marketplace", "classifieds", "маркетплейс")),
+    ("adtech", ("adtech", "advertising", "реклама", "advertisement tech")),
+    ("martech", ("martech", "marketing tech", "crm", "маркетинг тех")),
 )
 
 DOMAIN_DISPLAY = {
@@ -70,15 +125,68 @@ DOMAIN_DISPLAY = {
 }
 
 HIRING_STAGE_ALIASES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("recruiter_screen", ("recruiter screen", "recruiter call", "hr screen", "hr call", "intro call")),
-    ("manager_screen", ("manager screen", "manager call", "hiring manager call")),
-    ("technical_interview", ("technical interview", "tech interview")),
-    ("system_design", ("system design", "architecture interview", "design interview")),
-    ("live_coding", ("live coding", "live-coding", "coding interview", "pair programming")),
-    ("take_home", ("take home", "take-home", "test task", "home assignment")),
-    ("team_fit", ("team fit", "culture fit", "team interview")),
-    ("final", ("final", "final interview", "final round")),
-    ("founder_call", ("founder call", "ceo call")),
+    (
+        "recruiter_screen",
+        (
+            "recruiter screen",
+            "recruiter call",
+            "hr screen",
+            "hr call",
+            "intro call",
+            "скрин с рекрутером",
+            "звонок с рекрутером",
+            "дзвінок з рекрутером",
+            "скрин з рекрутером",
+        ),
+    ),
+    (
+        "manager_screen",
+        (
+            "manager screen",
+            "manager call",
+            "hiring manager call",
+            "звонок с менеджером",
+            "інтерв'ю з менеджером",
+            "скрин с менеджером",
+        ),
+    ),
+    (
+        "technical_interview",
+        ("technical interview", "tech interview", "техническое интервью", "тех интервью", "технічне інтерв'ю"),
+    ),
+    (
+        "system_design",
+        ("system design", "architecture interview", "design interview", "систем дизайн", "дизайн системы", "системний дизайн"),
+    ),
+    (
+        "live_coding",
+        (
+            "live coding",
+            "live-coding",
+            "coding interview",
+            "pair programming",
+            "лайвкодинг",
+            "лайв кодинг",
+            "парное программирование",
+            "парне програмування",
+        ),
+    ),
+    (
+        "take_home",
+        (
+            "take home",
+            "take-home",
+            "test task",
+            "home assignment",
+            "тестовое задание",
+            "тестове завдання",
+            "домашнее задание",
+            "домашнє завдання",
+        ),
+    ),
+    ("team_fit", ("team fit", "culture fit", "team interview", "командное интервью", "командна співбесіда")),
+    ("final", ("final", "final interview", "final round", "финальный этап", "финальное интервью", "фінальний етап", "фінальне інтерв'ю")),
+    ("founder_call", ("founder call", "ceo call", "звонок с фаундером", "дзвінок з фаундером")),
 )
 
 HIRING_STAGE_DISPLAY = {
@@ -130,7 +238,7 @@ def _collect_matches(text: str | None, groups: tuple[tuple[str, tuple[str, ...]]
     found: list[str] = []
     for canonical, aliases in groups:
         for alias in aliases:
-            if re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", normalized):
+            if re.search(rf"(?<![\w]){re.escape(alias)}(?![\w])", normalized):
                 found.append(canonical)
                 break
     return found

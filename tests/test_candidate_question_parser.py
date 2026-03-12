@@ -32,3 +32,21 @@ def test_parse_candidate_questions_extracts_matching_preferences() -> None:
     assert parsed["preferred_domains_json"] == ["fintech", "saas"]
     assert parsed["show_take_home_task_roles"] is True
     assert parsed["show_live_coding_roles"] is False
+
+
+def test_parse_candidate_questions_ru_ua_matching_preferences() -> None:
+    parsed = parse_candidate_questions(
+        "Зарплата: 4500-5000 USD в месяц. Живу в Киев, Украина и предпочитаю удаленно. "
+        "Английский: B2. Предпочитаю фінтех и SaaS. Тестовое задание ок, но без лайвкодинга."
+    )
+
+    assert parsed["salary_min"] == 4500
+    assert parsed["salary_max"] == 5000
+    assert parsed["salary_currency"] == "USD"
+    assert parsed["salary_period"] == "month"
+    assert parsed["country_code"] == "UA"
+    assert parsed["work_format"] == "remote"
+    assert parsed["english_level"] == "b2"
+    assert parsed["preferred_domains_json"] == ["fintech", "saas"]
+    assert parsed["show_take_home_task_roles"] is True
+    assert parsed["show_live_coding_roles"] is False

@@ -869,6 +869,106 @@ def test_execute_ready_action_handles_no_open_vacancies() -> None:
     assert result.reply_markup["inline_keyboard"][0][0]["web_app"]["url"].endswith("/webapp/cv-challenge")
 
 
+def test_execute_ready_action_updates_preferences_and_rechecks_matching() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+    profile.salary_min = 4000
+    profile.salary_max = 4500
+    profile.salary_currency = "USD"
+    profile.salary_period = "month"
+    profile.location_text = "Kyiv, Ukraine"
+    profile.country_code = "UA"
+    profile.city = "Kyiv"
+    profile.work_format = "remote"
+    profile.english_level = "b1"
+    profile.preferred_domains_json = ["fintech"]
+    profile.show_take_home_task_roles = True
+    profile.show_live_coding_roles = True
+    vacancy_a = SimpleNamespace(id=uuid4())
+    vacancy_b = SimpleNamespace(id=uuid4())
+    service.vacancies.open_vacancies = [vacancy_a, vacancy_b]
+
+    result = service.execute_ready_action(
+        user=user,
+        raw_message_id="raw-ready-update-1",
+        action="update_matching_preferences",
+        structured_payload={
+            "salary_min": 5000,
+            "salary_max": 5500,
+            "work_format": "remote",
+            "location_text": "Warsaw, Poland",
+            "country_code": "PL",
+            "city": "Warsaw",
+            "english_level": "b2",
+            "preferred_domains_json": ["saas"],
+            "show_take_home_task_roles": False,
+            "show_live_coding_roles": False,
+        },
+    )
+
+    assert result is not None
+    assert result.status == "preferences_updated_matching_requested"
+    assert profile.salary_min == 5000
+    assert profile.salary_max == 5500
+    assert profile.location_text == "Warsaw, Poland"
+    assert profile.country_code == "PL"
+    assert profile.city == "Warsaw"
+    assert profile.english_level == "b2"
+    assert profile.preferred_domains_json == ["saas"]
+    assert profile.show_take_home_task_roles is False
+    assert profile.show_live_coding_roles is False
+    assert "updated your" in result.notification_text.lower()
+    assert "rechecking open roles" in result.notification_text.lower()
+    assert len(service.queue.messages) == 2
+    assert service.queue.messages[0].job_type == "matching_run_for_vacancy_v1"
+    assert service.queue.messages[0].payload["trigger_candidate_profile_id"] == str(profile.id)
+
+
+def test_execute_ready_action_requests_follow_up_for_hybrid_without_city() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+    profile.salary_min = 4500
+    profile.salary_max = 5000
+    profile.salary_currency = "USD"
+    profile.salary_period = "month"
+    profile.location_text = "Poland"
+    profile.country_code = "PL"
+    profile.city = None
+    profile.work_format = "remote"
+    profile.english_level = "b2"
+    profile.preferred_domains_json = ["saas"]
+    profile.show_take_home_task_roles = True
+    profile.show_live_coding_roles = False
+
+    result = service.execute_ready_action(
+        user=user,
+        raw_message_id="raw-ready-update-2",
+        action="update_matching_preferences",
+        structured_payload={"work_format": "hybrid"},
+    )
+
+    assert result is not None
+    assert result.status == "preferences_updated_needs_follow_up"
+    assert profile.work_format == "hybrid"
+    assert profile.questions_context_json["current_question_key"] == "location"
+    assert "one more thing" in result.notification_text.lower()
+    assert len(service.queue.messages) == 0
+
+
 def test_verification_instruction_is_returned_for_non_video_input() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()

@@ -304,14 +304,15 @@ class TelegramUpdateService:
         if stage_result.stage == "READY":
             if not (
                 stage_result.action_accepted
-                and stage_result.proposed_action in {"delete_profile", "find_matching_vacancies"}
+                and stage_result.proposed_action in {"delete_profile", "find_matching_vacancies", "update_matching_preferences"}
             ):
                 return None
-            if stage_result.proposed_action == "find_matching_vacancies":
+            if stage_result.proposed_action in {"find_matching_vacancies", "update_matching_preferences"}:
                 ready_result = self.candidate_service.execute_ready_action(
                     user=user,
                     raw_message_id=raw_message_id,
                     action=stage_result.proposed_action,
+                    structured_payload=stage_result.structured_payload or {},
                 )
                 if ready_result is None:
                     return None
@@ -391,9 +392,26 @@ class TelegramUpdateService:
         if stage_result.stage == "OPEN":
             if not (
                 stage_result.action_accepted
-                and stage_result.proposed_action == "delete_vacancy"
+                and stage_result.proposed_action in {"delete_vacancy", "update_vacancy_preferences"}
             ):
                 return None
+            if stage_result.proposed_action == "update_vacancy_preferences":
+                open_result = self.vacancy_service.execute_open_action(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    action=stage_result.proposed_action,
+                    structured_payload=stage_result.structured_payload or {},
+                    latest_user_message=latest_user_message,
+                )
+                if open_result is None:
+                    return None
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key=open_result.notification_template,
+                        text=open_result.notification_text,
+                    )
+                ]
             deletion_text = "delete vacancy"
         else:
             if not (
@@ -624,6 +642,7 @@ class TelegramUpdateService:
         *,
         user,
         raw_message_id,
+        latest_user_message: str | None,
         stage_result,
     ) -> List[str] | None:
         if not (
@@ -641,6 +660,7 @@ class TelegramUpdateService:
             user=user,
             raw_message_id=raw_message_id,
             action=stage_result.proposed_action,
+            latest_user_message=latest_user_message,
         )
         if open_result is None:
             return None
@@ -1748,6 +1768,7 @@ class TelegramUpdateService:
         action_templates = self._handle_manager_open_stage_action(
             user=user,
             raw_message_id=raw_message_id,
+            latest_user_message=latest_user_message,
             stage_result=stage_result,
         )
         if action_templates is not None:

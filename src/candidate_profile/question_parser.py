@@ -8,19 +8,44 @@ from src.shared.hiring_taxonomy import extract_domains, normalize_english_level
 
 COUNTRY_CODES = {
     "ukraine": "UA",
+    "украина": "UA",
+    "україна": "UA",
     "poland": "PL",
+    "польша": "PL",
+    "польща": "PL",
     "germany": "DE",
+    "германия": "DE",
+    "німеччина": "DE",
     "spain": "ES",
+    "испания": "ES",
+    "іспанія": "ES",
     "portugal": "PT",
+    "португалия": "PT",
+    "португалія": "PT",
     "france": "FR",
+    "франция": "FR",
+    "франція": "FR",
     "italy": "IT",
+    "италия": "IT",
+    "італія": "IT",
     "netherlands": "NL",
+    "нидерланды": "NL",
+    "нідерланди": "NL",
     "united kingdom": "GB",
     "uk": "GB",
+    "великобритания": "GB",
+    "велика британія": "GB",
     "united states": "US",
     "usa": "US",
+    "сша": "US",
+    "сполучені штати": "US",
     "canada": "CA",
+    "канада": "CA",
 }
+
+_NEGATIVE_WORDS = r"(?:no|not|don't|do not|avoid|hide|skip|without|не|без|не хочу|не хочу бачити|не хочу видеть|не подходит|не підходить|не показувати|не показывать|уникати)"
+_POSITIVE_WORDS = r"(?:yes|yeah|yep|ok|okay|fine|show|include|open to|can do|comfortable|fine with|так|ок|окей|підходить|подходит|можно|можна|готов|готова|готовий|готова)"
+_CLAUSE_SPLIT_RE = r"[.;\n,]|\bbut\b|\bhowever\b|\bале\b|\bно\b|\bоднак\b|\bпроте\b"
 
 
 def _normalize_text(text: str) -> str:
@@ -40,9 +65,9 @@ def _extract_currency(text: str) -> Optional[str]:
 
 def _extract_period(text: str) -> Optional[str]:
     lowered = text.lower()
-    if re.search(r"\b(per month|monthly|month)\b", lowered) or "/month" in lowered:
+    if re.search(r"\b(per month|monthly|month|в месяц|в місяць|месяц|місяць)\b", lowered) or "/month" in lowered:
         return "month"
-    if re.search(r"\b(per year|yearly|annual|annually|year)\b", lowered) or "/year" in lowered:
+    if re.search(r"\b(per year|yearly|annual|annually|year|в год|в рік|год|рік)\b", lowered) or "/year" in lowered:
         return "year"
     return None
 
@@ -61,7 +86,11 @@ def _parse_amount(raw_value: str) -> Optional[float]:
 
 def parse_salary_expectations(text: str) -> dict:
     normalized = _normalize_text(text)
-    matches = re.findall(r"(?<!\d)(\d{1,3}(?:[,\d]{0,3})?(?:\.\d+)?k?)(?!\d)", normalized, flags=re.IGNORECASE)
+    matches = re.findall(
+        r"(?<![\w])(\d{1,3}(?:[,\d]{0,3})?(?:\.\d+)?k?)(?![\w])",
+        normalized,
+        flags=re.IGNORECASE,
+    )
     values = []
     for match in matches:
         amount = _parse_amount(match)
@@ -86,11 +115,11 @@ def parse_salary_expectations(text: str) -> dict:
 
 def parse_work_format(text: str) -> dict:
     lowered = _normalize_text(text).lower()
-    if "remote" in lowered:
+    if any(token in lowered for token in ("remote", "удаленно", "удалённо", "віддалено", "дистанційно")):
         return {"work_format": "remote"}
-    if "hybrid" in lowered:
+    if any(token in lowered for token in ("hybrid", "гибрид", "гібрид")):
         return {"work_format": "hybrid"}
-    if "office" in lowered or "onsite" in lowered or "on-site" in lowered:
+    if any(token in lowered for token in ("office", "onsite", "on-site", "офис", "офіс", "онсайт")):
         return {"work_format": "office"}
     return {}
 
@@ -99,7 +128,7 @@ def parse_english_level(text: str) -> dict:
     normalized = _normalize_text(text)
     lowered = normalized.lower()
     explicit_match = re.search(
-        r"\b(?:english|eng)\s*(?:level)?\s*[:\-]?\s*(a1|a2|b1|b2|c1|c2|native)\b",
+        r"\b(?:english|eng|английский|англійська|англійський|англ)\s*(?:level|рівень|уровень)?\s*[:\-]?\s*(a1|a2|b1|b2|c1|c2|native)\b",
         lowered,
     )
     candidate = explicit_match.group(1) if explicit_match is not None else None
@@ -119,6 +148,14 @@ def parse_english_level(text: str) -> dict:
             "fluent",
             "conversational english",
             "basic english",
+            "свободный",
+            "вільний",
+            "разговорный",
+            "розмовний",
+            "базовый",
+            "базовий",
+            "выше среднего",
+            "вище середнього",
         ):
             if token in lowered:
                 candidate = token
@@ -139,22 +176,43 @@ def parse_location(text: str) -> dict:
     normalized = _normalize_text(text)
     location_text = (
         _extract_labeled_value(normalized, "location")
+        or _extract_labeled_value(normalized, "локация")
+        or _extract_labeled_value(normalized, "локація")
         or _extract_labeled_value(normalized, "based in")
         or _extract_labeled_value(normalized, "located in")
+        or _extract_labeled_value(normalized, "нахожусь в")
+        or _extract_labeled_value(normalized, "перебуваю в")
     )
     if location_text is None:
         lowered = normalized.lower()
-        for marker in ("based in ", "located in ", "from ", "in "):
+        for marker in (
+            "based in ",
+            "located in ",
+            "from ",
+            "in ",
+            "живу в ",
+            "живу у ",
+            "нахожусь в ",
+            "перебуваю в ",
+            "базуюсь в ",
+            "базуюсь у ",
+            "знаходжусь у ",
+            "знаходжусь в ",
+        ):
             if marker in lowered:
                 start = lowered.index(marker) + len(marker)
                 location_text = normalized[start:].strip(" .")
                 break
+    if location_text is None:
+        lowered = normalized.lower()
+        if any(country_name in lowered for country_name in COUNTRY_CODES):
+            location_text = normalized.strip(" .")
 
     if not location_text:
         return {}
 
     location_text = re.split(
-        r"\s+(?:and|but)\s+(?:open|prefer|preferred|remote|hybrid|office|onsite|on-site)\b",
+        r"\s+(?:and|but|але|но)\s+(?:open|prefer|preferred|remote|hybrid|office|onsite|on-site|удаленно|удалённо|віддалено|гібрид|гибрид|офис|офіс)\b",
         location_text,
         maxsplit=1,
         flags=re.IGNORECASE,
@@ -185,7 +243,7 @@ def parse_location(text: str) -> dict:
 
 def parse_preferred_domains(text: str) -> dict:
     lowered = _normalize_text(text).lower()
-    if re.search(r"\b(any|no preference|open to anything|open to any domain|any domain)\b", lowered):
+    if re.search(r"\b(any|no preference|open to anything|open to any domain|any domain|без разницы|без різниці|будь-який|любой|будь що|что угодно)\b", lowered):
         return {"preferred_domains_json": ["any"]}
     domains = extract_domains(lowered)
     return {"preferred_domains_json": domains} if domains else {}
@@ -194,9 +252,9 @@ def parse_preferred_domains(text: str) -> dict:
 def _parse_keyword_boolean(text: str, *, keywords: tuple[str, ...]) -> Optional[bool]:
     lowered = _normalize_text(text).lower()
     if any(keyword in lowered for keyword in keywords):
-        if re.search(r"\b(no|not|don't|do not|avoid|hide|skip|without)\b", lowered):
+        if re.search(rf"\b{_NEGATIVE_WORDS}\b", lowered):
             return False
-        if re.search(r"\b(yes|yeah|yep|ok|okay|fine|show|include|open to|can do|comfortable)\b", lowered):
+        if re.search(rf"\b{_POSITIVE_WORDS}\b", lowered):
             return True
         return True
     return None
@@ -207,42 +265,42 @@ def _extract_local_boolean(text: str, *, keywords: tuple[str, ...]) -> Optional[
     keyword_patterns = tuple(re.escape(keyword) for keyword in keywords)
     clauses = [
         clause.strip()
-        for clause in re.split(r"[.;\n,]|\bbut\b|\bhowever\b", lowered)
+        for clause in re.split(_CLAUSE_SPLIT_RE, lowered)
         if clause.strip()
     ]
     relevant_clauses = [clause for clause in clauses if any(keyword in clause for keyword in keywords)]
     for clause in relevant_clauses:
-        if re.search(r"\b(no|not|don't|do not|avoid|hide|skip|without)\b", clause):
+        if re.search(rf"\b{_NEGATIVE_WORDS}\b", clause):
             return False
-        if re.search(r"\b(yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine with|fine)\b", clause):
+        if re.search(rf"\b{_POSITIVE_WORDS}\b", clause):
             return True
 
     positive_patterns = (
-        rf"\b(?:yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine with)\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
-        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b(?:yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine)\b",
+        rf"\b{_POSITIVE_WORDS}\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
+        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b{_POSITIVE_WORDS}\b",
     )
     for pattern in positive_patterns:
         if re.search(pattern, lowered):
             return True
 
     negative_patterns = (
-        rf"\b(?:no|not|don't|do not|avoid|hide|skip|without)\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
-        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b(?:no|not|don't|do not|avoid|hide|skip|without)\b",
+        rf"\b{_NEGATIVE_WORDS}\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
+        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b{_NEGATIVE_WORDS}\b",
     )
     for pattern in negative_patterns:
         if re.search(pattern, lowered):
             return False
 
-    if "both" in lowered and any(keyword in lowered for keyword in keywords):
+    if any(token in lowered for token in ("both", "оба", "оба", "обидва")) and any(keyword in lowered for keyword in keywords):
         return True
-    if "neither" in lowered and any(keyword in lowered for keyword in keywords):
+    if any(token in lowered for token in ("neither", "ни один", "жоден")) and any(keyword in lowered for keyword in keywords):
         return False
     return _parse_keyword_boolean(lowered, keywords=keywords)
 
 
 def parse_assessment_preferences(text: str) -> dict:
     lowered = _normalize_text(text).lower()
-    if re.search(r"\b(no assessments|without assessments|no tests)\b", lowered):
+    if re.search(r"\b(no assessments|without assessments|no tests|без тестов|без тестів|без тестовых|без оцінювань)\b", lowered):
         return {
             "show_take_home_task_roles": False,
             "show_live_coding_roles": False,
@@ -251,11 +309,11 @@ def parse_assessment_preferences(text: str) -> dict:
     payload = {}
     take_home = _extract_local_boolean(
         lowered,
-        keywords=("test task", "take home", "take-home", "home assignment"),
+        keywords=("test task", "take home", "take-home", "home assignment", "тестовое задание", "тестове завдання", "домашнее задание", "домашнє завдання"),
     )
     live_coding = _extract_local_boolean(
         lowered,
-        keywords=("live coding", "live-coding", "pair programming", "coding interview"),
+        keywords=("live coding", "live-coding", "pair programming", "coding interview", "лайвкодинг", "лайв кодинг", "парное программирование", "парне програмування"),
     )
     if take_home is not None:
         payload["show_take_home_task_roles"] = take_home

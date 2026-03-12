@@ -211,7 +211,21 @@ def build_candidate_stage_detect_node(session):
             state.intent = payload.get("intent") or "help"
             state.reply_text = payload.get("response_text")
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
-            if payload.get("proposed_action") is not None:
+            if payload.get("proposed_action") == "update_matching_preferences":
+                answer_text = payload.get("answer_text") or text
+                parsed_payload = safe_parse_candidate_questions(session, answer_text).payload
+                if parsed_payload:
+                    state.proposed_action = "update_matching_preferences"
+                    state.parsed_input["intent"] = "stage_completion_input"
+                    state.structured_payload = parsed_payload
+                else:
+                    state.parsed_input["intent"] = "help"
+                    state.follow_up_needed = True
+                    state.follow_up_question = (
+                        payload.get("response_text")
+                        or "Tell me exactly what you want to change in salary, format, location, English, domains, or assessment preferences."
+                    )
+            elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
                 state.structured_payload = {}

@@ -1830,6 +1830,53 @@ def test_graph_ready_stage_can_request_manual_matching() -> None:
     assert service.candidate_service.ready_action_calls[-1]["action"] == "find_matching_vacancies"
 
 
+def test_graph_ready_stage_can_update_matching_preferences() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="READY",
+            reply_text="I can update your saved preferences here.",
+            stage_status="ready_for_transition",
+            proposed_action="update_matching_preferences",
+            action_accepted=True,
+            structured_payload={"salary_min": 5000, "work_format": "remote"},
+            validation_result={"accepted": True, "normalized_action": "update_matching_preferences"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.ready_action_result = SimpleNamespace(
+        status="preferences_updated_matching_requested",
+        notification_template="candidate_ready",
+        notification_text="I updated your salary and work format. I’m rechecking open roles now.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5c",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5c",
+        build_update(text="Now only remote roles from 5000 USD"),
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.ready_action_calls
+    assert service.candidate_service.ready_action_calls[-1]["action"] == "update_matching_preferences"
+    assert service.candidate_service.ready_action_calls[-1]["structured_payload"] == {
+        "salary_min": 5000,
+        "work_format": "remote",
+    }
+
+
 def test_graph_candidate_vacancy_review_stage_can_apply_to_vacancy() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -4094,6 +4141,58 @@ def test_graph_open_stage_can_request_manual_matching() -> None:
     assert templates == ["vacancy_open"]
     assert service.vacancy_service.open_action_calls
     assert service.vacancy_service.open_action_calls[-1]["action"] == "find_matching_candidates"
+
+
+def test_graph_open_stage_can_update_vacancy_preferences() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="I can update this vacancy.",
+            stage_status="ready_for_transition",
+            proposed_action="update_vacancy_preferences",
+            action_accepted=True,
+            structured_payload={"budget_min": 7000, "budget_max": 9000, "required_english_level": "b2"},
+            validation_result={"accepted": True, "normalized_action": "update_vacancy_preferences"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="vacancy_updated_matching_requested",
+        notification_template="vacancy_open",
+        notification_text="I updated the vacancy and I’m refreshing matching now.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12openprefs",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12openprefs",
+        build_update(text="Update the vacancy budget to 7000-9000 and English to B2"),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "update_vacancy_preferences"
+    assert service.vacancy_service.open_action_calls[-1]["structured_payload"] == {
+        "budget_min": 7000,
+        "budget_max": 9000,
+        "required_english_level": "b2",
+    }
+    assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
+        "Update the vacancy budget to 7000-9000 and English to B2"
+    )
 
 
 def test_manager_voice_clarification_passthrough_reaches_clarification_handler() -> None:

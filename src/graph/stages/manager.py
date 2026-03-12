@@ -151,7 +151,20 @@ def build_manager_stage_detect_node(session):
             state.intent = payload.get("intent") or "help"
             state.reply_text = payload.get("response_text")
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
-            if payload.get("proposed_action") is not None:
+            if payload.get("proposed_action") == "update_vacancy_preferences":
+                parsed = dict(safe_parse_vacancy_clarifications(session, payload.get("answer_text") or text).payload or {})
+                if parsed:
+                    state.proposed_action = "update_vacancy_preferences"
+                    state.parsed_input["intent"] = "stage_completion_input"
+                    state.structured_payload = parsed
+                else:
+                    state.parsed_input["intent"] = "help"
+                    state.follow_up_needed = True
+                    state.follow_up_question = (
+                        payload.get("response_text")
+                        or "Tell me exactly what you want to change in budget, format, location, English, process, project, or stack."
+                    )
+            elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
                 state.structured_payload = {}

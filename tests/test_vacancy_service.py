@@ -202,6 +202,105 @@ def test_execute_open_action_enqueues_matching_refresh() -> None:
     assert service.queue.messages[0].idempotency_key.endswith(":manual:raw-open-1")
 
 
+def test_execute_open_action_updates_vacancy_and_refreshes_matching() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    service.repo = fake_repo
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    vacancy.role_title = "Senior Python Engineer"
+    vacancy.seniority_normalized = "senior"
+    vacancy.budget_min = 6000
+    vacancy.budget_max = 7000
+    vacancy.budget_currency = "USD"
+    vacancy.budget_period = "month"
+    vacancy.work_format = "remote"
+    vacancy.countries_allowed_json = ["PL"]
+    vacancy.required_english_level = "b1"
+    vacancy.has_take_home_task = True
+    vacancy.take_home_paid = False
+    vacancy.has_live_coding = True
+    vacancy.hiring_stages_json = ["recruiter_screen", "technical_interview"]
+    vacancy.team_size = 6
+    vacancy.project_description = "Payments platform"
+    vacancy.primary_tech_stack_json = ["python", "postgresql"]
+
+    result = service.execute_open_action(
+        user=user,
+        raw_message_id="raw-open-update-1",
+        action="update_vacancy_preferences",
+        structured_payload={
+            "budget_min": 7000,
+            "budget_max": 9000,
+            "required_english_level": "b2",
+            "has_take_home_task": False,
+            "has_live_coding": False,
+            "hiring_stages_json": ["recruiter_screen", "technical_interview", "final"],
+            "project_description": "Fintech platform for ecommerce merchants",
+            "primary_tech_stack_json": ["python", "fastapi", "postgresql"],
+        },
+        latest_user_message="Update the backend vacancy.",
+    )
+
+    assert result is not None
+    assert result.status == "vacancy_updated_matching_requested"
+    assert vacancy.budget_min == 7000
+    assert vacancy.budget_max == 9000
+    assert vacancy.required_english_level == "b2"
+    assert vacancy.has_take_home_task is False
+    assert vacancy.has_live_coding is False
+    assert vacancy.hiring_stages_json == ["recruiter_screen", "technical_interview", "final"]
+    assert vacancy.project_description == "Fintech platform for ecommerce merchants"
+    assert vacancy.primary_tech_stack_json == ["python", "fastapi", "postgresql"]
+    assert "updated" in result.notification_text.lower()
+    assert "refreshing matching" in result.notification_text.lower()
+    assert len(service.queue.messages) == 1
+    assert service.queue.messages[0].payload["vacancy_id"] == str(vacancy.id)
+
+
+def test_execute_open_action_requests_follow_up_for_hybrid_without_office_city() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    service.repo = fake_repo
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    vacancy.budget_min = 7000
+    vacancy.budget_max = 9000
+    vacancy.budget_currency = "USD"
+    vacancy.budget_period = "month"
+    vacancy.work_format = "remote"
+    vacancy.countries_allowed_json = ["PL"]
+    vacancy.required_english_level = "b2"
+    vacancy.has_take_home_task = False
+    vacancy.take_home_paid = None
+    vacancy.has_live_coding = False
+    vacancy.hiring_stages_json = ["recruiter_screen", "technical_interview", "final"]
+    vacancy.team_size = 5
+    vacancy.project_description = "B2B SaaS platform"
+    vacancy.primary_tech_stack_json = ["python", "fastapi"]
+
+    result = service.execute_open_action(
+        user=user,
+        raw_message_id="raw-open-update-2",
+        action="update_vacancy_preferences",
+        structured_payload={"work_format": "hybrid"},
+        latest_user_message="Make it hybrid.",
+    )
+
+    assert result is not None
+    assert result.status == "vacancy_updated_needs_follow_up"
+    assert vacancy.work_format == "hybrid"
+    assert vacancy.questions_context_json["current_question_key"] == "office_city"
+    assert "one more thing" in result.notification_text.lower()
+    assert len(service.queue.messages) == 0
+
+
 def test_handle_jd_intake_transitions_to_processing() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()

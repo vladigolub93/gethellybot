@@ -652,6 +652,48 @@ def test_graph_manager_stage_accepts_find_matching_candidates_intent() -> None:
     assert result.reply_text is None
 
 
+def test_graph_manager_stage_accepts_open_vacancy_update_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6prefs", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m6prefs",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message=(
+            "Update this vacancy: budget 7000-9000 USD, remote, English B2, no live coding, "
+            "hiring stages recruiter screen, technical interview, final, project fintech platform, stack Python and FastAPI."
+        ),
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "update_vacancy_preferences"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["budget_min"] == 7000
+    assert result.structured_payload["budget_max"] == 9000
+    assert result.structured_payload["work_format"] == "remote"
+    assert result.structured_payload["required_english_level"] == "b2"
+    assert result.structured_payload["has_live_coding"] is False
+    assert result.structured_payload["hiring_stages_json"] == [
+        "recruiter_screen",
+        "technical_interview",
+        "final",
+    ]
+    assert result.structured_payload["primary_tech_stack_json"][:2] == ["python", "fastapi"]
+
+
 def test_graph_manager_stage_handles_manager_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

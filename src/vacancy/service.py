@@ -95,6 +95,8 @@ class VacancyService:
         user,
         raw_message_id,
         action: str | None,
+        structured_payload: dict | None = None,
+        latest_user_message: str | None = None,
     ) -> Optional[VacancyOpenActionResult]:
         if action == "create_new_vacancy":
             self.start_onboarding(user, trigger_ref_id=raw_message_id)
@@ -113,27 +115,67 @@ class VacancyService:
                 notification_text=self._format_open_vacancies(user),
             )
 
+        if action == "update_vacancy_preferences":
+            vacancy = self._resolve_open_target_vacancy(user, latest_user_message=latest_user_message)
+            if vacancy is None:
+                return VacancyOpenActionResult(
+                    status="no_open_vacancy",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy("I couldn’t find an open vacancy to update right now."),
+                )
+            parsed = dict(structured_payload or {})
+            if not parsed:
+                return VacancyOpenActionResult(
+                    status="vacancy_update_missing",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy(
+                        "Tell me exactly what to change in budget, format, city, countries, English, process, project, or stack."
+                    ),
+                )
+            self.repo.update_clarifications(vacancy, **parsed)
+            updated_labels = self._describe_open_updates(parsed)
+            missing_keys = self._missing_clarification_keys(vacancy)
+            if missing_keys:
+                next_key = missing_keys[0]
+                questions_context = self._ensure_questions_context(vacancy)
+                questions_context["current_question_key"] = next_key
+                self.repo.update_questions_context(vacancy, questions_context)
+                lead = (
+                    f'I updated "{self._vacancy_label(vacancy)}": {", ".join(updated_labels)}.'
+                    if updated_labels
+                    else f'I updated "{self._vacancy_label(vacancy)}".'
+                )
+                return VacancyOpenActionResult(
+                    status="vacancy_updated_needs_follow_up",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy(
+                        f"{lead} To use this cleanly in matching, I still need one more thing: "
+                        f"{question_prompt(next_key, work_format=getattr(vacancy, 'work_format', None), has_take_home_task=getattr(vacancy, 'has_take_home_task', None))}"
+                    ),
+                )
+            self._enqueue_open_matching(vacancy=vacancy, raw_message_id=raw_message_id)
+            return VacancyOpenActionResult(
+                status="vacancy_updated_matching_requested",
+                notification_template="vacancy_open",
+                notification_text=self._copy(
+                    (
+                        f'I updated "{self._vacancy_label(vacancy)}": {", ".join(updated_labels)}.'
+                        if updated_labels
+                        else f'I updated "{self._vacancy_label(vacancy)}".'
+                    )
+                    + " I’m refreshing matching for this vacancy now."
+                ),
+            )
+
         if action == "find_matching_candidates":
-            open_vacancies = self.repo.get_open_by_manager_user_id(user.id)
-            vacancy = open_vacancies[0] if open_vacancies else None
+            vacancy = self._resolve_open_target_vacancy(user, latest_user_message=latest_user_message)
             if vacancy is None:
                 return VacancyOpenActionResult(
                     status="no_open_vacancy",
                     notification_template="vacancy_open",
                     notification_text=self._copy("I couldn’t find an open vacancy to refresh right now."),
                 )
-            self.queue.enqueue(
-                JobMessage(
-                    job_type="matching_run_for_vacancy_v1",
-                    payload={
-                        "vacancy_id": str(vacancy.id),
-                        "trigger_type": "manager_manual_request",
-                    },
-                    idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:manual:{raw_message_id}",
-                    entity_type="vacancy",
-                    entity_id=vacancy.id,
-                )
-            )
+            self._enqueue_open_matching(vacancy=vacancy, raw_message_id=raw_message_id)
             return VacancyOpenActionResult(
                 status="matching_requested",
                 notification_template="vacancy_open",
@@ -141,6 +183,50 @@ class VacancyService:
             )
 
         return None
+
+    def _enqueue_open_matching(self, *, vacancy, raw_message_id) -> None:
+        self.queue.enqueue(
+            JobMessage(
+                job_type="matching_run_for_vacancy_v1",
+                payload={
+                    "vacancy_id": str(vacancy.id),
+                    "trigger_type": "manager_manual_request",
+                },
+                idempotency_key=f"matching_run_for_vacancy_v1:{vacancy.id}:manual:{raw_message_id}",
+                entity_type="vacancy",
+                entity_id=vacancy.id,
+            )
+        )
+
+    def _describe_open_updates(self, parsed: dict) -> list[str]:
+        labels = []
+        if any(key in parsed for key in {"budget_min", "budget_max", "budget_currency", "budget_period"}):
+            labels.append("budget")
+        if "work_format" in parsed:
+            labels.append("work format")
+        if "office_city" in parsed:
+            labels.append("office city")
+        if "countries_allowed_json" in parsed:
+            labels.append("allowed countries")
+        if "required_english_level" in parsed:
+            labels.append("English requirement")
+        if any(key in parsed for key in {"has_take_home_task", "has_live_coding"}):
+            labels.append("assessment requirements")
+        if "take_home_paid" in parsed:
+            labels.append("take-home compensation")
+        if "hiring_stages_json" in parsed:
+            labels.append("hiring stages")
+        if "team_size" in parsed:
+            labels.append("team size")
+        if "project_description" in parsed:
+            labels.append("project description")
+        if "primary_tech_stack_json" in parsed:
+            labels.append("tech stack")
+        if "role_title" in parsed:
+            labels.append("role title")
+        if "seniority_normalized" in parsed:
+            labels.append("seniority")
+        return labels
 
     def ensure_active_intake_vacancy_for_manager(self, user) -> object:
         vacancy = self.repo.get_latest_incomplete_by_manager_user_id(user.id)
@@ -748,11 +834,7 @@ class VacancyService:
                 return vacancy
         return None
 
-    def _resolve_deletion_target_vacancy(self, user, *, latest_user_message: str | None):
-        pending_vacancy = self._find_pending_deletion_vacancy(user)
-        if pending_vacancy is not None:
-            return pending_vacancy
-
+    def _resolve_open_target_vacancy(self, user, *, latest_user_message: str | None):
         open_vacancies = self.repo.get_open_by_manager_user_id(user.id)
         if not open_vacancies:
             return self.repo.get_latest_active_by_manager_user_id(user.id)
@@ -775,6 +857,12 @@ class VacancyService:
                     return vacancy
 
         return open_vacancies[0]
+
+    def _resolve_deletion_target_vacancy(self, user, *, latest_user_message: str | None):
+        pending_vacancy = self._find_pending_deletion_vacancy(user)
+        if pending_vacancy is not None:
+            return pending_vacancy
+        return self._resolve_open_target_vacancy(user, latest_user_message=latest_user_message)
 
     def _message_matches_vacancy_alias(self, normalized_message: str, normalized_label: str) -> bool:
         label_tokens = {token for token in normalized_label.replace(".", " ").split() if token}
