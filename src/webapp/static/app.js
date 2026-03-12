@@ -57,6 +57,28 @@
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
   }
 
+  function splitExpandableText(value, maxLength) {
+    const text = String(value || "");
+    if (!text || text.length <= maxLength) {
+      return { preview: text, remainder: "" };
+    }
+
+    const previewSlice = text.slice(0, maxLength);
+    const lastBoundary = Math.max(previewSlice.lastIndexOf("\n"), previewSlice.lastIndexOf(" "));
+    const splitIndex = lastBoundary >= Math.floor(maxLength * 0.6) ? lastBoundary : maxLength;
+    const preview = text.slice(0, splitIndex).trimEnd();
+    const remainder = text.slice(splitIndex).trimStart();
+
+    if (!preview || !remainder) {
+      return { preview: truncateText(text, maxLength), remainder: "" };
+    }
+
+    return {
+      preview: `${preview}…`,
+      remainder,
+    };
+  }
+
   function firstNonEmpty() {
     for (let index = 0; index < arguments.length; index += 1) {
       const value = arguments[index];
@@ -622,10 +644,14 @@
     const disclosureId = `panel-disclosure-${state.disclosureCounter += 1}`;
     const openLabel = isTerminalTheme() ? "show_full_text" : "Show full text";
     const closeLabel = isTerminalTheme() ? "hide_full_text" : "Hide full text";
+    const { preview, remainder } = splitExpandableText(text, previewLength);
+    if (!remainder) {
+      return renderTextPanel(title, text, emptyText);
+    }
     return renderPanel(
       title,
       `
-        <p class="card-note">${escapeHtml(truncateText(text, previewLength)).replace(/\n/g, "<br />")}</p>
+        <p class="card-note">${escapeHtml(preview).replace(/\n/g, "<br />")}</p>
         <button
           class="panel-toggle"
           type="button"
@@ -635,7 +661,7 @@
           aria-expanded="false"
         >${escapeHtml(openLabel)}</button>
         <div id="${escapeHtml(disclosureId)}" class="panel-toggle-target is-hidden">
-          <p class="card-note">${escapeHtml(text).replace(/\n/g, "<br />")}</p>
+          <p class="card-note">${escapeHtml(remainder).replace(/\n/g, "<br />")}</p>
         </div>
       `
     );
