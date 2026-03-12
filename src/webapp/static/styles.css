@@ -1046,6 +1046,55 @@ html[data-theme="terminal"] .detail-grid-terminal dd {
   display: none;
 }
 
+.view-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.view-controls-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.control-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.control-chip.is-active {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.control-chip:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
 .detail-grid {
   display: grid;
   gap: 0;
@@ -1462,6 +1511,25 @@ html[data-theme="terminal"] .panel-toggle:focus-visible {
 
 html[data-theme="terminal"] .panel-toggle-target {
   border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="terminal"] .control-chip {
+  border-radius: 8px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #c7c7cc;
+}
+
+html[data-theme="terminal"] .control-chip.is-active {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+}
+
+html[data-theme="terminal"] .control-chip:focus-visible {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
 }
 
 html[data-theme="terminal"] .empty-state {

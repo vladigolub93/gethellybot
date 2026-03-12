@@ -292,6 +292,102 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
     assert payload["profile"]["source"]["text"] == "Senior backend engineer with Node.js and PostgreSQL background."
 
 
+def test_candidate_opportunity_detail_includes_why_this_role() -> None:
+    user_id = uuid4()
+    manager_user_id = uuid4()
+    profile_id = uuid4()
+    vacancy_id = uuid4()
+    match_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    service = WebAppService(session=object())
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(
+            id=profile_id,
+            user_id=user_id,
+            state="READY",
+            location_text="Kyiv",
+            country_code="UA",
+            city="Kyiv",
+            work_format="remote",
+            salary_min=5000,
+            salary_max=6000,
+            salary_currency="USD",
+            salary_period="month",
+            ready_at=now,
+            updated_at=now,
+        ),
+        version=SimpleNamespace(
+            source_type="cv_file",
+            extracted_text="Senior backend engineer with Node.js and PostgreSQL background.",
+            transcript_text=None,
+            summary_json={
+                "headline": "Senior Backend Engineer",
+                "approval_summary_text": "Built scalable backend products.",
+                "skills": ["Node.js", "PostgreSQL"],
+                "years_experience": 8,
+                "target_role": "Senior Backend Engineer",
+            },
+        ),
+    )
+    service.matches = FakeMatchingRepository(
+        matches=[
+            SimpleNamespace(
+                id=match_id,
+                vacancy_id=vacancy_id,
+                candidate_profile_id=profile_id,
+                status="candidate_decision_pending",
+                updated_at=now,
+                invitation_sent_at=None,
+                candidate_response_at=None,
+                manager_decision_at=None,
+            )
+        ]
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(
+            id=vacancy_id,
+            manager_user_id=manager_user_id,
+            role_title="Senior Backend Engineer",
+            budget_min=6000,
+            budget_max=7000,
+            budget_currency="USD",
+            budget_period="month",
+            countries_allowed_json=["UA"],
+            work_format="remote",
+            team_size="8",
+            project_description="Realtime pricing platform",
+            primary_tech_stack_json=["Node.js", "PostgreSQL"],
+            seniority_normalized="senior",
+            opened_at=now,
+            updated_at=now,
+        ),
+        version=SimpleNamespace(
+            source_type="job_description",
+            extracted_text="Senior Node.js role for a realtime pricing platform.",
+            transcript_text=None,
+            summary_json={
+                "approval_summary_text": "Build and run a pricing platform.",
+                "headline": "Senior Node.js role",
+                "skills": ["Node.js", "PostgreSQL"],
+            },
+        ),
+    )
+    service.users = FakeUsersRepository({})
+    service.interviews = FakeInterviewsRepository(interview=None)
+    service.evaluations = FakeEvaluationsRepository(evaluation=None)
+
+    payload = service.get_candidate_opportunity_detail(
+        SimpleNamespace(role="candidate", user_id=str(user_id)),
+        str(match_id),
+    )
+
+    assert payload["vacancy"]["whyThisRole"] == (
+        "Your profile overlaps with this role on Node.js, PostgreSQL. "
+        "It also matches your preferred work format: remote."
+    )
+
+
 def test_bootstrap_candidate_cv_challenge_commits_only_for_eligible_attempts() -> None:
     session = FakeSession()
     user_id = uuid4()
@@ -487,6 +583,8 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "budget": "6000-7000 USD per month",
             "candidateCount": 1,
             "activePipelineCount": 0,
+            "needsReviewCount": 0,
+            "interviewCount": 0,
             "connectedCount": 1,
             "updatedAt": now.isoformat(),
         }
@@ -518,8 +616,58 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
     assert match_detail_payload["match"]["statusDescription"] == "Contacts were shared and this candidate moved into direct communication."
     assert match_detail_payload["match"]["needsCandidateAction"] is False
     assert match_detail_payload["match"]["needsManagerAction"] is False
+    assert match_detail_payload["vacancy"]["whyThisRole"] == (
+        "Your profile overlaps with this role on Node.js. "
+        "It also matches your preferred work format: remote."
+    )
     assert match_detail_payload["vacancy"]["source"]["text"] == "Senior Node.js role for a realtime pricing platform."
     assert match_detail_payload["candidate"]["answers"]["city"] == "Kyiv"
     assert match_detail_payload["candidate"]["source"]["text"] == "Built scalable Node.js backends for product teams."
     assert match_detail_payload["interview"]["state"] is None
     assert match_detail_payload["evaluation"]["interviewSummary"] is None
+
+
+def test_manager_vacancy_cards_include_review_and_interview_counts() -> None:
+    manager_user_id = uuid4()
+    vacancy_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    service = WebAppService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(
+            id=vacancy_id,
+            manager_user_id=manager_user_id,
+            role_title="Node.js Developer",
+            state="OPEN",
+            budget_min=6000,
+            budget_max=7000,
+            budget_currency="USD",
+            budget_period="month",
+            updated_at=now,
+        )
+    )
+    service.matches = FakeMatchingRepository(
+        matches=[
+            SimpleNamespace(
+                id=uuid4(),
+                vacancy_id=vacancy_id,
+                candidate_profile_id=uuid4(),
+                status="manager_decision_pending",
+                updated_at=now,
+            ),
+            SimpleNamespace(
+                id=uuid4(),
+                vacancy_id=vacancy_id,
+                candidate_profile_id=uuid4(),
+                status="invited",
+                updated_at=now,
+            ),
+        ]
+    )
+
+    payload = service.list_manager_vacancies(
+        SimpleNamespace(role="hiring_manager", user_id=str(manager_user_id))
+    )
+
+    assert payload["items"][0]["needsReviewCount"] == 1
+    assert payload["items"][0]["interviewCount"] == 1

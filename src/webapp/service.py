@@ -49,6 +49,17 @@ WEBAPP_STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 class WebAppService:
+    INTERVIEW_RELATED_MATCH_STATUSES = frozenset(
+        {
+            "manager_interview_requested",
+            "interview_queued",
+            "invited",
+            "accepted",
+            "candidate_declined_interview",
+            "interview_completed",
+        }
+    )
+
     def __init__(self, session):
         self.session = session
         self.settings = get_settings()
@@ -490,6 +501,12 @@ class WebAppService:
             ),
             "candidateCount": len(matches),
             "activePipelineCount": len([match for match in matches if match.status in self.matches.ACTIVE_MATCH_STATUSES]),
+            "needsReviewCount": len(
+                [match for match in matches if match_requires_action(match.status, perspective="manager")]
+            ),
+            "interviewCount": len(
+                [match for match in matches if match.status in self.INTERVIEW_RELATED_MATCH_STATUSES]
+            ),
             "connectedCount": len([match for match in matches if getattr(match, "status", None) == "approved"]),
             "updatedAt": isoformat_or_none(vacancy.updated_at),
         }
@@ -568,6 +585,7 @@ class WebAppService:
         interview = self.interviews.get_session_by_match_id(match.id)
         evaluation = self.evaluations.get_by_match_id(match.id)
         vacancy_summary = vacancy_summary_snapshot(getattr(vacancy_version, "summary_json", None))
+        candidate_summary = candidate_summary_snapshot(getattr(candidate_version, "summary_json", None))
 
         return {
             "match": {
@@ -612,6 +630,12 @@ class WebAppService:
                 "projectDescription": getattr(vacancy, "project_description", None),
                 "primaryTechStack": list(getattr(vacancy, "primary_tech_stack_json", None) or []),
                 "summary": vacancy_summary,
+                "whyThisRole": self._build_candidate_match_reason(
+                    vacancy=vacancy,
+                    candidate_profile=candidate_profile,
+                    candidate_summary=candidate_summary,
+                    vacancy_summary=vacancy_summary,
+                ),
                 "source": source_text_snapshot(vacancy_version),
                 "managerName": self._display_name(manager_user, None),
             },
@@ -639,7 +663,7 @@ class WebAppService:
                         "city": None,
                         "workFormat": None,
                     },
-                    "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
+                    "summary": candidate_summary,
                 }
             ),
             "interview": {
@@ -653,3 +677,59 @@ class WebAppService:
             },
             "evaluation": evaluation_snapshot(evaluation),
         }
+
+    @staticmethod
+    def _normalize_skill_token(value: Any) -> str:
+        return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+    def _build_candidate_match_reason(
+        self,
+        *,
+        vacancy,
+        candidate_profile,
+        candidate_summary: Optional[Dict[str, Any]],
+        vacancy_summary: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        candidate_summary = candidate_summary or {}
+        vacancy_summary = vacancy_summary or {}
+
+        candidate_skill_map = {
+            self._normalize_skill_token(skill): skill
+            for skill in candidate_summary.get("skills") or []
+            if self._normalize_skill_token(skill)
+        }
+        overlapping_skills = [
+            skill
+            for skill in vacancy_summary.get("skills") or []
+            if self._normalize_skill_token(skill) in candidate_skill_map
+        ]
+
+        reasons: List[str] = []
+        if overlapping_skills:
+            rendered_skills = ", ".join(overlapping_skills[:3])
+            reasons.append(f"Your profile overlaps with this role on {rendered_skills}.")
+        else:
+            target_role = candidate_summary.get("targetRole")
+            role_title = getattr(vacancy, "role_title", None)
+            if target_role and role_title:
+                reasons.append(f"This role lines up well with your target profile for {target_role}.")
+            elif role_title:
+                reasons.append(f"This role is relevant to your current profile for {role_title}.")
+
+        candidate_work_format = getattr(candidate_profile, "work_format", None)
+        vacancy_work_format = getattr(vacancy, "work_format", None)
+        if candidate_work_format and vacancy_work_format and str(candidate_work_format).lower() == str(vacancy_work_format).lower():
+            reasons.append(f"It also matches your preferred work format: {candidate_work_format}.")
+
+        candidate_country = getattr(candidate_profile, "country_code", None)
+        countries_allowed = list(getattr(vacancy, "countries_allowed_json", None) or [])
+        if candidate_country and countries_allowed and candidate_country in countries_allowed:
+            reasons.append("Your location is already allowed for this role.")
+
+        if reasons:
+            return " ".join(reasons[:2])
+
+        summary_text = vacancy_summary.get("approvalSummaryText") or vacancy_summary.get("headline")
+        if summary_text:
+            return summary_text
+        return None

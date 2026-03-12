@@ -5,8 +5,28 @@
     backButtonHandlerBound: false,
     theme: "terminal",
     disclosureCounter: 0,
+    managerHomeView: { filter: "all", sort: "updated" },
+    managerHomePayload: null,
+    managerVacancyViews: {},
+    managerVacancyPayloads: {},
   };
   const TERMINAL_THEME = "terminal";
+  const INTERVIEW_RELATED_STAGES = new Set([
+    "manager_interview_requested",
+    "interview_queued",
+    "invited",
+    "accepted",
+    "candidate_declined_interview",
+    "interview_completed",
+  ]);
+  const CLOSED_MATCH_STAGES = new Set([
+    "rejected",
+    "manager_skipped",
+    "candidate_skipped",
+    "candidate_declined_interview",
+    "filtered_out",
+    "expired",
+  ]);
 
   const appEl = document.getElementById("app");
   const appShellEl = document.querySelector(".app-shell");
@@ -254,8 +274,150 @@
     }, 0);
   }
 
+  function timeValue(isoValue) {
+    const value = new Date(isoValue).getTime();
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function pluralize(count, singular, plural) {
+    return Number(count) === 1 ? singular : plural;
+  }
+
   function isTerminalTheme() {
     return state.theme === TERMINAL_THEME;
+  }
+
+  function isInterviewStage(status) {
+    return INTERVIEW_RELATED_STAGES.has(String(status || ""));
+  }
+
+  function isClosedMatchStage(status) {
+    return CLOSED_MATCH_STAGES.has(String(status || ""));
+  }
+
+  function getManagerHomeView() {
+    return state.managerHomeView;
+  }
+
+  function getManagerVacancyView(vacancyId) {
+    if (!state.managerVacancyViews[vacancyId]) {
+      state.managerVacancyViews[vacancyId] = { filter: "all", sort: "needs-action" };
+    }
+    return state.managerVacancyViews[vacancyId];
+  }
+
+  function updateViewState(scope, key, value, id) {
+    if (scope === "manager-home") {
+      state.managerHomeView = {
+        ...getManagerHomeView(),
+        [key]: value,
+      };
+      return;
+    }
+    if (scope === "manager-vacancy" && id) {
+      state.managerVacancyViews[id] = {
+        ...getManagerVacancyView(id),
+        [key]: value,
+      };
+    }
+  }
+
+  function filterManagerVacancies(items, filterKey) {
+    const allItems = items || [];
+    switch (filterKey) {
+      case "needs-review":
+        return allItems.filter((item) => Number(item && item.needsReviewCount) > 0);
+      case "interview":
+        return allItems.filter((item) => Number(item && item.interviewCount) > 0);
+      case "connected":
+        return allItems.filter((item) => Number(item && item.connectedCount) > 0);
+      case "closed":
+        return allItems.filter((item) => String(item && item.state || "").toUpperCase() !== "OPEN");
+      default:
+        return allItems;
+    }
+  }
+
+  function sortManagerVacancies(items, sortKey) {
+    const allItems = [...(items || [])];
+    const byUpdated = (left, right) => timeValue(right && right.updatedAt) - timeValue(left && left.updatedAt);
+    if (sortKey === "needs-review") {
+      allItems.sort((left, right) => (
+        Number(right && right.needsReviewCount || 0) - Number(left && left.needsReviewCount || 0)
+      ) || byUpdated(left, right));
+      return allItems;
+    }
+    if (sortKey === "candidates") {
+      allItems.sort((left, right) => (
+        Number(right && right.candidateCount || 0) - Number(left && left.candidateCount || 0)
+      ) || byUpdated(left, right));
+      return allItems;
+    }
+    allItems.sort(byUpdated);
+    return allItems;
+  }
+
+  function filterManagerCandidates(items, filterKey) {
+    const allItems = items || [];
+    switch (filterKey) {
+      case "needs-review":
+        return allItems.filter((item) => item && item.needsAction);
+      case "interview":
+        return allItems.filter((item) => isInterviewStage(item && item.stage));
+      case "connected":
+        return allItems.filter((item) => item && item.stage === "approved");
+      case "closed":
+        return allItems.filter((item) => isClosedMatchStage(item && item.stage));
+      default:
+        return allItems;
+    }
+  }
+
+  function sortManagerCandidates(items, sortKey) {
+    const allItems = [...(items || [])];
+    const byUpdated = (left, right) => timeValue(right && right.updatedAt) - timeValue(left && left.updatedAt);
+    if (sortKey === "needs-action") {
+      allItems.sort((left, right) => (
+        Number(Boolean(right && right.needsAction)) - Number(Boolean(left && left.needsAction))
+      ) || byUpdated(left, right));
+      return allItems;
+    }
+    allItems.sort(byUpdated);
+    return allItems;
+  }
+
+  function renderFilteredEmptyState(message) {
+    return `<div class="empty-state">${escapeHtml(message)}</div>`;
+  }
+
+  function renderViewControls(groups) {
+    const visibleGroups = (groups || []).filter((group) => group && (group.items || []).length);
+    if (!visibleGroups.length) return "";
+    return `
+      <section class="view-controls ${isTerminalTheme() ? "view-controls-terminal" : ""}">
+        ${visibleGroups.map((group) => `
+          <div class="view-controls-group">
+            <p class="footer-note">${escapeHtml(group.label)}</p>
+            <div class="control-bar">
+              ${(group.items || []).map((item) => {
+                const isActive = item.value === group.selectedValue;
+                return `
+                  <button
+                    class="control-chip ${isActive ? "is-active" : ""}"
+                    type="button"
+                    data-view-scope="${escapeHtml(group.scope)}"
+                    data-view-key="${escapeHtml(group.key)}"
+                    data-view-value="${escapeHtml(item.value)}"
+                    ${group.scopeId ? `data-view-id="${escapeHtml(group.scopeId)}"` : ""}
+                    aria-pressed="${isActive ? "true" : "false"}"
+                  >${escapeHtml(item.label)}</button>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `).join("")}
+      </section>
+    `;
   }
 
   function terminalToken(value) {
@@ -559,33 +721,178 @@
   }
 
   function renderManagerVacancyCard(item) {
+    const needsReviewCount = Number(item && item.needsReviewCount || 0);
+    const interviewCount = Number(item && item.interviewCount || 0);
     return renderShortcutCard({
       route: `manager-vacancy:${item.id}`,
       title: item.roleTitle || "Vacancy",
-      badge: item.state || "State",
-      badgeTone: badgeTone(item.state),
-      note: `Updated ${formatRelativeTime(item.updatedAt)}`,
+      badge: needsReviewCount ? "Needs review" : item.state || "State",
+      badgeTone: needsReviewCount ? "warn" : badgeTone(item.state),
+      note: needsReviewCount
+        ? `${needsReviewCount} ${pluralize(needsReviewCount, "candidate", "candidates")} waiting for your review.`
+        : `Updated ${formatRelativeTime(item.updatedAt)}`,
       metrics: [
         { label: "Candidates", value: String(item.candidateCount || 0) },
-        { label: "Pipeline", value: String(item.activePipelineCount || 0) },
+        { label: "Interview", value: String(interviewCount) },
         { label: "Connected", value: String(item.connectedCount || 0) },
       ],
     });
   }
 
   function renderManagerCandidateCard(item) {
+    const summaryText = firstNonEmpty(
+      item.needsAction ? item.stageDescription : "",
+      (item.summary || {}).approvalSummaryText,
+      "No summary yet."
+    );
     return renderShortcutCard({
       route: `manager-candidate:${item.id}`,
       title: item.candidateName || "Candidate",
       badge: item.stageLabel || "Status",
       badgeTone: badgeTone(item.stageLabel || item.stage),
-      note: truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 110),
+      note: truncateText(summaryText, 110),
       metrics: [
         { label: "Location", value: item.location || "Not set" },
         { label: "Salary", value: item.salaryExpectation || "Not set" },
-        { label: "Format", value: item.workFormat || "Not set" },
+        { label: "Updated", value: formatRelativeTime(item.updatedAt) },
       ],
     });
+  }
+
+  function renderManagerHomeScreen(payload) {
+    const items = payload.items || [];
+    const view = getManagerHomeView();
+    const filteredItems = sortManagerVacancies(filterManagerVacancies(items, view.filter), view.sort);
+    const totalCandidateCount = sumBy(items, "candidateCount");
+    const totalNeedsReviewCount = sumBy(items, "needsReviewCount");
+    const totalConnectedCount = sumBy(items, "connectedCount");
+    const emptyMessageByFilter = {
+      "needs-review": "No vacancies need review right now.",
+      interview: "No vacancies are in interview flow right now.",
+      connected: "No vacancies have connected candidates yet.",
+      closed: "No closed vacancies yet.",
+    };
+    appEl.innerHTML = `
+      ${renderScreenHeader("Dashboard", "", "dashboard")}
+      ${renderStatsStrip([
+        { label: "Vacancies", value: String(items.length) },
+        { label: "Needs review", value: String(totalNeedsReviewCount) },
+        { label: "Candidates", value: String(totalCandidateCount) },
+        { label: "Connected", value: String(totalConnectedCount) }
+      ])}
+      ${items.length ? renderViewControls([
+        {
+          label: "Filter",
+          scope: "manager-home",
+          key: "filter",
+          selectedValue: view.filter,
+          items: [
+            { label: "All", value: "all" },
+            { label: "Needs review", value: "needs-review" },
+            { label: "Interview", value: "interview" },
+            { label: "Connected", value: "connected" },
+            { label: "Closed", value: "closed" },
+          ],
+        },
+        {
+          label: "Sort",
+          scope: "manager-home",
+          key: "sort",
+          selectedValue: view.sort,
+          items: [
+            { label: "Updated", value: "updated" },
+            { label: "Needs review first", value: "needs-review" },
+            { label: "Most candidates", value: "candidates" },
+          ],
+        },
+      ]) : ""}
+      <section class="list">
+        ${filteredItems.length
+          ? filteredItems.map(renderManagerVacancyCard).join("")
+          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No vacancies yet. Open a role and candidates will start appearing here.")}
+      </section>
+    `;
+    bindCards();
+    bindViewControls();
+  }
+
+  function renderManagerVacancyScreen(vacancyId, detail, matchesPayload) {
+    const vacancy = detail.vacancy;
+    const stats = detail.stats;
+    const items = matchesPayload.items || [];
+    const view = getManagerVacancyView(vacancyId);
+    const filteredItems = sortManagerCandidates(filterManagerCandidates(items, view.filter), view.sort);
+    const emptyMessageByFilter = {
+      "needs-review": "No candidates need your review in this vacancy right now.",
+      interview: "No candidates are in interview flow for this vacancy right now.",
+      connected: "No connected candidates in this vacancy yet.",
+      closed: "No closed candidates in this vacancy yet.",
+    };
+
+    appEl.innerHTML = `
+      ${renderScreenHeader(vacancy.roleTitle || "Vacancy", "", "vacancy")}
+      ${renderStatsStrip([
+        { label: "Candidates", value: String(stats.candidateCount) },
+        { label: "Needs review", value: String(stats.needsReviewCount || 0) },
+        { label: "Interview", value: String(stats.interviewCount || 0) },
+        { label: "Connected", value: String(stats.connectedCount || 0) }
+      ])}
+      <section class="list">
+        <p class="footer-note">Candidates</p>
+        ${items.length ? renderViewControls([
+          {
+            label: "Filter",
+            scope: "manager-vacancy",
+            scopeId: vacancyId,
+            key: "filter",
+            selectedValue: view.filter,
+            items: [
+              { label: "All", value: "all" },
+              { label: "Needs review", value: "needs-review" },
+              { label: "Interview", value: "interview" },
+              { label: "Connected", value: "connected" },
+              { label: "Closed", value: "closed" },
+            ],
+          },
+          {
+            label: "Sort",
+            scope: "manager-vacancy",
+            scopeId: vacancyId,
+            key: "sort",
+            selectedValue: view.sort,
+            items: [
+              { label: "Needs action first", value: "needs-action" },
+              { label: "Updated", value: "updated" },
+            ],
+          },
+        ]) : ""}
+        ${filteredItems.length
+          ? filteredItems.map(renderManagerCandidateCard).join("")
+          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No candidates yet. As soon as Helly finds matches, they will appear here.")}
+      </section>
+      ${renderTextPanel(
+        "Summary",
+        firstNonEmpty(
+          vacancy.summary && vacancy.summary.approvalSummaryText,
+          vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
+          vacancy.projectDescription
+        ),
+        "No summary yet."
+      )}
+      ${renderDetailSection("Vacancy", [
+        { label: "Budget", value: vacancy.budget || "Not specified" },
+        { label: "Work format", value: vacancy.workFormat || "Not specified" },
+        { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
+        { label: "Team size", value: vacancy.teamSize || "" },
+        { label: "Opened", value: vacancy.openedAt ? formatEventTime(vacancy.openedAt) : "" },
+        { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
+      ])}
+      ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
+      ${renderExpandableTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
+    `;
+    bindCards();
+    bindDisclosures();
+    bindViewControls();
   }
 
   function renderCandidateProfileHome(profile) {
@@ -743,23 +1050,8 @@
 
     if (role === "hiring_manager") {
       const payload = await api("/webapp/api/hiring-manager/vacancies");
-      const items = payload.items || [];
-      const totalCandidateCount = sumBy(items, "candidateCount");
-      const totalActivePipelineCount = sumBy(items, "activePipelineCount");
-      const totalConnectedCount = sumBy(items, "connectedCount");
-      appEl.innerHTML = `
-        ${renderScreenHeader("Dashboard", "", "dashboard")}
-        ${renderStatsStrip([
-          { label: "Vacancies", value: String(items.length) },
-          { label: "Candidates", value: String(totalCandidateCount) },
-          { label: "Pipeline", value: String(totalActivePipelineCount) },
-          { label: "Connected", value: String(totalConnectedCount) }
-        ])}
-        <section class="list">
-          ${items.length ? items.map(renderManagerVacancyCard).join("") : `<div class="empty-state">No vacancies yet. Open a role and candidates will start appearing here.</div>`}
-        </section>
-      `;
-      bindCards();
+      state.managerHomePayload = payload;
+      renderManagerHomeScreen(payload);
       return;
     }
   }
@@ -775,6 +1067,7 @@
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
       ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
+      ${renderTextPanel("Why this role", payload.vacancy.whyThisRole || "", "")}
       ${renderDetailSection("Timeline", [
         { label: "Last updated", value: formatEventTime(payload.match.updatedAt) },
         { label: "Your reply", value: formatEventTime(payload.match.candidateRespondedAt, "Pending") },
@@ -805,42 +1098,8 @@
     const detailPath = `/webapp/api/hiring-manager/vacancies/${vacancyId}`;
     const matchesPath = `/webapp/api/hiring-manager/vacancies/${vacancyId}/matches`;
     const [detail, matchesPayload] = await Promise.all([api(detailPath), api(matchesPath)]);
-    const vacancy = detail.vacancy;
-    const stats = detail.stats;
-    const items = matchesPayload.items || [];
-    appEl.innerHTML = `
-      ${renderScreenHeader(vacancy.roleTitle || "Vacancy", "", "vacancy")}
-      ${renderStatsStrip([
-        { label: "Candidates", value: String(stats.candidateCount) },
-        { label: "Pipeline", value: String(stats.activePipelineCount) },
-        { label: "Connected", value: String(stats.connectedCount || 0) },
-        { label: "Budget", value: vacancy.budget || "Not specified" }
-      ])}
-      <section class="list">
-        <p class="footer-note">Candidates</p>
-        ${items.length ? items.map(renderManagerCandidateCard).join("") : `<div class="empty-state">No candidates yet. As soon as Helly finds matches, they will appear here.</div>`}
-      </section>
-      ${renderTextPanel(
-        "Summary",
-        firstNonEmpty(
-          vacancy.summary && vacancy.summary.approvalSummaryText,
-          vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
-          vacancy.projectDescription
-        ),
-        "No summary yet."
-      )}
-      ${renderDetailSection("Vacancy", [
-        { label: "Work format", value: vacancy.workFormat || "Not specified" },
-        { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
-        { label: "Team size", value: vacancy.teamSize || "" },
-        { label: "Opened", value: vacancy.openedAt ? formatEventTime(vacancy.openedAt) : "" },
-        { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
-      ])}
-      ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
-      ${renderExpandableTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
-    `;
-    bindCards();
-    bindDisclosures();
+    state.managerVacancyPayloads[vacancyId] = { detail, matchesPayload };
+    renderManagerVacancyScreen(vacancyId, detail, matchesPayload);
   }
 
   async function renderManagerCandidate(matchId) {
@@ -950,6 +1209,36 @@
         node.textContent = isHidden
           ? node.getAttribute("data-label-close") || "Hide full text"
           : node.getAttribute("data-label-open") || "Show full text";
+      });
+    });
+  }
+
+  function bindViewControls() {
+    Array.from(document.querySelectorAll("[data-view-scope]")).forEach((node) => {
+      node.addEventListener("click", () => {
+        const scope = node.getAttribute("data-view-scope");
+        const key = node.getAttribute("data-view-key");
+        const value = node.getAttribute("data-view-value");
+        const scopeId = node.getAttribute("data-view-id");
+        if (!scope || !key || !value) return;
+        tapFeedback();
+        updateViewState(scope, key, value, scopeId);
+        if (scope === "manager-home") {
+          if (state.managerHomePayload) {
+            renderManagerHomeScreen(state.managerHomePayload);
+            return;
+          }
+          renderRoute();
+          return;
+        }
+        if (scope === "manager-vacancy" && scopeId) {
+          const cachedPayload = state.managerVacancyPayloads[scopeId];
+          if (cachedPayload) {
+            renderManagerVacancyScreen(scopeId, cachedPayload.detail, cachedPayload.matchesPayload);
+            return;
+          }
+        }
+        renderRoute();
       });
     });
   }
