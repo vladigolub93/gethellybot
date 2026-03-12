@@ -239,7 +239,7 @@ def _candidate_cv_challenge_memory(*, stage: str | None, candidate, version, mat
 
     if not active_matches and len(saved_skills) >= 3:
         snippets.append(
-            "Saved waiting-state fact: there are no live opportunities right now and Helly CV Challenge is available in Telegram while the candidate waits for matches."
+            "Saved waiting-state fact: there are no live opportunities right now and Helly CV Challenge is available in the WebApp dashboard while the candidate waits for matches."
         )
 
     active_attempt = _call_optional(cv_challenges, "get_latest_active_for_candidate_profile", candidate.id)
@@ -254,7 +254,7 @@ def _candidate_cv_challenge_memory(*, stage: str | None, candidate, version, mat
             snippets.append(
                 "Saved CV Challenge run in progress: "
                 + "; ".join(parts)
-                + ". The candidate can resume it in Telegram."
+                + ". The candidate can resume it in the WebApp dashboard."
             )
 
     completed_attempt = _call_optional(cv_challenges, "get_latest_completed_for_candidate_profile", candidate.id)

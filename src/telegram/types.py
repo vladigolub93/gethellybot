@@ -32,4 +32,3 @@ class NormalizedTelegramUpdate:
     chat_title: Optional[str] = None
     callback_query_id: Optional[str] = None
     callback_data: Optional[str] = None
-    callback_game_short_name: Optional[str] = None

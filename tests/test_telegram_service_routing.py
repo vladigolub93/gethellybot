@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from src.graph.service import StageAgentExecutionResult
 from src.orchestrator.policy import resolve_state_context
 from src.shared.text import normalize_command_text
-import src.telegram.service as telegram_service_module
 from src.telegram.service import TelegramUpdateService
 from src.telegram.types import NormalizedTelegramUpdate
 
@@ -42,14 +41,6 @@ class FakeBotController:
 
     def build_recovery_message(self, *, user, latest_user_message: str) -> str:
         return f"Recovery: {latest_user_message}"
-
-
-class FakeTelegramBotClient:
-    answered_callbacks = []
-
-    def answer_callback_query(self, **kwargs):
-        self.__class__.answered_callbacks.append(dict(kwargs))
-        return {"ok": True}
 
 
 class FakeStageAgentService:
@@ -237,13 +228,6 @@ class FakeCandidateService:
         self.cv_result = SimpleNamespace(
             notification_template="candidate_cv_received_processing",
             status="accepted",
-        )
-        self.cv_challenge = SimpleNamespace(
-            game_short_name="helly_cv_challenge",
-            build_game_launch_result=lambda _user_id: {
-                "eligible": True,
-                "url": "https://helly.test/webapp/cv-challenge?session_token=token-1",
-            },
         )
 
     def handle_deletion_message(self, **kwargs):
@@ -436,7 +420,6 @@ def build_update(
     content_type: str = "text",
     contact_phone_number: Optional[str] = None,
     callback_data: Optional[str] = None,
-    callback_game_short_name: Optional[str] = None,
 ) -> NormalizedTelegramUpdate:
     return NormalizedTelegramUpdate(
         update_id=1,
@@ -453,7 +436,6 @@ def build_update(
         payload={},
         callback_query_id="cb-1" if content_type == "callback" else None,
         callback_data=callback_data,
-        callback_game_short_name=callback_game_short_name,
     )
 
 
@@ -2001,35 +1983,6 @@ def test_candidate_interview_skip_callback_routes_action_by_match_id() -> None:
     assert service.interview_service.calls
     assert service.interview_service.calls[-1]["action"] == "skip_opportunity"
     assert service.interview_service.calls[-1]["match_id"] == "match-89"
-
-
-def test_candidate_cv_challenge_game_callback_returns_launch_url(monkeypatch) -> None:
-    FakeTelegramBotClient.answered_callbacks = []
-    monkeypatch.setattr(telegram_service_module, "TelegramBotClient", FakeTelegramBotClient)
-
-    service = build_service()
-    service.bot_controller = FakeBotController(None)
-    service.candidate_service = FakeCandidateService()
-    service.interview_service = FailIfCalledService()
-    service.vacancy_service = FailIfCalledService()
-    service.evaluation_service = FailIfCalledService()
-
-    user = SimpleNamespace(
-        id="u5pgame",
-        phone_number="+123",
-        is_candidate=True,
-        is_hiring_manager=False,
-    )
-
-    templates = service._apply_identity_flow(
-        user,
-        "raw5pgame",
-        build_update(content_type="callback", callback_game_short_name="helly_cv_challenge"),
-    )
-
-    assert templates == []
-    assert FakeTelegramBotClient.answered_callbacks[-1]["callback_query_id"] == "cb-1"
-    assert FakeTelegramBotClient.answered_callbacks[-1]["url"] == "https://helly.test/webapp/cv-challenge?session_token=token-1"
 
 
 def test_manager_review_approve_callback_routes_action_by_match_id() -> None:

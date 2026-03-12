@@ -348,7 +348,7 @@ Valid outcomes:
 
 Rules:
 - treat questions like "what happens now?", "what should I do next?", "when will I hear back?", "when will I get opportunities?", and "do I need to do anything else?" as help, not as delete intent
-- treat comments or questions about Helly CV Challenge, waiting time, or recent game results as help, not as delete intent
+- treat comments or questions about the Helly WebApp, CV Challenge, waiting time, or recent game results as help, not as delete intent
 - propose `find_matching_vacancies` when the candidate is clearly asking to check current vacancies, look for jobs now, or see whether there is anything suitable right now
 - only propose `delete_profile` when the candidate is clearly asking to remove their profile
 - do not invent matching outcomes or timelines

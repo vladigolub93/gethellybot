@@ -36,37 +36,10 @@ class TelegramBotClient:
             raise RuntimeError(f"Telegram sendMessage failed: {payload}")
         return payload.get("result") or {}
 
-    def send_game(self, *, chat_id: int, game_short_name: str) -> dict:
-        body = {
-            "chat_id": chat_id,
-            "game_short_name": game_short_name,
-        }
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(
-                f"{self.api_base_url}/sendGame",
-                json=body,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        if not payload.get("ok"):
-            raise RuntimeError(f"Telegram sendGame failed: {payload}")
-        return payload.get("result") or {}
-
-    def answer_callback_query(
-        self,
-        *,
-        callback_query_id: str,
-        text: Optional[str] = None,
-        url: Optional[str] = None,
-        show_alert: Optional[bool] = None,
-    ) -> dict:
+    def answer_callback_query(self, *, callback_query_id: str, text: Optional[str] = None) -> dict:
         body = {"callback_query_id": callback_query_id}
         if text:
             body["text"] = text
-        if url:
-            body["url"] = url
-        if show_alert is not None:
-            body["show_alert"] = bool(show_alert)
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(
                 f"{self.api_base_url}/answerCallbackQuery",

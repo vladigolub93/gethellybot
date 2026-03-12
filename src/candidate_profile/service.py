@@ -82,7 +82,6 @@ class CandidateReadyActionResult:
     notification_template: str
     notification_text: str
     reply_markup: Optional[dict] = None
-    message_entries: Optional[list[dict]] = None
 
 
 class CandidateProfileService:
@@ -638,38 +637,22 @@ class CandidateProfileService:
         open_vacancies = self.vacancies.get_open_vacancies()
         if not open_vacancies:
             challenge_payload = self.cv_challenge.build_invitation_payload(user.id)
-            message_entries = None
-            reply_markup = None
-            if challenge_payload is not None:
-                if challenge_payload.get("gameShortName"):
-                    message_entries = [
-                        {
-                            "text": self._copy(
-                                "I checked current open roles. Nothing is open right now, but I’ll keep watching and message you when a strong match appears. "
-                                "While you wait, you can also play a quick round of Helly CV Challenge."
-                            )
-                        },
-                        {"game_short_name": challenge_payload["gameShortName"]},
-                    ]
-                else:
-                    reply_markup = candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
             return CandidateReadyActionResult(
                 status="no_open_vacancies",
                 notification_template="candidate_ready",
                 notification_text=self._copy(
                     "I checked current open roles. Nothing is open right now, but I’ll keep watching and message you when a strong match appears."
                     + (
-                        (
-                            " While you wait, you can also play a quick round of Helly CV Challenge here in Telegram."
-                            if challenge_payload.get("gameShortName")
-                            else " While you wait, you can also open Helly CV Challenge and play a quick round."
-                        )
+                        " While you wait, you can also open Helly CV Challenge and play a quick round."
                         if challenge_payload is not None
                         else ""
                     )
                 ),
-                reply_markup=reply_markup,
-                message_entries=message_entries,
+                reply_markup=(
+                    candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
+                    if challenge_payload is not None
+                    else None
+                ),
             )
 
         for vacancy in open_vacancies:

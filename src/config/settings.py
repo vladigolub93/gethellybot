@@ -43,10 +43,6 @@ class Settings(BaseSettings):
         default=86400,
         alias="TELEGRAM_WEBAPP_SESSION_TTL_SECONDS",
     )
-    telegram_cv_challenge_game_short_name: str = Field(
-        default="",
-        alias="TELEGRAM_CV_CHALLENGE_GAME_SHORT_NAME",
-    )
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model_extraction: str = Field(

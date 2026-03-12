@@ -67,15 +67,6 @@ class FakeTelegramBotClient:
         )
         return {"message_id": len(self.calls)}
 
-    def send_game(self, *, chat_id, game_short_name):
-        self.calls.append(
-            {
-                "chat_id": chat_id,
-                "game_short_name": game_short_name,
-            }
-        )
-        return {"message_id": len(self.calls), "game_short_name": game_short_name}
-
 
 def _build_service():
     service = NotificationDeliveryService(session=None)
@@ -207,29 +198,3 @@ def test_send_notification_supports_per_message_reply_markup_entries() -> None:
     assert len(service.telegram.calls) == 2
     assert service.telegram.calls[0]["reply_markup"] is None
     assert service.telegram.calls[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
-
-
-def test_send_notification_supports_game_entries() -> None:
-    service = _build_service()
-    notification = SimpleNamespace(
-        id="notification-7",
-        user_id="user-1",
-        template_key="candidate_ready",
-        payload_json={
-            "message_entries": [
-                {"text": "Try Helly CV Challenge while you wait."},
-                {"game_short_name": "helly_cv_challenge"},
-            ]
-        },
-        status="pending",
-    )
-    service.notifications.rows[str(notification.id)] = notification
-
-    result = service.send_notification_by_id(notification.id)
-
-    assert result["status"] == "sent"
-    assert len(service.telegram.calls) == 2
-    assert service.telegram.calls[0]["text"] == "Try Helly CV Challenge while you wait."
-    assert service.telegram.calls[1]["game_short_name"] == "helly_cv_challenge"
-    assert service.raw_messages.created[1]["content_type"] == "game"
-    assert service.raw_messages.created[1]["text_content"] is None

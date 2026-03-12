@@ -85,29 +85,12 @@ class FakeAttemptsRepository:
         return attempt
 
 
-class FakeUsersRepository:
-    def __init__(self, user):
-        self.user = user
-
-    def get_by_id(self, user_id):
-        if str(user_id) == str(self.user.id):
-            return self.user
-        return None
-
-
 def _build_service(*, active_matches=None, skills=None):
     profile_id = uuid4()
     version_id = uuid4()
-    user_id = uuid4()
-    user = SimpleNamespace(
-        id=user_id,
-        telegram_user_id=123456,
-        display_name="Vlad Golub",
-        username="vlad",
-    )
     profile = SimpleNamespace(
         id=profile_id,
-        user_id=user_id,
+        user_id=uuid4(),
         state="READY",
         current_version_id=version_id,
     )
@@ -116,16 +99,10 @@ def _build_service(*, active_matches=None, skills=None):
         summary_json={"skills": list(skills or ["react", "typescript", "docker"])},
     )
     service = CandidateCvChallengeService(session=object())
-    service.settings = SimpleNamespace(
-        app_base_url="https://helly.test",
-        telegram_cv_challenge_game_short_name="helly_cv_challenge",
-        telegram_webapp_session_ttl_seconds=3600,
-        webapp_session_secret="secret-1",
-    )
+    service.settings = SimpleNamespace(app_base_url="https://helly.test")
     service.profiles = FakeProfilesRepository(profile=profile, version=version)
     service.matches = FakeMatchingRepository(active_matches=active_matches)
     service.attempts = FakeAttemptsRepository()
-    service.users = FakeUsersRepository(user)
     return service, profile
 
 
@@ -237,21 +214,3 @@ def test_cv_challenge_service_blocks_foreign_attempt() -> None:
         assert False, "expected HTTPException"
     except HTTPException as exc:
         assert exc.status_code == 403
-
-
-def test_cv_challenge_service_builds_game_launch_url_for_eligible_candidate() -> None:
-    service, profile = _build_service()
-
-    result = service.build_game_launch_result(profile.user_id)
-
-    assert result["eligible"] is True
-    assert result["url"].startswith("https://helly.test/webapp/cv-challenge?session_token=")
-
-
-def test_cv_challenge_invitation_payload_includes_game_short_name() -> None:
-    service, profile = _build_service()
-
-    payload = service.build_invitation_payload(profile.user_id)
-
-    assert payload is not None
-    assert payload["gameShortName"] == "helly_cv_challenge"

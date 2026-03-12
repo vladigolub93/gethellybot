@@ -81,32 +81,16 @@ class MatchingProcessingService:
         invitation = self.cv_challenge.build_invitation_payload(profile.user_id)
         if invitation is None:
             return
-        payload_json = self._build_candidate_challenge_notification_payload(
-            text=invitation["text"],
-            invitation=invitation,
-        )
         self.notifications.create(
             user_id=profile.user_id,
             entity_type=invitation["entityType"],
             entity_id=profile.id,
             template_key="candidate_ready",
-            payload_json=payload_json,
+            payload_json={
+                "text": invitation["text"],
+                "reply_markup": candidate_cv_challenge_keyboard(invitation["launchUrl"]),
+            },
         )
-
-    @staticmethod
-    def _build_candidate_challenge_notification_payload(*, text: str, invitation: dict) -> dict:
-        game_short_name = invitation.get("gameShortName")
-        if game_short_name:
-            return {
-                "message_entries": [
-                    {"text": text},
-                    {"game_short_name": game_short_name},
-                ]
-            }
-        return {
-            "text": text,
-            "reply_markup": candidate_cv_challenge_keyboard(invitation["launchUrl"]),
-        }
 
     def _process_vacancy_run(self, job) -> dict:
         payload = job.payload_json or {}
@@ -165,13 +149,10 @@ class MatchingProcessingService:
         if not candidate_profile_id or not request_id:
             return
 
-        try:
-            related_jobs = self.job_logs.list_candidate_manual_request_jobs(
-                candidate_profile_id=str(candidate_profile_id),
-                request_id=str(request_id),
-            )
-        except Exception:
-            related_jobs = [job]
+        related_jobs = self.job_logs.list_candidate_manual_request_jobs(
+            candidate_profile_id=str(candidate_profile_id),
+            request_id=str(request_id),
+        )
         current_job_id = str(getattr(job, "id", ""))
         if any(
             str(getattr(row, "id", "")) != current_job_id and getattr(row, "status", None) in {"queued", "running"}
@@ -333,11 +314,7 @@ class MatchingProcessingService:
             )
 
         if challenge_payload is not None:
-            text += (
-                " While you wait, you can play a quick round of Helly CV Challenge here in Telegram."
-                if challenge_payload.get("gameShortName")
-                else " While you wait, you can open Helly CV Challenge and play a quick round."
-            )
+            text += " While you wait, you can open Helly CV Challenge and play a quick round."
         else:
             text += " I'll keep watching and message you as soon as something strong appears."
 
@@ -346,14 +323,14 @@ class MatchingProcessingService:
             entity_type="candidate_profile",
             entity_id=profile.id,
             template_key="candidate_ready",
-            payload_json=(
-                self._build_candidate_challenge_notification_payload(
-                    text=text,
-                    invitation=challenge_payload,
-                )
-                if challenge_payload is not None
-                else {"text": text}
-            ),
+            payload_json={
+                "text": text,
+                "reply_markup": (
+                    candidate_cv_challenge_keyboard(challenge_payload["launchUrl"])
+                    if challenge_payload is not None
+                    else None
+                ),
+            },
             allow_duplicate=True,
         )
 

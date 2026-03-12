@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -22,7 +20,6 @@ from src.matching.policy import (
     MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
     MATCH_STATUS_SHORTLISTED,
 )
-from src.webapp.session import WebAppSessionContext, issue_webapp_session_token
 
 
 MIN_CV_CHALLENGE_SKILL_COUNT = 3
@@ -165,11 +162,6 @@ class CandidateCvChallengeService:
     def launch_url(self) -> str:
         return f"{self.settings.app_base_url.rstrip('/')}/webapp/cv-challenge"
 
-    @property
-    def game_short_name(self) -> str | None:
-        value = (self.settings.telegram_cv_challenge_game_short_name or "").strip()
-        return value or None
-
     def build_eligibility_for_user_id(self, user_id) -> CandidateCvChallengeEligibility:
         profile = self.profiles.get_active_by_user_id(user_id)
         if profile is None:
@@ -267,7 +259,6 @@ class CandidateCvChallengeService:
             "title": eligibility.title,
             "body": eligibility.body,
             "launchUrl": eligibility.launch_url,
-            "gameShortName": self.game_short_name,
             "correctSkillCount": len(eligibility.correct_skills),
             "activeMatchCount": eligibility.active_match_count,
             "reasonCode": eligibility.reason_code,
@@ -304,46 +295,6 @@ class CandidateCvChallengeService:
                 "Tap the skills that appear in your CV and avoid the ones that do not."
             ),
             "launchUrl": eligibility.launch_url,
-            "gameShortName": self.game_short_name,
-        }
-
-    def build_game_launch_result(self, user_id) -> Dict[str, Any]:
-        eligibility = self.build_eligibility_for_user_id(user_id)
-        if not eligibility.eligible:
-            return {
-                "eligible": False,
-                "title": eligibility.title,
-                "body": eligibility.body,
-                "reasonCode": eligibility.reason_code,
-            }
-
-        user = self.users.get_by_id(user_id)
-        if user is None or not getattr(user, "telegram_user_id", None):
-            return {
-                "eligible": False,
-                "title": "CV Challenge is unavailable",
-                "body": "Helly could not resolve your Telegram session for the challenge right now.",
-                "reasonCode": "user_missing",
-            }
-
-        now_ts = int(time.time())
-        session_token = issue_webapp_session_token(
-            session_context=WebAppSessionContext(
-                telegram_user_id=int(user.telegram_user_id),
-                role="candidate",
-                user_id=str(user.id),
-                display_name=(getattr(user, "display_name", None) or getattr(user, "username", None)),
-                issued_at=now_ts,
-                expires_at=now_ts + int(self.settings.telegram_webapp_session_ttl_seconds),
-            ),
-            secret=self.settings.webapp_session_secret,
-        )
-        return {
-            "eligible": True,
-            "url": "{base}?{query}".format(
-                base=self.launch_url,
-                query=urlencode({"session_token": session_token}),
-            ),
         }
 
     def bootstrap_for_candidate(self, user_id) -> Dict[str, Any]:

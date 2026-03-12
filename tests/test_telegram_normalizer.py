@@ -135,29 +135,3 @@ def test_normalize_callback_query() -> None:
     assert normalized.callback_query_id == "cb-1"
     assert normalized.callback_data == "mgr_pre:int:match-1"
     assert normalized.text is None
-
-
-def test_normalize_game_callback_query() -> None:
-    update = {
-        "update_id": 128,
-        "callback_query": {
-            "id": "cb-game-1",
-            "from": {
-                "id": 1004,
-                "first_name": "Candidate",
-                "username": "cand",
-            },
-            "game_short_name": "helly_cv_challenge",
-            "message": {
-                "message_id": 82,
-                "chat": {"id": 560, "type": "private"},
-            },
-        },
-    }
-
-    normalized = normalize_telegram_update(update)
-
-    assert normalized.content_type == "callback"
-    assert normalized.callback_query_id == "cb-game-1"
-    assert normalized.callback_data is None
-    assert normalized.callback_game_short_name == "helly_cv_challenge"
