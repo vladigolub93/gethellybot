@@ -199,9 +199,15 @@ class VacanciesRepository:
         budget_period=None,
         countries_allowed_json=None,
         work_format=None,
+        office_city=None,
+        required_english_level=None,
         team_size=None,
         project_description=None,
         primary_tech_stack_json=None,
+        hiring_stages_json=None,
+        has_take_home_task=None,
+        take_home_paid=None,
+        has_live_coding=None,
     ) -> Vacancy:
         if role_title is not None:
             vacancy.role_title = role_title
@@ -219,12 +225,24 @@ class VacanciesRepository:
             vacancy.countries_allowed_json = countries_allowed_json
         if work_format is not None:
             vacancy.work_format = work_format
+        if office_city is not None:
+            vacancy.office_city = office_city
+        if required_english_level is not None:
+            vacancy.required_english_level = required_english_level
         if team_size is not None:
             vacancy.team_size = team_size
         if project_description is not None:
             vacancy.project_description = project_description
         if primary_tech_stack_json is not None:
             vacancy.primary_tech_stack_json = primary_tech_stack_json
+        if hiring_stages_json is not None:
+            vacancy.hiring_stages_json = hiring_stages_json
+        if has_take_home_task is not None:
+            vacancy.has_take_home_task = has_take_home_task
+        if take_home_paid is not None:
+            vacancy.take_home_paid = take_home_paid
+        if has_live_coding is not None:
+            vacancy.has_live_coding = has_live_coding
         self.session.flush()
         return vacancy
 

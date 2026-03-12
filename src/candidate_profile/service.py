@@ -85,6 +85,28 @@ class CandidateReadyActionResult:
 
 
 class CandidateProfileService:
+    _TEXT_CV_META_PREFIXES = (
+        "here is my cv",
+        "here's my cv",
+        "here is my resume",
+        "here's my resume",
+        "sending my cv",
+        "sending my resume",
+        "i will send my cv",
+        "i'll send my cv",
+        "i will send it now",
+        "i'll send it now",
+        "send it now",
+        "one sec",
+        "one second",
+        "wait a sec",
+        "hold on",
+        "see attached",
+        "attached here",
+        "cv attached",
+        "resume attached",
+    )
+
     def __init__(self, session: Session):
         self.session = session
         self.repo = CandidateProfilesRepository(session)
@@ -100,6 +122,25 @@ class CandidateProfileService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    @staticmethod
+    def _normalize_text_cv_input(text: Optional[str]) -> str:
+        return " ".join((text or "").split()).strip()
+
+    @classmethod
+    def _text_cv_needs_more_detail(cls, text: Optional[str]) -> bool:
+        normalized = cls._normalize_text_cv_input(text)
+        lowered = normalized.lower()
+        if not normalized:
+            return True
+        if lowered in cls._TEXT_CV_META_PREFIXES:
+            return True
+        if any(
+            lowered.startswith(f"{prefix}.") or lowered.startswith(f"{prefix},")
+            for prefix in cls._TEXT_CV_META_PREFIXES
+        ):
+            return True
+        return len(normalized) < 24 and len(normalized.split()) < 4
 
     def ensure_profile_for_user(self, user) -> object:
         profile = self.repo.get_active_by_user_id(user.id)
@@ -194,6 +235,14 @@ class CandidateProfileService:
                 status="unsupported",
                 notification_template="candidate_input_unsupported",
             )
+
+        if content_type == "text":
+            text = self._normalize_text_cv_input(text)
+            if self._text_cv_needs_more_detail(text):
+                return CandidateIntakeResult(
+                    status="needs_more_detail",
+                    notification_template="candidate_cv_needs_more_detail",
+                )
 
         self.state_service.transition(
             entity_type="candidate_profile",
@@ -505,20 +554,20 @@ class CandidateProfileService:
             return CandidateQuestionsResult(
                 status="next_question",
                 notification_template="candidate_questions_follow_up",
-                notification_text=question_prompt(next_question_key),
+                notification_text=question_prompt(next_question_key, work_format=getattr(profile, "work_format", None)),
             )
 
         if parsed:
             return CandidateQuestionsResult(
                 status="follow_up",
                 notification_template="candidate_questions_follow_up",
-                notification_text=follow_up_prompt(current_question_key),
+                notification_text=follow_up_prompt(current_question_key, work_format=getattr(profile, "work_format", None)),
             )
 
         return CandidateQuestionsResult(
             status="incomplete",
             notification_template="candidate_questions_missing",
-            notification_text=question_prompt(next_question_key),
+            notification_text=question_prompt(next_question_key, work_format=getattr(profile, "work_format", None)),
         )
 
     def _filter_question_payload(self, parsed: dict, current_question_key: str | None) -> dict:
@@ -527,8 +576,11 @@ class CandidateProfileService:
 
         allowed_by_question = {
             "salary": {"salary_min", "salary_max", "salary_currency", "salary_period"},
-            "location": {"location_text", "city", "country_code"},
             "work_format": {"work_format"},
+            "location": {"location_text", "city", "country_code"},
+            "english_level": {"english_level"},
+            "preferred_domains": {"preferred_domains_json"},
+            "assessment_preferences": {"show_take_home_task_roles", "show_live_coding_roles"},
         }
         allowed_keys = allowed_by_question.get(current_question_key, set())
         return {key: value for key, value in parsed.items() if key in allowed_keys}
@@ -537,14 +589,25 @@ class CandidateProfileService:
         missing = []
         salary_min = getattr(profile, "salary_min", None)
         salary_max = getattr(profile, "salary_max", None)
-        location_text = getattr(profile, "location_text", None)
         work_format = getattr(profile, "work_format", None)
+        country_code = getattr(profile, "country_code", None)
+        city = getattr(profile, "city", None)
+        english_level = getattr(profile, "english_level", None)
+        preferred_domains_json = list(getattr(profile, "preferred_domains_json", None) or [])
+        show_take_home_task_roles = getattr(profile, "show_take_home_task_roles", None)
+        show_live_coding_roles = getattr(profile, "show_live_coding_roles", None)
         if salary_min is None and salary_max is None:
             missing.append("salary")
-        if not location_text:
-            missing.append("location")
         if not work_format:
             missing.append("work_format")
+        if not country_code or (work_format in {"office", "hybrid"} and not city):
+            missing.append("location")
+        if not english_level:
+            missing.append("english_level")
+        if not preferred_domains_json:
+            missing.append("preferred_domains")
+        if show_take_home_task_roles is None or show_live_coding_roles is None:
+            missing.append("assessment_preferences")
         return missing
 
     def _ensure_questions_context(self, profile) -> dict:

@@ -1078,6 +1078,40 @@ def test_candidate_document_cv_passthrough_reaches_cv_handler() -> None:
     assert service.candidate_service.cv_calls
 
 
+def test_candidate_cv_needs_more_detail_uses_retry_copy() -> None:
+    service = build_service()
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.cv_result = SimpleNamespace(
+        notification_template="candidate_cv_needs_more_detail",
+        status="needs_more_detail",
+    )
+    service.candidate_service.summary_result = None
+    service.candidate_service.verification_result = None
+    service.candidate_service.question_result = None
+    service.interview_service = FakeInterviewService()
+    service.interview_service.result = None
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u1d",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw1d",
+        build_update(text="Here is my CV"),
+    )
+
+    assert templates == ["candidate_cv_needs_more_detail"]
+    assert service.notifications_repo.calls[-1]["template_key"] == "candidate_cv_needs_more_detail"
+    assert "short work summary" in service.notifications_repo.calls[-1]["payload_json"]["text"]
+
+
 def test_manager_jd_help_is_intercepted_before_jd_intake() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -4304,6 +4338,44 @@ def test_candidate_cv_processing_question_uses_processing_help_not_role_recovery
     text = service.notifications_repo.calls[-1]["payload_json"]["text"].lower()
     assert "summary" in text
     assert "hiring manager" not in text
+
+
+def test_candidate_cv_processing_document_uses_processing_help_not_intake_rejection() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="CV_PROCESSING",
+            reply_text="Still on it. I’m parsing the CV and I’ll send the summary next.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.verification_result = None
+
+    user = SimpleNamespace(
+        id="u16doc",
+        phone_number="+123",
+        username="testuser",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw16doc",
+        build_update(content_type="document"),
+    )
+
+    assert templates == ["state_aware_help"]
+    assert not service.candidate_service.cv_calls
+    text = service.notifications_repo.calls[-1]["payload_json"]["text"].lower()
+    assert "summary" in text
+    assert "input is not expected" not in text
 
 
 def test_manager_jd_processing_question_uses_processing_help_not_role_recovery() -> None:

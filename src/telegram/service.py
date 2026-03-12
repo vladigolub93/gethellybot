@@ -75,6 +75,21 @@ class TelegramUpdateService:
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
 
+    def _candidate_cv_intake_message(self, *, notification_template: str, content_type: str) -> str:
+        if notification_template == "candidate_cv_received_processing":
+            if content_type == "document":
+                return self._copy("Nice, got your CV file. I’m turning it into a short summary now.")
+            if content_type == "voice":
+                return self._copy("Nice, got your voice description. I’m turning it into a short summary now.")
+            return self._copy("Nice, got your experience text. I’m turning it into a short summary now.")
+        if notification_template == "candidate_cv_needs_more_detail":
+            return self._copy(
+                "Send the actual CV text or a short work summary with a bit more detail, or just upload the CV file instead."
+            )
+        if notification_template == "candidate_input_not_expected":
+            return self._copy("Candidate input is not expected at the current step.")
+        return self._copy("Send your experience as text, a file, or a voice note.")
+
     def _entry_stage_reply_markup(self, stage: str | None):
         if stage == "CONTACT_REQUIRED":
             return contact_request_keyboard()
@@ -962,16 +977,14 @@ class TelegramUpdateService:
             text=(stage_result.structured_payload or {}).get("cv_text") or normalized_update.text,
             file_id=file_id,
         )
-        message_map = {
-            "candidate_cv_received_processing": "Nice, got it. I’m turning that into a short summary now.",
-            "candidate_input_not_expected": "Candidate input is not expected at the current step.",
-            "candidate_input_unsupported": "Send your experience as text, a file, or a voice note.",
-        }
         return [
             self._notify_result(
                 user_id=user.id,
                 template_key=intake_result.notification_template,
-                text=self._copy(message_map[intake_result.notification_template]),
+                text=self._candidate_cv_intake_message(
+                    notification_template=intake_result.notification_template,
+                    content_type="text",
+                ),
             )
         ]
 
@@ -1128,16 +1141,14 @@ class TelegramUpdateService:
             text=normalized_update.text,
             file_id=file_id,
         )
-        message_map = {
-            "candidate_cv_received_processing": "Nice, got it. I’m turning that into a short summary now.",
-            "candidate_input_not_expected": "Candidate input is not expected at the current step.",
-            "candidate_input_unsupported": "Send your experience as text, a file, or a voice note.",
-        }
         return [
             self._notify_result(
                 user_id=user.id,
                 template_key=intake_result.notification_template,
-                text=self._copy(message_map[intake_result.notification_template]),
+                text=self._candidate_cv_intake_message(
+                    notification_template=intake_result.notification_template,
+                    content_type=normalized_update.content_type,
+                ),
             )
         ]
 
@@ -1352,6 +1363,16 @@ class TelegramUpdateService:
         file_id,
         stage_result,
     ) -> List[str]:
+        if stage_result is not None and stage_result.stage == "CV_PROCESSING":
+            assistance_templates = self._maybe_handle_graph_help(
+                user=user,
+                latest_user_message=normalized_update.text or normalized_update.content_type,
+                user_id=user.id,
+                stage_result=stage_result,
+            )
+            if assistance_templates is not None:
+                return assistance_templates
+            return None
         if normalized_update.content_type == "text":
             candidate_intake_templates = self._handle_candidate_intake_stage_action(
                 user=user,
@@ -1837,7 +1858,7 @@ class TelegramUpdateService:
     ):
         if not getattr(user, "is_candidate", False):
             return None
-        if normalized_update.content_type not in {"text", "video"}:
+        if normalized_update.content_type not in {"text", "voice", "document", "video"}:
             return None
         return self._maybe_run_graph_stage(
             user=user,

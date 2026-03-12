@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import re
 from typing import Optional
+
+from src.shared.hiring_taxonomy import extract_domains, normalize_english_level
 
 
 COUNTRY_CODES = {
@@ -91,6 +95,38 @@ def parse_work_format(text: str) -> dict:
     return {}
 
 
+def parse_english_level(text: str) -> dict:
+    normalized = _normalize_text(text)
+    lowered = normalized.lower()
+    explicit_match = re.search(
+        r"\b(?:english|eng)\s*(?:level)?\s*[:\-]?\s*(a1|a2|b1|b2|c1|c2|native)\b",
+        lowered,
+    )
+    candidate = explicit_match.group(1) if explicit_match is not None else None
+    if candidate is None:
+        for token in (
+            "native",
+            "c2",
+            "c1",
+            "b2",
+            "b1",
+            "a2",
+            "a1",
+            "upper-intermediate",
+            "upper intermediate",
+            "intermediate",
+            "advanced",
+            "fluent",
+            "conversational english",
+            "basic english",
+        ):
+            if token in lowered:
+                candidate = token
+                break
+    english_level = normalize_english_level(candidate)
+    return {"english_level": english_level} if english_level else {}
+
+
 def _extract_labeled_value(text: str, label: str) -> Optional[str]:
     pattern = rf"{label}\s*:\s*([^.;\n]+)"
     match = re.search(pattern, text, flags=re.IGNORECASE)
@@ -125,13 +161,20 @@ def parse_location(text: str) -> dict:
     )[0].strip(" .,")
 
     parts = [part.strip() for part in location_text.split(",") if part.strip()]
-    city = parts[0] if parts else None
     country_code = None
     lowered_location = location_text.lower()
     for country_name, code in COUNTRY_CODES.items():
         if country_name in lowered_location:
             country_code = code
             break
+
+    city = None
+    if len(parts) >= 2:
+        city = parts[0]
+    elif parts:
+        single_part = parts[0].lower()
+        if single_part not in COUNTRY_CODES:
+            city = parts[0]
 
     return {
         "location_text": location_text,
@@ -140,10 +183,94 @@ def parse_location(text: str) -> dict:
     }
 
 
+def parse_preferred_domains(text: str) -> dict:
+    lowered = _normalize_text(text).lower()
+    if re.search(r"\b(any|no preference|open to anything|open to any domain|any domain)\b", lowered):
+        return {"preferred_domains_json": ["any"]}
+    domains = extract_domains(lowered)
+    return {"preferred_domains_json": domains} if domains else {}
+
+
+def _parse_keyword_boolean(text: str, *, keywords: tuple[str, ...]) -> Optional[bool]:
+    lowered = _normalize_text(text).lower()
+    if any(keyword in lowered for keyword in keywords):
+        if re.search(r"\b(no|not|don't|do not|avoid|hide|skip|without)\b", lowered):
+            return False
+        if re.search(r"\b(yes|yeah|yep|ok|okay|fine|show|include|open to|can do|comfortable)\b", lowered):
+            return True
+        return True
+    return None
+
+
+def _extract_local_boolean(text: str, *, keywords: tuple[str, ...]) -> Optional[bool]:
+    lowered = _normalize_text(text).lower()
+    keyword_patterns = tuple(re.escape(keyword) for keyword in keywords)
+    clauses = [
+        clause.strip()
+        for clause in re.split(r"[.;\n,]|\bbut\b|\bhowever\b", lowered)
+        if clause.strip()
+    ]
+    relevant_clauses = [clause for clause in clauses if any(keyword in clause for keyword in keywords)]
+    for clause in relevant_clauses:
+        if re.search(r"\b(no|not|don't|do not|avoid|hide|skip|without)\b", clause):
+            return False
+        if re.search(r"\b(yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine with|fine)\b", clause):
+            return True
+
+    positive_patterns = (
+        rf"\b(?:yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine with)\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
+        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b(?:yes|yeah|yep|ok|okay|show|include|open to|can do|comfortable|fine)\b",
+    )
+    for pattern in positive_patterns:
+        if re.search(pattern, lowered):
+            return True
+
+    negative_patterns = (
+        rf"\b(?:no|not|don't|do not|avoid|hide|skip|without)\b[^.!?\n]{{0,48}}\b(?:{'|'.join(keyword_patterns)})\b",
+        rf"\b(?:{'|'.join(keyword_patterns)})\b[^.!?\n]{{0,48}}\b(?:no|not|don't|do not|avoid|hide|skip|without)\b",
+    )
+    for pattern in negative_patterns:
+        if re.search(pattern, lowered):
+            return False
+
+    if "both" in lowered and any(keyword in lowered for keyword in keywords):
+        return True
+    if "neither" in lowered and any(keyword in lowered for keyword in keywords):
+        return False
+    return _parse_keyword_boolean(lowered, keywords=keywords)
+
+
+def parse_assessment_preferences(text: str) -> dict:
+    lowered = _normalize_text(text).lower()
+    if re.search(r"\b(no assessments|without assessments|no tests)\b", lowered):
+        return {
+            "show_take_home_task_roles": False,
+            "show_live_coding_roles": False,
+        }
+
+    payload = {}
+    take_home = _extract_local_boolean(
+        lowered,
+        keywords=("test task", "take home", "take-home", "home assignment"),
+    )
+    live_coding = _extract_local_boolean(
+        lowered,
+        keywords=("live coding", "live-coding", "pair programming", "coding interview"),
+    )
+    if take_home is not None:
+        payload["show_take_home_task_roles"] = take_home
+    if live_coding is not None:
+        payload["show_live_coding_roles"] = live_coding
+    return payload
+
+
 def parse_candidate_questions(text: str) -> dict:
     normalized = _normalize_text(text)
     parsed = {}
     parsed.update(parse_salary_expectations(normalized))
-    parsed.update(parse_location(normalized))
     parsed.update(parse_work_format(normalized))
+    parsed.update(parse_location(normalized))
+    parsed.update(parse_english_level(normalized))
+    parsed.update(parse_preferred_domains(normalized))
+    parsed.update(parse_assessment_preferences(normalized))
     return parsed

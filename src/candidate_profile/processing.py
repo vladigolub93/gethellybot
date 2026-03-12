@@ -1,7 +1,12 @@
 from src.candidate_profile.states import (
+    CANDIDATE_STATE_CV_PENDING,
     CANDIDATE_STATE_CV_PROCESSING,
     CANDIDATE_STATE_QUESTIONS_PENDING,
     CANDIDATE_STATE_SUMMARY_REVIEW,
+)
+from src.candidate_profile.skills_inventory import (
+    candidate_version_full_hard_skills,
+    extract_full_hard_skills,
 )
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.notifications import NotificationsRepository
@@ -77,6 +82,19 @@ class CandidateProcessingService:
                     approval_status="quality_retry_required",
                     model_name="quality-gate",
                 )
+                if profile.state == CANDIDATE_STATE_CV_PROCESSING:
+                    self.state_service.transition(
+                        entity_type="candidate_profile",
+                        entity=profile,
+                        to_state=CANDIDATE_STATE_CV_PENDING,
+                        trigger_type="job",
+                        trigger_ref_id=job.id,
+                        metadata_json={
+                            "job_type": job.job_type,
+                            "reason": "quality_retry_required",
+                            "quality_reason": exc.code,
+                        },
+                    )
                 self.notifications.create(
                     user_id=profile.user_id,
                     entity_type="candidate_profile",
@@ -123,6 +141,10 @@ class CandidateProcessingService:
             version.source_type,
         )
         summary = llm_result.payload
+        full_hard_skills = extract_full_hard_skills(
+            source_text,
+            extra_values=summary.get("skills") or [],
+        )
         embedding_result = self.embeddings.safe_build_candidate_embedding(summary)
         self.repo.update_version_analysis(
             version,
@@ -132,6 +154,8 @@ class CandidateProcessingService:
                 "ingestion_ready": True,
                 "ingestion_mode": ingestion_mode,
                 "ingestion_source": ingestion_source,
+                "full_hard_skills": full_hard_skills,
+                "skill_inventory_version": "candidate_hard_skills_v1",
                 "embedding_ready": embedding_result is not None,
                 "embedding_model_name": embedding_result.model_name if embedding_result else None,
                 "embedding_dimensions": embedding_result.dimensions if embedding_result else None,
@@ -203,6 +227,7 @@ class CandidateProcessingService:
             payload.get("edit_request_text") or "",
         )
         merged_summary = llm_result.payload
+        full_hard_skills = candidate_version_full_hard_skills(base_version)
         embedding_result = self.embeddings.safe_build_candidate_embedding(merged_summary)
         self.repo.update_version_analysis(
             version,
@@ -210,6 +235,8 @@ class CandidateProcessingService:
             normalization_json={
                 "processor": llm_result.prompt_version,
                 "base_version_id": str(base_version.id),
+                "full_hard_skills": full_hard_skills,
+                "skill_inventory_version": "candidate_hard_skills_v1",
                 "embedding_ready": embedding_result is not None,
                 "embedding_model_name": embedding_result.model_name if embedding_result else None,
                 "embedding_dimensions": embedding_result.dimensions if embedding_result else None,
@@ -293,7 +320,7 @@ class CandidateProcessingService:
                     entity_id=profile.id,
                     template_key="candidate_questions_text_retry",
                     payload_json={
-                        "text": "I saved the voice/video answer, but the transcript failed. Send salary, location, and work format in text and I’ll keep going.",
+                        "text": "I saved the voice/video answer, but the transcript failed. Send your profile answers in text and I’ll keep going.",
                     },
                 )
                 raise

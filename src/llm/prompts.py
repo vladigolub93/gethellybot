@@ -239,6 +239,7 @@ Valid outcomes:
 
 Rules:
 - treat questions like "what should I send?", "I don't have a CV", "can I use LinkedIn?", "can I send voice?", "why do you need this?", and "what happens next?" as help, not as CV input
+- treat coordination-only text like "here is my CV", "I will send it now", or "see attached" as help, not as CV input
 - only propose `send_cv_text` when the candidate is clearly providing resume text, experience details, or a useful work-history summary
 - if the candidate is clearly providing experience input, include the original text in `cv_text`
 - do not invent candidate experience
@@ -293,10 +294,14 @@ Extract if present:
 - salary_max
 - salary_currency (USD, EUR, GBP)
 - salary_period (month, year)
+- work_format (remote, hybrid, office)
 - location_text
 - city
 - country_code (ISO alpha-2)
-- work_format (remote, hybrid, office)
+- english_level (A1, A2, B1, B2, C1, C2, native)
+- preferred_domains_json (use ["any"] if the candidate says there is no preference)
+- show_take_home_task_roles
+- show_live_coding_roles
 
 Text:
 {text}
@@ -313,13 +318,13 @@ def candidate_questions_decision_prompt(
 
 Valid outcomes:
 - help question or clarification
-- real profile answer that should be parsed for salary, location, and work format
+- real profile answer that should be parsed for salary, work format, location, English level, domain preferences, or assessment preferences
 
 Rules:
 - treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", and "how should I answer?" as help, not as final profile answers
 - only propose `send_salary_location_work_format` when the candidate is actually providing their profile details
 - if the candidate is clearly answering, include the original answer in `answer_text`
-- do not invent salary, location, or work format values here
+- do not invent profile values here
 - do not transition stages yourself
 
 Current step guidance:
@@ -624,8 +629,14 @@ Extract if present:
 - budget_max
 - budget_currency (USD, EUR, GBP)
 - budget_period (month, year)
-- countries_allowed_json (ISO alpha-2 codes)
 - work_format (remote, hybrid, office)
+- office_city
+- countries_allowed_json (ISO alpha-2 codes)
+- required_english_level (A1, A2, B1, B2, C1, C2, native)
+- has_take_home_task
+- take_home_paid
+- has_live_coding
+- hiring_stages_json (normalized stage labels)
 - team_size
 - project_description
 - primary_tech_stack_json (normalized lowercase list)

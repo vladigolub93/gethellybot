@@ -28,6 +28,19 @@
       "type": ["string", "null"],
       "enum": ["remote", "hybrid", "office", null]
     },
+    "office_city": { "type": ["string", "null"], "maxLength": 80 },
+    "required_english_level": {
+      "type": ["string", "null"],
+      "enum": ["A1", "A2", "B1", "B2", "C1", "C2", "native", null]
+    },
+    "hiring_stages_json": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 12
+    },
+    "has_take_home_task": { "type": ["boolean", "null"] },
+    "take_home_paid": { "type": ["boolean", "null"] },
+    "has_live_coding": { "type": ["boolean", "null"] },
     "team_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 5000 },
     "project_description": { "type": ["string", "null"], "maxLength": 1200 },
     "primary_tech_stack_json": {
@@ -45,6 +58,12 @@
     "budget_period",
     "countries_allowed_json",
     "work_format",
+    "office_city",
+    "required_english_level",
+    "hiring_stages_json",
+    "has_take_home_task",
+    "take_home_paid",
+    "has_live_coding",
     "team_size",
     "project_description",
     "primary_tech_stack_json"

@@ -174,7 +174,83 @@ def test_candidate_processing_extracts_document_text_before_summary(monkeypatch)
     assert version.extracted_text == "Python engineer with FastAPI and PostgreSQL."
     assert version.summary_json["headline"] == "Python engineer"
     assert version.summary_json["approval_summary_text"].startswith("You are a Python engineer")
+    assert version.normalization_json["full_hard_skills"] == ["python", "fastapi", "postgresql"]
     assert service.notifications.rows
+
+
+def test_candidate_processing_summary_edit_preserves_full_hard_skills(monkeypatch) -> None:
+    profile = SimpleNamespace(id=uuid4(), user_id=uuid4(), state="CV_PROCESSING")
+    base_version_id = uuid4()
+    version = SimpleNamespace(
+        id=uuid4(),
+        source_type="summary_user_edit",
+        extracted_text=None,
+        transcript_text=None,
+        source_raw_message_id=None,
+        summary_json=None,
+        normalization_json=None,
+        approval_status="draft",
+        model_name=None,
+    )
+    base_version = SimpleNamespace(
+        id=base_version_id,
+        source_type="document_upload",
+        extracted_text="Python engineer with FastAPI, PostgreSQL, Docker, and Redis.",
+        transcript_text=None,
+        summary_json={
+            "headline": "Python engineer",
+            "skills": ["python", "fastapi", "postgresql"],
+        },
+        normalization_json={"full_hard_skills": ["python", "fastapi", "postgresql", "docker", "redis"]},
+    )
+
+    class FakeRepoWithBase(FakeCandidateRepo):
+        def get_version_by_id(self, version_id):
+            if str(version_id) == str(base_version_id):
+                return base_version
+            return version
+
+    service = CandidateProcessingService(SimpleNamespace())
+    service.repo = FakeRepoWithBase(profile, version)
+    service.notifications = FakeNotificationsRepo()
+    service.state_service = FakeStateService()
+
+    monkeypatch.setattr(
+        "src.candidate_profile.processing.safe_merge_candidate_summary",
+        lambda *_args, **_kwargs: LLMResult(
+            payload={
+                "headline": "Senior Python engineer",
+                "experience_excerpt": "Senior Python engineer with backend platform ownership.",
+                "skills": ["python", "fastapi", "postgresql"],
+                "approval_summary_text": "Updated summary.",
+            },
+            model_name="gpt-5.4",
+            prompt_version="candidate_summary_edit_apply_llm_v2",
+        ),
+    )
+
+    result = service.process_job(
+        SimpleNamespace(
+            id=uuid4(),
+            job_type="candidate_summary_edit_apply_v1",
+            payload_json={
+                "candidate_profile_id": str(profile.id),
+                "candidate_profile_version_id": str(version.id),
+                "base_version_id": str(base_version_id),
+                "edit_request_text": "Please emphasize backend platform ownership.",
+            },
+        )
+    )
+
+    assert result["status"] == "summary_ready"
+    assert version.summary_json["headline"] == "Senior Python engineer"
+    assert version.normalization_json["full_hard_skills"] == [
+        "python",
+        "fastapi",
+        "postgresql",
+        "docker",
+        "redis",
+    ]
 
 
 def test_candidate_processing_skips_duplicate_review_ready_extract() -> None:
@@ -450,6 +526,7 @@ def test_candidate_processing_returns_quality_retry_for_low_quality_document() -
 
     assert result["status"] == "quality_retry_required"
     assert result["quality_reason"] == "pdf_low_text_density"
+    assert profile.state == "CV_PENDING"
     assert version.summary_json["status"] == "quality_retry_required"
     assert version.normalization_json["quality_reason"] == "pdf_low_text_density"
     assert service.notifications.rows[0].template_key == "candidate_cv_quality_retry"

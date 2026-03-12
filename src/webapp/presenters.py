@@ -3,6 +3,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional
 
+from src.candidate_profile.skills_inventory import display_skill_list
+
 
 MATCH_STATUS_LABELS = {
     "shortlisted": "Matched",
@@ -154,7 +156,7 @@ def candidate_summary_snapshot(summary_json: Optional[Dict[str, Any]]) -> Dict[s
     return {
         "headline": summary.get("headline"),
         "approvalSummaryText": summary.get("approval_summary_text"),
-        "skills": clean_list(summary.get("skills"), limit=12),
+        "skills": display_skill_list(summary.get("skills"), limit=12),
         "yearsExperience": summary.get("years_experience"),
         "targetRole": summary.get("target_role"),
         "experienceExcerpt": clean_text(summary.get("experience_excerpt")),
@@ -166,7 +168,7 @@ def vacancy_summary_snapshot(summary_json: Optional[Dict[str, Any]]) -> Dict[str
     return {
         "approvalSummaryText": summary.get("approval_summary_text"),
         "headline": summary.get("headline"),
-        "skills": clean_list(summary.get("skills"), limit=12),
+        "skills": display_skill_list(summary.get("skills"), limit=12),
         "projectDescriptionExcerpt": clean_text(summary.get("project_description_excerpt")),
     }
 

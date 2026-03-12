@@ -463,9 +463,9 @@ def test_clarification_still_asks_project_and_stack_when_prefilled_from_summary(
 
     assert result is not None
     assert result.status == "next_question"
-    assert "project" in result.notification_text.lower()
+    assert "english level" in result.notification_text.lower()
     assert vacancy.state == VACANCY_STATE_CLARIFICATION_QA
-    assert vacancy.questions_context_json["current_question_key"] == "project_description"
+    assert vacancy.questions_context_json["current_question_key"] == "english_level"
     assert vacancy.questions_context_json["confirmed_fields"] == [
         "budget",
         "countries",
@@ -512,11 +512,126 @@ def test_clarification_payload_filters_to_current_question_only() -> None:
 
     assert result is not None
     assert result.status == "next_question"
-    assert "project" in result.notification_text.lower()
-    assert vacancy.questions_context_json["current_question_key"] == "project_description"
+    assert "english level" in result.notification_text.lower()
+    assert vacancy.questions_context_json["current_question_key"] == "english_level"
     assert vacancy.team_size == 6
     assert vacancy.project_description is None
     assert vacancy.primary_tech_stack_json == []
+
+
+def test_clarification_requires_office_city_for_hybrid_or_office() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "office_city": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "take_home_paid": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": ["budget"],
+            "current_question_key": "work_format",
+        },
+    )
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={"work_format": "hybrid"},
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "city" in result.notification_text.lower()
+    assert vacancy.questions_context_json["current_question_key"] == "office_city"
+
+
+def test_clarification_requires_take_home_paid_when_take_home_enabled() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        required_english_level="B2",
+        team_size=6,
+        project_description="Payments platform.",
+        primary_tech_stack_json=["python"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "office_city": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "take_home_paid": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": [
+                "budget",
+                "work_format",
+                "countries",
+                "english_level",
+                "team_size",
+                "project_description",
+                "primary_tech_stack",
+            ],
+            "current_question_key": "assessment",
+        },
+    )
+
+    result = service.handle_clarification_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "has_take_home_task": True,
+            "has_live_coding": False,
+        },
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert "paid or unpaid" in result.notification_text.lower()
+    assert vacancy.questions_context_json["current_question_key"] == "take_home_paid"
 
 
 def test_parsed_clarification_payload_opens_vacancy() -> None:

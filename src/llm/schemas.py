@@ -35,6 +35,10 @@ class CandidateQuestionParseSchema(BaseModel):
     city: Optional[str] = None
     country_code: Optional[str] = None
     work_format: Optional[str] = None
+    english_level: Optional[str] = None
+    preferred_domains_json: List[str] = Field(default_factory=list)
+    show_take_home_task_roles: Optional[bool] = None
+    show_live_coding_roles: Optional[bool] = None
 
 
 class CandidateQuestionsDecisionSchema(BaseModel):
@@ -199,9 +203,15 @@ class VacancyClarificationSchema(BaseModel):
     budget_period: Optional[str] = None
     countries_allowed_json: List[str] = Field(default_factory=list)
     work_format: Optional[str] = None
+    office_city: Optional[str] = None
+    required_english_level: Optional[str] = None
     team_size: Optional[int] = None
     project_description: Optional[str] = None
     primary_tech_stack_json: List[str] = Field(default_factory=list)
+    hiring_stages_json: List[str] = Field(default_factory=list)
+    has_take_home_task: Optional[bool] = None
+    take_home_paid: Optional[bool] = None
+    has_live_coding: Optional[bool] = None
 
 
 class InterviewQuestionItemSchema(BaseModel):

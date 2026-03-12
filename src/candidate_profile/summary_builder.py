@@ -1,6 +1,7 @@
 import re
 from typing import List, Optional
 
+from src.candidate_profile.skills_inventory import extract_full_hard_skills
 
 KNOWN_SKILLS = [
     "python",
@@ -38,12 +39,7 @@ def extract_years_experience(text: str) -> Optional[int]:
 
 
 def extract_skills(text: str) -> List[str]:
-    normalized = _normalize_text(text).lower()
-    found = []
-    for skill in KNOWN_SKILLS:
-        if skill in normalized:
-            found.append(skill)
-    return found
+    return extract_full_hard_skills(text, limit=12)
 
 
 def build_candidate_summary(source_text: str, source_type: str) -> dict:

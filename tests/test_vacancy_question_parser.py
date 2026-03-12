@@ -23,3 +23,25 @@ def test_parse_vacancy_clarifications_accepts_project_link() -> None:
     parsed = parse_vacancy_clarifications("https://repriced.ai")
 
     assert parsed["project_description"] == "https://repriced.ai"
+
+
+def test_parse_vacancy_clarifications_extracts_matching_requirements() -> None:
+    parsed = parse_vacancy_clarifications(
+        "Hybrid in Warsaw, Poland. English C1. Hiring stages: recruiter screen, manager call, technical interview, final. "
+        "There will be a paid take-home task, but no live coding."
+    )
+
+    assert parsed["work_format"] == "hybrid"
+    assert parsed["office_city"] == "Warsaw"
+    assert parsed["countries_allowed_json"] == ["PL"]
+    assert parsed["required_english_level"] == "c1"
+    assert parsed["has_take_home_task"] is True
+    assert parsed["take_home_paid"] is True
+    assert parsed["has_live_coding"] is False
+    assert parsed["hiring_stages_json"] == [
+        "recruiter_screen",
+        "manager_screen",
+        "technical_interview",
+        "take_home",
+        "final",
+    ]

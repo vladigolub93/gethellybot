@@ -475,7 +475,7 @@ class VacancyService:
         parsed = self._filter_clarification_payload(parsed, current_question_key)
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
-            confirmed_fields.update(self._answered_clarification_keys(parsed))
+            confirmed_fields.update(self._answered_clarification_keys(vacancy, parsed))
 
         missing_keys = self._missing_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
         if not missing_keys:
@@ -517,20 +517,32 @@ class VacancyService:
             return VacancyClarificationResult(
                 status="next_question",
                 notification_template="vacancy_clarification_follow_up",
-                notification_text=question_prompt(next_question_key),
+                notification_text=question_prompt(
+                    next_question_key,
+                    work_format=getattr(vacancy, "work_format", None),
+                    has_take_home_task=getattr(vacancy, "has_take_home_task", None),
+                ),
             )
 
         if parsed:
             return VacancyClarificationResult(
                 status="follow_up",
                 notification_template="vacancy_clarification_follow_up",
-                notification_text=follow_up_prompt(current_question_key),
+                notification_text=follow_up_prompt(
+                    current_question_key,
+                    work_format=getattr(vacancy, "work_format", None),
+                    has_take_home_task=getattr(vacancy, "has_take_home_task", None),
+                ),
             )
 
         return VacancyClarificationResult(
             status="incomplete",
             notification_template="vacancy_clarification_missing",
-            notification_text=question_prompt(next_question_key),
+            notification_text=question_prompt(
+                next_question_key,
+                work_format=getattr(vacancy, "work_format", None),
+                has_take_home_task=getattr(vacancy, "has_take_home_task", None),
+            ),
         )
 
     def _filter_clarification_payload(self, parsed: dict, current_question_key: str | None) -> dict:
@@ -540,7 +552,12 @@ class VacancyService:
         allowed_by_question = {
             "budget": {"budget_min", "budget_max", "budget_currency", "budget_period"},
             "work_format": {"work_format"},
+            "office_city": {"office_city"},
             "countries": {"countries_allowed_json"},
+            "english_level": {"required_english_level"},
+            "assessment": {"has_take_home_task", "has_live_coding"},
+            "take_home_paid": {"take_home_paid"},
+            "hiring_stages": {"hiring_stages_json"},
             "team_size": {"team_size"},
             "project_description": {"project_description"},
             "primary_tech_stack": {"primary_tech_stack_json"},
@@ -549,21 +566,32 @@ class VacancyService:
         return {key: value for key, value in parsed.items() if key in allowed_keys}
 
     def _missing_clarification_keys(self, vacancy, *, confirmed_fields: set[str] | None = None) -> list[str]:
+        required_keys = self._required_clarification_keys(vacancy)
         if confirmed_fields is not None:
-            return [key for key in QUESTION_KEYS if key not in confirmed_fields]
+            return [key for key in required_keys if key not in confirmed_fields]
 
         questions_context = dict(vacancy.questions_context_json or {})
         if "confirmed_fields" in questions_context:
             stored_confirmed_fields = set(questions_context.get("confirmed_fields") or [])
-            return [key for key in QUESTION_KEYS if key not in stored_confirmed_fields]
+            return [key for key in required_keys if key not in stored_confirmed_fields]
 
         missing = []
         if vacancy.budget_min is None and vacancy.budget_max is None:
             missing.append("budget")
         if not vacancy.work_format:
             missing.append("work_format")
+        if vacancy.work_format in {"office", "hybrid"} and not getattr(vacancy, "office_city", None):
+            missing.append("office_city")
         if not vacancy.countries_allowed_json:
             missing.append("countries")
+        if not getattr(vacancy, "required_english_level", None):
+            missing.append("english_level")
+        if getattr(vacancy, "has_take_home_task", None) is None or getattr(vacancy, "has_live_coding", None) is None:
+            missing.append("assessment")
+        if getattr(vacancy, "has_take_home_task", None) is True and getattr(vacancy, "take_home_paid", None) is None:
+            missing.append("take_home_paid")
+        if not getattr(vacancy, "hiring_stages_json", None):
+            missing.append("hiring_stages")
         if vacancy.team_size is None:
             missing.append("team_size")
         if not vacancy.project_description:
@@ -571,6 +599,24 @@ class VacancyService:
         if not vacancy.primary_tech_stack_json:
             missing.append("primary_tech_stack")
         return missing
+
+    def _required_clarification_keys(self, vacancy) -> list[str]:
+        required = [
+            "budget",
+            "work_format",
+            "countries",
+            "english_level",
+            "assessment",
+            "hiring_stages",
+            "team_size",
+            "project_description",
+            "primary_tech_stack",
+        ]
+        if getattr(vacancy, "work_format", None) in {"office", "hybrid"}:
+            required.insert(2, "office_city")
+        if getattr(vacancy, "has_take_home_task", None) is True:
+            required.insert(required.index("hiring_stages"), "take_home_paid")
+        return required
 
     def _ensure_questions_context(self, vacancy) -> dict:
         current = dict(vacancy.questions_context_json or {})
@@ -581,14 +627,24 @@ class VacancyService:
         current["confirmed_fields"] = list(current.get("confirmed_fields") or [])
         return current
 
-    def _answered_clarification_keys(self, parsed: dict) -> set[str]:
+    def _answered_clarification_keys(self, vacancy, parsed: dict) -> set[str]:
         answered = set()
         if any(parsed.get(key) is not None for key in ("budget_min", "budget_max", "budget_currency", "budget_period")):
             answered.add("budget")
         if parsed.get("work_format"):
             answered.add("work_format")
+        if parsed.get("office_city"):
+            answered.add("office_city")
         if parsed.get("countries_allowed_json"):
             answered.add("countries")
+        if parsed.get("required_english_level"):
+            answered.add("english_level")
+        if getattr(vacancy, "has_take_home_task", None) is not None and getattr(vacancy, "has_live_coding", None) is not None:
+            answered.add("assessment")
+        if "take_home_paid" in parsed:
+            answered.add("take_home_paid")
+        if parsed.get("hiring_stages_json"):
+            answered.add("hiring_stages")
         if parsed.get("team_size") is not None:
             answered.add("team_size")
         if parsed.get("project_description"):

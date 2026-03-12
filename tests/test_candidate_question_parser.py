@@ -21,3 +21,14 @@ def test_parse_candidate_questions_partial_text() -> None:
 
     assert parsed["location_text"] == "Berlin, Germany"
     assert parsed["work_format"] == "hybrid"
+
+
+def test_parse_candidate_questions_extracts_matching_preferences() -> None:
+    parsed = parse_candidate_questions(
+        "English: C1. Prefer fintech and SaaS. Show take-home roles, but no live coding."
+    )
+
+    assert parsed["english_level"] == "c1"
+    assert parsed["preferred_domains_json"] == ["fintech", "saas"]
+    assert parsed["show_take_home_task_roles"] is True
+    assert parsed["show_live_coding_roles"] is False

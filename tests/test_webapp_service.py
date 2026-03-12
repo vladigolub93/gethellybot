@@ -242,6 +242,10 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
             country_code="UA",
             city="Kyiv",
             work_format="remote",
+            english_level="B2",
+            preferred_domains_json=["fintech", "saas"],
+            show_take_home_task_roles=True,
+            show_live_coding_roles=False,
             salary_min=5000,
             salary_max=6000,
             salary_currency="USD",
@@ -281,12 +285,17 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
 
     assert payload["profile"]["name"] == "Candidate Name"
     assert payload["profile"]["summary"]["approvalSummaryText"] == "Built scalable backend products."
+    assert payload["profile"]["fullHardSkills"] == ["Node.js", "PostgreSQL"]
     assert payload["profile"]["answers"] == {
         "salaryExpectation": "5000-6000 USD per month",
         "location": "Kyiv",
         "countryCode": "UA",
         "city": "Kyiv",
         "workFormat": "remote",
+        "englishLevel": "B2",
+        "preferredDomains": ["Fintech", "SaaS"],
+        "showTakeHomeTaskRoles": True,
+        "showLiveCodingRoles": False,
     }
     assert payload["profile"]["source"]["sourceType"] == "cv_file"
     assert payload["profile"]["source"]["text"] == "Senior backend engineer with Node.js and PostgreSQL background."
@@ -494,6 +503,12 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
         budget_period="month",
         countries_allowed_json=["UA"],
         work_format="remote",
+        office_city=None,
+        required_english_level="B2",
+        hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
+        has_take_home_task=True,
+        take_home_paid=False,
+        has_live_coding=False,
         team_size="8",
         project_description="Realtime pricing platform",
         primary_tech_stack_json=["Node.js", "PostgreSQL"],
@@ -537,6 +552,10 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             country_code="UA",
             city="Kyiv",
             work_format="remote",
+            english_level="C1",
+            preferred_domains_json=["any"],
+            show_take_home_task_roles=True,
+            show_live_coding_roles=False,
             salary_min=5000,
             salary_max=6000,
             salary_currency="USD",
@@ -620,8 +639,18 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
         "Your profile overlaps with this role on Node.js. "
         "It also matches your preferred work format: remote."
     )
+    assert match_detail_payload["vacancy"]["requiredEnglishLevel"] == "B2"
+    assert match_detail_payload["vacancy"]["hiringStages"] == ["Recruiter screen", "Technical interview", "Final interview"]
+    assert match_detail_payload["vacancy"]["hasTakeHomeTask"] is True
+    assert match_detail_payload["vacancy"]["takeHomePaid"] is False
+    assert match_detail_payload["vacancy"]["hasLiveCoding"] is False
     assert match_detail_payload["vacancy"]["source"]["text"] == "Senior Node.js role for a realtime pricing platform."
     assert match_detail_payload["candidate"]["answers"]["city"] == "Kyiv"
+    assert match_detail_payload["candidate"]["answers"]["englishLevel"] == "C1"
+    assert match_detail_payload["candidate"]["answers"]["preferredDomains"] == ["Any domain"]
+    assert match_detail_payload["candidate"]["answers"]["showTakeHomeTaskRoles"] is True
+    assert match_detail_payload["candidate"]["answers"]["showLiveCodingRoles"] is False
+    assert match_detail_payload["candidate"]["fullHardSkills"] == ["Node.js", "TypeScript"]
     assert match_detail_payload["candidate"]["source"]["text"] == "Built scalable Node.js backends for product teams."
     assert match_detail_payload["interview"]["state"] is None
     assert match_detail_payload["evaluation"]["interviewSummary"] is None

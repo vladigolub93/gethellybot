@@ -782,6 +782,24 @@
       .trim();
   }
 
+  function formatBooleanChoice(value, labels) {
+    if (value === true) return labels && labels.yes ? labels.yes : "Yes";
+    if (value === false) return labels && labels.no ? labels.no : "No";
+    return "";
+  }
+
+  function formatJoinedValues(values) {
+    return (values || [])
+      .filter((value) => value !== null && value !== undefined && String(value).trim())
+      .join(" • ");
+  }
+
+  function formatVacancyAssessment(value, options) {
+    if (value === true) return options && options.yes ? options.yes : "Yes";
+    if (value === false) return options && options.no ? options.no : "No";
+    return "";
+  }
+
   function renderCandidateProfileCard(profile) {
     const title = firstNonEmpty(profile.targetRole, profile.headline, "Your profile");
     const summaryFallback = firstNonEmpty(
@@ -806,7 +824,7 @@
     if (profile.salaryExpectation) {
       facts.push(compactCompensation(profile.salaryExpectation));
     }
-    const skills = ((profile.summary && profile.summary.skills) || []).slice(0, 4);
+    const skills = (profile.fullHardSkills || (profile.summary && profile.summary.skills) || []).slice(0, 4);
     const summaryText = summaryFallback && summaryFallback !== title && summaryFallback !== subtitle
       ? truncateText(summaryFallback, 150)
       : "";
@@ -982,11 +1000,17 @@
       ${renderDetailSection("Vacancy", [
         { label: "Budget", value: vacancy.budget || "Not specified" },
         { label: "Work format", value: vacancy.workFormat || "Not specified" },
+        { label: "Office city", value: vacancy.officeCity || "" },
         { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
+        { label: "English", value: vacancy.requiredEnglishLevel || "" },
+        { label: "Take-home task", value: formatVacancyAssessment(vacancy.hasTakeHomeTask, { yes: "Included", no: "No" }) },
+        { label: "Take-home compensation", value: vacancy.hasTakeHomeTask ? formatVacancyAssessment(vacancy.takeHomePaid, { yes: "Paid", no: "Unpaid" }) : "" },
+        { label: "Live coding", value: formatVacancyAssessment(vacancy.hasLiveCoding, { yes: "Included", no: "No" }) },
         { label: "Team size", value: vacancy.teamSize || "" },
         { label: "Opened", value: vacancy.openedAt ? formatEventTime(vacancy.openedAt) : "" },
         { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
       ])}
+      ${renderChipPanel("Hiring stages", vacancy.hiringStages || [], "")}
       ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
       ${renderExpandableTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
     `;
@@ -1000,11 +1024,12 @@
       profile.summary && profile.summary.approvalSummaryText,
       profile.summary && profile.summary.experienceExcerpt
     );
-    const skillsText = ((profile.summary && profile.summary.skills) || []).slice(0, 4).join(" • ");
+    const skillsText = (profile.fullHardSkills || (profile.summary && profile.summary.skills) || []).slice(0, 4).join(" • ");
     const answersText = [
       profile.answers && profile.answers.salaryExpectation,
       profile.answers && profile.answers.location,
       profile.answers && profile.answers.workFormat,
+      profile.answers && profile.answers.englishLevel,
     ].filter(Boolean).join(" • ");
     appEl.innerHTML = `
       ${renderScreenHeader("Profile", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "profile")}
@@ -1046,15 +1071,18 @@
           { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
           { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
         ])}
-        ${renderChipPanel("Skills", (profile.summary && profile.summary.skills) || [], "")}
+        ${renderChipPanel("Core skills", (profile.summary && profile.summary.skills) || [], "")}
       `;
       return;
     }
 
     if (sectionKey === "skills") {
+      const fullSkills = profile.fullHardSkills || [];
+      const coreSkills = (profile.summary && profile.summary.skills) || [];
       appEl.innerHTML = `
       ${renderScreenHeader("Skills", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "skills")}
-      ${renderChipPanel("Core skills", (profile.summary && profile.summary.skills) || [], "Your core skills will appear here after your profile is processed.")}
+      ${renderChipPanel("Skills from your CV", fullSkills, "Your skills will appear here after your profile is processed.")}
+      ${fullSkills.length && coreSkills.length ? renderChipPanel("Core summary skills", coreSkills, "") : ""}
       ${renderDetailSection("Profile context", [
         { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
         { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
@@ -1072,6 +1100,10 @@
         { label: "Country", value: profile.answers && profile.answers.countryCode ? profile.answers.countryCode : "" },
         { label: "City", value: profile.answers && profile.answers.city ? profile.answers.city : "" },
         { label: "Work format", value: profile.answers && profile.answers.workFormat ? profile.answers.workFormat : "Not set" },
+        { label: "English", value: profile.answers && profile.answers.englishLevel ? profile.answers.englishLevel : "Not set" },
+        { label: "Preferred domains", value: formatJoinedValues(profile.answers && profile.answers.preferredDomains), full: true },
+        { label: "Take-home roles", value: formatBooleanChoice(profile.answers && profile.answers.showTakeHomeTaskRoles, { yes: "Show", no: "Hide" }) || "Not set" },
+        { label: "Live coding roles", value: formatBooleanChoice(profile.answers && profile.answers.showLiveCodingRoles, { yes: "Show", no: "Hide" }) || "Not set" },
       ])}
     `;
       return;
@@ -1167,10 +1199,16 @@
       )}
       ${renderDetailSection("Vacancy", [
         { label: "Allowed countries", value: (payload.vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
+        { label: "Office city", value: payload.vacancy.officeCity || "" },
+        { label: "English", value: payload.vacancy.requiredEnglishLevel || "" },
+        { label: "Take-home task", value: formatVacancyAssessment(payload.vacancy.hasTakeHomeTask, { yes: "Included", no: "No" }) },
+        { label: "Take-home compensation", value: payload.vacancy.hasTakeHomeTask ? formatVacancyAssessment(payload.vacancy.takeHomePaid, { yes: "Paid", no: "Unpaid" }) : "" },
+        { label: "Live coding", value: formatVacancyAssessment(payload.vacancy.hasLiveCoding, { yes: "Included", no: "No" }) },
         { label: "Seniority", value: payload.vacancy.seniority || "" },
         { label: "Team size", value: payload.vacancy.teamSize || "" },
         { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
       ])}
+      ${renderChipPanel("Hiring stages", payload.vacancy.hiringStages || [], "")}
       ${renderChipPanel("Tech stack", payload.vacancy.primaryTechStack || [], "")}
       ${renderExpandableTextPanel("Job description", payload.vacancy.source && payload.vacancy.source.text, "")}
     `;
@@ -1225,13 +1263,17 @@
         ),
         "Helly is still preparing the candidate summary."
       )}
-      ${renderChipPanel("Skills", (payload.candidate.summary || {}).skills || [], "")}
+      ${renderChipPanel("Skills", payload.candidate.fullHardSkills || (payload.candidate.summary || {}).skills || [], "")}
       ${renderDetailSection("Answers", [
         { label: "Salary", value: payload.candidate.answers && payload.candidate.answers.salaryExpectation ? payload.candidate.answers.salaryExpectation : payload.candidate.salaryExpectation || "Not specified" },
         { label: "Location", value: payload.candidate.answers && payload.candidate.answers.location ? payload.candidate.answers.location : payload.candidate.location || "Not specified" },
         { label: "Country", value: payload.candidate.answers && payload.candidate.answers.countryCode ? payload.candidate.answers.countryCode : payload.candidate.countryCode || "" },
         { label: "City", value: payload.candidate.answers && payload.candidate.answers.city ? payload.candidate.answers.city : payload.candidate.city || "" },
         { label: "Work format", value: payload.candidate.answers && payload.candidate.answers.workFormat ? payload.candidate.answers.workFormat : payload.candidate.workFormat || "Not specified" },
+        { label: "English", value: payload.candidate.answers && payload.candidate.answers.englishLevel ? payload.candidate.answers.englishLevel : "Not specified" },
+        { label: "Preferred domains", value: formatJoinedValues(payload.candidate.answers && payload.candidate.answers.preferredDomains), full: true },
+        { label: "Take-home roles", value: formatBooleanChoice(payload.candidate.answers && payload.candidate.answers.showTakeHomeTaskRoles, { yes: "Show", no: "Hide" }) || "Not set" },
+        { label: "Live coding roles", value: formatBooleanChoice(payload.candidate.answers && payload.candidate.answers.showLiveCodingRoles, { yes: "Show", no: "Hide" }) || "Not set" },
       ])}
       ${renderExpandableTextPanel("CV text", payload.candidate.source && payload.candidate.source.text, "")}
     `;

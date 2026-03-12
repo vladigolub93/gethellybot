@@ -290,6 +290,35 @@ def test_graph_candidate_stage_does_not_treat_cv_question_as_submission() -> Non
     assert result.reply_text is not None
 
 
+def test_graph_candidate_stage_does_not_treat_cv_meta_message_as_submission() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp1m", state="CV_PENDING")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u4m",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Here is my CV",
+    )
+
+    assert result is not None
+    assert result.stage == "CV_PENDING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
+    assert result.reply_text is not None
+
+
 def test_graph_candidate_stage_handles_cv_processing_question() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

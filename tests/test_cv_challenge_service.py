@@ -105,7 +105,7 @@ class FakeAttemptsRepository:
         return attempt
 
 
-def _build_service(*, active_matches=None, skills=None):
+def _build_service(*, active_matches=None, skills=None, full_skills=None, source_text=None):
     profile_id = uuid4()
     version_id = uuid4()
     profile = SimpleNamespace(
@@ -116,7 +116,12 @@ def _build_service(*, active_matches=None, skills=None):
     )
     version = SimpleNamespace(
         id=version_id,
+        extracted_text=source_text,
+        transcript_text=None,
         summary_json={"skills": list(skills or ["react", "typescript", "docker"])},
+        normalization_json={
+            "full_hard_skills": list(full_skills or skills or ["react", "typescript", "docker"])
+        },
     )
     service = CandidateCvChallengeService(session=object())
     service.settings = SimpleNamespace(app_base_url="https://helly.test")
@@ -141,6 +146,18 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["attempt"]["status"] == "started"
     assert bootstrap["lastResult"] is None
     assert bootstrap["bestResult"] is None
+
+
+def test_cv_challenge_service_uses_full_cv_skills_not_only_summary_skills() -> None:
+    service, profile = _build_service(
+        skills=["react", "docker"],
+        full_skills=["react", "graphql", "docker", "postgresql"],
+        source_text="React GraphQL Docker PostgreSQL",
+    )
+
+    bootstrap = service.bootstrap_for_candidate(profile.user_id)
+
+    assert bootstrap["challenge"]["correctSkills"] == ["React", "GraphQL", "Docker", "PostgreSQL"]
 
 
 def test_cv_challenge_service_upgrades_legacy_stage_config_for_active_attempt() -> None:
@@ -170,6 +187,37 @@ def test_cv_challenge_service_prioritizes_smart_distractors() -> None:
     assert "React Native" in distractors[:6]
     assert "Deno" in distractors[:8]
     assert "Podman" in distractors[:10]
+
+
+def test_cv_challenge_service_never_uses_cv_skill_as_distractor() -> None:
+    service, profile = _build_service(
+        skills=["react", "docker"],
+        full_skills=["react", "graphql", "docker"],
+        source_text="Senior frontend engineer working with React, GraphQL, and Docker.",
+    )
+
+    bootstrap = service.bootstrap_for_candidate(profile.user_id)
+
+    assert "GraphQL" not in bootstrap["challenge"]["distractorSkills"]
+
+
+def test_cv_challenge_service_sanitizes_legacy_attempt_distractors_against_full_cv_skills() -> None:
+    service, profile = _build_service(
+        skills=["react", "docker"],
+        full_skills=["react", "graphql", "docker"],
+        source_text="Senior frontend engineer working with React, GraphQL, and Docker.",
+    )
+
+    first = service.bootstrap_for_candidate(profile.user_id)
+    active_attempt = service.attempts.get_by_id(first["attempt"]["id"])
+    active_attempt.skills_snapshot_json["correctSkills"] = ["React", "Docker"]
+    active_attempt.skills_snapshot_json["distractorSkills"] = ["GraphQL", "Rust"]
+
+    resumed = service.bootstrap_for_candidate(profile.user_id)
+
+    assert resumed["challenge"]["correctSkills"] == ["React", "Docker"]
+    assert "GraphQL" not in resumed["challenge"]["distractorSkills"]
+    assert "Rust" in resumed["challenge"]["distractorSkills"]
 
 
 def test_cv_challenge_service_rejects_candidate_with_blocking_active_matches() -> None:

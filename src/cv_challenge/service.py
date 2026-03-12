@@ -9,6 +9,13 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from src.candidate_profile.skills_inventory import (
+    candidate_version_full_hard_skills,
+    display_skill as inventory_display_skill,
+    display_skill_list as inventory_display_skill_list,
+    normalize_skill_token as inventory_normalize_skill_token,
+    text_contains_skill,
+)
 from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.config.settings import get_settings
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
@@ -170,61 +177,15 @@ CV_CHALLENGE_BLOCKING_MATCH_STATUSES = frozenset(
 
 
 def _normalize_skill_token(value: str) -> str:
-    return " ".join(str(value or "").strip().lower().replace("_", " ").split())
+    return inventory_normalize_skill_token(value)
 
 
 def _display_skill(value: str) -> str:
-    normalized = _normalize_skill_token(value)
-    display_map = {
-        "aws": "AWS",
-        "gcp": "GCP",
-        "node": "Node.js",
-        "nodejs": "Node.js",
-        "node.js": "Node.js",
-        "javascript": "JavaScript",
-        "typescript": "TypeScript",
-        "react": "React",
-        "vue": "Vue",
-        "angular": "Angular",
-        "postgresql": "PostgreSQL",
-        "mysql": "MySQL",
-        "mongodb": "MongoDB",
-        "docker": "Docker",
-        "kubernetes": "Kubernetes",
-        "graphql": "GraphQL",
-        "redis": "Redis",
-        "python": "Python",
-        "django": "Django",
-        "fastapi": "FastAPI",
-        "flask": "Flask",
-        "java": "Java",
-        "spring": "Spring",
-        "php": "PHP",
-        "swift": "Swift",
-        "kotlin": "Kotlin",
-        "rust": "Rust",
-        "go": "Go",
-        ".net": ".NET",
-        "c#": "C#",
-    }
-    if normalized in display_map:
-        return display_map[normalized]
-    if normalized.endswith(".js"):
-        return normalized[:-3].title() + ".js"
-    words = normalized.split()
-    return " ".join(word.upper() if len(word) <= 3 else word.capitalize() for word in words)
+    return inventory_display_skill(value)
 
 
 def _clean_skill_list(values: list[str] | None) -> list[str]:
-    seen = set()
-    result: list[str] = []
-    for raw_value in values or []:
-        normalized = _normalize_skill_token(raw_value)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        result.append(_display_skill(normalized))
-    return result
+    return inventory_display_skill_list(values or [])
 
 
 def _daily_seed(*parts: str) -> str:
@@ -289,19 +250,41 @@ def _resolve_stage_config(snapshot_stage_config: Any) -> list[dict[str, Any]]:
     return resolved
 
 
-def _build_distractor_skills(correct_skills: list[str]) -> list[str]:
-    normalized_correct = {_normalize_skill_token(skill) for skill in correct_skills}
+def _distractor_is_blocked(
+    skill: str,
+    *,
+    all_cv_skills: list[str],
+    source_text: str | None,
+) -> bool:
+    normalized = _normalize_skill_token(skill)
+    if not normalized:
+        return True
+    normalized_cv_skills = {_normalize_skill_token(item) for item in all_cv_skills}
+    if normalized in normalized_cv_skills:
+        return True
+    return text_contains_skill(source_text, skill)
+
+
+def _build_distractor_skills(
+    *,
+    all_cv_skills: list[str],
+    source_text: str | None,
+) -> list[str]:
     seen = set()
     result: list[str] = []
 
     def add(skill: str) -> None:
         normalized = _normalize_skill_token(skill)
-        if not normalized or normalized in normalized_correct or normalized in seen:
+        if normalized in seen or _distractor_is_blocked(
+            skill,
+            all_cv_skills=all_cv_skills,
+            source_text=source_text,
+        ):
             return
         seen.add(normalized)
         result.append(_display_skill(skill))
 
-    for skill in correct_skills:
+    for skill in all_cv_skills:
         normalized = _normalize_skill_token(skill)
         for related in CV_CHALLENGE_SMART_DISTRACTORS.get(normalized, ()):
             add(related)
@@ -309,6 +292,38 @@ def _build_distractor_skills(correct_skills: list[str]) -> list[str]:
     for skill in CV_CHALLENGE_DISTRACTOR_POOL:
         add(skill)
 
+    return result[:18]
+
+
+def _merge_distractor_skills(
+    *,
+    preferred_skills: list[str] | None,
+    fallback_skills: list[str] | None,
+    all_cv_skills: list[str],
+    source_text: str | None,
+) -> list[str]:
+    seen = set()
+    result: list[str] = []
+
+    def add_many(values: list[str] | None) -> None:
+        for raw_value in values or []:
+            normalized = _normalize_skill_token(raw_value)
+            if not normalized or normalized in seen:
+                continue
+            if _distractor_is_blocked(
+                raw_value,
+                all_cv_skills=all_cv_skills,
+                source_text=source_text,
+            ):
+                continue
+            seen.add(normalized)
+            result.append(_display_skill(raw_value))
+            if len(result) >= 18:
+                return
+
+    add_many(preferred_skills)
+    if len(result) < 18:
+        add_many(fallback_skills)
     return result[:18]
 
 
@@ -322,6 +337,8 @@ class CandidateCvChallengeEligibility:
     candidate_profile_id: Optional[str]
     candidate_profile_version_id: Optional[str]
     active_match_count: int
+    source_text: Optional[str]
+    all_cv_skills: list[str]
     correct_skills: list[str]
     distractor_skills: list[str]
 
@@ -351,6 +368,8 @@ class CandidateCvChallengeService:
                 candidate_profile_id=None,
                 candidate_profile_version_id=None,
                 active_match_count=0,
+                source_text=None,
+                all_cv_skills=[],
                 correct_skills=[],
                 distractor_skills=[],
             )
@@ -365,6 +384,8 @@ class CandidateCvChallengeService:
                 candidate_profile_id=str(profile.id),
                 candidate_profile_version_id=str(profile.current_version_id) if profile.current_version_id else None,
                 active_match_count=0,
+                source_text=None,
+                all_cv_skills=[],
                 correct_skills=[],
                 distractor_skills=[],
             )
@@ -385,14 +406,16 @@ class CandidateCvChallengeService:
                 candidate_profile_id=str(profile.id),
                 candidate_profile_version_id=str(profile.current_version_id) if profile.current_version_id else None,
                 active_match_count=len(blocking_matches),
+                source_text=None,
+                all_cv_skills=[],
                 correct_skills=[],
                 distractor_skills=[],
             )
 
         version = self.profiles.get_current_version(profile)
-        summary = getattr(version, "summary_json", None) or {}
-        correct_skills = _clean_skill_list(summary.get("skills") or [])
-        if len(correct_skills) < MIN_CV_CHALLENGE_SKILL_COUNT:
+        source_text = getattr(version, "extracted_text", None) or getattr(version, "transcript_text", None) or ""
+        all_cv_skills = _clean_skill_list(candidate_version_full_hard_skills(version))
+        if len(all_cv_skills) < MIN_CV_CHALLENGE_SKILL_COUNT:
             return CandidateCvChallengeEligibility(
                 eligible=False,
                 reason_code="skills_not_enough",
@@ -402,11 +425,16 @@ class CandidateCvChallengeService:
                 candidate_profile_id=str(profile.id),
                 candidate_profile_version_id=str(version.id) if version is not None else None,
                 active_match_count=0,
-                correct_skills=correct_skills,
+                source_text=source_text,
+                all_cv_skills=all_cv_skills,
+                correct_skills=all_cv_skills,
                 distractor_skills=[],
             )
 
-        distractor_skills = _build_distractor_skills(correct_skills)
+        distractor_skills = _build_distractor_skills(
+            all_cv_skills=all_cv_skills,
+            source_text=source_text,
+        )
         return CandidateCvChallengeEligibility(
             eligible=True,
             reason_code="eligible",
@@ -419,7 +447,9 @@ class CandidateCvChallengeService:
             candidate_profile_id=str(profile.id),
             candidate_profile_version_id=str(version.id) if version is not None else None,
             active_match_count=0,
-            correct_skills=correct_skills,
+            source_text=source_text,
+            all_cv_skills=all_cv_skills,
+            correct_skills=all_cv_skills,
             distractor_skills=distractor_skills,
         )
 
@@ -484,11 +514,17 @@ class CandidateCvChallengeService:
         best_completed = self.attempts.get_best_completed_for_candidate_profile(profile_id)
         active_snapshot = dict(active_attempt.skills_snapshot_json or {}) if active_attempt is not None else {}
 
+        challenge_all_cv_skills = _clean_skill_list(
+            active_snapshot.get("allCvSkills") or eligibility.all_cv_skills
+        )
         challenge_correct_skills = _clean_skill_list(
             active_snapshot.get("correctSkills") or eligibility.correct_skills
         )
-        challenge_distractor_skills = _clean_skill_list(
-            active_snapshot.get("distractorSkills") or eligibility.distractor_skills
+        challenge_distractor_skills = _merge_distractor_skills(
+            preferred_skills=active_snapshot.get("distractorSkills"),
+            fallback_skills=eligibility.distractor_skills,
+            all_cv_skills=challenge_all_cv_skills,
+            source_text=eligibility.source_text,
         )
         challenge_stage_config = _resolve_stage_config(active_snapshot.get("stageConfig"))
         challenge_total_lives = int(active_snapshot.get("totalLives") or CV_CHALLENGE_TOTAL_LIVES)
@@ -508,6 +544,7 @@ class CandidateCvChallengeService:
                 if eligibility.candidate_profile_version_id
                 else None,
                 skills_snapshot_json={
+                    "allCvSkills": challenge_all_cv_skills,
                     "correctSkills": challenge_correct_skills,
                     "distractorSkills": challenge_distractor_skills,
                     "stageConfig": challenge_stage_config,
@@ -533,6 +570,7 @@ class CandidateCvChallengeService:
                 "title": "Helly CV Challenge",
                 "subtitle": "Tap only the skills that appear in your CV.",
                 "totalLives": challenge_total_lives,
+                "allCvSkills": challenge_all_cv_skills,
                 "correctSkills": challenge_correct_skills,
                 "distractorSkills": challenge_distractor_skills,
                 "stages": challenge_stage_config,

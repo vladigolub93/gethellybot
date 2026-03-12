@@ -20,7 +20,18 @@
     "work_format": {
       "type": ["string", "null"],
       "enum": ["remote", "hybrid", "office", null]
-    }
+    },
+    "english_level": {
+      "type": ["string", "null"],
+      "enum": ["A1", "A2", "B1", "B2", "C1", "C2", "native", null]
+    },
+    "preferred_domains_json": {
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 12
+    },
+    "show_take_home_task_roles": { "type": ["boolean", "null"] },
+    "show_live_coding_roles": { "type": ["boolean", "null"] }
   },
   "required": [
     "salary_min",
@@ -30,6 +41,10 @@
     "location_text",
     "city",
     "country_code",
-    "work_format"
+    "work_format",
+    "english_level",
+    "preferred_domains_json",
+    "show_take_home_task_roles",
+    "show_live_coding_roles"
   ]
 }

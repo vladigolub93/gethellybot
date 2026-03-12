@@ -142,6 +142,60 @@ def test_execute_for_vacancy_creates_shortlisted_and_filtered_matches() -> None:
     assert any(match.status == "filtered_out" for match in service.matching.matches)
 
 
+def test_execute_for_vacancy_applies_new_matching_preferences_as_hard_filters() -> None:
+    vacancy = SimpleNamespace(
+        id=uuid4(),
+        primary_tech_stack_json=["python"],
+        countries_allowed_json=["PL"],
+        work_format="hybrid",
+        office_city="Warsaw",
+        required_english_level="C1",
+        has_take_home_task=True,
+        has_live_coding=False,
+        budget_max=7000,
+        seniority_normalized="senior",
+    )
+    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
+
+    candidate = SimpleNamespace(
+        id=uuid4(),
+        state="READY",
+        deleted_at=None,
+        country_code="PL",
+        city="Krakow",
+        work_format="hybrid",
+        english_level="B2",
+        show_take_home_task_roles=False,
+        show_live_coding_roles=True,
+        salary_min=5000,
+        seniority_normalized="senior",
+    )
+    candidate_versions = {
+        candidate.id: SimpleNamespace(
+            id=uuid4(),
+            semantic_embedding=None,
+            summary_json={"skills": ["python"], "years_experience": 7},
+        )
+    }
+
+    service = MatchingService(FakeSession())
+    service.candidates = FakeCandidateRepository([candidate], candidate_versions)
+    service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
+    service.matching = FakeMatchingRepository()
+
+    result = service.execute_for_vacancy(
+        vacancy_id=vacancy.id,
+        trigger_type="vacancy_open",
+    )
+
+    assert result["hard_filtered_count"] == 1
+    match = service.matching.matches[0]
+    assert match.status == "filtered_out"
+    assert "office_city_mismatch" in match.filter_reason_codes_json
+    assert "english_level_mismatch" in match.filter_reason_codes_json
+    assert "take_home_preference_mismatch" in match.filter_reason_codes_json
+
+
 def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest.MonkeyPatch) -> None:
     vacancy = SimpleNamespace(
         id=uuid4(),

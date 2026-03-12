@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.shared.hiring_taxonomy import display_domains, display_english_level, display_hiring_stages
+
 
 def _call_optional(target: Any, method_name: str, *args, **kwargs):
     method = getattr(target, method_name, None)
@@ -106,6 +108,18 @@ def _candidate_preferences_line(candidate) -> str | None:
     work_format = getattr(candidate, "work_format", None)
     if work_format:
         parts.append(f"work format {work_format}")
+    english_level = display_english_level(getattr(candidate, "english_level", None))
+    if english_level:
+        parts.append(f"english {english_level}")
+    preferred_domains = display_domains(getattr(candidate, "preferred_domains_json", None))
+    if preferred_domains:
+        parts.append(f"preferred domains {', '.join(preferred_domains)}")
+    show_take_home = getattr(candidate, "show_take_home_task_roles", None)
+    if show_take_home is not None:
+        parts.append("take-home roles shown" if show_take_home else "take-home roles hidden")
+    show_live_coding = getattr(candidate, "show_live_coding_roles", None)
+    if show_live_coding is not None:
+        parts.append("live-coding roles shown" if show_live_coding else "live-coding roles hidden")
     if not parts:
         return None
     return f"Saved candidate preferences: {'; '.join(parts)}."
@@ -143,9 +157,33 @@ def _vacancy_details_line(vacancy) -> str | None:
     work_format = getattr(vacancy, "work_format", None)
     if work_format:
         parts.append(f"work format {work_format}")
+    office_city = getattr(vacancy, "office_city", None)
+    if office_city:
+        parts.append(f"office city {office_city}")
     countries = _clean_list(getattr(vacancy, "countries_allowed_json", None), limit=6)
     if countries:
         parts.append(f"countries {', '.join(countries)}")
+    required_english = display_english_level(getattr(vacancy, "required_english_level", None))
+    if required_english:
+        parts.append(f"required english {required_english}")
+    has_take_home = getattr(vacancy, "has_take_home_task", None)
+    if has_take_home is True:
+        take_home_text = "take-home included"
+        if getattr(vacancy, "take_home_paid", None) is True:
+            take_home_text = "paid take-home included"
+        elif getattr(vacancy, "take_home_paid", None) is False:
+            take_home_text = "unpaid take-home included"
+        parts.append(take_home_text)
+    elif has_take_home is False:
+        parts.append("no take-home task")
+    has_live_coding = getattr(vacancy, "has_live_coding", None)
+    if has_live_coding is True:
+        parts.append("live coding included")
+    elif has_live_coding is False:
+        parts.append("no live coding")
+    hiring_stages = display_hiring_stages(getattr(vacancy, "hiring_stages_json", None))
+    if hiring_stages:
+        parts.append(f"hiring stages {', '.join(hiring_stages)}")
     team_size = getattr(vacancy, "team_size", None)
     if team_size:
         parts.append(f"team size {team_size}")

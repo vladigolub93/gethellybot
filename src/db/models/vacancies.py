@@ -40,6 +40,8 @@ class Vacancy(Base, UpdateTimestampMixin):
         server_default=text("'[]'::jsonb"),
     )
     work_format: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    office_city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    required_english_level: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     team_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     project_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     primary_tech_stack_json: Mapped[list] = mapped_column(
@@ -47,6 +49,14 @@ class Vacancy(Base, UpdateTimestampMixin):
         nullable=False,
         server_default=text("'[]'::jsonb"),
     )
+    hiring_stages_json: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
+    has_take_home_task: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    take_home_paid: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    has_live_coding: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     questions_context_json: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,

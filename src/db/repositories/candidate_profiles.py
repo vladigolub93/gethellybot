@@ -145,6 +145,10 @@ class CandidateProfilesRepository:
         country_code=None,
         city=None,
         work_format=None,
+        english_level=None,
+        preferred_domains_json=None,
+        show_take_home_task_roles=None,
+        show_live_coding_roles=None,
     ) -> CandidateProfile:
         if salary_min is not None:
             profile.salary_min = salary_min
@@ -162,6 +166,14 @@ class CandidateProfilesRepository:
             profile.city = city
         if work_format is not None:
             profile.work_format = work_format
+        if english_level is not None:
+            profile.english_level = english_level
+        if preferred_domains_json is not None:
+            profile.preferred_domains_json = preferred_domains_json
+        if show_take_home_task_roles is not None:
+            profile.show_take_home_task_roles = show_take_home_task_roles
+        if show_live_coding_roles is not None:
+            profile.show_live_coding_roles = show_live_coding_roles
         self.session.flush()
         return profile
 

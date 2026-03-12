@@ -207,6 +207,33 @@ def test_handle_cv_intake_transitions_to_processing() -> None:
     assert len(fake_queue.messages) == 1
 
 
+def test_handle_cv_intake_rejects_meta_text_without_transition() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    fake_queue = FakeQueue()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = fake_queue
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_CV_PENDING)
+
+    result = service.handle_cv_intake(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="Here is my CV",
+    )
+
+    assert result.status == "needs_more_detail"
+    assert result.notification_template == "candidate_cv_needs_more_detail"
+    assert profile.state == CANDIDATE_STATE_CV_PENDING
+    assert len(fake_repo.versions) == 0
+    assert len(fake_queue.messages) == 0
+
+
 def test_approve_summary_moves_candidate_to_questions_pending() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()
@@ -438,9 +465,9 @@ def test_questions_answer_completion_moves_profile_to_verification_pending() -> 
     assert result is not None
     assert result.status == "next_question"
     assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
-    assert "current location" in result.notification_text.lower()
+    assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
     assert profile.salary_min == 5000
-    assert profile.questions_context_json["current_question_key"] == "location"
+    assert profile.questions_context_json["current_question_key"] == "work_format"
 
 
 def test_questions_answer_asks_next_question_in_sequence() -> None:
@@ -474,9 +501,9 @@ def test_questions_answer_asks_next_question_in_sequence() -> None:
 
     assert result is not None
     assert result.status == "next_question"
-    assert "current location" in result.notification_text.lower()
+    assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
     assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
-    assert profile.questions_context_json["current_question_key"] == "location"
+    assert profile.questions_context_json["current_question_key"] == "work_format"
     assert profile.salary_min == 4500
 
 
@@ -515,8 +542,8 @@ def test_questions_payload_filters_to_current_question_only() -> None:
 
     assert result is not None
     assert result.status == "next_question"
-    assert "current location" in result.notification_text.lower()
-    assert profile.questions_context_json["current_question_key"] == "location"
+    assert "remote" in result.notification_text.lower() or "office" in result.notification_text.lower()
+    assert profile.questions_context_json["current_question_key"] == "work_format"
     assert profile.salary_min == 4500
     assert getattr(profile, "location_text", None) is None
     assert getattr(profile, "work_format", None) is None
@@ -579,7 +606,92 @@ def test_parsed_questions_payload_completion_moves_profile_to_verification_pendi
     assert result.status == "next_question"
     assert profile.state == CANDIDATE_STATE_QUESTIONS_PENDING
     assert profile.salary_min == 5000
+    assert profile.questions_context_json["current_question_key"] == "work_format"
+
+
+def test_questions_require_city_for_hybrid_or_office() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_question_answers(
+        profile,
+        salary_min=5000,
+        salary_currency="USD",
+        salary_period="month",
+        work_format="hybrid",
+    )
+
+    result = service.handle_questions_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={"location_text": "Poland", "country_code": "PL"},
+    )
+
+    assert result is not None
+    assert result.status == "follow_up"
+    assert "city and country" in result.notification_text.lower()
     assert profile.questions_context_json["current_question_key"] == "location"
+
+
+def test_questions_complete_after_new_matching_preferences() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_question_answers(
+        profile,
+        salary_min=5000,
+        salary_currency="USD",
+        salary_period="month",
+        work_format="remote",
+        location_text="Warsaw, Poland",
+        city="Warsaw",
+        country_code="PL",
+        english_level="B2",
+        preferred_domains_json=["fintech", "saas"],
+    )
+    fake_repo.update_questions_context(
+        profile,
+        {
+            "follow_up_used": {
+                "salary": False,
+                "work_format": False,
+                "location": False,
+                "english_level": False,
+                "preferred_domains": False,
+                "assessment_preferences": False,
+            },
+            "current_question_key": "assessment_preferences",
+        },
+    )
+
+    result = service.handle_questions_parsed_payload(
+        user=user,
+        raw_message_id=uuid4(),
+        parsed_payload={
+            "show_take_home_task_roles": True,
+            "show_live_coding_roles": False,
+        },
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+    assert getattr(profile, "show_take_home_task_roles", None) is True
+    assert getattr(profile, "show_live_coding_roles", None) is False
 
 
 def test_questions_voice_answer_enqueues_processing_job() -> None:

@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
+from src.candidate_profile.skills_inventory import candidate_version_full_hard_skills, display_skill_list
 from src.cv_challenge.service import CandidateCvChallengeService
 from src.config.settings import get_settings
 from src.db.models.core import User
@@ -19,6 +20,7 @@ from src.db.repositories.interviews import InterviewsRepository
 from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
+from src.shared.hiring_taxonomy import display_domains, display_english_level, display_hiring_stages
 from src.webapp.auth import TelegramWebAppAuthError, verify_telegram_webapp_init_data
 from src.webapp.presenters import (
     candidate_summary_snapshot,
@@ -423,7 +425,12 @@ class WebAppService:
             "targetRole": summary.get("targetRole") or getattr(profile, "target_role", None),
             "location": getattr(profile, "location_text", None),
             "countryCode": getattr(profile, "country_code", None),
+            "city": getattr(profile, "city", None),
             "workFormat": getattr(profile, "work_format", None),
+            "englishLevel": display_english_level(getattr(profile, "english_level", None)),
+            "preferredDomains": display_domains(getattr(profile, "preferred_domains_json", None)),
+            "showTakeHomeTaskRoles": getattr(profile, "show_take_home_task_roles", None),
+            "showLiveCodingRoles": getattr(profile, "show_live_coding_roles", None),
             "salaryExpectation": format_money_range(
                 getattr(profile, "salary_min", None),
                 getattr(profile, "salary_max", None),
@@ -431,6 +438,7 @@ class WebAppService:
                 getattr(profile, "salary_period", None),
             ),
             "summary": summary,
+            "fullHardSkills": display_skill_list(candidate_version_full_hard_skills(current_version)),
             "readyAt": isoformat_or_none(getattr(profile, "ready_at", None)),
             "updatedAt": isoformat_or_none(getattr(profile, "updated_at", None)),
         }
@@ -460,6 +468,10 @@ class WebAppService:
                 "countryCode": getattr(profile, "country_code", None),
                 "city": getattr(profile, "city", None),
                 "workFormat": getattr(profile, "work_format", None),
+                "englishLevel": display_english_level(getattr(profile, "english_level", None)),
+                "preferredDomains": display_domains(getattr(profile, "preferred_domains_json", None)),
+                "showTakeHomeTaskRoles": getattr(profile, "show_take_home_task_roles", None),
+                "showLiveCodingRoles": getattr(profile, "show_live_coding_roles", None),
             },
             "summary": summary,
         }
@@ -532,6 +544,12 @@ class WebAppService:
                 ),
                 "countriesAllowed": list(vacancy.countries_allowed_json or []),
                 "workFormat": vacancy.work_format,
+                "officeCity": getattr(vacancy, "office_city", None),
+                "requiredEnglishLevel": display_english_level(getattr(vacancy, "required_english_level", None)),
+                "hiringStages": display_hiring_stages(getattr(vacancy, "hiring_stages_json", None)),
+                "hasTakeHomeTask": getattr(vacancy, "has_take_home_task", None),
+                "takeHomePaid": getattr(vacancy, "take_home_paid", None),
+                "hasLiveCoding": getattr(vacancy, "has_live_coding", None),
                 "teamSize": vacancy.team_size,
                 "projectDescription": vacancy.project_description,
                 "primaryTechStack": list(vacancy.primary_tech_stack_json or []),
@@ -626,6 +644,12 @@ class WebAppService:
                 ),
                 "countriesAllowed": list(getattr(vacancy, "countries_allowed_json", None) or []),
                 "workFormat": getattr(vacancy, "work_format", None),
+                "officeCity": getattr(vacancy, "office_city", None),
+                "requiredEnglishLevel": display_english_level(getattr(vacancy, "required_english_level", None)),
+                "hiringStages": display_hiring_stages(getattr(vacancy, "hiring_stages_json", None)),
+                "hasTakeHomeTask": getattr(vacancy, "has_take_home_task", None),
+                "takeHomePaid": getattr(vacancy, "take_home_paid", None),
+                "hasLiveCoding": getattr(vacancy, "has_live_coding", None),
                 "teamSize": getattr(vacancy, "team_size", None),
                 "projectDescription": getattr(vacancy, "project_description", None),
                 "primaryTechStack": list(getattr(vacancy, "primary_tech_stack_json", None) or []),
@@ -662,8 +686,13 @@ class WebAppService:
                         "countryCode": None,
                         "city": None,
                         "workFormat": None,
+                        "englishLevel": None,
+                        "preferredDomains": [],
+                        "showTakeHomeTaskRoles": None,
+                        "showLiveCodingRoles": None,
                     },
                     "summary": candidate_summary,
+                    "fullHardSkills": display_skill_list(candidate_version_full_hard_skills(candidate_version)),
                 }
             ),
             "interview": {

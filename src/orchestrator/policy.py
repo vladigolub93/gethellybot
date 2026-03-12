@@ -90,16 +90,16 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     ),
     "QUESTIONS_PENDING": StatePolicyDefinition(
         state="QUESTIONS_PENDING",
-        goal="Collect salary expectations, location, and preferred work format.",
+        goal="Collect the candidate's matching preferences and constraints.",
         allowed_actions=["send_salary_location_work_format"],
         assistance_prompt_slug="candidate_questions_pending",
         guidance_text=(
-            "Answer the current question about your salary expectations, location, or preferred work format."
+            "Answer the current profile question so I can save the right matching preferences."
         ),
         help_text=(
-            "I collect salary expectations, location, and preferred work format one by one so matching stays clean."
+            "I collect salary, work format, location, English level, domain preferences, and interview-process preferences one by one so matching stays clean."
         ),
-        missing_requirements=["salary", "location", "work_format"],
+        missing_requirements=["candidate_questions"],
     ),
     "VERIFICATION_PENDING": StatePolicyDefinition(
         state="VERIFICATION_PENDING",
@@ -173,14 +173,14 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     ),
     "CLARIFICATION_QA": StatePolicyDefinition(
         state="CLARIFICATION_QA",
-        goal="Resolve mandatory vacancy fields before opening the vacancy.",
+        goal="Resolve mandatory vacancy requirements and hiring-process details before opening the vacancy.",
         allowed_actions=["send_vacancy_clarifications"],
         assistance_prompt_slug="vacancy_clarification_qa",
         guidance_text=(
             "Answer the current vacancy clarification question so I can keep moving."
         ),
         help_text=(
-            "I collect the vacancy basics one by one before opening it: budget, work format, countries, team size, project context, and main stack."
+            "I collect the vacancy basics one by one before opening it: budget, work format, hiring location, English requirement, assessments, hiring stages, team context, and main stack."
         ),
         missing_requirements=["vacancy_clarifications"],
     ),

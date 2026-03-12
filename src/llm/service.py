@@ -7,6 +7,7 @@ from typing import Optional, TypeVar
 
 from pydantic import BaseModel
 
+from src.candidate_profile.skills_inventory import normalize_skill_list
 from src.candidate_profile.question_parser import COUNTRY_CODES, parse_candidate_questions
 from src.candidate_profile.summary_builder import build_approval_summary_text, build_candidate_summary
 from src.config.logging import get_logger
@@ -95,6 +96,11 @@ from src.llm.schemas import (
 )
 from src.shared.text import normalize_command_text
 from src.vacancy.question_parser import parse_vacancy_clarifications
+from src.shared.hiring_taxonomy import (
+    extract_domains,
+    extract_hiring_stages,
+    normalize_english_level,
+)
 from src.vacancy.summary_builder import (
     build_vacancy_approval_summary_text,
     build_vacancy_summary,
@@ -348,12 +354,7 @@ def _looks_like_transcript_dump(summary: Optional[str], answer_texts: list[str])
 
 
 def _normalize_skill_list(values: list[str]) -> list[str]:
-    normalized: list[str] = []
-    for value in values or []:
-        item = " ".join((value or "").lower().split()).strip(" ,.")
-        if item and item not in normalized:
-            normalized.append(item)
-    return normalized[:12]
+    return normalize_skill_list(values or [], limit=12)
 
 
 def _normalize_work_format(value: Optional[str]) -> Optional[str]:
@@ -391,6 +392,23 @@ def _normalize_period(value: Optional[str]) -> Optional[str]:
         return "month"
     if normalized in {"annual", "annually", "yearly"}:
         return "year"
+    return None
+
+
+def _normalize_domain_list(values: list[str]) -> list[str]:
+    return extract_domains(" ".join(str(item or "") for item in (values or [])), extra_values=values or [])
+
+
+def _normalize_bool(value) -> Optional[bool]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "yes", "1"}:
+        return True
+    if normalized in {"false", "no", "0"}:
+        return False
     return None
 
 
@@ -698,9 +716,24 @@ def parse_candidate_questions_with_llm(text: str) -> LLMResult:
         "city": _clean_text(result.payload.get("city"), limit=80),
         "country_code": (result.payload.get("country_code") or "").strip().upper() or None,
         "work_format": _normalize_work_format(result.payload.get("work_format")),
+        "english_level": normalize_english_level(result.payload.get("english_level")),
+        "preferred_domains_json": _normalize_domain_list(
+            result.payload.get("preferred_domains_json") or []
+        ),
+        "show_take_home_task_roles": _normalize_bool(result.payload.get("show_take_home_task_roles")),
+        "show_live_coding_roles": _normalize_bool(result.payload.get("show_live_coding_roles")),
     }
     if payload["country_code"] not in set(COUNTRY_CODES.values()):
         payload["country_code"] = None
+    if not payload["preferred_domains_json"] and re.search(
+        r"\b(any|no preference|open to anything|open to any domain|any domain)\b",
+        text.lower(),
+    ):
+        payload["preferred_domains_json"] = ["any"]
+    if not payload["preferred_domains_json"]:
+        inferred_domains = extract_domains(text)
+        if inferred_domains:
+            payload["preferred_domains_json"] = inferred_domains
     return LLMResult(
         payload={key: value for key, value in payload.items() if value is not None},
         model_name=result.model_name,
@@ -1360,12 +1393,23 @@ def parse_vacancy_clarifications_with_llm(text: str) -> LLMResult:
             result.payload.get("countries_allowed_json") or []
         ),
         "work_format": _normalize_work_format(result.payload.get("work_format")),
+        "office_city": _clean_text(result.payload.get("office_city"), limit=80),
+        "required_english_level": normalize_english_level(result.payload.get("required_english_level")),
         "team_size": result.payload.get("team_size"),
         "project_description": _clean_text(result.payload.get("project_description"), limit=1200),
         "primary_tech_stack_json": _normalize_skill_list(
             result.payload.get("primary_tech_stack_json") or []
         ),
+        "hiring_stages_json": extract_hiring_stages(
+            " ".join(str(item) for item in (result.payload.get("hiring_stages_json") or [])),
+            extra_values=result.payload.get("hiring_stages_json") or [],
+        ),
+        "has_take_home_task": _normalize_bool(result.payload.get("has_take_home_task")),
+        "take_home_paid": _normalize_bool(result.payload.get("take_home_paid")),
+        "has_live_coding": _normalize_bool(result.payload.get("has_live_coding")),
     }
+    if not payload["hiring_stages_json"]:
+        payload["hiring_stages_json"] = extract_hiring_stages(text)
     return LLMResult(
         payload={
             key: value
@@ -2561,8 +2605,60 @@ def safe_candidate_cv_decision(
         except Exception as exc:  # noqa: BLE001
             logger.warning("candidate_cv_decision_fallback", error=str(exc))
 
-    normalized_text = (latest_user_message or "").strip()
+    normalized_text = " ".join((latest_user_message or "").strip().split())
     lowered = normalized_text.lower()
+
+    meta_phrases = (
+        "here is my cv",
+        "here's my cv",
+        "here is my resume",
+        "here's my resume",
+        "sending my cv",
+        "sending my resume",
+        "i will send my cv",
+        "i'll send my cv",
+        "i will send it now",
+        "i'll send it now",
+        "send it now",
+        "one sec",
+        "one second",
+        "wait a sec",
+        "hold on",
+        "see attached",
+        "attached here",
+        "cv attached",
+        "resume attached",
+    )
+
+    def _looks_like_meta_message(value: str) -> bool:
+        if not value:
+            return False
+        if value in meta_phrases:
+            return True
+        return any(
+            value.startswith(f"{phrase}.") or value.startswith(f"{phrase},")
+            for phrase in meta_phrases
+        )
+
+    def _looks_like_experience_input(value: str) -> bool:
+        if not value or "?" in value:
+            return False
+        if _looks_like_meta_message(value):
+            return False
+
+        word_count = len(value.split())
+        if len(value) >= 80:
+            return True
+        if ("\n" in latest_user_message or "," in value or ";" in value) and len(value) >= 24:
+            return True
+        if re.search(r"\b\d+\+?\b", value) and re.search(
+            r"\b(year|years|yr|yrs|month|months|experience|engineer|developer|frontend|backend|full[- ]stack|"
+            r"python|java|javascript|typescript|react|node|go|aws|django|postgres|sql|docker|kubernetes)\b",
+            value,
+        ):
+            return True
+        return word_count >= 8
+
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
@@ -2594,14 +2690,14 @@ def safe_candidate_cv_decision(
             "what next",
             "?",
         ]
-    ):
+    ) or _looks_like_meta_message(lowered):
         return LLMResult(
             payload=payload,
             model_name="baseline-deterministic",
             prompt_version="baseline_candidate_cv_decision_v1",
         )
 
-    if normalized_text:
+    if _looks_like_experience_input(lowered):
         return LLMResult(
             payload={
                 **payload,
