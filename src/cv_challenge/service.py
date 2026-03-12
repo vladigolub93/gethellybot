@@ -31,38 +31,62 @@ CV_CHALLENGE_STAGE_CONFIG = (
     {
         "index": 1,
         "label": "Stage 1",
-        "durationMs": 18000,
-        "spawnIntervalMs": 1050,
-        "speedMin": 74,
-        "speedMax": 96,
-        "correctChance": 0.65,
-        "bonusChance": 0.12,
-        "shieldChance": 0.06,
-        "trapChance": 0.08,
+        "durationMs": 15000,
+        "spawnIntervalMs": 1080,
+        "speedMin": 72,
+        "speedMax": 92,
+        "correctChance": 0.72,
+        "bonusChance": 0.08,
+        "shieldChance": 0.05,
+        "trapChance": 0.05,
     },
     {
         "index": 2,
         "label": "Stage 2",
-        "durationMs": 18000,
-        "spawnIntervalMs": 840,
-        "speedMin": 102,
-        "speedMax": 128,
-        "correctChance": 0.5,
-        "bonusChance": 0.14,
+        "durationMs": 15000,
+        "spawnIntervalMs": 940,
+        "speedMin": 88,
+        "speedMax": 110,
+        "correctChance": 0.6,
+        "bonusChance": 0.1,
         "shieldChance": 0.05,
-        "trapChance": 0.1,
+        "trapChance": 0.07,
     },
     {
         "index": 3,
         "label": "Stage 3",
-        "durationMs": 18000,
-        "spawnIntervalMs": 640,
-        "speedMin": 134,
-        "speedMax": 168,
-        "correctChance": 0.38,
-        "bonusChance": 0.16,
+        "durationMs": 15000,
+        "spawnIntervalMs": 820,
+        "speedMin": 104,
+        "speedMax": 130,
+        "correctChance": 0.5,
+        "bonusChance": 0.12,
         "shieldChance": 0.04,
-        "trapChance": 0.14,
+        "trapChance": 0.1,
+    },
+    {
+        "index": 4,
+        "label": "Stage 4",
+        "durationMs": 14500,
+        "spawnIntervalMs": 690,
+        "speedMin": 126,
+        "speedMax": 154,
+        "correctChance": 0.42,
+        "bonusChance": 0.14,
+        "shieldChance": 0.04,
+        "trapChance": 0.13,
+    },
+    {
+        "index": 5,
+        "label": "Stage 5",
+        "durationMs": 14000,
+        "spawnIntervalMs": 560,
+        "speedMin": 148,
+        "speedMax": 180,
+        "correctChance": 0.34,
+        "bonusChance": 0.16,
+        "shieldChance": 0.03,
+        "trapChance": 0.16,
     },
 )
 CV_CHALLENGE_DISTRACTOR_POOL = (
@@ -247,6 +271,22 @@ def _build_daily_run(
         "seed": seed,
         "goals": _build_daily_goals(seed=seed, correct_skills=correct_skills),
     }
+
+
+def _resolve_stage_config(snapshot_stage_config: Any) -> list[dict[str, Any]]:
+    base_config = [dict(stage) for stage in CV_CHALLENGE_STAGE_CONFIG]
+    if not isinstance(snapshot_stage_config, list) or len(snapshot_stage_config) < len(base_config):
+        return base_config
+
+    resolved: list[dict[str, Any]] = []
+    for index, stage in enumerate(snapshot_stage_config):
+        fallback = dict(base_config[index] if index < len(base_config) else base_config[-1])
+        if isinstance(stage, dict):
+            fallback.update(stage)
+        fallback["index"] = index + 1
+        fallback["label"] = str(fallback.get("label") or f"Stage {index + 1}")
+        resolved.append(fallback)
+    return resolved
 
 
 def _build_distractor_skills(correct_skills: list[str]) -> list[str]:
@@ -450,7 +490,7 @@ class CandidateCvChallengeService:
         challenge_distractor_skills = _clean_skill_list(
             active_snapshot.get("distractorSkills") or eligibility.distractor_skills
         )
-        challenge_stage_config = list(active_snapshot.get("stageConfig") or CV_CHALLENGE_STAGE_CONFIG)
+        challenge_stage_config = _resolve_stage_config(active_snapshot.get("stageConfig"))
         challenge_total_lives = int(active_snapshot.get("totalLives") or CV_CHALLENGE_TOTAL_LIVES)
         challenge_daily_run = dict(
             active_snapshot.get("dailyRun")

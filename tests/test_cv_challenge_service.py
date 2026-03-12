@@ -134,12 +134,31 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["eligible"] is True
     assert bootstrap["challenge"]["title"] == "Helly CV Challenge"
     assert bootstrap["challenge"]["correctSkills"] == ["React", "TypeScript", "Docker"]
+    assert len(bootstrap["challenge"]["stages"]) == 5
     assert bootstrap["challenge"]["dailyRun"]["dateLabel"]
     assert len(bootstrap["challenge"]["dailyRun"]["goals"]) == 3
     assert bootstrap["attempt"]["id"]
     assert bootstrap["attempt"]["status"] == "started"
     assert bootstrap["lastResult"] is None
     assert bootstrap["bestResult"] is None
+
+
+def test_cv_challenge_service_upgrades_legacy_stage_config_for_active_attempt() -> None:
+    service, profile = _build_service()
+
+    bootstrap = service.bootstrap_for_candidate(profile.user_id)
+    active_attempt = service.attempts.get_by_id(bootstrap["attempt"]["id"])
+    active_attempt.skills_snapshot_json["stageConfig"] = [
+        {"index": 1, "label": "Stage 1"},
+        {"index": 2, "label": "Stage 2"},
+        {"index": 3, "label": "Stage 3"},
+    ]
+
+    resumed = service.bootstrap_for_candidate(profile.user_id)
+
+    assert resumed["attempt"]["id"] == bootstrap["attempt"]["id"]
+    assert len(resumed["challenge"]["stages"]) == 5
+    assert resumed["challenge"]["stages"][-1]["label"] == "Stage 5"
 
 
 def test_cv_challenge_service_prioritizes_smart_distractors() -> None:

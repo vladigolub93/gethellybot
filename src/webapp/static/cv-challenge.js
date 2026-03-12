@@ -361,7 +361,7 @@
     if (integerOr(data.maxStreak, 0) >= 6) achievements.push("Combo x3");
     if (integerOr(data.accuracyPercent, 0) >= 85) achievements.push("Sharp Eye");
     if (integerOr(data.totalMistakes, 0) === 0) achievements.push("Clean Run");
-    if ((data.missedSkills || []).length === 0 && integerOr(metrics.stageReached, 1) >= 3) achievements.push("No Misses");
+    if ((data.missedSkills || []).length === 0 && integerOr(metrics.stageReached, 1) >= baseStageCount()) achievements.push("No Misses");
     if (integerOr(data.bonusTapCount, 0) >= 2) achievements.push("Bonus Hunter");
     if (integerOr(data.shieldTapCount, 0) >= 1) achievements.push("Shield Keeper");
     if (integerOr(data.trapHitCount, 0) >= 1 && integerOr(metrics.livesLeft, 0) > 0) achievements.push("Trap Survivor");
@@ -387,9 +387,6 @@
   }
 
   function buildTokenLabel(text, kind) {
-    if (kind === "bonus") return isTerminalTheme() ? `[ +2 ${text} ]` : `+2 ${text}`;
-    if (kind === "shield") return isTerminalTheme() ? `[ +1 ${text} ]` : `+1 ${text}`;
-    if (kind === "trap") return isTerminalTheme() ? `[ !! ${text} ]` : `!! ${text}`;
     return isTerminalTheme() ? `[ ${text} ]` : text;
   }
 
@@ -1072,18 +1069,10 @@
         ? cssVar("--token-fill-correct", "rgba(12,12,18,0.92)")
         : cssVar("--token-fill-wrong", "rgba(12,12,18,0.92)");
       ctx.fill();
-      if (item.kind === "bonus") {
-        ctx.strokeStyle = cssVar("--warn", "#f2c15d");
-      } else if (item.kind === "shield") {
-        ctx.strokeStyle = cssVar("--good", "#42cf8d");
-      } else if (item.kind === "trap") {
-        ctx.strokeStyle = cssVar("--bad", "#ff7a85");
-      } else {
-        ctx.strokeStyle = item.correct
-          ? cssVar("--token-stroke-correct", "rgba(255,255,255,0.08)")
-          : cssVar("--token-stroke-wrong", "rgba(255,255,255,0.08)");
-      }
-      ctx.lineWidth = item.kind === "correct" || item.kind === "wrong" ? 1 : 1.4;
+      ctx.strokeStyle = item.correct
+        ? cssVar("--token-stroke-correct", "rgba(255,255,255,0.08)")
+        : cssVar("--token-stroke-wrong", "rgba(255,255,255,0.08)");
+      ctx.lineWidth = 1;
       ctx.stroke();
       ctx.font = cssVar("--canvas-font", "700 18px system-ui, sans-serif");
       ctx.fillStyle = cssVar("--token-text", "#f8f8fb");
