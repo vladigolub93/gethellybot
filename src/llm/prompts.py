@@ -935,11 +935,20 @@ Follow-up reason:
 def candidate_rerank_prompt(*, vacancy_context: dict, shortlisted_candidates: list[dict]) -> str:
     return f"""Task: rerank already-shortlisted candidates for this vacancy.
 
+Use the vacancy context, candidate profile snapshots, and deterministic scoring signals below.
+Do not invent missing resume or vacancy facts.
+
 Vacancy context:
 {vacancy_context}
 
 Shortlisted candidates:
 {shortlisted_candidates}
+
+Output requirements for each candidate:
+- keep `rationale` to one concise sentence
+- list up to 3 grounded `matched_signals`
+- list up to 2 grounded `concerns`
+- only mention concerns when they are real tradeoffs, not hidden rejections
 """
 
 

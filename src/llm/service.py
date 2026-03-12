@@ -220,6 +220,23 @@ def _clean_text(value: Optional[str], *, limit: int) -> Optional[str]:
     return normalized[:limit]
 
 
+def _clean_text_list(values, *, limit: int, item_limit: int) -> list[str]:
+    result: list[str] = []
+    seen = set()
+    for value in values or []:
+        cleaned = _clean_text(value, limit=limit)
+        if not cleaned:
+            continue
+        normalized_key = cleaned.lower()
+        if normalized_key in seen:
+            continue
+        seen.add(normalized_key)
+        result.append(cleaned)
+        if len(result) >= item_limit:
+            break
+    return result
+
+
 def _clean_summary_text(value: Optional[str], *, limit: int) -> Optional[str]:
     if value is None:
         return None
@@ -427,11 +444,55 @@ def _vacancy_context(vacancy) -> dict:
         "role_title": getattr(vacancy, "role_title", None),
         "seniority_normalized": getattr(vacancy, "seniority_normalized", None),
         "primary_tech_stack_json": getattr(vacancy, "primary_tech_stack_json", None),
+        "vacancy_skill_universe": getattr(vacancy, "vacancy_skill_universe", None),
         "project_description": getattr(vacancy, "project_description", None),
         "budget_min": getattr(vacancy, "budget_min", None),
         "budget_max": getattr(vacancy, "budget_max", None),
         "work_format": getattr(vacancy, "work_format", None),
+        "office_city": getattr(vacancy, "office_city", None),
+        "countries_allowed_json": getattr(vacancy, "countries_allowed_json", None),
+        "required_english_level": getattr(vacancy, "required_english_level", None),
+        "has_take_home_task": getattr(vacancy, "has_take_home_task", None),
+        "take_home_paid": getattr(vacancy, "take_home_paid", None),
+        "has_live_coding": getattr(vacancy, "has_live_coding", None),
+        "hiring_stages_json": getattr(vacancy, "hiring_stages_json", None),
+        "vacancy_domains": getattr(vacancy, "vacancy_domains", None),
     }
+
+
+def _baseline_rerank_signals(item: dict) -> tuple[list[str], list[str]]:
+    score_breakdown = item.get("score_breakdown") or {}
+    matched_signals: list[str] = []
+    concerns: list[str] = []
+
+    if float(score_breakdown.get("core_skill_overlap_ratio") or 0.0) >= 0.75:
+        matched_signals.append("Strong direct overlap with the core vacancy stack")
+    elif float(score_breakdown.get("full_skill_overlap_ratio") or 0.0) >= 0.75:
+        matched_signals.append("Strong overlap across the broader vacancy skill set")
+
+    if float(score_breakdown.get("role_fit") or 0.0) >= 0.6:
+        matched_signals.append("Role title and profile direction align well")
+
+    if float(score_breakdown.get("domain_fit") or 0.0) >= 0.6:
+        matched_signals.append("Candidate domain preferences align with the vacancy domain")
+
+    if float(score_breakdown.get("process_fit") or 0.0) >= 0.85:
+        matched_signals.append("Hiring process looks compatible with candidate preferences")
+    elif float(score_breakdown.get("process_fit") or 0.0) <= 0.4:
+        concerns.append("Hiring process may be heavier than the candidate prefers")
+
+    if float(score_breakdown.get("english_fit") or 0.0) == 0.0:
+        concerns.append("English requirement looks tighter than the candidate profile")
+
+    if float(score_breakdown.get("location_fit") or 0.0) == 0.0:
+        concerns.append("Location or office expectation may be a weaker fit")
+
+    if not matched_signals:
+        matched_signals.append("Solid deterministic fit on stack, experience, and seniority")
+    if not concerns and float(score_breakdown.get("core_skill_overlap_ratio") or 0.0) < 0.5:
+        concerns.append("Direct core stack overlap is not especially strong")
+
+    return matched_signals[:3], concerns[:2]
 
 
 def _fallback_interview_question_plan(vacancy, candidate_summary: dict) -> dict:
@@ -1794,16 +1855,21 @@ def conduct_interview_turn_with_llm(
     )
 
 
-def rerank_candidates_with_llm(*, vacancy, shortlisted_candidates: list[dict]) -> LLMResult:
+def rerank_candidates_with_llm(
+    *,
+    vacancy,
+    vacancy_context: dict | None = None,
+    shortlisted_candidates: list[dict],
+) -> LLMResult:
     result = _client.parse(
         schema=CandidateRerankSchema,
         system_prompt=load_system_prompt("matching", "candidate_rerank"),
         user_prompt=candidate_rerank_prompt(
-            vacancy_context=_vacancy_context(vacancy),
+            vacancy_context=vacancy_context or _vacancy_context(vacancy),
             shortlisted_candidates=shortlisted_candidates,
         ),
         primary_model=get_settings().openai_model_reasoning,
-        prompt_version="matching_candidate_rerank_llm_v1",
+        prompt_version="matching_candidate_rerank_llm_v2",
     )
     ranked_candidates = []
     for item in result.payload.get("ranked_candidates") or []:
@@ -1811,6 +1877,8 @@ def rerank_candidates_with_llm(*, vacancy, shortlisted_candidates: list[dict]) -
             continue
         candidate_ref = _clean_text(item.get("candidate_ref"), limit=120)
         rationale = _clean_text(item.get("rationale"), limit=280)
+        matched_signals = _clean_text_list(item.get("matched_signals"), limit=140, item_limit=3)
+        concerns = _clean_text_list(item.get("concerns"), limit=140, item_limit=2)
         rank = item.get("rank")
         fit_score = item.get("fit_score")
         if not candidate_ref or rationale is None:
@@ -1826,6 +1894,8 @@ def rerank_candidates_with_llm(*, vacancy, shortlisted_candidates: list[dict]) -
                 "rank": rank_value,
                 "fit_score": round(fit_score_value, 4),
                 "rationale": rationale,
+                "matched_signals": matched_signals,
+                "concerns": concerns,
             }
         )
     ranked_candidates.sort(key=lambda item: item["rank"])
@@ -4157,11 +4227,12 @@ def safe_conduct_interview_turn(
     )
 
 
-def safe_rerank_candidates(session, *, vacancy, shortlisted_candidates: list[dict]) -> LLMResult:
+def safe_rerank_candidates(session, *, vacancy, vacancy_context: dict | None = None, shortlisted_candidates: list[dict]) -> LLMResult:
     if should_use_llm_runtime(session):
         try:
             result = rerank_candidates_with_llm(
                 vacancy=vacancy,
+                vacancy_context=vacancy_context,
                 shortlisted_candidates=shortlisted_candidates,
             )
             if result.payload.get("ranked_candidates"):
@@ -4180,18 +4251,21 @@ def safe_rerank_candidates(session, *, vacancy, shortlisted_candidates: list[dic
         reverse=True,
     )
     for rank, item in enumerate(ordered, start=1):
+        matched_signals, concerns = _baseline_rerank_signals(item)
         ranked.append(
             {
                 "candidate_ref": item["candidate_ref"],
                 "rank": rank,
                 "fit_score": round(float(item.get("deterministic_score") or 0.0), 4),
                 "rationale": "Strong deterministic fit based on stack overlap, experience, and seniority alignment.",
+                "matched_signals": matched_signals,
+                "concerns": concerns,
             }
         )
     return LLMResult(
         payload={"ranked_candidates": ranked},
         model_name="baseline-deterministic",
-        prompt_version="baseline_candidate_rerank_v1",
+        prompt_version="baseline_candidate_rerank_v2",
     )
 
 

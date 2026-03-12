@@ -442,6 +442,121 @@ def test_bootstrap_candidate_cv_challenge_commits_only_for_eligible_attempts() -
     assert ineligible_service.session.commit_calls == 0
 
 
+def test_candidate_match_detail_uses_real_matching_rationale() -> None:
+    user_id = uuid4()
+    profile_id = uuid4()
+    vacancy_id = uuid4()
+    manager_user_id = uuid4()
+    match_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    service = WebAppService(session=object())
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(
+            id=profile_id,
+            user_id=user_id,
+            state="READY",
+            location_text="Kyiv",
+            country_code="UA",
+            city="Kyiv",
+            work_format="remote",
+            salary_min=5000,
+            salary_max=6000,
+            salary_currency="USD",
+            salary_period="month",
+            ready_at=now,
+            updated_at=now,
+        ),
+        version=SimpleNamespace(
+            source_type="cv_file",
+            extracted_text="Senior backend engineer with Node.js and PostgreSQL background.",
+            transcript_text=None,
+            summary_json={
+                "headline": "Senior Backend Engineer",
+                "approval_summary_text": "Built scalable backend products.",
+                "skills": ["Node.js", "PostgreSQL"],
+                "years_experience": 8,
+                "target_role": "Senior Backend Engineer",
+            },
+        ),
+    )
+    service.matches = FakeMatchingRepository(
+        matches=[
+            SimpleNamespace(
+                id=match_id,
+                vacancy_id=vacancy_id,
+                candidate_profile_id=profile_id,
+                status="candidate_decision_pending",
+                updated_at=now,
+                invitation_sent_at=None,
+                candidate_response_at=None,
+                manager_decision_at=None,
+                rationale_json={
+                    "llm_rationale": "Strong direct overlap with the vacancy stack and clear backend role fit.",
+                    "matched_signals": [
+                        "Strong overlap with Node.js and PostgreSQL",
+                        "Target role aligns with the vacancy scope",
+                    ],
+                    "concerns": ["Hiring process may be heavier than preferred"],
+                },
+            )
+        ]
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(
+            id=vacancy_id,
+            manager_user_id=manager_user_id,
+            role_title="Senior Backend Engineer",
+            budget_min=6000,
+            budget_max=7000,
+            budget_currency="USD",
+            budget_period="month",
+            countries_allowed_json=["UA"],
+            work_format="remote",
+            team_size="8",
+            project_description="Realtime pricing platform",
+            primary_tech_stack_json=["Node.js", "PostgreSQL"],
+            seniority_normalized="senior",
+            opened_at=now,
+            updated_at=now,
+            required_english_level="B2",
+            office_city=None,
+            hiring_stages_json=[],
+            has_take_home_task=False,
+            take_home_paid=None,
+            has_live_coding=False,
+        ),
+        version=SimpleNamespace(
+            source_type="job_description",
+            extracted_text="Senior Node.js role for a realtime pricing platform.",
+            transcript_text=None,
+            summary_json={
+                "approval_summary_text": "Build and run a pricing platform.",
+                "headline": "Senior Node.js role",
+                "skills": ["Node.js", "PostgreSQL"],
+            },
+        ),
+    )
+    service.users = FakeUsersRepository({})
+    service.interviews = FakeInterviewsRepository(interview=None)
+    service.evaluations = FakeEvaluationsRepository(evaluation=None)
+
+    payload = service.get_candidate_opportunity_detail(
+        SimpleNamespace(role="candidate", user_id=str(user_id)),
+        str(match_id),
+    )
+
+    assert payload["vacancy"]["whyThisRole"] == (
+        "Strong direct overlap with the vacancy stack and clear backend role fit."
+    )
+    assert payload["vacancy"]["matchSignals"] == [
+        "Strong overlap with Node.js and PostgreSQL",
+        "Target role aligns with the vacancy scope",
+    ]
+    assert payload["match"]["rationale"]["summary"] == payload["vacancy"]["whyThisRole"]
+    assert payload["match"]["rationale"]["concerns"] == []
+
+
 def test_finish_candidate_cv_challenge_commits_result() -> None:
     session = FakeSession()
     user_id = uuid4()
@@ -712,3 +827,122 @@ def test_manager_vacancy_cards_include_review_and_interview_counts() -> None:
 
     assert payload["items"][0]["needsReviewCount"] == 1
     assert payload["items"][0]["interviewCount"] == 1
+
+
+def test_manager_match_detail_includes_real_rationale_and_concerns() -> None:
+    manager_user_id = uuid4()
+    candidate_user_id = uuid4()
+    vacancy_id = uuid4()
+    profile_id = uuid4()
+    match_id = uuid4()
+    now = datetime(2026, 3, 11, 12, 0, tzinfo=timezone.utc)
+
+    service = WebAppService(session=object())
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(
+            id=vacancy_id,
+            manager_user_id=manager_user_id,
+            role_title="Node.js Developer",
+            state="OPEN",
+            budget_min=6000,
+            budget_max=7000,
+            budget_currency="USD",
+            budget_period="month",
+            countries_allowed_json=["UA"],
+            work_format="remote",
+            office_city=None,
+            required_english_level="B2",
+            hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
+            has_take_home_task=True,
+            take_home_paid=False,
+            has_live_coding=False,
+            project_description="Realtime pricing platform",
+            primary_tech_stack_json=["Node.js", "PostgreSQL"],
+            team_size=6,
+            seniority_normalized="senior",
+            opened_at=now,
+            updated_at=now,
+        ),
+        version=SimpleNamespace(
+            source_type="job_description",
+            extracted_text="Senior Node.js role for a realtime pricing platform.",
+            transcript_text=None,
+            summary_json={
+                "approval_summary_text": "Build and run a pricing platform.",
+                "headline": "Senior Node.js role",
+                "skills": ["Node.js", "PostgreSQL"],
+            },
+        ),
+    )
+    service.matches = FakeMatchingRepository(
+        matches=[
+            SimpleNamespace(
+                id=match_id,
+                vacancy_id=vacancy_id,
+                candidate_profile_id=profile_id,
+                status="approved",
+                updated_at=now,
+                invitation_sent_at=now,
+                candidate_response_at=now,
+                manager_decision_at=now,
+                rationale_json={
+                    "llm_rationale": "Strong direct stack fit with clear backend product experience.",
+                    "matched_signals": [
+                        "Direct overlap on Node.js and PostgreSQL",
+                        "Candidate location already fits the vacancy",
+                    ],
+                    "concerns": ["Take-home task is unpaid"],
+                },
+            )
+        ]
+    )
+    service.candidate_profiles = FakeCandidateProfilesRepository(
+        profile=SimpleNamespace(
+            id=profile_id,
+            user_id=candidate_user_id,
+            location_text="Kyiv",
+            country_code="UA",
+            city="Kyiv",
+            work_format="remote",
+            english_level="C1",
+            preferred_domains_json=["any"],
+            show_take_home_task_roles=True,
+            show_live_coding_roles=False,
+            salary_min=5000,
+            salary_max=6000,
+            salary_currency="USD",
+            salary_period="month",
+        ),
+        version=SimpleNamespace(
+            source_type="cv_file",
+            extracted_text="Built scalable Node.js backends for product teams.",
+            transcript_text=None,
+            summary_json={
+                "approval_summary_text": "Built scalable Node.js backends.",
+                "skills": ["Node.js", "TypeScript"],
+            },
+        ),
+    )
+    service.users = FakeUsersRepository(
+        {
+            str(manager_user_id): SimpleNamespace(id=manager_user_id, display_name="Manager Name"),
+            str(candidate_user_id): SimpleNamespace(id=candidate_user_id, display_name="Candidate Name"),
+        }
+    )
+    service.interviews = FakeInterviewsRepository(interview=None)
+    service.evaluations = FakeEvaluationsRepository(evaluation=None)
+
+    payload = service.get_manager_match_detail(
+        SimpleNamespace(role="hiring_manager", user_id=str(manager_user_id)),
+        str(match_id),
+    )
+
+    assert payload["candidate"]["whyThisCandidate"] == (
+        "Strong direct stack fit with clear backend product experience."
+    )
+    assert payload["candidate"]["matchSignals"] == [
+        "Direct overlap on Node.js and PostgreSQL",
+        "Candidate location already fits the vacancy",
+    ]
+    assert payload["candidate"]["concerns"] == ["Take-home task is unpaid"]
+    assert payload["match"]["rationale"]["concerns"] == ["Take-home task is unpaid"]

@@ -611,6 +611,58 @@ class WebAppService:
         evaluation = self.evaluations.get_by_match_id(match.id)
         vacancy_summary = vacancy_summary_snapshot(getattr(vacancy_version, "summary_json", None))
         candidate_summary = candidate_summary_snapshot(getattr(candidate_version, "summary_json", None))
+        candidate_rationale = self._build_match_rationale_payload(
+            match=match,
+            perspective="candidate",
+            vacancy=vacancy,
+            candidate_profile=candidate_profile,
+            candidate_summary=candidate_summary,
+            vacancy_summary=vacancy_summary,
+        )
+        manager_rationale = self._build_match_rationale_payload(
+            match=match,
+            perspective="manager",
+            vacancy=vacancy,
+            candidate_profile=candidate_profile,
+            candidate_summary=candidate_summary,
+            vacancy_summary=vacancy_summary,
+        )
+
+        candidate_payload = (
+            self._serialize_candidate_profile_detail(
+                candidate_profile,
+                candidate_version,
+                candidate_user=candidate_user,
+                include_identity=True,
+            )
+            if candidate_profile is not None
+            else {
+                "profileId": None,
+                "name": self._display_name(candidate_user, "Candidate"),
+                "location": None,
+                "countryCode": None,
+                "city": None,
+                "workFormat": None,
+                "salaryExpectation": None,
+                "source": source_text_snapshot(candidate_version),
+                "answers": {
+                    "salaryExpectation": None,
+                    "location": None,
+                    "countryCode": None,
+                    "city": None,
+                    "workFormat": None,
+                    "englishLevel": None,
+                    "preferredDomains": [],
+                    "showTakeHomeTaskRoles": None,
+                    "showLiveCodingRoles": None,
+                },
+                "summary": candidate_summary,
+                "fullHardSkills": display_skill_list(candidate_version_full_hard_skills(candidate_version)),
+            }
+        )
+        candidate_payload["whyThisCandidate"] = manager_rationale.get("summary")
+        candidate_payload["matchSignals"] = manager_rationale.get("signals") or []
+        candidate_payload["concerns"] = manager_rationale.get("concerns") or []
 
         return {
             "match": {
@@ -638,6 +690,7 @@ class WebAppService:
                 "invitationSentAt": isoformat_or_none(match.invitation_sent_at),
                 "candidateRespondedAt": isoformat_or_none(match.candidate_response_at),
                 "managerDecisionAt": isoformat_or_none(match.manager_decision_at),
+                "rationale": manager_rationale if session_context.role == WEBAPP_ROLE_HIRING_MANAGER else candidate_rationale,
             },
             "vacancy": {
                 "id": str(vacancy.id) if vacancy is not None else None,
@@ -661,47 +714,12 @@ class WebAppService:
                 "projectDescription": getattr(vacancy, "project_description", None),
                 "primaryTechStack": list(getattr(vacancy, "primary_tech_stack_json", None) or []),
                 "summary": vacancy_summary,
-                "whyThisRole": self._build_candidate_match_reason(
-                    vacancy=vacancy,
-                    candidate_profile=candidate_profile,
-                    candidate_summary=candidate_summary,
-                    vacancy_summary=vacancy_summary,
-                ),
+                "whyThisRole": candidate_rationale.get("summary"),
+                "matchSignals": candidate_rationale.get("signals") or [],
                 "source": source_text_snapshot(vacancy_version),
                 "managerName": self._display_name(manager_user, None),
             },
-            "candidate": (
-                self._serialize_candidate_profile_detail(
-                    candidate_profile,
-                    candidate_version,
-                    candidate_user=candidate_user,
-                    include_identity=True,
-                )
-                if candidate_profile is not None
-                else {
-                    "profileId": None,
-                    "name": self._display_name(candidate_user, "Candidate"),
-                    "location": None,
-                    "countryCode": None,
-                    "city": None,
-                    "workFormat": None,
-                    "salaryExpectation": None,
-                    "source": source_text_snapshot(candidate_version),
-                    "answers": {
-                        "salaryExpectation": None,
-                        "location": None,
-                        "countryCode": None,
-                        "city": None,
-                        "workFormat": None,
-                        "englishLevel": None,
-                        "preferredDomains": [],
-                        "showTakeHomeTaskRoles": None,
-                        "showLiveCodingRoles": None,
-                    },
-                    "summary": candidate_summary,
-                    "fullHardSkills": display_skill_list(candidate_version_full_hard_skills(candidate_version)),
-                }
-            ),
+            "candidate": candidate_payload,
             "interview": {
                 "sessionId": str(interview.id) if interview is not None else None,
                 "state": getattr(interview, "state", None),
@@ -717,6 +735,93 @@ class WebAppService:
     @staticmethod
     def _normalize_skill_token(value: Any) -> str:
         return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+    @staticmethod
+    def _clean_reason_text(value: Any, *, limit: int = 220) -> Optional[str]:
+        normalized = " ".join(str(value or "").split()).strip()
+        if not normalized:
+            return None
+        return normalized[:limit]
+
+    @classmethod
+    def _clean_reason_list(cls, values: Any, *, limit: int) -> List[str]:
+        result: List[str] = []
+        seen = set()
+        for value in values or []:
+            cleaned = cls._clean_reason_text(value, limit=140)
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(cleaned)
+            if len(result) >= limit:
+                break
+        return result
+
+    @classmethod
+    def _reason_text_from_signals(cls, values: List[str]) -> Optional[str]:
+        sentences = []
+        for value in values or []:
+            cleaned = cls._clean_reason_text(value, limit=140)
+            if not cleaned:
+                continue
+            sentences.append(cleaned if cleaned.endswith((".", "!", "?")) else f"{cleaned}.")
+        if not sentences:
+            return None
+        return " ".join(sentences[:2])
+
+    def _build_manager_match_reason(
+        self,
+        *,
+        vacancy,
+        candidate_profile,
+        candidate_summary: Optional[Dict[str, Any]],
+        vacancy_summary: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        candidate_summary = candidate_summary or {}
+        vacancy_summary = vacancy_summary or {}
+        candidate_skill_map = {
+            self._normalize_skill_token(skill): skill
+            for skill in candidate_summary.get("skills") or []
+            if self._normalize_skill_token(skill)
+        }
+        overlapping_skills = [
+            skill
+            for skill in vacancy_summary.get("skills") or []
+            if self._normalize_skill_token(skill) in candidate_skill_map
+        ]
+
+        reasons: List[str] = []
+        if overlapping_skills:
+            rendered_skills = ", ".join(overlapping_skills[:3])
+            reasons.append(f"This candidate overlaps with the role on {rendered_skills}.")
+        else:
+            target_role = candidate_summary.get("targetRole")
+            role_title = getattr(vacancy, "role_title", None)
+            if target_role and role_title:
+                reasons.append(f"The candidate profile lines up with this role through {target_role}.")
+            elif role_title:
+                reasons.append(f"This candidate looks relevant for the role {role_title}.")
+
+        candidate_work_format = getattr(candidate_profile, "work_format", None)
+        vacancy_work_format = getattr(vacancy, "work_format", None)
+        if candidate_work_format and vacancy_work_format and str(candidate_work_format).lower() == str(vacancy_work_format).lower():
+            reasons.append(f"Preferred work format already matches {candidate_work_format}.")
+
+        candidate_country = getattr(candidate_profile, "country_code", None)
+        countries_allowed = list(getattr(vacancy, "countries_allowed_json", None) or [])
+        if candidate_country and countries_allowed and candidate_country in countries_allowed:
+            reasons.append("Candidate location is already allowed for this role.")
+
+        if reasons:
+            return " ".join(reasons[:2])
+
+        summary_text = candidate_summary.get("approvalSummaryText") or candidate_summary.get("headline")
+        if summary_text:
+            return summary_text
+        return None
 
     def _build_candidate_match_reason(
         self,
@@ -769,3 +874,47 @@ class WebAppService:
         if summary_text:
             return summary_text
         return None
+
+    def _build_match_rationale_payload(
+        self,
+        *,
+        match,
+        perspective: str,
+        vacancy,
+        candidate_profile,
+        candidate_summary: Optional[Dict[str, Any]],
+        vacancy_summary: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        rationale_json = getattr(match, "rationale_json", None) or {}
+        matched_signals = self._clean_reason_list(rationale_json.get("matched_signals"), limit=3)
+        concerns = self._clean_reason_list(rationale_json.get("concerns"), limit=2)
+        llm_rationale = self._clean_reason_text(rationale_json.get("llm_rationale"))
+        summary = llm_rationale or self._reason_text_from_signals(matched_signals)
+
+        if summary:
+            return {
+                "summary": summary,
+                "signals": matched_signals,
+                "concerns": [] if perspective == "candidate" else concerns,
+            }
+
+        fallback_summary = (
+            self._build_candidate_match_reason(
+                vacancy=vacancy,
+                candidate_profile=candidate_profile,
+                candidate_summary=candidate_summary,
+                vacancy_summary=vacancy_summary,
+            )
+            if perspective == "candidate"
+            else self._build_manager_match_reason(
+                vacancy=vacancy,
+                candidate_profile=candidate_profile,
+                candidate_summary=candidate_summary,
+                vacancy_summary=vacancy_summary,
+            )
+        )
+        return {
+            "summary": fallback_summary,
+            "signals": [],
+            "concerns": [],
+        }

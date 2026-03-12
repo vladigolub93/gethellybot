@@ -303,6 +303,8 @@ class CandidateRerankItemSchema(BaseModel):
     rank: int
     fit_score: float
     rationale: str
+    matched_signals: List[str] = Field(default_factory=list)
+    concerns: List[str] = Field(default_factory=list)
 
 
 class CandidateRerankSchema(BaseModel):

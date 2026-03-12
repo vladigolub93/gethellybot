@@ -38,13 +38,25 @@ Output:
       "candidate_ref": "cand_1",
       "rank": 1,
       "fit_score": 0.9,
-      "rationale": "Strong direct overlap with the vacancy stack and relevant seniority for the role."
+      "rationale": "Strong direct overlap with the vacancy stack and relevant seniority for the role.",
+      "matched_signals": [
+        "Direct overlap with python, fastapi, and postgresql",
+        "Relevant senior backend experience",
+        "Good overall role fit"
+      ],
+      "concerns": []
     },
     {
       "candidate_ref": "cand_2",
       "rank": 2,
       "fit_score": 0.42,
-      "rationale": "Shows senior backend experience but has weak direct overlap with the required stack."
+      "rationale": "Shows senior backend experience but has weak direct overlap with the required stack.",
+      "matched_signals": [
+        "Strong backend seniority"
+      ],
+      "concerns": [
+        "Weak direct stack overlap"
+      ]
     }
   ]
 }

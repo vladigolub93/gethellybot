@@ -56,11 +56,18 @@ class FakeVacancyRepository:
 
 
 class FakeMatchingRepository:
+    ACTIVE_MATCH_STATUSES = {
+        "shortlisted",
+        "manager_decision_pending",
+        "candidate_decision_pending",
+        "candidate_applied",
+        "manager_interview_requested",
+    }
+
     def __init__(self):
         self.run = None
         self.matches = []
-        self.active_matches = []
-        self.seen_candidate_ids = []
+        self.historical_matches = []
 
     def create_run(self, **kwargs):
         self.run = SimpleNamespace(id=uuid4(), **kwargs)
@@ -75,118 +82,139 @@ class FakeMatchingRepository:
             setattr(run, key, value)
         return run
 
-    def list_active_for_vacancy(self, vacancy_id):
-        return [match for match in self.active_matches if match.vacancy_id == vacancy_id]
-
-    def list_seen_candidate_ids_for_vacancy(self, vacancy_id):
-        return list(self.seen_candidate_ids)
+    def list_all_for_vacancy(self, vacancy_id):
+        return [match for match in self.historical_matches if match.vacancy_id == vacancy_id]
 
 
-def test_execute_for_vacancy_creates_shortlisted_and_filtered_matches() -> None:
-    vacancy = SimpleNamespace(
+def make_candidate(**overrides):
+    payload = {
+        "id": uuid4(),
+        "state": "READY",
+        "deleted_at": None,
+        "country_code": "PL",
+        "city": "Warsaw",
+        "work_format": "remote",
+        "salary_min": 5000,
+        "seniority_normalized": "senior",
+        "english_level": "C1",
+        "preferred_domains_json": ["saas"],
+        "target_role": "Senior Python Backend Developer",
+        "show_take_home_task_roles": True,
+        "show_live_coding_roles": True,
+    }
+    payload.update(overrides)
+    return SimpleNamespace(**payload)
+
+
+def make_candidate_version(*, core_skills, years=7, full_skills=None, semantic_embedding=None):
+    normalization_json = {"full_hard_skills": full_skills or []}
+    return SimpleNamespace(
         id=uuid4(),
-        primary_tech_stack_json=["python", "postgresql"],
-        countries_allowed_json=["PL"],
-        work_format="remote",
-        budget_max=6000,
-        seniority_normalized="senior",
+        semantic_embedding=semantic_embedding,
+        summary_json={"skills": core_skills, "years_experience": years},
+        normalization_json=normalization_json,
+        extracted_text="",
+        transcript_text="",
     )
+
+
+def make_vacancy(**overrides):
+    payload = {
+        "id": uuid4(),
+        "role_title": "Senior Python Backend Engineer",
+        "project_description": "B2B SaaS product for developer analytics.",
+        "primary_tech_stack_json": ["python", "postgresql"],
+        "countries_allowed_json": ["PL"],
+        "work_format": "remote",
+        "office_city": None,
+        "required_english_level": "B2",
+        "has_take_home_task": False,
+        "has_live_coding": False,
+        "take_home_paid": None,
+        "hiring_stages_json": [],
+        "budget_max": 7000,
+        "seniority_normalized": "senior",
+    }
+    payload.update(overrides)
+    return SimpleNamespace(**payload)
+
+
+def make_identity_rerank(candidates):
+    return SimpleNamespace(
+        prompt_version="matching_candidate_rerank_llm_v1",
+        payload={
+            "ranked_candidates": [
+                {
+                    "candidate_ref": str(candidate.id),
+                    "rank": index,
+                    "fit_score": round(1.0 - (index * 0.01), 2),
+                    "rationale": "Ranked for test.",
+                }
+                for index, candidate in enumerate(candidates, start=1)
+            ]
+        },
+    )
+
+
+def test_execute_for_vacancy_creates_shortlisted_and_filtered_matches(monkeypatch: pytest.MonkeyPatch) -> None:
+    vacancy = make_vacancy()
     vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
 
-    candidate_a = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    candidate_b = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="UA",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
+    candidate_a = make_candidate()
+    candidate_b = make_candidate(country_code="UA")
     candidate_versions = {
-        candidate_a.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
-        ),
-        candidate_b.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python"], "years_experience": 4},
-        ),
+        candidate_a.id: make_candidate_version(core_skills=["python", "postgresql"]),
+        candidate_b.id: make_candidate_version(core_skills=["python"]),
     }
 
     service = MatchingService(FakeSession())
     service.candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
-
-    result = service.execute_for_vacancy(
-        vacancy_id=vacancy.id,
-        trigger_type="vacancy_open",
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: make_identity_rerank([candidate_a]),
     )
+
+    result = service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="vacancy_open")
 
     assert result["candidate_pool_count"] == 2
     assert result["hard_filtered_count"] == 1
     assert result["shortlisted_count"] == 1
-    assert len(service.matching.matches) == 2
     assert any(match.status == "shortlisted" for match in service.matching.matches)
     assert any(match.status == "filtered_out" for match in service.matching.matches)
 
 
-def test_execute_for_vacancy_applies_new_matching_preferences_as_hard_filters() -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["python"],
-        countries_allowed_json=["PL"],
+def test_execute_for_vacancy_applies_new_matching_preferences_as_hard_filters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vacancy = make_vacancy(
         work_format="hybrid",
         office_city="Warsaw",
         required_english_level="C1",
         has_take_home_task=True,
-        has_live_coding=False,
-        budget_max=7000,
-        seniority_normalized="senior",
     )
     vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
-
-    candidate = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
+    candidate = make_candidate(
         city="Krakow",
         work_format="hybrid",
         english_level="B2",
         show_take_home_task_roles=False,
-        show_live_coding_roles=True,
-        salary_min=5000,
-        seniority_normalized="senior",
     )
     candidate_versions = {
-        candidate.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python"], "years_experience": 7},
-        )
+        candidate.id: make_candidate_version(core_skills=["python"]),
     }
 
     service = MatchingService(FakeSession())
     service.candidates = FakeCandidateRepository([candidate], candidate_versions)
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
-
-    result = service.execute_for_vacancy(
-        vacancy_id=vacancy.id,
-        trigger_type="vacancy_open",
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: make_identity_rerank([]),
     )
+
+    result = service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="vacancy_open")
 
     assert result["hard_filtered_count"] == 1
     match = service.matching.matches[0]
@@ -197,56 +225,27 @@ def test_execute_for_vacancy_applies_new_matching_preferences_as_hard_filters() 
 
 
 def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest.MonkeyPatch) -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["python", "postgresql"],
-        countries_allowed_json=["PL"],
-        work_format="remote",
-        budget_max=6000,
-        seniority_normalized="senior",
-    )
+    vacancy = make_vacancy()
     vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
 
-    candidate_a = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    candidate_b = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
+    candidate_a = make_candidate(target_role="Senior Python Backend Developer")
+    candidate_b = make_candidate(target_role="Senior Python Platform Engineer")
     candidate_versions = {
-        candidate_a.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
-        ),
-        candidate_b.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
-        ),
+        candidate_a.id: make_candidate_version(core_skills=["python", "postgresql"]),
+        candidate_b.id: make_candidate_version(core_skills=["python", "postgresql"]),
     }
 
     service = MatchingService(FakeSession())
     service.candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
+    captured = {}
 
-    monkeypatch.setattr(
-        "src.matching.service.safe_rerank_candidates",
-        lambda *args, **kwargs: SimpleNamespace(
-            prompt_version="matching_candidate_rerank_llm_v1",
+    def _fake_rerank(*args, **kwargs):
+        captured["vacancy_context"] = kwargs["vacancy_context"]
+        captured["shortlisted_candidates"] = kwargs["shortlisted_candidates"]
+        return SimpleNamespace(
+            prompt_version="matching_candidate_rerank_llm_v2",
             payload={
                 "ranked_candidates": [
                     {
@@ -254,22 +253,30 @@ def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest
                         "rank": 1,
                         "fit_score": 0.91,
                         "rationale": "Better direct role fit.",
+                        "matched_signals": [
+                            "Strong role-title alignment",
+                            "Good Python and PostgreSQL overlap",
+                        ],
+                        "concerns": ["Less explicit backend platform ownership"],
                     },
                     {
                         "candidate_ref": str(candidate_a.id),
                         "rank": 2,
                         "fit_score": 0.82,
                         "rationale": "Strong but slightly less aligned.",
+                        "matched_signals": ["Strong backend fit"],
+                        "concerns": [],
                     },
                 ]
             },
-        ),
+        )
+
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        _fake_rerank,
     )
 
-    result = service.execute_for_vacancy(
-        vacancy_id=vacancy.id,
-        trigger_type="vacancy_open",
-    )
+    result = service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="vacancy_open")
 
     shortlisted = [match for match in service.matching.matches if match.status == "shortlisted"]
     assert result["shortlisted_count"] == 2
@@ -279,245 +286,169 @@ def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest
     assert candidate_b_match.llm_rank_position == 1
     assert candidate_a_match.llm_rank_position == 2
     assert candidate_b_match.llm_rank_score == 0.91
+    assert candidate_b_match.rationale_json["matched_signals"] == [
+        "Strong role-title alignment",
+        "Good Python and PostgreSQL overlap",
+    ]
+    assert candidate_b_match.rationale_json["concerns"] == ["Less explicit backend platform ownership"]
+    assert captured["vacancy_context"]["required_english_level"] == "B2"
+    assert captured["vacancy_context"]["vacancy_skill_universe"] == ["python", "postgresql"]
+    candidate_payload = next(
+        item for item in captured["shortlisted_candidates"] if item["candidate_profile_id"] == candidate_a.id
+    )
+    assert candidate_payload["candidate_full_hard_skills"] == ["python", "postgresql"]
 
 
-def test_execute_for_vacancy_uses_vector_retrieval_pool(monkeypatch: pytest.MonkeyPatch) -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["python", "postgresql"],
-        countries_allowed_json=["PL"],
-        work_format="remote",
-        budget_max=6000,
-        seniority_normalized="senior",
+def test_execute_for_vacancy_uses_hybrid_vector_pool_and_skill_rescue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vacancy = make_vacancy(
+        primary_tech_stack_json=["python"],
     )
-    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=AmbiguousEmbedding(0.1, 0.2, 0.3))
+    vacancy_version = SimpleNamespace(
+        id=uuid4(),
+        semantic_embedding=AmbiguousEmbedding(0.1, 0.2, 0.3),
+        extracted_text="Senior Django backend role using Python, Django and PostgreSQL.",
+        transcript_text=None,
+        approval_summary_text=None,
+        summary_json={"primary_tech_stack": ["python"]},
+    )
 
-    candidate_a = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    candidate_b = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
+    candidate_vector = make_candidate(target_role="Python Developer")
+    candidate_skill = make_candidate(target_role="Django Backend Developer")
     candidate_versions = {
-        candidate_a.id: SimpleNamespace(
-            id=uuid4(),
+        candidate_vector.id: make_candidate_version(
+            core_skills=["python"],
+            full_skills=["python"],
             semantic_embedding=[0.1, 0.2, 0.29],
-            summary_json={"skills": ["python"], "years_experience": 7},
         ),
-        candidate_b.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=[0.05, 0.1, 0.15],
-            summary_json={"skills": ["postgresql"], "years_experience": 5},
+        candidate_skill.id: make_candidate_version(
+            core_skills=["python"],
+            full_skills=["python", "django", "postgresql"],
+            semantic_embedding=[0.01, 0.02, 0.03],
         ),
     }
 
     service = MatchingService(FakeSession())
-    fake_candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
+    fake_candidates = FakeCandidateRepository([candidate_vector, candidate_skill], candidate_versions)
     fake_candidates.similar_results = [
         {
-            "candidate": candidate_a,
-            "candidate_version": candidate_versions[candidate_a.id],
+            "candidate": candidate_vector,
+            "candidate_version": candidate_versions[candidate_vector.id],
             "embedding_score": 0.97,
-        },
-        {
-            "candidate": candidate_b,
-            "candidate_version": candidate_versions[candidate_b.id],
-            "embedding_score": 0.82,
         },
     ]
     service.candidates = fake_candidates
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
-
     monkeypatch.setattr(
         "src.matching.service.safe_rerank_candidates",
-        lambda *args, **kwargs: SimpleNamespace(
-            prompt_version="matching_candidate_rerank_llm_v1",
-            payload={
-                "ranked_candidates": [
-                    {"candidate_ref": str(candidate_a.id), "rank": 1, "fit_score": 0.93, "rationale": "Closer stack fit."},
-                    {"candidate_ref": str(candidate_b.id), "rank": 2, "fit_score": 0.81, "rationale": "Good secondary fit."},
-                ]
-            },
-        ),
+        lambda *args, **kwargs: make_identity_rerank([candidate_skill, candidate_vector]),
     )
 
     result = service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="vacancy_open")
 
+    shortlisted_ids = {
+        match.candidate_profile_id
+        for match in service.matching.matches
+        if match.status == "shortlisted"
+    }
     assert result["candidate_pool_count"] == 2
-    assert service.matching.run.payload_json["mode"] == "vector_plus_deterministic_plus_llm_rerank"
+    assert service.matching.run.payload_json["mode"] == "hybrid_vector_plus_deterministic_plus_llm_rerank"
+    assert service.matching.run.payload_json["vacancy_skill_count"] >= 3
+    assert service.matching.run.payload_json["hybrid_skill_pool_count"] == 2
+    assert candidate_skill.id in shortlisted_ids
 
 
-def test_execute_for_vacancy_does_not_repeat_seen_candidate_for_same_vacancy() -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["node.js", "postgresql"],
-        countries_allowed_json=["UA"],
-        work_format="remote",
-        budget_max=7000,
-        seniority_normalized="senior",
-    )
+def test_execute_for_vacancy_skips_candidate_seen_for_same_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vacancy = make_vacancy(primary_tech_stack_json=["node.js", "postgresql"], countries_allowed_json=["UA"])
     vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
 
-    seen_candidate = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="UA",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    fresh_candidate = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="UA",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
+    seen_candidate = make_candidate(country_code="UA", target_role="Senior Node.js Engineer")
+    fresh_candidate = make_candidate(country_code="UA", target_role="Senior Node.js Engineer")
+    seen_version = make_candidate_version(core_skills=["node.js", "postgresql"])
+    fresh_version = make_candidate_version(core_skills=["node.js", "postgresql"])
     candidate_versions = {
-        seen_candidate.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["node.js", "postgresql"], "years_experience": 8},
-        ),
-        fresh_candidate.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["node.js", "postgresql"], "years_experience": 8},
-        ),
+        seen_candidate.id: seen_version,
+        fresh_candidate.id: fresh_version,
     }
 
     service = MatchingService(FakeSession())
     service.candidates = FakeCandidateRepository([seen_candidate, fresh_candidate], candidate_versions)
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
-    service.matching.seen_candidate_ids = [seen_candidate.id]
+    service.matching.historical_matches = [
+        SimpleNamespace(
+            vacancy_id=vacancy.id,
+            candidate_profile_id=seen_candidate.id,
+            candidate_profile_version_id=seen_version.id,
+            vacancy_version_id=vacancy_version.id,
+            status="candidate_skipped",
+        )
+    ]
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: make_identity_rerank([fresh_candidate]),
+    )
 
     result = service.execute_for_vacancy(
         vacancy_id=vacancy.id,
         trigger_type="manager_manual_request",
     )
 
+    shortlisted_ids = {
+        match.candidate_profile_id
+        for match in service.matching.matches
+        if match.status == "shortlisted"
+    }
     assert result["candidate_pool_count"] == 1
-    shortlisted_ids = {match.candidate_profile_id for match in service.matching.matches if match.status == "shortlisted"}
     assert fresh_candidate.id in shortlisted_ids
     assert seen_candidate.id not in shortlisted_ids
 
 
-def test_execute_for_vacancy_keeps_candidate_eligible_when_not_seen_for_vacancy() -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["node.js", "postgresql"],
-        countries_allowed_json=["UA"],
-        work_format="remote",
-        budget_max=7000,
-        seniority_normalized="senior",
-    )
+def test_execute_for_vacancy_resurfaces_candidate_after_profile_version_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vacancy = make_vacancy(primary_tech_stack_json=["node.js", "postgresql"], countries_allowed_json=["UA"])
     vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
 
-    candidate = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="UA",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
+    candidate = make_candidate(country_code="UA", target_role="Senior Node.js Engineer")
+    current_version = make_candidate_version(
+        core_skills=["node.js"],
+        full_skills=["node.js", "postgresql"],
     )
-    candidate_versions = {
-        candidate.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["node.js", "postgresql"], "years_experience": 8},
-        ),
-    }
+    old_version = make_candidate_version(core_skills=["node.js"])
+    candidate_versions = {candidate.id: current_version}
 
     service = MatchingService(FakeSession())
     service.candidates = FakeCandidateRepository([candidate], candidate_versions)
     service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
     service.matching = FakeMatchingRepository()
-    service.matching.seen_candidate_ids = []
+    service.matching.historical_matches = [
+        SimpleNamespace(
+            vacancy_id=vacancy.id,
+            candidate_profile_id=candidate.id,
+            candidate_profile_version_id=old_version.id,
+            vacancy_version_id=vacancy_version.id,
+            status="candidate_skipped",
+        )
+    ]
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: make_identity_rerank([candidate]),
+    )
 
     result = service.execute_for_vacancy(
         vacancy_id=vacancy.id,
         trigger_type="manager_manual_request",
     )
 
-    assert result["candidate_pool_count"] == 1
-    shortlisted_ids = {match.candidate_profile_id for match in service.matching.matches if match.status == "shortlisted"}
-    assert shortlisted_ids == {candidate.id}
-
-
-def test_execute_for_vacancy_skips_candidates_already_seen_for_same_vacancy() -> None:
-    vacancy = SimpleNamespace(
-        id=uuid4(),
-        primary_tech_stack_json=["python", "postgresql"],
-        countries_allowed_json=["PL"],
-        work_format="remote",
-        budget_max=6000,
-        seniority_normalized="senior",
-    )
-    vacancy_version = SimpleNamespace(id=uuid4(), semantic_embedding=None)
-
-    candidate_a = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    candidate_b = SimpleNamespace(
-        id=uuid4(),
-        state="READY",
-        deleted_at=None,
-        country_code="PL",
-        work_format="remote",
-        salary_min=5000,
-        seniority_normalized="senior",
-    )
-    candidate_versions = {
-        candidate_a.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
-        ),
-        candidate_b.id: SimpleNamespace(
-            id=uuid4(),
-            semantic_embedding=None,
-            summary_json={"skills": ["python", "postgresql"], "years_experience": 7},
-        ),
+    shortlisted_ids = {
+        match.candidate_profile_id
+        for match in service.matching.matches
+        if match.status == "shortlisted"
     }
-
-    service = MatchingService(FakeSession())
-    service.candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
-    service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
-    service.matching = FakeMatchingRepository()
-    service.matching.seen_candidate_ids = [candidate_a.id]
-
-    result = service.execute_for_vacancy(
-        vacancy_id=vacancy.id,
-        trigger_type="manager_manual_request",
-    )
-
     assert result["candidate_pool_count"] == 1
-    assert result["shortlisted_count"] == 1
-    shortlisted = [match for match in service.matching.matches if match.status == "shortlisted"]
-    assert len(shortlisted) == 1
-    assert shortlisted[0].candidate_profile_id == candidate_b.id
+    assert shortlisted_ids == {candidate.id}

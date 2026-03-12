@@ -1199,6 +1199,7 @@
       ])}
       ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
       ${renderTextPanel("Why this role", payload.vacancy.whyThisRole || "", "")}
+      ${renderChipPanel("Matching signals", payload.vacancy.matchSignals || [], "")}
       ${renderDetailSection("Timeline", [
         { label: "Last updated", value: formatEventTime(payload.match.updatedAt) },
         { label: "Your reply", value: formatEventTime(payload.match.candidateRespondedAt, "Pending") },
@@ -1258,6 +1259,9 @@
         { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
       ])}
       ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
+      ${renderTextPanel("Why this candidate", payload.candidate.whyThisCandidate || "", "")}
+      ${renderChipPanel("Strong signals", payload.candidate.matchSignals || [], "")}
+      ${renderChipPanel("Watchouts", payload.candidate.concerns || [], "")}
       ${renderDetailSection("Timeline", [
         { label: "Last updated", value: formatEventTime(payload.match.updatedAt) },
         { label: "Invitation sent", value: payload.match.invitationSentAt ? formatEventTime(payload.match.invitationSentAt) : "" },
