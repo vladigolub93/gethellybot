@@ -386,7 +386,15 @@ class ContentIngestionService:
         avg_chars_per_page = text_length / page_count
         return text_length < 200 or avg_chars_per_page < 80
 
-    def _assess_transcription_quality(self, *, response: Any, response_data: dict, text: str, file_row) -> dict:
+    def _assess_transcription_quality(
+        self,
+        *,
+        response: Any,
+        response_data: dict | None = None,
+        text: str,
+        file_row=None,
+    ) -> dict:
+        response_data = dict(response_data or {})
         duration = self._coerce_float(
             response_data.get("duration")
             or getattr(response, "duration", None)
