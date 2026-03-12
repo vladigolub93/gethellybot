@@ -568,7 +568,7 @@
             <span class="hud-label">${isTerminalTheme() ? "lives" : "Lives"}</span>
           </article>
           <article class="hud-card">
-            <span id="hud-stage" class="hud-value">1 / 3</span>
+            <span id="hud-stage" class="hud-value">1 / ${Math.max(baseStageCount(), 1)}</span>
             <span class="hud-label">${isTerminalTheme() ? "stage" : "Stage"}</span>
           </article>
         </header>
@@ -579,9 +579,8 @@
         <footer class="game-footer" aria-label="How to play">
           <span class="game-footer-chip">${isTerminalTheme() ? "tap cv skills" : "Tap CV skills"}</span>
           <span class="game-footer-chip">${isTerminalTheme() ? "combo = more score" : "Combo = more score"}</span>
-          <span class="game-footer-chip">${isTerminalTheme() ? "+2 token = bonus" : "+2 token = bonus"}</span>
-          <span class="game-footer-chip">${isTerminalTheme() ? "+1 token = restore life" : "+1 token = restore life"}</span>
-          <span class="game-footer-chip">${isTerminalTheme() ? "trap = -2 lives" : "Trap = -2 lives"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "later stages = faster" : "Later stages = faster"}</span>
+          <span class="game-footer-chip">${isTerminalTheme() ? "wrong tap = lose life" : "Wrong tap = lose life"}</span>
           <span class="game-footer-chip">${isTerminalTheme() ? "missed real skill = -1 life" : "Missed real skill = -1 life"}</span>
         </footer>
       </section>
