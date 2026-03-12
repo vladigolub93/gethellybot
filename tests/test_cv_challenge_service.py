@@ -134,10 +134,23 @@ def test_cv_challenge_service_builds_bootstrap_for_eligible_candidate() -> None:
     assert bootstrap["eligible"] is True
     assert bootstrap["challenge"]["title"] == "Helly CV Challenge"
     assert bootstrap["challenge"]["correctSkills"] == ["React", "TypeScript", "Docker"]
+    assert bootstrap["challenge"]["dailyRun"]["dateLabel"]
+    assert len(bootstrap["challenge"]["dailyRun"]["goals"]) == 3
     assert bootstrap["attempt"]["id"]
     assert bootstrap["attempt"]["status"] == "started"
     assert bootstrap["lastResult"] is None
     assert bootstrap["bestResult"] is None
+
+
+def test_cv_challenge_service_prioritizes_smart_distractors() -> None:
+    service, profile = _build_service(skills=["react", "node.js", "docker"])
+
+    bootstrap = service.bootstrap_for_candidate(profile.user_id)
+    distractors = bootstrap["challenge"]["distractorSkills"]
+
+    assert "React Native" in distractors[:6]
+    assert "Deno" in distractors[:8]
+    assert "Podman" in distractors[:10]
 
 
 def test_cv_challenge_service_rejects_candidate_with_blocking_active_matches() -> None:

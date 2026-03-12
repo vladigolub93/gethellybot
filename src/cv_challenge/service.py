@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import random
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -97,6 +100,38 @@ CV_CHALLENGE_DISTRACTOR_POOL = (
     "Perl",
     "Hadoop",
 )
+CV_CHALLENGE_SMART_DISTRACTORS = {
+    "react": ("React Native", "Next.js", "Vue", "Angular"),
+    "react native": ("React", "Flutter", "Swift", "Kotlin"),
+    "next.js": ("Nuxt", "React", "Remix", "Angular"),
+    "node": ("Node-RED", "Deno", "Bun", "NestJS"),
+    "nodejs": ("Node-RED", "Deno", "Bun", "NestJS"),
+    "node.js": ("Node-RED", "Deno", "Bun", "NestJS"),
+    "typescript": ("JavaScript", "Flow", "ReasonML", "CoffeeScript"),
+    "javascript": ("TypeScript", "Flow", "Elm", "ReasonML"),
+    "python": ("Django", "Flask", "FastAPI", "Pandas"),
+    "django": ("Flask", "FastAPI", "Ruby on Rails", "Laravel"),
+    "fastapi": ("Flask", "Express", "Django", "NestJS"),
+    "docker": ("Podman", "Kubernetes", "Helm", "Terraform"),
+    "kubernetes": ("Docker Swarm", "Nomad", "Helm", "OpenShift"),
+    "postgresql": ("MySQL", "SQLite", "MariaDB", "MongoDB"),
+    "mysql": ("PostgreSQL", "MariaDB", "SQLite", "MongoDB"),
+    "mongodb": ("PostgreSQL", "MySQL", "Redis", "Cassandra"),
+    "redis": ("Memcached", "RabbitMQ", "MongoDB", "PostgreSQL"),
+    "graphql": ("REST", "gRPC", "Apollo Client", "Relay"),
+    "aws": ("GCP", "Azure", "CloudFormation", "Terraform"),
+    "gcp": ("AWS", "Azure", "Terraform", "Cloud Run"),
+    "terraform": ("CloudFormation", "Pulumi", "Ansible", "Helm"),
+    "ansible": ("Terraform", "Puppet", "Chef", "Helm"),
+}
+CV_CHALLENGE_DAILY_GOAL_TEMPLATES = (
+    {"type": "accuracy_min", "target": 75, "label": "Finish with 75%+ accuracy"},
+    {"type": "lives_left_min", "target": 2, "label": "Finish with 2+ lives"},
+    {"type": "max_streak_min", "target": 6, "label": "Reach a x3 combo"},
+    {"type": "bonus_taps_min", "target": 2, "label": "Catch 2 bonus tokens"},
+    {"type": "mistakes_max", "target": 2, "label": "Keep mistakes at 2 or less"},
+    {"type": "shield_taps_min", "target": 1, "label": "Catch a shield token"},
+)
 
 CV_CHALLENGE_BLOCKING_MATCH_STATUSES = frozenset(
     {
@@ -166,6 +201,75 @@ def _clean_skill_list(values: list[str] | None) -> list[str]:
         seen.add(normalized)
         result.append(_display_skill(normalized))
     return result
+
+
+def _daily_seed(*parts: str) -> str:
+    payload = "::".join(str(part or "") for part in parts)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _build_daily_goals(*, seed: str, correct_skills: list[str]) -> list[dict[str, Any]]:
+    rng = random.Random(int(seed, 16))
+    score_target = max(12, min(24, len(correct_skills) * 4 + 2))
+    candidates = list(CV_CHALLENGE_DAILY_GOAL_TEMPLATES) + [
+        {
+            "type": "score_min",
+            "target": score_target,
+            "label": f"Score at least {score_target} points",
+        }
+    ]
+    selected = rng.sample(candidates, k=min(3, len(candidates)))
+    return [
+        {
+            "type": item["type"],
+            "target": item["target"],
+            "label": item["label"],
+        }
+        for item in selected
+    ]
+
+
+def _build_daily_run(
+    *,
+    candidate_profile_id: str,
+    candidate_profile_version_id: Optional[str],
+    correct_skills: list[str],
+) -> dict[str, Any]:
+    date_label = datetime.now(timezone.utc).date().isoformat()
+    seed = _daily_seed(
+        date_label,
+        candidate_profile_id,
+        candidate_profile_version_id or "",
+        "|".join(correct_skills),
+    )
+    return {
+        "dateLabel": date_label,
+        "seed": seed,
+        "goals": _build_daily_goals(seed=seed, correct_skills=correct_skills),
+    }
+
+
+def _build_distractor_skills(correct_skills: list[str]) -> list[str]:
+    normalized_correct = {_normalize_skill_token(skill) for skill in correct_skills}
+    seen = set()
+    result: list[str] = []
+
+    def add(skill: str) -> None:
+        normalized = _normalize_skill_token(skill)
+        if not normalized or normalized in normalized_correct or normalized in seen:
+            return
+        seen.add(normalized)
+        result.append(_display_skill(skill))
+
+    for skill in correct_skills:
+        normalized = _normalize_skill_token(skill)
+        for related in CV_CHALLENGE_SMART_DISTRACTORS.get(normalized, ()):
+            add(related)
+
+    for skill in CV_CHALLENGE_DISTRACTOR_POOL:
+        add(skill)
+
+    return result[:18]
 
 
 @dataclass(frozen=True)
@@ -262,13 +366,7 @@ class CandidateCvChallengeService:
                 distractor_skills=[],
             )
 
-        normalized_correct = {_normalize_skill_token(skill) for skill in correct_skills}
-        distractor_skills = [
-            skill
-            for skill in CV_CHALLENGE_DISTRACTOR_POOL
-            if _normalize_skill_token(skill) not in normalized_correct
-        ]
-
+        distractor_skills = _build_distractor_skills(correct_skills)
         return CandidateCvChallengeEligibility(
             eligible=True,
             reason_code="eligible",
@@ -282,7 +380,7 @@ class CandidateCvChallengeService:
             candidate_profile_version_id=str(version.id) if version is not None else None,
             active_match_count=0,
             correct_skills=correct_skills,
-            distractor_skills=distractor_skills[:18],
+            distractor_skills=distractor_skills,
         )
 
     def build_dashboard_card(self, user_id) -> Dict[str, Any]:
@@ -344,6 +442,24 @@ class CandidateCvChallengeService:
         active_attempt = self.attempts.get_latest_active_for_candidate_profile(profile_id)
         last_completed = self.attempts.get_latest_completed_for_candidate_profile(profile_id)
         best_completed = self.attempts.get_best_completed_for_candidate_profile(profile_id)
+        active_snapshot = dict(active_attempt.skills_snapshot_json or {}) if active_attempt is not None else {}
+
+        challenge_correct_skills = _clean_skill_list(
+            active_snapshot.get("correctSkills") or eligibility.correct_skills
+        )
+        challenge_distractor_skills = _clean_skill_list(
+            active_snapshot.get("distractorSkills") or eligibility.distractor_skills
+        )
+        challenge_stage_config = list(active_snapshot.get("stageConfig") or CV_CHALLENGE_STAGE_CONFIG)
+        challenge_total_lives = int(active_snapshot.get("totalLives") or CV_CHALLENGE_TOTAL_LIVES)
+        challenge_daily_run = dict(
+            active_snapshot.get("dailyRun")
+            or _build_daily_run(
+                candidate_profile_id=eligibility.candidate_profile_id,
+                candidate_profile_version_id=eligibility.candidate_profile_version_id,
+                correct_skills=challenge_correct_skills,
+            )
+        )
 
         if active_attempt is None:
             active_attempt = self.attempts.create(
@@ -352,10 +468,11 @@ class CandidateCvChallengeService:
                 if eligibility.candidate_profile_version_id
                 else None,
                 skills_snapshot_json={
-                    "correctSkills": eligibility.correct_skills,
-                    "distractorSkills": eligibility.distractor_skills,
-                    "stageConfig": list(CV_CHALLENGE_STAGE_CONFIG),
-                    "totalLives": CV_CHALLENGE_TOTAL_LIVES,
+                    "correctSkills": challenge_correct_skills,
+                    "distractorSkills": challenge_distractor_skills,
+                    "stageConfig": challenge_stage_config,
+                    "totalLives": challenge_total_lives,
+                    "dailyRun": challenge_daily_run,
                 },
             )
 
@@ -375,10 +492,11 @@ class CandidateCvChallengeService:
             "challenge": {
                 "title": "Helly CV Challenge",
                 "subtitle": "Tap only the skills that appear in your CV.",
-                "totalLives": CV_CHALLENGE_TOTAL_LIVES,
-                "correctSkills": eligibility.correct_skills,
-                "distractorSkills": eligibility.distractor_skills,
-                "stages": list(CV_CHALLENGE_STAGE_CONFIG),
+                "totalLives": challenge_total_lives,
+                "correctSkills": challenge_correct_skills,
+                "distractorSkills": challenge_distractor_skills,
+                "stages": challenge_stage_config,
+                "dailyRun": challenge_daily_run,
             },
         }
 

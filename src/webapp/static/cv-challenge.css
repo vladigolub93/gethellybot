@@ -322,6 +322,30 @@ html[data-theme="terminal"] .brand-tail {
   line-height: 1.5;
 }
 
+.goal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.goal-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.goal-item[data-complete="true"] {
+  border-color: rgba(66, 207, 141, 0.22);
+  background: rgba(66, 207, 141, 0.1);
+}
+
 html[data-theme="terminal"] .screen-card,
 html[data-theme="terminal"] .game-shell,
 html[data-theme="terminal"] .result-card,
@@ -337,6 +361,17 @@ html[data-theme="terminal"] .result-meta-card {
   border-color: rgba(87, 255, 158, 0.14);
   border-radius: 10px;
   background: rgba(4, 9, 7, 0.86);
+}
+
+html[data-theme="terminal"] .goal-item {
+  border-radius: 10px;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="terminal"] .goal-item[data-complete="true"] {
+  border-color: rgba(52, 199, 89, 0.2);
+  background: rgba(52, 199, 89, 0.12);
 }
 
 .meta-value,

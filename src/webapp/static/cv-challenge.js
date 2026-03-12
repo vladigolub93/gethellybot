@@ -40,6 +40,8 @@
     bannerText: "",
     bannerUntil: 0,
     latestRunIsBest: false,
+    rngState: 0,
+    practiceMode: false,
   };
   const TERMINAL_THEME = "terminal";
 
@@ -254,9 +256,13 @@
 
   function defaultBannerText() {
     const comboText = isTerminalTheme() ? `combo_x${state.multiplier}` : `Combo x${state.multiplier}`;
-    const stageText = isTerminalTheme()
-      ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
-      : (currentStageConfig() && currentStageConfig().label) || `Stage ${currentStageNumber()}`;
+    const stageText = state.practiceMode
+      ? (isTerminalTheme()
+        ? `endless_${String(currentStageNumber()).padStart(2, "0")}`
+        : `Endless ${currentStageNumber()}`)
+      : (isTerminalTheme()
+        ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
+        : (currentStageConfig() && currentStageConfig().label) || `Stage ${currentStageNumber()}`);
     return isTerminalTheme() ? `[ ${stageText} | ${comboText} ]` : `${stageText} • ${comboText}`;
   }
 
@@ -264,6 +270,104 @@
     state.bannerText = text;
     state.bannerUntil = performance.now() + durationMs;
     updateHud();
+  }
+
+  function hashSeedString(value) {
+    let hash = 2166136261;
+    const text = String(value || "helly");
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function seedRandom(seedValue) {
+    state.rngState = hashSeedString(seedValue) || 1;
+  }
+
+  function nextRandom() {
+    let t = (state.rngState += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    const result = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    state.rngState = t >>> 0;
+    return result;
+  }
+
+  function dailyRunData() {
+    return state.bootstrap && state.bootstrap.challenge ? state.bootstrap.challenge.dailyRun || null : null;
+  }
+
+  function formatDailyLabel(dailyRun) {
+    if (!dailyRun || !dailyRun.dateLabel) return "";
+    return `Daily run · ${dailyRun.dateLabel}`;
+  }
+
+  function accuracyPercentFromCounts(correctTapCount, wrongTapCount, missedCount) {
+    const total = integerOr(correctTapCount, 0) + integerOr(wrongTapCount, 0) + integerOr(missedCount, 0);
+    if (total <= 0) return 100;
+    return Math.round((integerOr(correctTapCount, 0) / total) * 100);
+  }
+
+  function currentAccuracyPercent() {
+    return accuracyPercentFromCounts(
+      state.correctTapCount,
+      state.wrongTapCount,
+      state.missedCorrect.size
+    );
+  }
+
+  function dailyGoals() {
+    const dailyRun = dailyRunData();
+    return dailyRun && Array.isArray(dailyRun.goals) ? dailyRun.goals : [];
+  }
+
+  function renderGoalList(goals, completedKeys) {
+    const items = goals || [];
+    if (!items.length) return "";
+    const done = new Set(completedKeys || []);
+    return `
+      <div class="goal-list">
+        ${items.map((goal) => `
+          <span class="goal-item" data-complete="${done.has(goal.type) ? "true" : "false"}">${escapeHtml(goal.label)}</span>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function evaluateDailyGoal(goal, metrics) {
+    if (!goal || !metrics) return false;
+    const data = metrics.result || {};
+    if (goal.type === "accuracy_min") return integerOr(data.accuracyPercent, 0) >= integerOr(goal.target, 0);
+    if (goal.type === "lives_left_min") return integerOr(metrics.livesLeft, 0) >= integerOr(goal.target, 0);
+    if (goal.type === "max_streak_min") return integerOr(data.maxStreak, 0) >= integerOr(goal.target, 0);
+    if (goal.type === "bonus_taps_min") return integerOr(data.bonusTapCount, 0) >= integerOr(goal.target, 0);
+    if (goal.type === "mistakes_max") return integerOr(data.totalMistakes, 0) <= integerOr(goal.target, 0);
+    if (goal.type === "shield_taps_min") return integerOr(data.shieldTapCount, 0) >= integerOr(goal.target, 0);
+    if (goal.type === "score_min") return integerOr(metrics.score, 0) >= integerOr(goal.target, 0);
+    return false;
+  }
+
+  function completedGoalTypes(metrics) {
+    return dailyGoals()
+      .filter((goal) => evaluateDailyGoal(goal, metrics))
+      .map((goal) => goal.type);
+  }
+
+  function buildAchievements(metrics) {
+    const data = metrics.result || {};
+    const achievements = [];
+    if (integerOr(data.maxStreak, 0) >= 6) achievements.push("Combo x3");
+    if (integerOr(data.accuracyPercent, 0) >= 85) achievements.push("Sharp Eye");
+    if (integerOr(data.totalMistakes, 0) === 0) achievements.push("Clean Run");
+    if ((data.missedSkills || []).length === 0 && integerOr(metrics.stageReached, 1) >= 3) achievements.push("No Misses");
+    if (integerOr(data.bonusTapCount, 0) >= 2) achievements.push("Bonus Hunter");
+    if (integerOr(data.shieldTapCount, 0) >= 1) achievements.push("Shield Keeper");
+    if (integerOr(data.trapHitCount, 0) >= 1 && integerOr(metrics.livesLeft, 0) > 0) achievements.push("Trap Survivor");
+    if (state.practiceMode && integerOr(metrics.stageReached, 1) >= baseStageCount() + 2) achievements.push("Endless Push");
+    if (completedGoalTypes(metrics).length === dailyGoals().length && dailyGoals().length) achievements.push("Daily Goals");
+    return achievements.slice(0, 8);
   }
 
   function rememberRecent(array, value) {
@@ -290,8 +394,10 @@
   }
 
   function buildCurrentAttemptResult(won) {
+    const accuracyPercent = currentAccuracyPercent();
     return {
       score: state.score,
+      livesLeft: state.livesLeft,
       stageReached: currentStageNumber(),
       won: Boolean(won),
       result: {
@@ -304,6 +410,8 @@
         totalMistakes: state.totalMistakes,
         missedSkills: Array.from(state.missedCorrect),
         durationMs: Math.max(Date.now() - state.startedAt, 0),
+        accuracyPercent,
+        mode: state.practiceMode ? "endless_practice" : "challenge",
       },
     };
   }
@@ -311,6 +419,13 @@
   function renderAttemptMetrics(result, options) {
     if (!result) return "";
     const resultData = resultPayload(result);
+    const accuracyPercent = resultData.accuracyPercent !== undefined
+      ? integerOr(resultData.accuracyPercent, 0)
+      : accuracyPercentFromCounts(
+        integerOr(resultData.correctTapCount, 0),
+        integerOr(resultData.wrongTapCount, 0),
+        Array.isArray(resultData.missedSkills) ? resultData.missedSkills.length : 0
+      );
     return `
       <div class="result-meta">
         <article class="result-meta-card">
@@ -326,8 +441,8 @@
           <span class="result-meta-label">${isTerminalTheme() ? "max_streak" : "Max streak"}</span>
         </article>
         <article class="result-meta-card">
-          <span class="result-meta-value">${escapeHtml(integerOr(resultData.totalMistakes, 0))}</span>
-          <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
+          <span class="result-meta-value">${escapeHtml(accuracyPercent)}%</span>
+          <span class="result-meta-label">${isTerminalTheme() ? "accuracy" : "Accuracy"}</span>
         </article>
       </div>
       ${options && options.note ? `<p class="history-note">${escapeHtml(options.note)}</p>` : ""}
@@ -390,6 +505,7 @@
     const attempt = state.bootstrap.attempt || null;
     const lastResult = state.bootstrap.lastResult || null;
     const bestResult = state.bootstrap.bestResult || lastResult || null;
+    const dailyRun = dailyRunData();
     const canResume = Boolean(attempt && attempt.resumable && attempt.progress);
     const historyNote = lastResult && bestResult && !isSameResult(lastResult, bestResult)
       ? `Last run: ${integerOr(lastResult.score, 0)} points, stage ${integerOr(lastResult.stageReached, 1)}.`
@@ -413,6 +529,12 @@
             <span class="meta-label">${isTerminalTheme() ? "stages" : "Stages"}</span>
           </article>
         </div>
+        ${dailyRun ? `
+          <div class="result-history">
+            <p class="eyebrow">${escapeHtml(formatDailyLabel(dailyRun))}</p>
+            ${renderGoalList(dailyGoals(), [])}
+          </div>
+        ` : ""}
         ${bestResult ? `
           <div class="result-history">
             <p class="eyebrow">${isTerminalTheme() ? "best_run" : "Best result"}</p>
@@ -484,11 +606,15 @@
     const currentResult = buildCurrentAttemptResult(won);
     const bestResult = state.bootstrap && state.bootstrap.bestResult ? state.bootstrap.bestResult : currentResult;
     const isNewBest = Boolean(state.latestRunIsBest);
+    const resultData = resultPayload(currentResult);
+    const completedGoals = completedGoalTypes(currentResult);
+    const achievements = buildAchievements(currentResult);
+    const showEndlessButton = Boolean(won && !state.practiceMode);
     appEl.innerHTML = `
       <section class="result-card">
         <p class="eyebrow">${won ? (isTerminalTheme() ? "run_complete" : "Challenge complete") : (isTerminalTheme() ? "run_failed" : "Game over")}</p>
-        <h2>${won ? "You know your CV well." : "You missed some skills from your CV."}</h2>
-        <p class="result-copy">${isNewBest ? "New best run saved." : (won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile.")}</p>
+        <h2>${state.practiceMode ? "Endless mode complete." : (won ? "You know your CV well." : "You missed some skills from your CV.")}</h2>
+        <p class="result-copy">${isNewBest ? "New best run saved." : (state.practiceMode ? "Practice run finished. Your saved challenge result stayed untouched." : (won ? "Nice run. Helly is still matching you in the background." : "Try again and tap only the technologies that really appear in your profile."))}</p>
         <div class="result-meta">
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.score)}</span>
@@ -507,25 +633,43 @@
             <span class="result-meta-label">${isTerminalTheme() ? "max_streak" : "Max streak"}</span>
           </article>
           <article class="result-meta-card">
-            <span class="result-meta-value">${escapeHtml(state.correctTapCount)}</span>
-            <span class="result-meta-label">${isTerminalTheme() ? "correct_taps" : "Correct taps"}</span>
+            <span class="result-meta-value">${escapeHtml(integerOr(resultData.accuracyPercent, 0))}%</span>
+            <span class="result-meta-label">${isTerminalTheme() ? "accuracy" : "Accuracy"}</span>
           </article>
           <article class="result-meta-card">
             <span class="result-meta-value">${escapeHtml(state.totalMistakes)}</span>
             <span class="result-meta-label">${isTerminalTheme() ? "mistakes" : "Mistakes"}</span>
           </article>
         </div>
+        ${dailyGoals().length ? `
+          <div class="result-history">
+            <p class="eyebrow">${isTerminalTheme() ? "daily_goals" : "Daily goals"}</p>
+            ${renderGoalList(dailyGoals(), completedGoals)}
+          </div>
+        ` : ""}
+        ${achievements.length ? `
+          <div class="result-history">
+            <p class="eyebrow">${isTerminalTheme() ? "achievements" : "Achievements"}</p>
+            <div class="goal-list">
+              ${achievements.map((item) => `<span class="goal-item" data-complete="true">${escapeHtml(item)}</span>`).join("")}
+            </div>
+          </div>
+        ` : ""}
         ${missed.length ? `
           <div class="missed-list">
             ${missed.map((skill) => `<span class="missed-item">${escapeHtml(isTerminalTheme() ? `[ ${skill} ]` : skill)}</span>`).join("")}
           </div>
         ` : ""}
         <div class="action-row">
+          ${showEndlessButton ? `<button id="continue-endless" class="ghost-button" type="button">${isTerminalTheme() ? "continue endless" : "Continue endless"}</button>` : ""}
           <button id="try-again" class="button" type="button">${isTerminalTheme() ? "rerun" : "Try again"}</button>
           <button id="open-dashboard" class="ghost-button" type="button">${isTerminalTheme() ? "cd /dashboard" : "Open dashboard"}</button>
         </div>
       </section>
     `;
+    bindPress(document.getElementById("continue-endless"), () => {
+      startEndlessPractice();
+    });
     bindPress(document.getElementById("try-again"), async () => {
       await refreshBootstrap();
       startGame();
@@ -560,6 +704,8 @@
       totalMistakes: state.totalMistakes,
       recentCorrectTexts: state.recentCorrectTexts.slice(),
       recentWrongTexts: state.recentWrongTexts.slice(),
+      rngState: state.rngState,
+      practiceMode: state.practiceMode,
       objects: state.objects.map((item) => ({
         text: item.text,
         displayText: item.displayText,
@@ -575,7 +721,7 @@
   }
 
   async function saveProgressSnapshot(force) {
-    if (!state.running || state.finishSubmitted || state.progressSaveInFlight) return;
+    if (!state.running || state.finishSubmitted || state.progressSaveInFlight || state.practiceMode) return;
     const attemptId = currentAttemptId();
     if (!attemptId) return;
     const now = performance.now();
@@ -602,7 +748,7 @@
   }
 
   function restoreProgressSnapshot(snapshot) {
-    const currentStage = state.bootstrap.challenge.stages[Math.min(snapshot.stageIndex || 0, state.bootstrap.challenge.stages.length - 1)];
+    const currentStage = stageConfigForIndex(Math.max(integerOr(snapshot.stageIndex, 0), 0));
     state.objects = (snapshot.objects || []).map((item) => ({
       id: state.nextId++,
       text: item.text,
@@ -617,7 +763,7 @@
     }));
     state.score = Number(snapshot.score || 0);
     state.livesLeft = Number(snapshot.livesLeft || state.bootstrap.challenge.totalLives);
-    state.stageIndex = Math.min(Number(snapshot.stageIndex || 0), state.bootstrap.challenge.stages.length - 1);
+    state.stageIndex = Math.max(integerOr(snapshot.stageIndex, 0), 0);
     state.streak = integerOr(snapshot.streak, 0);
     state.maxStreak = integerOr(snapshot.maxStreak, 0);
     state.multiplier = integerOr(snapshot.multiplier, comboMultiplier(state.streak));
@@ -630,6 +776,8 @@
     state.totalMistakes = Number(snapshot.totalMistakes || 0);
     state.recentCorrectTexts = Array.isArray(snapshot.recentCorrectTexts) ? snapshot.recentCorrectTexts.slice(-2) : [];
     state.recentWrongTexts = Array.isArray(snapshot.recentWrongTexts) ? snapshot.recentWrongTexts.slice(-2) : [];
+    state.rngState = integerOr(snapshot.rngState, state.rngState || 1);
+    state.practiceMode = Boolean(snapshot.practiceMode);
     state.startedAt = Date.now() - Math.max(Number(snapshot.elapsedMs || 0), 0);
     const now = performance.now();
     const stageRemainingMs = Math.max(Number(snapshot.stageRemainingMs || currentStage.durationMs), 0);
@@ -730,19 +878,92 @@
     }
   }
 
+  function baseStageCount() {
+    return state.bootstrap && state.bootstrap.challenge && Array.isArray(state.bootstrap.challenge.stages)
+      ? state.bootstrap.challenge.stages.length
+      : 0;
+  }
+
+  function stageConfigForIndex(index) {
+    const stages = state.bootstrap && state.bootstrap.challenge ? state.bootstrap.challenge.stages || [] : [];
+    if (!stages.length) {
+      return {
+        index: integerOr(index, 0) + 1,
+        label: `Stage ${integerOr(index, 0) + 1}`,
+        durationMs: 18000,
+        spawnIntervalMs: 900,
+        speedMin: 90,
+        speedMax: 120,
+        correctChance: 0.5,
+        bonusChance: 0.12,
+        shieldChance: 0.05,
+        trapChance: 0.1,
+      };
+    }
+    if (index < stages.length) return stages[index];
+
+    const last = stages[stages.length - 1];
+    const extra = index - stages.length + 1;
+    return {
+      index: index + 1,
+      label: `Stage ${index + 1}`,
+      durationMs: Math.max(integerOr(last.durationMs, 18000) - (extra * 350), 13000),
+      spawnIntervalMs: Math.max(integerOr(last.spawnIntervalMs, 640) - (extra * 45), 300),
+      speedMin: integerOr(last.speedMin, 134) + (extra * 16),
+      speedMax: integerOr(last.speedMax, 168) + (extra * 20),
+      correctChance: Math.max(Number(last.correctChance || 0.38) - (extra * 0.025), 0.22),
+      bonusChance: Math.min(Number(last.bonusChance || 0.16) + (extra * 0.015), 0.28),
+      shieldChance: Math.max(Number(last.shieldChance || 0.04) - (extra * 0.004), 0.01),
+      trapChance: Math.min(Number(last.trapChance || 0.14) + (extra * 0.018), 0.3),
+    };
+  }
+
   function currentStageConfig() {
-    return state.bootstrap.challenge.stages[Math.min(state.stageIndex, state.bootstrap.challenge.stages.length - 1)];
+    return stageConfigForIndex(Math.max(integerOr(state.stageIndex, 0), 0));
+  }
+
+  function effectiveStageConfig() {
+    const base = currentStageConfig();
+    let spawnFactor = 1;
+    let speedFactor = 1;
+    const accuracy = currentAccuracyPercent();
+    const actionCount = state.correctTapCount + state.wrongTapCount + state.missedCorrect.size;
+
+    if (actionCount >= 6 && accuracy >= 82) {
+      spawnFactor *= 0.9;
+      speedFactor *= 1.12;
+    } else if (actionCount >= 5 && accuracy <= 58) {
+      spawnFactor *= 1.12;
+      speedFactor *= 0.9;
+    }
+
+    if (state.streak >= 6) {
+      spawnFactor *= 0.92;
+      speedFactor *= 1.08;
+    }
+
+    if (state.livesLeft <= 1) {
+      spawnFactor *= 1.14;
+      speedFactor *= 0.88;
+    }
+
+    return {
+      ...base,
+      spawnIntervalMs: Math.max(Math.round(integerOr(base.spawnIntervalMs, 900) * spawnFactor), 260),
+      speedMin: Math.max(Math.round(integerOr(base.speedMin, 90) * speedFactor), 50),
+      speedMax: Math.max(Math.round(integerOr(base.speedMax, 120) * speedFactor), 70),
+    };
   }
 
   function pickRandom(list) {
-    return list[Math.floor(Math.random() * list.length)];
+    return list[Math.floor(nextRandom() * list.length)];
   }
 
   function spawnItem() {
     const challenge = state.bootstrap.challenge;
-    const stage = currentStageConfig();
+    const stage = effectiveStageConfig();
     const correctChance = Number(stage && stage.correctChance);
-    const correct = Math.random() < (Number.isFinite(correctChance) ? correctChance : 0.5);
+    const correct = nextRandom() < (Number.isFinite(correctChance) ? correctChance : 0.5);
     const sourceList = correct ? challenge.correctSkills : challenge.distractorSkills;
     const text = pickRandomAvoidRecent(sourceList, correct ? state.recentCorrectTexts : state.recentWrongTexts);
     if (!text) return;
@@ -750,13 +971,13 @@
     if (correct) {
       const shieldChance = canSpawnShieldToken() ? Number(stage && stage.shieldChance) : 0;
       const bonusChance = Number(stage && stage.bonusChance);
-      const roll = Math.random();
+      const roll = nextRandom();
       if (roll < (Number.isFinite(shieldChance) ? shieldChance : 0)) {
         kind = "shield";
       } else if (roll < (Number.isFinite(shieldChance) ? shieldChance : 0) + (Number.isFinite(bonusChance) ? bonusChance : 0.12)) {
         kind = "bonus";
       }
-    } else if (Math.random() < (Number.isFinite(Number(stage && stage.trapChance)) ? Number(stage.trapChance) : 0.1)) {
+    } else if (nextRandom() < (Number.isFinite(Number(stage && stage.trapChance)) ? Number(stage.trapChance) : 0.1)) {
       kind = "trap";
     }
 
@@ -774,9 +995,9 @@
       kind,
       width,
       height,
-      x: 12 + Math.random() * Math.max(maxX - 12, 1),
+      x: 12 + nextRandom() * Math.max(maxX - 12, 1),
       y: -height - 12,
-      speed: stage.speedMin + Math.random() * (stage.speedMax - stage.speedMin),
+      speed: stage.speedMin + nextRandom() * (stage.speedMax - stage.speedMin),
     });
     rememberRecent(correct ? state.recentCorrectTexts : state.recentWrongTexts, text);
   }
@@ -785,9 +1006,13 @@
     if (state.hudScoreEl) state.hudScoreEl.textContent = String(state.score);
     if (state.hudLivesEl) state.hudLivesEl.textContent = isTerminalTheme() ? "■".repeat(state.livesLeft) : String(state.livesLeft);
     if (state.hudStageEl) {
-      state.hudStageEl.textContent = isTerminalTheme()
-        ? `stage_${String(state.stageIndex + 1).padStart(2, "0")}`
-        : `${state.stageIndex + 1} / ${state.bootstrap.challenge.stages.length}`;
+      state.hudStageEl.textContent = state.practiceMode
+        ? (isTerminalTheme()
+          ? `endless_${String(currentStageNumber()).padStart(2, "0")}`
+          : `${currentStageNumber()} / ∞`)
+        : (isTerminalTheme()
+          ? `stage_${String(currentStageNumber()).padStart(2, "0")}`
+          : `${currentStageNumber()} / ${baseStageCount()}`);
     }
     if (state.stageBannerEl) {
       if (state.bannerText && performance.now() < state.bannerUntil) {
@@ -875,7 +1100,7 @@
       state.frameId = null;
     }
     const currentResult = buildCurrentAttemptResult(won);
-    if (state.bootstrap) {
+    if (state.bootstrap && !state.practiceMode) {
       const previousBest = state.bootstrap.bestResult || null;
       state.latestRunIsBest = !previousBest || compareResults(currentResult, previousBest) > 0;
       state.bootstrap.lastResult = currentResult;
@@ -889,8 +1114,10 @@
   }
 
   async function submitResult(won) {
-    if (state.finishSubmitted || !state.bootstrap || !state.bootstrap.attempt) return;
+    if (state.finishSubmitted || !state.bootstrap || !state.bootstrap.attempt || state.practiceMode) return;
     state.finishSubmitted = true;
+    const currentResult = buildCurrentAttemptResult(won);
+    const result = resultPayload(currentResult);
     try {
       await api("/webapp/api/candidate/cv-challenge/finish", {
         method: "POST",
@@ -898,19 +1125,9 @@
           attemptId: state.bootstrap.attempt.id,
           score: state.score,
           livesLeft: state.livesLeft,
-          stageReached: state.stageIndex + 1,
+          stageReached: currentStageNumber(),
           won,
-          result: {
-            correctTapCount: state.correctTapCount,
-            wrongTapCount: state.wrongTapCount,
-            bonusTapCount: state.bonusTapCount,
-            shieldTapCount: state.shieldTapCount,
-            trapHitCount: state.trapHitCount,
-            maxStreak: state.maxStreak,
-            totalMistakes: state.totalMistakes,
-            missedSkills: Array.from(state.missedCorrect),
-            durationMs: Date.now() - state.startedAt,
-          },
+          result,
         }),
       });
     } catch (_) {}
@@ -927,7 +1144,7 @@
     }
 
     if (now >= state.stageEndsAt) {
-      if (state.stageIndex >= state.bootstrap.challenge.stages.length - 1) {
+      if (!state.practiceMode && state.stageIndex >= baseStageCount() - 1) {
         finishGame(true);
         return;
       }
@@ -936,13 +1153,15 @@
       state.stageEndsAt = now + currentStageConfig().durationMs;
       state.lastSpawnAt = now;
       setBannerMessage(
-        isTerminalTheme() ? `[ ${currentStageConfig().label.toLowerCase().replace(/\s+/g, "_")} ]` : currentStageConfig().label,
+        state.practiceMode
+          ? (isTerminalTheme() ? `[ endless_${String(currentStageNumber()).padStart(2, "0")} ]` : `Endless ${currentStageNumber()}`)
+          : (isTerminalTheme() ? `[ ${currentStageConfig().label.toLowerCase().replace(/\s+/g, "_")} ]` : currentStageConfig().label),
         1200
       );
       updateHud();
     }
 
-    if (now - state.lastSpawnAt >= currentStageConfig().spawnIntervalMs) {
+    if (now - state.lastSpawnAt >= effectiveStageConfig().spawnIntervalMs) {
       spawnItem();
       state.lastSpawnAt = now;
     }
@@ -977,6 +1196,7 @@
     renderGameShell();
     state.running = true;
     state.finishSubmitted = false;
+    state.practiceMode = false;
     state.objects = [];
     state.nextId = 1;
     state.score = 0;
@@ -1004,11 +1224,40 @@
     state.bannerText = "";
     state.bannerUntil = 0;
     state.latestRunIsBest = false;
+    seedRandom((dailyRunData() && dailyRunData().seed) || currentAttemptId() || "helly");
     if (resumeSnapshot && Object.keys(resumeSnapshot).length) {
       restoreProgressSnapshot(resumeSnapshot);
     }
     updateHud();
     state.frameId = window.requestAnimationFrame(frame);
+  }
+
+  function startEndlessPractice() {
+    const snapshot = {
+      score: state.score,
+      livesLeft: Math.max(state.livesLeft, 1),
+      stageIndex: baseStageCount(),
+      stageReached: baseStageCount() + 1,
+      streak: state.streak,
+      maxStreak: state.maxStreak,
+      multiplier: state.multiplier,
+      stageRemainingMs: stageConfigForIndex(baseStageCount()).durationMs,
+      nextSpawnRemainingMs: 0,
+      elapsedMs: Math.max(Date.now() - state.startedAt, 0),
+      missedSkills: Array.from(state.missedCorrect),
+      correctTapCount: state.correctTapCount,
+      wrongTapCount: state.wrongTapCount,
+      bonusTapCount: state.bonusTapCount,
+      shieldTapCount: state.shieldTapCount,
+      trapHitCount: state.trapHitCount,
+      totalMistakes: state.totalMistakes,
+      recentCorrectTexts: state.recentCorrectTexts.slice(),
+      recentWrongTexts: state.recentWrongTexts.slice(),
+      rngState: state.rngState,
+      practiceMode: true,
+      objects: [],
+    };
+    startGame(snapshot);
   }
 
   async function refreshBootstrap() {
