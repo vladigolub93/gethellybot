@@ -527,6 +527,16 @@
     return `<p class="${classes.join(" ")}">${escapeHtml(value)}</p>`;
   }
 
+  function renderBadgeRow(values, tone) {
+    const items = (values || []).filter((value) => value !== null && value !== undefined && String(value).trim());
+    if (!items.length) return "";
+    return `
+      <div class="badge-row">
+        ${items.map((value) => `<span class="badge" data-tone="${escapeHtml(tone || "accent")}">${escapeHtml(value)}</span>`).join("")}
+      </div>
+    `;
+  }
+
   function renderInlineMetrics(metrics, extraClass) {
     const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
     const className = extraClass ? `inline-metrics ${extraClass}` : "inline-metrics";
@@ -773,34 +783,47 @@
   }
 
   function renderCandidateProfileCard(profile) {
-    const rawTitle = firstNonEmpty(profile.headline, profile.targetRole, "Profile");
-    const title = truncateText(rawTitle, 44);
-    const noteParts = [];
-    if (profile.targetRole && profile.targetRole !== rawTitle) {
-      noteParts.push(profile.targetRole);
-    }
-    if (profile.summary && profile.summary.yearsExperience) {
-      noteParts.push(`${profile.summary.yearsExperience}+ years experience`);
-    }
-    if (profile.workFormat) {
-      noteParts.push(profile.workFormat);
-    }
+    const title = firstNonEmpty(profile.targetRole, profile.headline, "Your profile");
     const summaryFallback = firstNonEmpty(
       profile.summary && profile.summary.approvalSummaryText,
       profile.summary && profile.summary.experienceExcerpt,
-      "Review your saved profile details."
+      "Open your summary, skills, and answers."
     );
+    const subtitle = firstNonEmpty(
+      profile.headline && profile.headline !== title ? profile.headline : "",
+      summaryFallback !== title ? truncateText(summaryFallback, 140) : ""
+    );
+    const facts = [];
+    if (profile.summary && profile.summary.yearsExperience) {
+      facts.push(`${profile.summary.yearsExperience}+ years`);
+    }
+    if (profile.workFormat) {
+      facts.push(profile.workFormat);
+    }
+    if (profile.location) {
+      facts.push(profile.location);
+    }
+    if (profile.salaryExpectation) {
+      facts.push(compactCompensation(profile.salaryExpectation));
+    }
+    const skills = ((profile.summary && profile.summary.skills) || []).slice(0, 4);
+    const summaryText = summaryFallback && summaryFallback !== title && summaryFallback !== subtitle
+      ? truncateText(summaryFallback, 150)
+      : "";
 
-    return renderShortcutCard({
-      route: "candidate-profile",
-      title,
-      kicker: "Profile",
-      note: truncateText(noteParts.join(" • ") || summaryFallback, 110),
-      metrics: [
-        { label: "Location", value: profile.location || "" },
-        { label: "Salary", value: compactCompensation(profile.salaryExpectation) || "" },
-      ],
-    });
+    return `
+      <section class="detail-panel action-panel profile-home-card ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
+        <div class="action-panel-copy">
+          <p class="eyebrow">${isTerminalTheme() ? "profile" : "Profile"}</p>
+          <h3 class="profile-home-title">${escapeHtml(title)}</h3>
+          ${subtitle ? `<p class="profile-home-subtitle">${escapeHtml(subtitle)}</p>` : ""}
+          ${summaryText ? renderCardNote(summaryText, "profile-home-summary") : ""}
+          ${renderBadgeRow(facts, "accent")}
+          ${skills.length ? `<div class="profile-home-skills">${listChips(skills)}</div>` : ""}
+        </div>
+        <button class="action-button profile-home-button" type="button" data-route="candidate-profile">${isTerminalTheme() ? "Open profile" : "Open profile"}</button>
+      </section>
+    `;
   }
 
   function renderManagerVacancyCard(item) {
