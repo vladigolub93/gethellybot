@@ -30,6 +30,7 @@
 
   const appEl = document.getElementById("app");
   const appShellEl = document.querySelector(".app-shell");
+  const topbarNoteEl = document.getElementById("topbar-note");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   const handleTelegramBack = () => {
     if (getCurrentRoute() === "home") {
@@ -205,7 +206,7 @@
       <section class="state-card loading-card">
         <p class="eyebrow">Loading</p>
         <h2>Checking your role</h2>
-        <p>${escapeHtml(note)}</p>
+        <p>${escapeHtml(note || "Checking your Telegram access and opening the right workspace.")}</p>
       </section>
     `;
   }
@@ -255,7 +256,7 @@
 
   function listChips(values) {
     if (!values || !values.length) {
-      return `<div class="empty-state">No data yet.</div>`;
+      return `<div class="empty-state">Nothing here yet.</div>`;
     }
     return `<div class="list-chips">${values
       .map((value) => `<span class="chip">${escapeHtml(value)}</span>`)
@@ -285,6 +286,44 @@
 
   function isTerminalTheme() {
     return state.theme === TERMINAL_THEME;
+  }
+
+  function getCurrentRole() {
+    return state.session && state.session.role ? state.session.role : "unknown";
+  }
+
+  function getTopbarNote(role) {
+    if (role === "candidate") {
+      return "Your profile, roles, and next steps in Telegram.";
+    }
+    if (role === "hiring_manager") {
+      return "Your vacancies, candidates, and decisions in Telegram.";
+    }
+    return "Your recruiting flow in Telegram.";
+  }
+
+  function updateTopbarCopy() {
+    if (!topbarNoteEl) return;
+    topbarNoteEl.textContent = getTopbarNote(getCurrentRole());
+  }
+
+  function homeLoadingCopy() {
+    if (getCurrentRole() === "candidate") {
+      return {
+        title: "Refreshing your matches",
+        body: "Loading your latest profile and opportunity updates.",
+      };
+    }
+    if (getCurrentRole() === "hiring_manager") {
+      return {
+        title: "Refreshing your hiring view",
+        body: "Loading your latest vacancies and candidate updates.",
+      };
+    }
+    return {
+      title: "Refreshing Helly",
+      body: "Loading the latest recruiting data.",
+    };
   }
 
   function isInterviewStage(status) {
@@ -664,6 +703,7 @@
     if (!appShellEl) return;
     const compact = sanitizeRoute(route) !== "home";
     appShellEl.classList.toggle("topbar-compact", compact);
+    updateTopbarCopy();
   }
 
   function sanitizeRoute(route) {
@@ -694,7 +734,7 @@
         profile && profile.salaryExpectation,
       ].filter(Boolean).join(" • ")
     );
-    return truncateText(summaryText || "Open your profile.", 120);
+    return truncateText(summaryText || "Review your saved profile details.", 120);
   }
 
   function groupCandidateOpportunityItems(items) {
@@ -743,7 +783,7 @@
     const summaryText = firstNonEmpty(
       item.needsAction ? item.stageDescription : "",
       (item.summary || {}).approvalSummaryText,
-      "No summary yet."
+      "Candidate summary is still being prepared."
     );
     return renderShortcutCard({
       route: `manager-candidate:${item.id}`,
@@ -767,10 +807,10 @@
     const totalNeedsReviewCount = sumBy(items, "needsReviewCount");
     const totalConnectedCount = sumBy(items, "connectedCount");
     const emptyMessageByFilter = {
-      "needs-review": "No vacancies need review right now.",
+      "needs-review": "No vacancies need your review right now.",
       interview: "No vacancies are in interview flow right now.",
       connected: "No vacancies have connected candidates yet.",
-      closed: "No closed vacancies yet.",
+      closed: "No paused or closed vacancies yet.",
     };
     appEl.innerHTML = `
       ${renderScreenHeader("Dashboard", "", "dashboard")}
@@ -809,7 +849,7 @@
       <section class="list">
         ${filteredItems.length
           ? filteredItems.map(renderManagerVacancyCard).join("")
-          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No vacancies yet. Open a role and candidates will start appearing here.")}
+          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No roles yet. Open or approve a role and Helly will start filling this list.")}
       </section>
     `;
     bindCards();
@@ -868,7 +908,7 @@
         ]) : ""}
         ${filteredItems.length
           ? filteredItems.map(renderManagerCandidateCard).join("")
-          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No candidates yet. As soon as Helly finds matches, they will appear here.")}
+          : renderFilteredEmptyState(emptyMessageByFilter[view.filter] || "No candidates yet. Helly is still matching this role and new candidates will appear here automatically.")}
       </section>
       ${renderTextPanel(
         "Summary",
@@ -877,7 +917,7 @@
           vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
           vacancy.projectDescription
         ),
-        "No summary yet."
+        "Helly is still preparing a short summary for this role."
       )}
       ${renderDetailSection("Vacancy", [
         { label: "Budget", value: vacancy.budget || "Not specified" },
@@ -912,17 +952,17 @@
         ${renderShortcutCard({
           route: "candidate-profile-section:summary",
           title: "Summary",
-          note: truncateText(summaryText || "No summary yet.", 120),
+          note: truncateText(summaryText || "Your approved profile summary will appear here.", 120),
         })}
         ${renderShortcutCard({
           route: "candidate-profile-section:skills",
           title: "Skills",
-          note: truncateText(skillsText || "No skills yet.", 120),
+          note: truncateText(skillsText || "Your core skills will appear here.", 120),
         })}
         ${renderShortcutCard({
           route: "candidate-profile-section:answers",
           title: "Answers",
-          note: truncateText(answersText || "No saved answers yet.", 120),
+          note: truncateText(answersText || "Your saved answers and preferences will appear here.", 120),
         })}
       </section>
     `;
@@ -939,7 +979,7 @@
             profile.summary && profile.summary.approvalSummaryText,
             profile.summary && profile.summary.experienceExcerpt
           ),
-          "No summary yet."
+          "Your approved profile summary will appear here after processing."
         )}
         ${renderDetailSection("Profile", [
           { label: "Headline", value: profile.summary && profile.summary.headline ? profile.summary.headline : "" },
@@ -954,7 +994,7 @@
     if (sectionKey === "skills") {
       appEl.innerHTML = `
       ${renderScreenHeader("Skills", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "skills")}
-      ${renderChipPanel("Core skills", (profile.summary && profile.summary.skills) || [], "No skills yet.")}
+      ${renderChipPanel("Core skills", (profile.summary && profile.summary.skills) || [], "Your core skills will appear here after your profile is processed.")}
       ${renderDetailSection("Profile context", [
         { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
         { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
@@ -983,7 +1023,7 @@
   async function renderHome() {
     const role = state.session.role;
     if (role === "unknown") {
-      renderRoleCheck("Checking your role in Telegram. Finish the role setup in chat to continue.");
+      renderRoleCheck("Finish the role setup in chat to unlock the right workspace here.");
       return;
     }
 
@@ -1010,7 +1050,7 @@
               openUrl: withCurrentTheme(payload.cvChallenge.launchUrl),
               title: payload.cvChallenge.title || "CV Challenge",
               kicker: "Game",
-              note: truncateText(payload.cvChallenge.body || "Open the game.", 120),
+              note: truncateText(payload.cvChallenge.body || "Take a quick skills challenge while you wait.", 120),
             })
             : ""}
           ${renderShortcutCard({
@@ -1039,7 +1079,7 @@
         ` : ""}
         ${items.length ? "" : `
           <section class="list">
-            <div class="empty-state">No vacancies yet. Helly will show new matches here as soon as a role fits your profile.</div>
+            <div class="empty-state">No roles yet. Keep your profile up to date and Helly will add matching opportunities here when it finds a fit.</div>
           </section>
         `}
       `;
@@ -1080,7 +1120,7 @@
           payload.vacancy.summary && payload.vacancy.summary.projectDescriptionExcerpt,
           payload.vacancy.projectDescription
         ),
-        "No summary yet."
+        "Helly is still preparing a short summary for this role."
       )}
       ${renderDetailSection("Vacancy", [
         { label: "Allowed countries", value: (payload.vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
@@ -1130,7 +1170,7 @@
       ${hasDecisionSupport ? renderDetailSection("Decision support", [
         { label: "Interview state", value: payload.interview.stateLabel || "Not started" },
         { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
-        { label: "Interview summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
+        { label: "Interview summary", value: payload.evaluation.interviewSummary || "Interview feedback will appear here after the session.", full: true },
         { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
         { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
       ]) : ""}
@@ -1140,7 +1180,7 @@
           payload.candidate.summary && payload.candidate.summary.approvalSummaryText,
           payload.candidate.summary && payload.candidate.summary.experienceExcerpt
         ),
-        "No summary yet."
+        "Helly is still preparing the candidate summary."
       )}
       ${renderChipPanel("Skills", (payload.candidate.summary || {}).skills || [], "")}
       ${renderDetailSection("Answers", [
@@ -1250,46 +1290,49 @@
     if (!state.session) return;
     try {
       if (currentRoute === "home") {
-        renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
+        const copy = homeLoadingCopy();
+        renderLoadingState(copy.title, copy.body);
         await renderHome();
         return;
       }
 
       const parts = currentRoute.split(":");
       if (currentRoute === "candidate-profile") {
-        renderLoadingState("Opening profile", "Loading your latest profile snapshot.");
+        renderLoadingState("Opening your profile", "Loading your latest summary, skills, and answers.");
         const payload = await api("/webapp/api/candidate/profile");
         renderCandidateProfileHome(payload.profile || {});
         return;
       }
       if (parts.length !== 2) {
-        renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
+        const copy = homeLoadingCopy();
+        renderLoadingState(copy.title, copy.body);
         await renderHome();
         return;
       }
       const route = parts[0];
       const id = parts[1];
       if (route === "candidate-profile-section") {
-        renderLoadingState("Opening profile", "Loading your latest profile snapshot.");
+        renderLoadingState("Opening your profile", "Loading your latest summary, skills, and answers.");
         const payload = await api("/webapp/api/candidate/profile");
         return renderCandidateProfileSection(payload.profile || {}, id);
       }
       if (route === "candidate-vacancy") {
-        renderLoadingState("Opening vacancy", "Loading the latest role details.");
+        renderLoadingState("Opening role details", "Loading the latest status, summary, and role context.");
         return await renderCandidateVacancy(id);
       }
       if (route === "manager-vacancy") {
-        renderLoadingState("Opening vacancy", "Loading the latest vacancy and candidate data.");
+        renderLoadingState("Opening vacancy", "Loading the latest vacancy data and candidate pipeline.");
         return await renderManagerVacancy(id);
       }
       if (route === "manager-candidate") {
-        renderLoadingState("Opening candidate", "Loading the latest candidate snapshot.");
+        renderLoadingState("Opening candidate", "Loading the latest candidate summary and decision signals.");
         return await renderManagerCandidate(id);
       }
-      renderLoadingState("Refreshing your home", "Loading the latest recruiting data.");
+      const copy = homeLoadingCopy();
+      renderLoadingState(copy.title, copy.body);
       await renderHome();
     } catch (error) {
-      renderError("Dashboard request failed", error.message || "Unable to load this screen.");
+      renderError("Unable to load this screen", error.message || "Please try again in a moment.");
     }
   }
 
@@ -1297,7 +1340,7 @@
     try {
       initializeTheme();
       bindTelegramRuntime();
-      renderRoleCheck("Checking your role and loading the latest recruiting data.");
+      renderRoleCheck("Checking your Telegram access and opening the right workspace.");
       if (tg) {
         if (tg.BackButton && typeof tg.BackButton.hide === "function") {
           tg.BackButton.hide();
@@ -1341,7 +1384,7 @@
       await renderRoute();
       window.addEventListener("popstate", renderRoute);
     } catch (error) {
-      renderError("Unable to open Helly Dashboard", error.message || "Unknown error.");
+      renderError("Unable to open Helly", error.message || "Unknown error.");
     }
   }
 
