@@ -4,11 +4,22 @@
     session: null,
     apiCache: new Map(),
     backButtonHandlerBound: false,
+    theme: "terminal",
   };
+  const TERMINAL_THEME = "terminal";
 
   const appEl = document.getElementById("app");
+  const appShellEl = document.querySelector(".app-shell");
   const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  const HOME_ROUTE = "home";
+  const handleTelegramBack = () => {
+    if (getCurrentRoute() === "home") {
+      if (tg && typeof tg.close === "function") {
+        tg.close();
+      }
+      return;
+    }
+    window.history.back();
+  };
 
   function escapeHtml(value) {
     return String(value || "")
@@ -20,7 +31,7 @@
   }
 
   function truncateText(value, maxLength) {
-    const text = String(value || "").trim();
+    const text = String(value || "");
     if (!text || text.length <= maxLength) return text;
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
   }
@@ -32,15 +43,6 @@
       if (String(value).trim()) return value;
     }
     return "";
-  }
-
-  function humanize(value) {
-    if (!value) return "";
-    return String(value)
-      .replace(/_/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .replace(/\b\w/g, (character) => character.toUpperCase());
   }
 
   function updateThemeColorMeta(color) {
@@ -60,6 +62,7 @@
 
   function applyTelegramChrome() {
     const backgroundColor = "#141415";
+    const surfaceColor = "#1c1c1e";
     updateThemeColorMeta(backgroundColor);
     if (!tg) return;
     try {
@@ -78,7 +81,7 @@
         typeof tg.isVersionAtLeast === "function" &&
         tg.isVersionAtLeast("7.10")
       ) {
-        tg.setBottomBarColor("#1c1c1e");
+        tg.setBottomBarColor(surfaceColor);
       }
     } catch (_) {}
   }
@@ -97,6 +100,37 @@
     tg.onEvent("contentSafeAreaChanged", applyViewportMetrics);
   }
 
+  function normalizeTheme(value) {
+    return TERMINAL_THEME;
+  }
+
+  function syncThemeInUrl() {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("theme");
+    const nextUrl = `${currentUrl.pathname}${currentUrl.search}`;
+    window.history.replaceState(window.history.state || { route: getCurrentRoute() }, "", nextUrl);
+  }
+
+  function withCurrentTheme(url) {
+    const nextUrl = new URL(url, window.location.origin);
+    nextUrl.searchParams.delete("theme");
+    return nextUrl.toString();
+  }
+
+  function setTheme(theme, options) {
+    state.theme = normalizeTheme(theme);
+    document.documentElement.setAttribute("data-theme", state.theme);
+    syncThemeInUrl();
+    applyTelegramChrome();
+    if (options && options.rerender && state.session) {
+      renderRoute();
+    }
+  }
+
+  function initializeTheme() {
+    setTheme(TERMINAL_THEME, { rerender: false });
+  }
+
   function tapFeedback() {
     try {
       if (tg && tg.HapticFeedback && typeof tg.HapticFeedback.impactOccurred === "function") {
@@ -107,9 +141,9 @@
 
   function badgeTone(value) {
     const text = String(value || "").toLowerCase();
-    if (text.includes("approved") || text.includes("completed") || text.includes("shared")) return "good";
-    if (text.includes("reject") || text.includes("declined") || text.includes("expired") || text.includes("closed")) return "bad";
-    if (text.includes("waiting") || text.includes("review") || text.includes("queued") || text.includes("pending")) return "warn";
+    if (text.includes("approved") || text.includes("completed") || text.includes("accepted")) return "good";
+    if (text.includes("reject") || text.includes("declined") || text.includes("expired")) return "bad";
+    if (text.includes("queued") || text.includes("review") || text.includes("waiting")) return "warn";
     return "accent";
   }
 
@@ -126,88 +160,44 @@
     return rtf.format(Math.round(diffSeconds / 86400), "day");
   }
 
-  function sanitizeRoute(route) {
-    return route && route !== "#" ? String(route).replace(/^#/, "") : HOME_ROUTE;
+  function setTopbarVisibility(visible, compact) {
+    if (!appShellEl) return;
+    appShellEl.classList.toggle("topbar-hidden", !visible);
+    appShellEl.classList.toggle("topbar-compact", Boolean(visible && compact));
   }
 
-  function splitRoute(route) {
-    const normalized = sanitizeRoute(route);
-    const separatorIndex = normalized.indexOf(":");
-    if (separatorIndex === -1) {
-      return { name: normalized, param: null };
-    }
-    return {
-      name: normalized.slice(0, separatorIndex),
-      param: normalized.slice(separatorIndex + 1),
-    };
-  }
-
-  function getCurrentRoute() {
-    return sanitizeRoute((window.history.state && window.history.state.route) || HOME_ROUTE);
-  }
-
-  function applyRoute(route, options) {
-    const nextRoute = sanitizeRoute(route);
-    const method = options && options.replace ? "replaceState" : "pushState";
-    window.history[method]({ route: nextRoute }, "", window.location.pathname + window.location.search);
-    renderRoute();
-  }
-
-  function pushRoute(route) {
-    applyRoute(route, { replace: false });
-  }
-
-  function handleTelegramBack() {
-    if (getCurrentRoute() === HOME_ROUTE) {
-      if (tg && typeof tg.close === "function") {
-        tg.close();
-      }
-      return;
-    }
-    window.history.back();
-  }
-
-  function updateBackButton() {
-    if (!tg || !tg.BackButton) return;
-    if (getCurrentRoute() === HOME_ROUTE) {
-      if (state.backButtonHandlerBound && typeof tg.BackButton.offClick === "function") {
-        tg.BackButton.offClick(handleTelegramBack);
-        state.backButtonHandlerBound = false;
-      }
-      tg.BackButton.hide();
-      return;
-    }
-    if (!state.backButtonHandlerBound && typeof tg.BackButton.onClick === "function") {
-      tg.BackButton.onClick(handleTelegramBack);
-      state.backButtonHandlerBound = true;
-    }
-    tg.BackButton.show();
-  }
-
-  function renderStatusScreen(title, note, options) {
-    const compact = options && options.compact;
-    const titleMarkup = title && String(title).trim()
-      ? `<h1 class="status-title">${escapeHtml(title)}</h1>`
-      : "";
+  function renderRoleCheck(note) {
+    setTopbarVisibility(false, false);
     appEl.innerHTML = `
-      <section class="${compact ? "loading-shell" : "status-shell"}">
-        <div class="brand-mark">Helly</div>
-        ${titleMarkup}
-        <p class="status-note">${escapeHtml(note)}</p>
+      <section class="state-card state-card-center role-check-card">
+        <h1 class="brand-lockup" aria-label="Helly">
+          <span class="brand-angle">&gt;</span><span class="brand-word">helly</span><span class="brand-tail">_</span>
+        </h1>
+        <p class="topbar-note role-check-note">${escapeHtml(note)}</p>
       </section>
     `;
   }
 
-  function renderLoading(note) {
-    renderStatusScreen("", note || "Checking access and loading your screen.", { compact: true });
+  function renderBlocked(title, body) {
+    setTopbarVisibility(false, false);
+    appEl.innerHTML = `
+      <section class="state-card">
+        <p class="eyebrow">Access</p>
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(body)}</p>
+      </section>
+    `;
   }
 
-  function renderBlocked(title, note) {
-    renderStatusScreen(title, note, { compact: false });
-  }
-
-  function renderError(title, note) {
-    renderStatusScreen(title, note, { compact: false });
+  function renderError(title, body) {
+    setTopbarVisibility(false, false);
+    appEl.innerHTML = `
+      <section class="state-card">
+        <p class="eyebrow">Error</p>
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(body)}</p>
+      </section>
+    `;
   }
 
   async function api(path) {
@@ -234,628 +224,671 @@
     }
   }
 
-  function renderBadge(value) {
-    if (!value) return "";
-    return `<span class="badge" data-tone="${badgeTone(value)}">${escapeHtml(value)}</span>`;
+  function listChips(values) {
+    if (!values || !values.length) {
+      return `<div class="empty-state">No data yet.</div>`;
+    }
+    return `<div class="list-chips">${values
+      .map((value) => `<span class="chip">${escapeHtml(value)}</span>`)
+      .join("")}</div>`;
   }
 
-  function renderStatsGrid(items) {
+  function includesAny(value, fragments) {
+    const text = String(value || "").toLowerCase();
+    return fragments.some((fragment) => text.includes(fragment));
+  }
+
+  function sumBy(items, key) {
+    return (items || []).reduce((total, item) => {
+      const value = Number(item && item[key]);
+      return total + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }
+
+  function isTerminalTheme() {
+    return state.theme === TERMINAL_THEME;
+  }
+
+  function terminalToken(value) {
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "value";
+  }
+
+  function renderStatsStrip(items) {
     const visibleItems = (items || []).filter((item) => item && item.value !== null && item.value !== undefined && item.value !== "");
     if (!visibleItems.length) return "";
     return `
-      <section class="stats-grid">
-        ${visibleItems.map((item) => `
-          <article class="metric-card">
-            <span class="metric-value">${escapeHtml(String(item.value))}</span>
-            <span class="metric-label">${escapeHtml(item.label)}</span>
+      <section class="stats-strip">
+        ${visibleItems.map((item) => {
+          const rawValue = String(item.value);
+          const isLongValue = rawValue.length > 18;
+          const displayValue = isLongValue ? truncateText(rawValue, 28) : rawValue;
+          return `
+          <article class="stat-card ${isTerminalTheme() ? "terminal-stat-card" : ""}">
+            <span class="stat-value ${isLongValue ? "stat-value-long" : ""}" title="${escapeHtml(rawValue)}">${escapeHtml(displayValue)}</span>
+            <span class="stat-label">${escapeHtml(isTerminalTheme() ? terminalToken(item.label) : item.label)}</span>
           </article>
-        `).join("")}
+        `;
+        }).join("")}
       </section>
     `;
   }
 
-  function renderMetaStrip(items) {
-    const visibleItems = (items || []).filter((item) => item && String(item).trim());
-    if (!visibleItems.length) return "";
+  function renderCardMetrics(metrics) {
+    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
+    if (!visibleMetrics.length) return "";
+    if (isTerminalTheme()) {
+      return `
+        <div class="terminal-metrics">
+          ${visibleMetrics.map((metric) => `
+            <div class="terminal-metric">
+              <span class="terminal-metric-key">${escapeHtml(terminalToken(metric.label))}</span>
+              <span class="terminal-metric-value">${escapeHtml(metric.value)}</span>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
     return `
-      <div class="meta-strip">
-        ${visibleItems.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
-      </div>
-    `;
-  }
-
-  function renderPills(values) {
-    const items = (values || []).filter((value) => value && String(value).trim());
-    if (!items.length) return "";
-    return `
-      <div class="pill-list">
-        ${items.map((value) => `<span class="pill">${escapeHtml(value)}</span>`).join("")}
-      </div>
-    `;
-  }
-
-  function renderPageHeader(title, note) {
-    const safeTitle = escapeHtml(title || "Untitled");
-    const safeNote = note ? `<p class="page-note">${escapeHtml(note)}</p>` : "";
-    return `
-      <header class="page-header">
-        <h1>${safeTitle}</h1>
-        ${safeNote}
-      </header>
-    `;
-  }
-
-  function renderSectionBar(title, count) {
-    const countMarkup = count === null || count === undefined ? "" : `<span class="section-count">${escapeHtml(String(count))}</span>`;
-    return `
-      <div class="section-bar">
-        <h2>${escapeHtml(title)}</h2>
-        ${countMarkup}
-      </div>
-    `;
-  }
-
-  function renderEmptyState(message) {
-    return `<div class="empty-state">${escapeHtml(message)}</div>`;
-  }
-
-  function renderPreviewMetrics(items) {
-    const visibleItems = (items || []).filter((item) => item && item.value && String(item.value).trim());
-    if (!visibleItems.length) return "";
-    return `
-      <div class="mini-metrics">
-        ${visibleItems.map((item) => `
-          <span class="mini-metric">
-            <span class="mini-metric-label">${escapeHtml(item.label)}</span>
-            <span class="mini-metric-value">${escapeHtml(item.value)}</span>
-          </span>
+      <div class="card-metrics">
+        ${visibleMetrics.map((metric) => `
+          <div class="metric">
+            <span class="metric-label">${escapeHtml(metric.label)}</span>
+            <span class="metric-value">${escapeHtml(metric.value)}</span>
+          </div>
         `).join("")}
       </div>
     `;
   }
 
-  function renderNavCard(options) {
-    const actionAttr = options.route
-      ? `data-route="${escapeHtml(options.route)}"`
-      : `data-open-url="${escapeHtml(options.openUrl)}"`;
+  function renderCardNote(value, extraClass) {
+    if (!value) return "";
+    const classes = ["card-note"];
+    if (isTerminalTheme()) classes.push("card-note-terminal");
+    if (extraClass) classes.push(extraClass);
+    return `<p class="${classes.join(" ")}">${escapeHtml(value)}</p>`;
+  }
+
+  function renderInlineMetrics(metrics, extraClass) {
+    const visibleMetrics = (metrics || []).filter((metric) => metric && metric.value !== null && metric.value !== undefined && metric.value !== "");
+    const className = extraClass ? `inline-metrics ${extraClass}` : "inline-metrics";
+    if (!visibleMetrics.length) return "";
     return `
-      <article class="nav-card" ${actionAttr}>
-        <div class="card-head">
-          <div class="card-head-copy">
-            <span class="card-label">${escapeHtml(options.label || "")}</span>
-            <h3 class="card-title">${escapeHtml(options.title || "Open")}</h3>
+      <div class="${className}">
+        ${visibleMetrics.map((metric) => `
+          <div class="inline-metric">
+            <span class="inline-metric-label">${escapeHtml(isTerminalTheme() ? terminalToken(metric.label) : metric.label)}</span>
+            <span class="inline-metric-value">${escapeHtml(metric.value)}</span>
           </div>
-          ${renderBadge(options.badge)}
-        </div>
-        ${options.note ? `<p class="card-note">${escapeHtml(options.note)}</p>` : ""}
-        ${renderPreviewMetrics(options.metrics)}
-      </article>
+        `).join("")}
+      </div>
     `;
   }
 
-  function renderInfoCard(title, rows) {
-    const visibleRows = (rows || []).filter((row) => row && row.value !== null && row.value !== undefined && row.value !== "");
+  function renderActionPanel(challenge) {
+    if (!challenge || !challenge.eligible || !challenge.launchUrl) return "";
+    return `
+      <section class="detail-panel action-panel ${isTerminalTheme() ? "action-panel-terminal" : ""}">
+        <div class="action-panel-copy">
+          <p class="eyebrow">${isTerminalTheme() ? "idle_mode" : "While you wait"}</p>
+          <h3 class="section-title">${isTerminalTheme() ? "CV Challenge" : "Play Helly CV Challenge"}</h3>
+          <p class="card-note">${escapeHtml(challenge.body || "Tap only the skills that really appear in your CV.")}</p>
+        </div>
+        ${isTerminalTheme() ? `
+          <div class="terminal-command-row">
+            <span class="terminal-prompt">&gt;</span>
+            <span class="terminal-command">launch /cv-challenge --profile current</span>
+          </div>
+        ` : ""}
+        <button class="action-button" type="button" data-open-url="${escapeHtml(withCurrentTheme(challenge.launchUrl))}">${isTerminalTheme() ? "Run challenge" : "Play challenge"}</button>
+      </section>
+    `;
+  }
+
+  function renderDetailSection(title, rows) {
+    const visibleRows = (rows || []).filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
     if (!visibleRows.length) return "";
     return `
-      <section class="detail-card">
-        <h2 class="detail-title">${escapeHtml(title)}</h2>
-        <dl class="detail-list">
-          ${visibleRows.map((row) => `
-            <div class="detail-row">
-              <dt>${escapeHtml(row.label)}</dt>
-              <dd>${row.raw ? row.value : escapeHtml(row.value)}</dd>
-            </div>
-          `).join("")}
+      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
+        ${isTerminalTheme() ? `
+          <div class="terminal-section-head">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-section-title">${escapeHtml(terminalToken(title))}</span>
+          </div>
+        ` : ""}
+        ${isTerminalTheme() ? "" : `<h3 class="section-title">${escapeHtml(title)}</h3>`}
+        <dl class="detail-grid ${isTerminalTheme() ? "detail-grid-terminal" : ""}">
+          ${visibleRows
+            .map((row) => `
+              <div class="${row.full ? "span-full" : ""}">
+                <dt>${escapeHtml(isTerminalTheme() ? terminalToken(row.label) : row.label)}</dt>
+                <dd>${row.raw ? row.value : escapeHtml(row.value)}</dd>
+              </div>
+            `)
+            .join("")}
         </dl>
       </section>
     `;
   }
 
-  function renderTextCard(title, text, emptyText) {
-    const content = String(firstNonEmpty(text, emptyText)).trim();
+  function renderPanel(title, content) {
     if (!content) return "";
     return `
-      <section class="detail-card">
-        <h2 class="detail-title">${escapeHtml(title)}</h2>
-        <div class="text-block">${escapeHtml(content).replace(/\n/g, "<br />")}</div>
+      <section class="detail-panel ${isTerminalTheme() ? "detail-panel-terminal" : ""}">
+        ${isTerminalTheme() ? `
+          <div class="terminal-section-head">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-section-title">${escapeHtml(terminalToken(title))}</span>
+          </div>
+        ` : `<h3 class="section-title">${escapeHtml(title)}</h3>`}
+        ${content}
       </section>
     `;
   }
 
-  function renderSkillCard(title, skills) {
-    const pills = renderPills(skills);
-    if (!pills) return "";
+  function renderTextPanel(title, value, emptyText) {
+    const text = String(value || "").trim();
+    if (!text && !emptyText) return "";
+    return renderPanel(
+      title,
+      `<div class="text-panel">${escapeHtml(text || emptyText).replace(/\n/g, "<br />")}</div>`
+    );
+  }
+
+  function renderChipPanel(title, values, emptyText) {
+    const items = values || [];
+    if (!items.length && !emptyText) return "";
+    return renderPanel(
+      title,
+      items.length
+        ? listChips(items)
+        : `<div class="empty-state">${escapeHtml(emptyText)}</div>`
+    );
+  }
+
+  function renderScreenHeader(title, note, eyebrow) {
     return `
-      <section class="detail-card">
-        <h2 class="detail-title">${escapeHtml(title)}</h2>
-        ${pills}
+      <section class="screen-header ${isTerminalTheme() ? "screen-header-terminal" : ""}">
+        ${eyebrow ? `<p class="eyebrow">${escapeHtml(isTerminalTheme() ? terminalToken(eyebrow) : eyebrow)}</p>` : ""}
+        <h2>${escapeHtml(title)}</h2>
+        ${note ? `<p>${escapeHtml(note)}</p>` : ""}
       </section>
     `;
+  }
+
+  function renderShortcutCard(options) {
+    const actionAttr = options.route
+      ? `data-route="${escapeHtml(options.route)}"`
+      : `data-open-url="${escapeHtml(options.openUrl)}"`;
+    const metrics = options.metrics || [];
+    const visibleMetrics = metrics.filter((metric) => metric && metric.value);
+    return `
+      <article class="card card-compact ${isTerminalTheme() ? "card-terminal" : ""}" ${actionAttr}>
+        <div class="card-head card-head-compact">
+          <div class="card-title-wrap">
+            <h3>${escapeHtml(options.title || "Open")}</h3>
+          </div>
+          ${options.badge ? `<span class="badge" data-tone="${escapeHtml(options.badgeTone || "accent")}">${escapeHtml(options.badge)}</span>` : ""}
+        </div>
+        ${options.note ? renderCardNote(options.note, "card-note-compact") : ""}
+        ${visibleMetrics.length ? renderInlineMetrics(visibleMetrics, visibleMetrics.length <= 2 ? "inline-metrics-compact" : "") : ""}
+      </article>
+    `;
+  }
+
+  function updateBackButton() {
+    if (!tg || !tg.BackButton) return;
+    if (getCurrentRoute() === "home") {
+      if (state.backButtonHandlerBound && typeof tg.BackButton.offClick === "function") {
+        tg.BackButton.offClick(handleTelegramBack);
+        state.backButtonHandlerBound = false;
+      }
+      tg.BackButton.hide();
+      return;
+    }
+    if (!state.backButtonHandlerBound && typeof tg.BackButton.onClick === "function") {
+      tg.BackButton.onClick(handleTelegramBack);
+      state.backButtonHandlerBound = true;
+    }
+    tg.BackButton.show();
+  }
+
+  function updateTopbar(route) {
+    setTopbarVisibility(false, false);
+  }
+
+  function sanitizeRoute(route) {
+    return route && route !== "#" ? String(route).replace(/^#/, "") : "home";
+  }
+
+  function getCurrentRoute() {
+    return sanitizeRoute((window.history.state && window.history.state.route) || "home");
+  }
+
+  function applyRoute(route, options) {
+    const nextRoute = sanitizeRoute(route);
+    const method = options && options.replace ? "replaceState" : "pushState";
+    window.history[method]({ route: nextRoute }, "", window.location.pathname + window.location.search);
+    renderRoute();
+  }
+
+  function pushRoute(route) {
+    applyRoute(route, { replace: false });
+  }
+
+  function buildProfilePreview(profile) {
+    const summaryText = firstNonEmpty(
+      profile && profile.summary && profile.summary.approvalSummaryText,
+      [
+        profile && profile.location,
+        profile && profile.workFormat,
+        profile && profile.salaryExpectation,
+      ].filter(Boolean).join(" • ")
+    );
+    return truncateText(summaryText || "Open your profile.", 120);
   }
 
   function renderCandidateVacancyCard(item) {
-    return `
-      <article class="entity-card" data-route="candidate-vacancy:${escapeHtml(item.id)}">
-        <div class="card-head">
-          <div class="card-head-copy">
-            <h3 class="card-title">${escapeHtml(item.roleTitle || "Vacancy")}</h3>
-          </div>
-          ${renderBadge(item.stageLabel || humanize(item.stage))}
-        </div>
-        ${renderMetaStrip([
-          item.budget || "Budget not set",
-          item.workFormat ? humanize(item.workFormat) : "Format not set",
-          item.updatedAt ? `Updated ${formatRelativeTime(item.updatedAt)}` : "",
-        ])}
-      </article>
-    `;
+    return renderShortcutCard({
+      route: `candidate-vacancy:${item.id}`,
+      title: item.roleTitle || "Vacancy",
+      badge: item.stageLabel || "Status",
+      badgeTone: badgeTone(item.stageLabel || item.stage),
+      metrics: [
+        { label: "Budget", value: item.budget || "Not set" },
+        { label: "Format", value: item.workFormat || "Not set" },
+        { label: "Updated", value: formatRelativeTime(item.updatedAt) },
+      ],
+    });
   }
 
   function renderManagerVacancyCard(item) {
-    return `
-      <article class="entity-card" data-route="manager-vacancy:${escapeHtml(item.id)}">
-        <div class="card-head">
-          <div class="card-head-copy">
-            <h3 class="card-title">${escapeHtml(item.roleTitle || "Vacancy")}</h3>
-          </div>
-          ${renderBadge(humanize(item.state))}
-        </div>
-        ${renderPreviewMetrics([
-          { label: "Candidates", value: String(item.candidateCount || 0) },
-          { label: "Pipeline", value: String(item.activePipelineCount || 0) },
-          { label: "Connected", value: String(item.connectedCount || 0) },
-        ])}
-        ${renderMetaStrip([
-          item.budget || "Budget not set",
-          item.updatedAt ? `Updated ${formatRelativeTime(item.updatedAt)}` : "",
-        ])}
-      </article>
-    `;
+    return renderShortcutCard({
+      route: `manager-vacancy:${item.id}`,
+      title: item.roleTitle || "Vacancy",
+      badge: item.state || "State",
+      badgeTone: badgeTone(item.state),
+      note: `Updated ${formatRelativeTime(item.updatedAt)}`,
+      metrics: [
+        { label: "Candidates", value: String(item.candidateCount || 0) },
+        { label: "Pipeline", value: String(item.activePipelineCount || 0) },
+        { label: "Connected", value: String(item.connectedCount || 0) },
+      ],
+    });
   }
 
   function renderManagerCandidateCard(item) {
-    return `
-      <article class="entity-card" data-route="manager-candidate:${escapeHtml(item.id)}">
-        <div class="card-head">
-          <div class="card-head-copy">
-            <h3 class="card-title">${escapeHtml(item.candidateName || "Candidate")}</h3>
-          </div>
-          ${renderBadge(item.stageLabel || humanize(item.stage))}
-        </div>
-        ${item.summary && item.summary.approvalSummaryText
-          ? `<p class="card-note">${escapeHtml(truncateText(item.summary.approvalSummaryText, 140))}</p>`
-          : ""}
-        ${renderMetaStrip([
-          item.location || "Location not set",
-          item.salaryExpectation || "Salary not set",
-          item.workFormat ? humanize(item.workFormat) : "",
-        ])}
-      </article>
-    `;
+    return renderShortcutCard({
+      route: `manager-candidate:${item.id}`,
+      title: item.candidateName || "Candidate",
+      badge: item.stageLabel || "Status",
+      badgeTone: badgeTone(item.stageLabel || item.stage),
+      note: truncateText(((item.summary || {}).approvalSummaryText) || "No summary yet.", 110),
+      metrics: [
+        { label: "Location", value: item.location || "Not set" },
+        { label: "Salary", value: item.salaryExpectation || "Not set" },
+        { label: "Format", value: item.workFormat || "Not set" },
+      ],
+    });
   }
 
-  function renderReviewCard(interview, evaluation) {
-    const hasInterviewInfo = Boolean(interview && (interview.stateLabel || interview.completedAt || interview.acceptedAt));
-    const hasEvaluationInfo = Boolean(
-      evaluation && (
-        evaluation.interviewSummary ||
-        evaluation.recommendation ||
-        (evaluation.strengths || []).length ||
-        (evaluation.risks || []).length
-      )
+  function renderCandidateProfileHome(profile) {
+    const summaryText = firstNonEmpty(
+      profile.summary && profile.summary.approvalSummaryText,
+      profile.summary && profile.summary.experienceExcerpt
     );
-    if (!hasInterviewInfo && !hasEvaluationInfo) return "";
-    const summaryText = evaluation && evaluation.interviewSummary
-      ? `
-        <div class="detail-card-embedded">
-          <h3 class="detail-subtitle">Interview summary</h3>
-          <div class="text-block">${escapeHtml(evaluation.interviewSummary).replace(/\n/g, "<br />")}</div>
-        </div>
-      `
-      : "";
-    const strengthsMarkup = (evaluation && evaluation.strengths && evaluation.strengths.length)
-      ? `
-        <div class="detail-card-embedded">
-          <h3 class="detail-subtitle">Strengths</h3>
-          ${renderPills(evaluation.strengths)}
-        </div>
-      `
-      : "";
-    const risksMarkup = (evaluation && evaluation.risks && evaluation.risks.length)
-      ? `
-        <div class="detail-card-embedded">
-          <h3 class="detail-subtitle">Risks</h3>
-          ${renderPills(evaluation.risks)}
-        </div>
-      `
-      : "";
-    return `
-      <section class="detail-card">
-        <h2 class="detail-title">Review</h2>
-        ${renderInfoCard("Status", [
-          { label: "Interview", value: interview && interview.stateLabel ? interview.stateLabel : "" },
-          { label: "Recommendation", value: evaluation && evaluation.recommendation ? evaluation.recommendation : "" },
-        ]).replace('<section class="detail-card">', '<div class="detail-card-embedded">').replace("</section>", "</div>")}
-        ${summaryText}
-        ${strengthsMarkup}
-        ${risksMarkup}
+    const answersText = [
+      profile.answers && profile.answers.salaryExpectation,
+      profile.answers && profile.answers.location,
+      profile.answers && profile.answers.workFormat,
+    ].filter(Boolean).join(" • ");
+    appEl.innerHTML = `
+      ${renderScreenHeader("Profile", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "profile")}
+      <section class="list">
+        ${renderShortcutCard({
+          route: "candidate-profile-section:summary",
+          title: "Summary",
+          badge: "Profile",
+          note: truncateText(summaryText || "No summary yet.", 120),
+        })}
+        ${renderShortcutCard({
+          route: "candidate-profile-section:cv",
+          title: "CV text",
+          badge: "CV",
+          note: truncateText((profile.source && profile.source.text) || "No CV text yet.", 120),
+        })}
+        ${renderShortcutCard({
+          route: "candidate-profile-section:answers",
+          title: "Answers",
+          badge: "Answers",
+          note: truncateText(answersText || "No saved answers yet.", 120),
+        })}
       </section>
     `;
-  }
-
-  function buildAnswerPreview(answers) {
-    return [
-      answers && answers.salaryExpectation,
-      answers && answers.location,
-      answers && answers.workFormat ? humanize(answers.workFormat) : "",
-    ].filter((value) => value && String(value).trim()).join(" • ");
-  }
-
-  function normalizeProfileAnswers(profile) {
-    return profile && profile.answers ? profile.answers : {
-      salaryExpectation: profile && profile.salaryExpectation,
-      location: profile && profile.location,
-      countryCode: profile && profile.countryCode,
-      city: profile && profile.city,
-      workFormat: profile && profile.workFormat,
-    };
-  }
-
-  function renderCandidateHome(payload) {
-    const items = payload.items || [];
-    const profile = payload.profile || {};
-    const waitingCount = items.filter((item) =>
-      ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
-    ).length;
-    const connectedCount = items.filter((item) => item.stage === "approved").length;
-    const challenge = payload.cvChallenge || {};
-
-    appEl.innerHTML = `
-      <div class="page">
-        ${renderStatsGrid([
-          { label: "Vacancies", value: String(items.length) },
-          { label: "Waiting", value: String(waitingCount) },
-          { label: "Connected", value: String(connectedCount) },
-        ])}
-        <section class="hero-grid">
-          ${challenge.eligible && challenge.launchUrl ? renderNavCard({
-            label: "Game",
-            title: challenge.title || "CV Challenge",
-            note: truncateText(challenge.body || "Open the game.", 120),
-            openUrl: challenge.launchUrl,
-          }) : ""}
-          ${renderNavCard({
-            label: "Profile",
-            title: firstNonEmpty(profile.targetRole, profile.headline, "Open profile"),
-            note: truncateText(firstNonEmpty(
-              profile.summary && profile.summary.approvalSummaryText,
-              buildAnswerPreview(normalizeProfileAnswers(profile)),
-              "Open your profile details."
-            ), 140),
-            route: "candidate-profile",
-            metrics: [
-              { label: "Location", value: profile.location || "" },
-              { label: "Format", value: profile.workFormat ? humanize(profile.workFormat) : "" },
-              { label: "Salary", value: profile.salaryExpectation || "" },
-            ],
-          })}
-        </section>
-        <section class="stack">
-          ${renderSectionBar("Vacancies", items.length)}
-          ${items.length ? items.map(renderCandidateVacancyCard).join("") : renderEmptyState("No vacancies yet.")}
-        </section>
-      </div>
-    `;
-    bindInteractiveNodes();
-  }
-
-  function renderCandidateProfile(profile) {
-    const answers = normalizeProfileAnswers(profile);
-    appEl.innerHTML = `
-      <div class="page">
-        ${renderPageHeader("Profile", firstNonEmpty(profile.targetRole, profile.headline, profile.name))}
-        ${renderStatsGrid([
-          { label: "Location", value: profile.location || "Not set" },
-          { label: "Format", value: profile.workFormat ? humanize(profile.workFormat) : "Not set" },
-          { label: "Salary", value: profile.salaryExpectation || "Not set" },
-        ])}
-        <section class="stack">
-          ${renderNavCard({
-            label: "Summary",
-            title: "Saved summary",
-            note: truncateText(firstNonEmpty(
-              profile.summary && profile.summary.approvalSummaryText,
-              profile.summary && profile.summary.experienceExcerpt,
-              "No summary yet."
-            ), 180),
-            route: "candidate-profile-section:summary",
-          })}
-          ${renderNavCard({
-            label: "CV",
-            title: "CV text",
-            note: truncateText(firstNonEmpty(profile.source && profile.source.text, "No CV text yet."), 180),
-            route: "candidate-profile-section:cv",
-          })}
-          ${renderNavCard({
-            label: "Answers",
-            title: "Question answers",
-            note: truncateText(firstNonEmpty(buildAnswerPreview(answers), "No saved answers yet."), 180),
-            route: "candidate-profile-section:answers",
-          })}
-        </section>
-      </div>
-    `;
-    bindInteractiveNodes();
+    bindCards();
   }
 
   function renderCandidateProfileSection(profile, sectionKey) {
-    const answers = normalizeProfileAnswers(profile);
     if (sectionKey === "summary") {
       appEl.innerHTML = `
-        <div class="page">
-          ${renderPageHeader("Summary", firstNonEmpty(profile.targetRole, profile.headline, profile.name))}
-          ${renderTextCard("Summary", firstNonEmpty(
+        ${renderScreenHeader("Summary", firstNonEmpty(profile.targetRole, profile.headline, profile.name), "summary")}
+        ${renderTextPanel(
+          "Summary",
+          firstNonEmpty(
             profile.summary && profile.summary.approvalSummaryText,
             profile.summary && profile.summary.experienceExcerpt
-          ), "No summary yet.")}
-          <div class="panel-grid">
-            ${renderInfoCard("Profile", [
-              { label: "Headline", value: profile.summary && profile.summary.headline ? profile.summary.headline : "" },
-              { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
-              { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
-            ])}
-            ${renderSkillCard("Skills", profile.summary && profile.summary.skills)}
-          </div>
-        </div>
+          ),
+          "No summary yet."
+        )}
+        ${renderDetailSection("Profile", [
+          { label: "Headline", value: profile.summary && profile.summary.headline ? profile.summary.headline : "" },
+          { label: "Target role", value: profile.summary && profile.summary.targetRole ? profile.summary.targetRole : "" },
+          { label: "Experience", value: profile.summary && profile.summary.yearsExperience ? `${profile.summary.yearsExperience}+ years` : "" },
+        ])}
+        ${renderChipPanel("Skills", (profile.summary && profile.summary.skills) || [], "")}
       `;
       return;
     }
 
     if (sectionKey === "cv") {
       appEl.innerHTML = `
-        <div class="page">
-          ${renderPageHeader("CV text", profile.name || "Profile")}
-          ${renderTextCard("Saved CV text", profile.source && profile.source.text, "No CV text yet.")}
-        </div>
+        ${renderScreenHeader("CV text", profile.name || "Profile", "cv_text")}
+        ${renderTextPanel("Saved CV text", profile.source && profile.source.text, "No CV text yet.")}
       `;
       return;
     }
 
     appEl.innerHTML = `
-      <div class="page">
-        ${renderPageHeader("Question answers", profile.name || "Profile")}
-        ${renderInfoCard("Answers", [
-          { label: "Salary", value: answers.salaryExpectation || "Not set" },
-          { label: "Location", value: answers.location || "Not set" },
-          { label: "Country", value: answers.countryCode || "" },
-          { label: "City", value: answers.city || "" },
-          { label: "Work format", value: answers.workFormat ? humanize(answers.workFormat) : "Not set" },
-        ])}
-      </div>
+      ${renderScreenHeader("Answers", profile.name || "Profile", "answers")}
+      ${renderDetailSection("Saved answers", [
+        { label: "Salary", value: profile.answers && profile.answers.salaryExpectation ? profile.answers.salaryExpectation : "Not set" },
+        { label: "Location", value: profile.answers && profile.answers.location ? profile.answers.location : "Not set" },
+        { label: "Country", value: profile.answers && profile.answers.countryCode ? profile.answers.countryCode : "" },
+        { label: "City", value: profile.answers && profile.answers.city ? profile.answers.city : "" },
+        { label: "Work format", value: profile.answers && profile.answers.workFormat ? profile.answers.workFormat : "Not set" },
+      ])}
     `;
   }
 
-  function renderCandidateVacancy(payload) {
-    const vacancy = payload.vacancy || {};
-    const match = payload.match || {};
-    appEl.innerHTML = `
-      <div class="page">
-        ${renderPageHeader(vacancy.roleTitle || "Vacancy", match.statusLabel || "")}
-        ${renderStatsGrid([
-          { label: "Stage", value: match.statusLabel || "Unknown" },
-          { label: "Budget", value: vacancy.budget || "Not set" },
-          { label: "Format", value: vacancy.workFormat ? humanize(vacancy.workFormat) : "Not set" },
-          { label: "Updated", value: match.updatedAt ? formatRelativeTime(match.updatedAt) : "Unknown" },
-        ])}
-        <div class="panel-grid">
-          ${renderTextCard("Summary", firstNonEmpty(
-            vacancy.summary && vacancy.summary.approvalSummaryText,
-            vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
-            vacancy.projectDescription
-          ), "No summary yet.")}
-          ${renderInfoCard("Details", [
-            { label: "Seniority", value: vacancy.seniority ? humanize(vacancy.seniority) : "" },
-            { label: "Countries", value: (vacancy.countriesAllowed || []).join(", ") || "" },
-            { label: "Team size", value: vacancy.teamSize || "" },
-          ])}
-        </div>
-        ${renderSkillCard("Tech stack", vacancy.primaryTechStack)}
-        ${renderTextCard("Job description", vacancy.source && vacancy.source.text, "")}
-      </div>
-    `;
-  }
+  async function renderHome() {
+    const role = state.session.role;
+    if (role === "unknown") {
+      renderRoleCheck("Checking your role in Telegram. Finish the role setup in chat to continue.");
+      return;
+    }
 
-  function renderManagerHome(payload) {
-    const items = payload.items || [];
-    const totalCandidates = items.reduce((sum, item) => sum + Number(item.candidateCount || 0), 0);
-    const totalPipeline = items.reduce((sum, item) => sum + Number(item.activePipelineCount || 0), 0);
-    const totalConnected = items.reduce((sum, item) => sum + Number(item.connectedCount || 0), 0);
-    appEl.innerHTML = `
-      <div class="page">
-        ${renderStatsGrid([
+    if (role === "candidate") {
+      const payload = await api("/webapp/api/candidate/opportunities");
+      const items = payload.items || [];
+      const profile = payload.profile || {};
+      const activeDecisionCount = items.filter((item) =>
+        ["manager_decision_pending", "candidate_decision_pending", "candidate_applied", "manager_interview_requested"].includes(item.stage)
+      ).length;
+      const connectedCount = items.filter((item) => item.stage === "approved").length;
+      appEl.innerHTML = `
+        ${renderStatsStrip([
           { label: "Vacancies", value: String(items.length) },
-          { label: "Candidates", value: String(totalCandidates) },
-          { label: "Pipeline", value: String(totalPipeline) },
-          { label: "Connected", value: String(totalConnected) },
+          { label: "Waiting", value: String(activeDecisionCount) },
+          { label: "Connected", value: String(connectedCount) }
         ])}
-        <section class="stack">
-          ${renderSectionBar("Vacancies", items.length)}
-          ${items.length ? items.map(renderManagerVacancyCard).join("") : renderEmptyState("No vacancies yet.")}
+        <section class="list">
+          ${payload.cvChallenge && payload.cvChallenge.eligible && payload.cvChallenge.launchUrl
+            ? renderShortcutCard({
+              openUrl: withCurrentTheme(payload.cvChallenge.launchUrl),
+              title: payload.cvChallenge.title || "CV Challenge",
+              badge: "Game",
+              note: truncateText(payload.cvChallenge.body || "Open the game.", 120),
+            })
+            : ""}
+          ${renderShortcutCard({
+            route: "candidate-profile",
+            title: firstNonEmpty(profile.targetRole, profile.headline, "Profile"),
+            badge: "Profile",
+            note: buildProfilePreview(profile),
+            metrics: [
+              { label: "Location", value: profile.location || "" },
+              { label: "Format", value: profile.workFormat || "" },
+              { label: "Salary", value: profile.salaryExpectation || "" },
+            ],
+          })}
         </section>
-      </div>
-    `;
-    bindInteractiveNodes();
+        <section class="list">
+          <p class="footer-note">Vacancies</p>
+          ${items.length ? items.map(renderCandidateVacancyCard).join("") : `<div class="empty-state">No vacancies yet.</div>`}
+        </section>
+      `;
+      bindCards();
+      bindActionButtons();
+      return;
+    }
+
+    if (role === "hiring_manager") {
+      const payload = await api("/webapp/api/hiring-manager/vacancies");
+      const items = payload.items || [];
+      const totalCandidateCount = sumBy(items, "candidateCount");
+      const totalActivePipelineCount = sumBy(items, "activePipelineCount");
+      const totalConnectedCount = sumBy(items, "connectedCount");
+      appEl.innerHTML = `
+        ${renderScreenHeader("Dashboard", "", "dashboard")}
+        ${renderStatsStrip([
+          { label: "Vacancies", value: String(items.length) },
+          { label: "Candidates", value: String(totalCandidateCount) },
+          { label: "Pipeline", value: String(totalActivePipelineCount) },
+          { label: "Connected", value: String(totalConnectedCount) }
+        ])}
+        <section class="list">
+          ${items.length ? items.map(renderManagerVacancyCard).join("") : `<div class="empty-state">No vacancies yet.</div>`}
+        </section>
+      `;
+      bindCards();
+      return;
+    }
   }
 
-  function renderManagerVacancy(detail, matchesPayload) {
-    const vacancy = detail.vacancy || {};
-    const stats = detail.stats || {};
+  async function renderCandidateVacancy(matchId) {
+    const payload = await api(`/webapp/api/candidate/opportunities/${matchId}`);
+    appEl.innerHTML = `
+      ${renderScreenHeader(payload.vacancy.roleTitle || "Vacancy", "", "vacancy")}
+      ${renderStatsStrip([
+        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
+        { label: "Budget", value: payload.vacancy.budget || "Not specified" },
+        { label: "Format", value: payload.vacancy.workFormat || "Not specified" },
+        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
+      ])}
+      ${renderDetailSection("Match", [
+        { label: "Your reply", value: payload.match.candidateRespondedAt ? formatRelativeTime(payload.match.candidateRespondedAt) : "Pending" },
+        { label: "Manager decision", value: payload.match.managerDecisionAt ? formatRelativeTime(payload.match.managerDecisionAt) : "Pending" }
+      ])}
+      ${renderTextPanel(
+        "Summary",
+        firstNonEmpty(
+          payload.vacancy.summary && payload.vacancy.summary.approvalSummaryText,
+          payload.vacancy.summary && payload.vacancy.summary.projectDescriptionExcerpt,
+          payload.vacancy.projectDescription
+        ),
+        "No summary yet."
+      )}
+      ${renderDetailSection("Vacancy", [
+        { label: "Allowed countries", value: (payload.vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
+        { label: "Seniority", value: payload.vacancy.seniority || "" },
+        { label: "Team size", value: payload.vacancy.teamSize || "" },
+        { label: "Project", value: payload.vacancy.projectDescription || "Not specified", full: true }
+      ])}
+      ${renderChipPanel("Tech stack", payload.vacancy.primaryTechStack || [], "")}
+      ${renderTextPanel("Job description", payload.vacancy.source && payload.vacancy.source.text, "")}
+    `;
+  }
+
+  async function renderManagerVacancy(vacancyId) {
+    const detailPath = `/webapp/api/hiring-manager/vacancies/${vacancyId}`;
+    const matchesPath = `/webapp/api/hiring-manager/vacancies/${vacancyId}/matches`;
+    const [detail, matchesPayload] = await Promise.all([api(detailPath), api(matchesPath)]);
+    const vacancy = detail.vacancy;
+    const stats = detail.stats;
     const items = matchesPayload.items || [];
     appEl.innerHTML = `
-      <div class="page">
-        ${renderPageHeader(vacancy.roleTitle || "Vacancy", humanize(vacancy.state))}
-        ${renderStatsGrid([
-          { label: "Candidates", value: String(stats.candidateCount || 0) },
-          { label: "Pipeline", value: String(stats.activePipelineCount || 0) },
-          { label: "Connected", value: String(stats.connectedCount || 0) },
-          { label: "Budget", value: vacancy.budget || "Not set" },
-        ])}
-        <div class="panel-grid">
-          ${renderTextCard("Summary", firstNonEmpty(
-            vacancy.summary && vacancy.summary.approvalSummaryText,
-            vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
-            vacancy.projectDescription
-          ), "No summary yet.")}
-          ${renderInfoCard("Details", [
-            { label: "Work format", value: vacancy.workFormat ? humanize(vacancy.workFormat) : "" },
-            { label: "Countries", value: (vacancy.countriesAllowed || []).join(", ") || "" },
-            { label: "Team size", value: vacancy.teamSize || "" },
-            { label: "Opened", value: vacancy.openedAt ? formatRelativeTime(vacancy.openedAt) : "" },
-          ])}
-        </div>
-        ${renderSkillCard("Tech stack", vacancy.primaryTechStack)}
-        ${renderTextCard("Job description", vacancy.source && vacancy.source.text, "")}
-        <section class="stack">
-          ${renderSectionBar("Candidates", items.length)}
-          ${items.length ? items.map(renderManagerCandidateCard).join("") : renderEmptyState("No candidates yet.")}
-        </section>
-      </div>
+      ${renderScreenHeader(vacancy.roleTitle || "Vacancy", "", "vacancy")}
+      ${renderStatsStrip([
+        { label: "Candidates", value: String(stats.candidateCount) },
+        { label: "Pipeline", value: String(stats.activePipelineCount) },
+        { label: "Connected", value: String(stats.connectedCount || 0) },
+        { label: "Budget", value: vacancy.budget || "Not specified" }
+      ])}
+      ${renderTextPanel(
+        "Summary",
+        firstNonEmpty(
+          vacancy.summary && vacancy.summary.approvalSummaryText,
+          vacancy.summary && vacancy.summary.projectDescriptionExcerpt,
+          vacancy.projectDescription
+        ),
+        "No summary yet."
+      )}
+      ${renderDetailSection("Vacancy", [
+        { label: "Work format", value: vacancy.workFormat || "Not specified" },
+        { label: "Allowed countries", value: (vacancy.countriesAllowed || []).join(", ") || "Not specified", full: true },
+        { label: "Team size", value: vacancy.teamSize || "" },
+        { label: "Opened", value: vacancy.openedAt ? formatRelativeTime(vacancy.openedAt) : "" },
+        { label: "Project", value: vacancy.projectDescription || "Not specified", full: true }
+      ])}
+      ${renderChipPanel("Tech stack", vacancy.primaryTechStack || [], "")}
+      ${renderTextPanel("Job description", vacancy.source && vacancy.source.text, "")}
+      <section class="list">
+        <p class="footer-note">Candidates</p>
+        ${items.length ? items.map(renderManagerCandidateCard).join("") : `<div class="empty-state">No candidates yet.</div>`}
+      </section>
     `;
-    bindInteractiveNodes();
+    bindCards();
   }
 
-  function renderManagerCandidate(payload) {
-    const candidate = payload.candidate || {};
-    const answers = normalizeProfileAnswers(candidate);
-    const summary = candidate.summary || {};
+  async function renderManagerCandidate(matchId) {
+    const payload = await api(`/webapp/api/hiring-manager/matches/${matchId}`);
+    const hasLegacyInterviewData = Boolean(
+      payload.interview.stateLabel ||
+      payload.evaluation.interviewSummary ||
+      (payload.evaluation.strengths || []).length ||
+      (payload.evaluation.risks || []).length
+    );
     appEl.innerHTML = `
-      <div class="page">
-        ${renderPageHeader(candidate.name || "Candidate", payload.vacancy && payload.vacancy.roleTitle ? payload.vacancy.roleTitle : "")}
-        ${renderStatsGrid([
-          { label: "Stage", value: payload.match && payload.match.statusLabel ? payload.match.statusLabel : "Unknown" },
-          { label: "Salary", value: candidate.salaryExpectation || "Not set" },
-          { label: "Format", value: candidate.workFormat ? humanize(candidate.workFormat) : "Not set" },
-          { label: "Location", value: candidate.location || "Not set" },
-        ])}
-        <div class="panel-grid">
-          ${renderTextCard("Summary", firstNonEmpty(
-            summary.approvalSummaryText,
-            summary.experienceExcerpt
-          ), "No summary yet.")}
-          ${renderInfoCard("Answers", [
-            { label: "Location", value: answers.location || "Not set" },
-            { label: "Country", value: answers.countryCode || "" },
-            { label: "City", value: answers.city || "" },
-            { label: "Work format", value: answers.workFormat ? humanize(answers.workFormat) : "Not set" },
-          ])}
-        </div>
-        ${renderSkillCard("Skills", summary.skills)}
-        ${renderTextCard("CV text", candidate.source && candidate.source.text, "")}
-        ${renderReviewCard(payload.interview || {}, payload.evaluation || {})}
-      </div>
+      ${renderScreenHeader(payload.candidate.name || "Candidate", payload.vacancy.roleTitle || "", "candidate")}
+      ${renderStatsStrip([
+        { label: "Stage", value: payload.match.statusLabel || "Unknown" },
+        { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
+        { label: "Location", value: payload.candidate.location || "Not specified" },
+        { label: "Format", value: payload.candidate.workFormat || "Not specified" },
+        { label: "Updated", value: formatRelativeTime(payload.match.updatedAt) }
+      ])}
+      ${renderTextPanel(
+        "Summary",
+        firstNonEmpty(
+          payload.candidate.summary && payload.candidate.summary.approvalSummaryText,
+          payload.candidate.summary && payload.candidate.summary.experienceExcerpt
+        ),
+        "No summary yet."
+      )}
+      ${renderDetailSection("Answers", [
+        { label: "Salary", value: payload.candidate.answers && payload.candidate.answers.salaryExpectation ? payload.candidate.answers.salaryExpectation : payload.candidate.salaryExpectation || "Not specified" },
+        { label: "Location", value: payload.candidate.answers && payload.candidate.answers.location ? payload.candidate.answers.location : payload.candidate.location || "Not specified" },
+        { label: "Country", value: payload.candidate.answers && payload.candidate.answers.countryCode ? payload.candidate.answers.countryCode : payload.candidate.countryCode || "" },
+        { label: "City", value: payload.candidate.answers && payload.candidate.answers.city ? payload.candidate.answers.city : payload.candidate.city || "" },
+        { label: "Work format", value: payload.candidate.answers && payload.candidate.answers.workFormat ? payload.candidate.answers.workFormat : payload.candidate.workFormat || "Not specified" },
+      ])}
+      ${renderChipPanel("Skills", (payload.candidate.summary || {}).skills || [], "")}
+      ${renderTextPanel("CV text", payload.candidate.source && payload.candidate.source.text, "")}
+      ${hasLegacyInterviewData ? renderDetailSection("Legacy interview notes", [
+        { label: "State", value: payload.interview.stateLabel || "Not started" },
+        { label: "Recommendation", value: payload.evaluation.recommendation || "N/A" },
+        { label: "Summary", value: payload.evaluation.interviewSummary || "No interview summary yet.", full: true },
+        { label: "Strengths", value: listChips(payload.evaluation.strengths || []), raw: true, full: true },
+        { label: "Risks", value: listChips(payload.evaluation.risks || []), raw: true, full: true }
+      ]) : ""}
     `;
   }
 
-  function bindInteractiveNodes() {
-    Array.from(document.querySelectorAll("[data-route], [data-open-url]")).forEach((node) => {
+  function bindCards() {
+    Array.from(document.querySelectorAll("[data-route]")).forEach((node) => {
       const route = node.getAttribute("data-route");
-      const openUrl = node.getAttribute("data-open-url");
-      const isButton = node.tagName === "BUTTON";
-      if (!isButton) {
+      node.setAttribute("tabindex", "0");
+      node.setAttribute("role", "button");
+      node.addEventListener("click", () => {
+        tapFeedback();
+        pushRoute(route);
+      });
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          tapFeedback();
+          pushRoute(route);
+        }
+      });
+    });
+  }
+
+  function bindActionButtons() {
+    Array.from(document.querySelectorAll("[data-open-url]")).forEach((node) => {
+      const targetUrl = node.getAttribute("data-open-url");
+      if (node.tagName !== "BUTTON") {
         node.setAttribute("tabindex", "0");
         node.setAttribute("role", "button");
       }
       const activate = () => {
         tapFeedback();
-        if (route) {
-          pushRoute(route);
-          return;
-        }
-        if (openUrl) {
-          window.location.assign(openUrl);
-        }
+        window.location.assign(targetUrl);
       };
-      node.addEventListener("click", activate);
       node.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           activate();
         }
       });
+      node.addEventListener("click", () => {
+        activate();
+      });
     });
   }
 
-  async function renderHome() {
-    if (!state.session) return;
-    if (state.session.role === "candidate") {
-      const payload = await api("/webapp/api/candidate/opportunities");
-      renderCandidateHome(payload);
-      return;
-    }
-    if (state.session.role === "hiring_manager") {
-      const payload = await api("/webapp/api/hiring-manager/vacancies");
-      renderManagerHome(payload);
-      return;
-    }
-    renderBlocked(
-      "Screen unavailable",
-      "This WebApp now supports candidate and manager screens only."
-    );
-  }
-
   async function renderRoute() {
-    if (!state.session) return;
+    const currentRoute = getCurrentRoute();
     updateBackButton();
+    updateTopbar(currentRoute);
+    if (!state.session) return;
     try {
-      const route = splitRoute(getCurrentRoute());
-      if (route.name === HOME_ROUTE) {
+      if (currentRoute === "home") {
         await renderHome();
         return;
       }
 
-      if (route.name === "candidate-profile") {
+      const parts = currentRoute.split(":");
+      if (currentRoute === "candidate-profile") {
         const payload = await api("/webapp/api/candidate/profile");
-        renderCandidateProfile(payload.profile || {});
+        renderCandidateProfileHome(payload.profile || {});
         return;
       }
-
-      if (route.name === "candidate-profile-section") {
+      if (parts.length !== 2) {
+        await renderHome();
+        return;
+      }
+      const route = parts[0];
+      const id = parts[1];
+      if (route === "candidate-profile-section") {
         const payload = await api("/webapp/api/candidate/profile");
-        renderCandidateProfileSection(payload.profile || {}, route.param || "summary");
-        return;
+        return renderCandidateProfileSection(payload.profile || {}, id);
       }
-
-      if (route.name === "candidate-vacancy" && route.param) {
-        const payload = await api(`/webapp/api/candidate/opportunities/${route.param}`);
-        renderCandidateVacancy(payload);
-        return;
-      }
-
-      if (route.name === "manager-vacancy" && route.param) {
-        const [detail, matchesPayload] = await Promise.all([
-          api(`/webapp/api/hiring-manager/vacancies/${route.param}`),
-          api(`/webapp/api/hiring-manager/vacancies/${route.param}/matches`),
-        ]);
-        renderManagerVacancy(detail, matchesPayload);
-        return;
-      }
-
-      if (route.name === "manager-candidate" && route.param) {
-        const payload = await api(`/webapp/api/hiring-manager/matches/${route.param}`);
-        renderManagerCandidate(payload);
-        return;
-      }
-
+      if (route === "candidate-vacancy") return await renderCandidateVacancy(id);
+      if (route === "manager-vacancy") return await renderManagerVacancy(id);
+      if (route === "manager-candidate") return await renderManagerCandidate(id);
       await renderHome();
     } catch (error) {
-      renderError("Unable to load screen", error.message || "Unknown error.");
+      renderError("Dashboard request failed", error.message || "Unable to load this screen.");
     }
   }
 
   async function boot() {
     try {
+      initializeTheme();
       bindTelegramRuntime();
-      renderLoading("Checking access and loading your screen.");
+      renderRoleCheck("Checking your role and loading the latest recruiting data.");
       if (tg) {
         if (tg.BackButton && typeof tg.BackButton.hide === "function") {
           tg.BackButton.hide();
@@ -876,7 +909,7 @@
       if (!initData) {
         renderBlocked(
           "Open this inside Helly",
-          "This WebApp requires Telegram Mini App authentication."
+          "This WebApp needs Telegram Mini App auth. Open it from the Helly bot button inside Telegram."
         );
         return;
       }
@@ -890,17 +923,16 @@
       if (!authResponse.ok) {
         throw new Error(authPayload.detail || "Telegram authentication failed.");
       }
-
       state.sessionToken = authPayload.sessionToken;
+
       const sessionPayload = await api("/webapp/api/session");
       state.session = sessionPayload.session;
-
-      const initialRoute = sanitizeRoute(window.location.hash || HOME_ROUTE);
+      const initialRoute = sanitizeRoute(window.location.hash || "home");
       window.history.replaceState({ route: initialRoute }, "", window.location.pathname + window.location.search);
       await renderRoute();
       window.addEventListener("popstate", renderRoute);
     } catch (error) {
-      renderError("Unable to open Helly", error.message || "Unknown error.");
+      renderError("Unable to open Helly Dashboard", error.message || "Unknown error.");
     }
   }
 
