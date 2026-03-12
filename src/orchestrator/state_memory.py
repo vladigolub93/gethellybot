@@ -249,6 +249,24 @@ def _candidate_skills_line(version) -> str | None:
     return f"Saved candidate facts: {'; '.join(parts)}."
 
 
+def _candidate_feedback_line(candidate) -> str | None:
+    if candidate is None:
+        return None
+    current = dict(getattr(candidate, "questions_context_json", None) or {})
+    matching_feedback = dict(current.get("matching_feedback") or {})
+    events = list(matching_feedback.get("candidate_feedback_events") or [])
+    if not events:
+        return None
+    recent_texts = []
+    for item in events[-2:]:
+        text = _truncate(item.get("text"), limit=120)
+        if text:
+            recent_texts.append(text)
+    if not recent_texts:
+        return None
+    return "Recent candidate mismatch feedback: " + " | ".join(recent_texts)
+
+
 def _vacancy_details_line(vacancy) -> str | None:
     if vacancy is None:
         return None
@@ -308,6 +326,24 @@ def _vacancy_project_line(vacancy) -> str | None:
     if not project:
         return None
     return f"Saved project description: {project}"
+
+
+def _vacancy_feedback_line(vacancy) -> str | None:
+    if vacancy is None:
+        return None
+    current = dict(getattr(vacancy, "questions_context_json", None) or {})
+    matching_feedback = dict(current.get("matching_feedback") or {})
+    events = list(matching_feedback.get("manager_feedback_events") or [])
+    if not events:
+        return None
+    recent_texts = []
+    for item in events[-2:]:
+        text = _truncate(item.get("text"), limit=120)
+        if text:
+            recent_texts.append(text)
+    if not recent_texts:
+        return None
+    return "Recent manager feedback on candidate flow: " + " | ".join(recent_texts)
 
 
 def _evaluation_memory(evaluation) -> list[str]:
@@ -439,6 +475,9 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
     skills_line = _candidate_skills_line(version)
     if skills_line:
         snippets.append(skills_line)
+    feedback_line = _candidate_feedback_line(candidate)
+    if feedback_line and stage in {"READY", "VACANCY_REVIEW"}:
+        snippets.append(feedback_line)
 
     if stage == "VACANCY_REVIEW":
         review_matches = _call_optional(
@@ -531,6 +570,9 @@ def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancie
     project_line = _vacancy_project_line(vacancy)
     if project_line:
         snippets.append(project_line)
+    feedback_line = _vacancy_feedback_line(vacancy)
+    if feedback_line and stage in {"OPEN", "PRE_INTERVIEW_REVIEW"}:
+        snippets.append(feedback_line)
 
     open_vacancies = _call_optional(vacancies, "get_open_by_manager_user_id", user_id) or []
     if len(open_vacancies) > 1:

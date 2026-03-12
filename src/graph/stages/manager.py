@@ -164,6 +164,13 @@ def build_manager_stage_detect_node(session):
                         payload.get("response_text")
                         or "Tell me exactly what you want to change in budget, format, location, English, process, project, or stack."
                     )
+            elif payload.get("proposed_action") == "record_vacancy_feedback":
+                state.proposed_action = "record_vacancy_feedback"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.structured_payload = {
+                    "feedback_text": payload.get("answer_text") or text,
+                    "source_stage": "OPEN",
+                }
             elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
@@ -221,6 +228,13 @@ def build_manager_stage_detect_node(session):
                         payload.get("response_text")
                         or "Tell me exactly what you want to change in budget, format, location, English, process, project, or stack."
                     )
+            elif payload.get("proposed_action") == "record_vacancy_feedback":
+                state.proposed_action = "record_vacancy_feedback"
+                state.structured_payload = {
+                    "feedback_text": payload.get("answer_text") or text,
+                    "source_stage": "PRE_INTERVIEW_REVIEW",
+                }
+                state.parsed_input["intent"] = "stage_completion_input"
             elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.structured_payload = {"candidate_slot": payload.get("candidate_slot")}

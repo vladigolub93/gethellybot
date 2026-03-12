@@ -1050,6 +1050,37 @@ def test_graph_candidate_stage_accepts_ready_preference_update_intent() -> None:
     assert result.structured_payload["show_live_coding_roles"] is False
 
 
+def test_graph_candidate_stage_accepts_ready_feedback_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8feedback", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u11feedback",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="These roles keep missing on salary and they often include live coding.",
+    )
+
+    assert result is not None
+    assert result.stage == "READY"
+    assert result.action_accepted is True
+    assert result.proposed_action == "record_matching_feedback"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["feedback_text"] == "These roles keep missing on salary and they often include live coding."
+    assert result.structured_payload["source_stage"] == "READY"
+
+
 def test_graph_candidate_stage_handles_vacancy_review_help() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
@@ -1140,6 +1171,37 @@ def test_graph_candidate_stage_accepts_vacancy_review_preference_update_intent()
     assert result.structured_payload["salary_min"] == 5000
     assert result.structured_payload["work_format"] == "remote"
     assert result.structured_payload["show_live_coding_roles"] is False
+
+
+def test_graph_candidate_stage_accepts_vacancy_review_feedback_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8duf", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(candidate_review_match=SimpleNamespace(id="m8duf"))
+
+    user = SimpleNamespace(
+        id="u11duf",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="These roles keep missing on compensation and process.",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "record_matching_feedback"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["feedback_text"] == "These roles keep missing on compensation and process."
+    assert result.structured_payload["source_stage"] == "VACANCY_REVIEW"
 
 
 def test_graph_candidate_stage_handles_interview_invited_help() -> None:

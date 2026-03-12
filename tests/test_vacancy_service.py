@@ -301,6 +301,38 @@ def test_execute_open_action_requests_follow_up_for_hybrid_without_office_city()
     assert len(service.queue.messages) == 0
 
 
+def test_execute_open_action_records_vacancy_feedback() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    service.repo = fake_repo
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+
+    result = service.execute_open_action(
+        user=user,
+        raw_message_id="raw-open-feedback-1",
+        action="record_vacancy_feedback",
+        structured_payload={
+            "feedback_text": "These candidates feel weak on stack and English.",
+            "source_stage": "PRE_INTERVIEW_REVIEW",
+        },
+        latest_user_message="These candidates feel weak on stack and English.",
+    )
+
+    assert result is not None
+    assert result.status == "vacancy_feedback_recorded"
+    feedback = vacancy.questions_context_json["matching_feedback"]["manager_feedback_events"][-1]
+    assert feedback["text"] == "These candidates feel weak on stack and English."
+    assert "stack" in feedback["categories"]
+    assert "english" in feedback["categories"]
+    assert feedback["source_stage"] == "PRE_INTERVIEW_REVIEW"
+    assert "saved" in result.notification_text.lower()
+    assert len(service.queue.messages) == 0
+
+
 def test_handle_jd_intake_transitions_to_processing() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()

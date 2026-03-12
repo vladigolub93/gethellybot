@@ -695,6 +695,29 @@ class CandidateProfileService:
         if profile is None:
             return None
 
+        if action == "record_matching_feedback":
+            feedback_text = self._normalize_matching_feedback_text((structured_payload or {}).get("feedback_text"))
+            if not feedback_text:
+                return CandidateReadyActionResult(
+                    status="matching_feedback_missing",
+                    notification_template="candidate_ready",
+                    notification_text=self._copy(
+                        "Tell me what feels off in these roles and I’ll save that feedback for matching."
+                    ),
+                )
+            categories = self._categorize_matching_feedback(feedback_text)
+            self._store_matching_feedback(
+                profile,
+                feedback_text=feedback_text,
+                categories=categories,
+                source_stage=(structured_payload or {}).get("source_stage") or "READY",
+            )
+            return CandidateReadyActionResult(
+                status="matching_feedback_recorded",
+                notification_template="candidate_ready",
+                notification_text=self._copy(self._matching_feedback_acknowledgement(categories)),
+            )
+
         if action == "update_matching_preferences":
             parsed = dict(structured_payload or {})
             if not parsed:
@@ -818,6 +841,74 @@ class CandidateProfileService:
         if any(key in parsed for key in {"show_take_home_task_roles", "show_live_coding_roles"}):
             labels.append("assessment preferences")
         return labels
+
+    @staticmethod
+    def _normalize_matching_feedback_text(value: str | None) -> str | None:
+        if not value:
+            return None
+        text = " ".join(str(value).split()).strip()
+        return text or None
+
+    @classmethod
+    def _categorize_matching_feedback(cls, text: str) -> list[str]:
+        lowered = text.lower()
+        categories: list[str] = []
+        category_markers = {
+            "compensation": ["salary", "money", "pay", "budget", "compensation", "дорого", "дешево", "мало", "маловато", "зарплат", "денег", "low paid", "too low"],
+            "location": ["remote", "hybrid", "office", "onsite", "relocate", "location", "city", "country", "remote only", "офис", "гибрид", "гібрид", "локац", "город", "місто", "країн"],
+            "english": ["english", "b2", "c1", "c2", "англий", "англій", "english level"],
+            "domain": ["domain", "fintech", "saas", "ecommerce", "healthtech", "gaming", "ai", "не мой домен", "домен"],
+            "process": ["take-home", "take home", "test task", "live coding", "interview stages", "too many stages", "процесс", "процес", "тестов", "лайвкод", "етап", "этап"],
+            "stack": ["stack", "technology", "technologies", "tech", "tooling", "language", "framework", "react", "node", "python", "java", "стек", "технолог", "фреймворк"],
+            "role": ["seniority", "junior", "middle", "senior", "staff", "lead", "role", "позици", "роль", "сеньор", "мидл", "джун"],
+        }
+        for category, markers in category_markers.items():
+            if any(marker in lowered for marker in markers):
+                categories.append(category)
+        return categories
+
+    def _store_matching_feedback(self, profile, *, feedback_text: str, categories: list[str], source_stage: str) -> None:
+        current = dict(profile.questions_context_json or {})
+        matching_feedback = dict(current.get("matching_feedback") or {})
+        events = list(matching_feedback.get("candidate_feedback_events") or [])
+        events.append(
+            {
+                "text": feedback_text,
+                "categories": categories,
+                "source_stage": source_stage,
+            }
+        )
+        matching_feedback["candidate_feedback_events"] = events[-6:]
+        current["matching_feedback"] = matching_feedback
+        self.repo.update_questions_context(profile, current)
+
+    @staticmethod
+    def _matching_feedback_acknowledgement(categories: list[str]) -> str:
+        label_map = {
+            "compensation": "compensation",
+            "location": "location",
+            "english": "English",
+            "domain": "domain",
+            "process": "hiring process",
+            "stack": "stack",
+            "role": "role level",
+        }
+        labels = [label_map[key] for key in categories if key in label_map]
+        if labels:
+            if len(labels) == 1:
+                summary = labels[0]
+            elif len(labels) == 2:
+                summary = f"{labels[0]} and {labels[1]}"
+            else:
+                summary = f"{', '.join(labels[:-1])}, and {labels[-1]}"
+            return (
+                f"Got it. I saved that these roles keep missing on {summary}. "
+                "If you want, I can also turn that into a concrete preference update right here."
+            )
+        return (
+            "Got it. I saved that feedback for future matching. "
+            "If you want, I can also turn it into a concrete preference update right here."
+        )
 
     def _ensure_deletion_context(self, profile) -> dict:
         current = dict(profile.questions_context_json or {})

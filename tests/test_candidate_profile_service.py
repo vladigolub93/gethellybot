@@ -969,6 +969,38 @@ def test_execute_ready_action_requests_follow_up_for_hybrid_without_city() -> No
     assert len(service.queue.messages) == 0
 
 
+def test_execute_ready_action_records_matching_feedback() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    service.repo = fake_repo
+    service.matching = FakeMatchingRepository()
+    service.vacancies = FakeVacanciesRepository()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_READY)
+
+    result = service.execute_ready_action(
+        user=user,
+        raw_message_id="raw-ready-feedback-1",
+        action="record_matching_feedback",
+        structured_payload={
+            "feedback_text": "These roles keep missing on salary and they often include live coding.",
+            "source_stage": "VACANCY_REVIEW",
+        },
+    )
+
+    assert result is not None
+    assert result.status == "matching_feedback_recorded"
+    feedback = profile.questions_context_json["matching_feedback"]["candidate_feedback_events"][-1]
+    assert feedback["text"] == "These roles keep missing on salary and they often include live coding."
+    assert "compensation" in feedback["categories"]
+    assert "process" in feedback["categories"]
+    assert feedback["source_stage"] == "VACANCY_REVIEW"
+    assert "saved" in result.notification_text.lower()
+    assert len(service.queue.messages) == 0
+
+
 def test_verification_instruction_is_returned_for_non_video_input() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()

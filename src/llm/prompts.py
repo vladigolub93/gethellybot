@@ -127,6 +127,7 @@ Valid outcomes:
 - explicit connect-candidate intent for one numbered candidate
 - explicit skip-candidate intent for one numbered candidate
 - explicit update-vacancy intent
+- explicit feedback-about-bad-candidate-fit intent
 
 Rules:
 - if the manager uses text instead of tapping buttons, they may still write things like `Connect 1`, `Approve 2`, `Interview 1`, or `Skip 3`
@@ -134,6 +135,8 @@ Rules:
 - only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
 - propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, or stack after reviewing candidates
 - if the manager is clearly updating the vacancy, include the original update request in `answer_text`
+- propose `record_vacancy_feedback` when the manager is clearly explaining why these candidates keep missing but does not give a concrete vacancy update yet
+- if the manager is clearly giving qualitative feedback, include that feedback in `answer_text`
 - treat questions like "why did you show this candidate?", "what are the current vacancy settings?", and "what do you have saved for this role?" as help
 - treat complaints like "these profiles are not right" or "I keep skipping these candidates" as help unless the manager also gives a concrete vacancy change
 - extract the numbered candidate slot into `candidate_slot`
@@ -373,6 +376,7 @@ Valid outcomes:
 - help question or status question
 - explicit find-vacancies intent
 - explicit update-preferences intent
+- explicit feedback-about-bad-matches intent
 - explicit delete-profile intent
 
 Rules:
@@ -383,6 +387,8 @@ Rules:
 - propose `find_matching_vacancies` when the candidate is clearly asking to check current vacancies, look for jobs now, or see whether there is anything suitable right now
 - propose `update_matching_preferences` when the candidate is clearly changing saved salary, work format, location, English, domain preferences, or assessment preferences
 - if the candidate is clearly updating preferences, include the original update request in `answer_text`
+- propose `record_matching_feedback` when the candidate is clearly saying current roles keep missing the mark but does not give a concrete new preference yet
+- if the candidate is clearly giving qualitative feedback, include that feedback in `answer_text`
 - only propose `delete_profile` when the candidate is clearly asking to remove their profile
 - do not invent matching outcomes or timelines
 - do not transition stages yourself
@@ -411,6 +417,7 @@ Valid outcomes:
 - explicit apply intent for one numbered vacancy
 - explicit skip intent for one numbered vacancy
 - explicit update-preferences intent
+- explicit feedback-about-bad-matches intent
 
 Rules:
 - if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Connect 1`, `Skip 2`, or `Apply vacancy 3`
@@ -418,6 +425,8 @@ Rules:
 - only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
 - propose `update_matching_preferences` when the candidate is clearly changing salary, work format, location, English, domain preferences, or assessment preferences after reviewing roles
 - if the candidate is clearly updating preferences, include the original update request in `answer_text`
+- propose `record_matching_feedback` when the candidate is clearly explaining why these roles keep missing but does not give a concrete new preference yet
+- if the candidate is clearly giving qualitative feedback, include that feedback in `answer_text`
 - treat questions like "why did you show this?", "what do you have saved for me?", and "what are my current preferences?" as help
 - treat complaints like "these roles are not right for me" or "I keep skipping these" as help unless the candidate also gives a concrete change to saved preferences
 - extract the numbered vacancy slot into `vacancy_slot`
@@ -647,6 +656,7 @@ Valid outcomes:
 - help question or status question
 - explicit find-candidates intent
 - explicit update-vacancy intent
+- explicit feedback-about-bad-candidate-flow intent
 - explicit create-another-vacancy intent
 - explicit list-open-vacancies intent
 - explicit delete-vacancy intent
@@ -658,6 +668,8 @@ Rules:
 - propose `find_matching_candidates` when the manager is clearly asking to search for candidates now, refresh matching, or check whether suitable candidates are available right now
 - propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, team size, or stack
 - if the manager is clearly updating vacancy details, include the original update request in `answer_text`
+- propose `record_vacancy_feedback` when the manager is clearly saying current candidate flow keeps missing the mark but does not give a concrete vacancy update yet
+- if the manager is clearly giving qualitative feedback, include that feedback in `answer_text`
 - propose `create_new_vacancy` when the manager is clearly asking to open another vacancy, add one more role, or create a second vacancy
 - propose `list_open_vacancies` when the manager is clearly asking to see, list, or review their active/open vacancies
 - only propose `delete_vacancy` when the manager is clearly asking to remove the vacancy

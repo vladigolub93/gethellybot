@@ -304,10 +304,10 @@ class TelegramUpdateService:
         if stage_result.stage == "READY":
             if not (
                 stage_result.action_accepted
-                and stage_result.proposed_action in {"delete_profile", "find_matching_vacancies", "update_matching_preferences"}
+                and stage_result.proposed_action in {"delete_profile", "find_matching_vacancies", "update_matching_preferences", "record_matching_feedback"}
             ):
                 return None
-            if stage_result.proposed_action in {"find_matching_vacancies", "update_matching_preferences"}:
+            if stage_result.proposed_action in {"find_matching_vacancies", "update_matching_preferences", "record_matching_feedback"}:
                 ready_result = self.candidate_service.execute_ready_action(
                     user=user,
                     raw_message_id=raw_message_id,
@@ -366,14 +366,14 @@ class TelegramUpdateService:
             stage_result is not None
             and stage_result.stage == "VACANCY_REVIEW"
             and stage_result.action_accepted
-            and stage_result.proposed_action in {"apply_to_vacancy", "skip_vacancy", "update_matching_preferences"}
+            and stage_result.proposed_action in {"apply_to_vacancy", "skip_vacancy", "update_matching_preferences", "record_matching_feedback"}
         ):
             return None
-        if stage_result.proposed_action == "update_matching_preferences":
+        if stage_result.proposed_action in {"update_matching_preferences", "record_matching_feedback"}:
             ready_result = self.candidate_service.execute_ready_action(
                 user=user,
                 raw_message_id=raw_message_id,
-                action="update_matching_preferences",
+                action=stage_result.proposed_action,
                 structured_payload=stage_result.structured_payload or {},
             )
             if ready_result is None:
@@ -410,10 +410,10 @@ class TelegramUpdateService:
         if stage_result.stage == "OPEN":
             if not (
                 stage_result.action_accepted
-                and stage_result.proposed_action in {"delete_vacancy", "update_vacancy_preferences"}
+                and stage_result.proposed_action in {"delete_vacancy", "update_vacancy_preferences", "record_vacancy_feedback"}
             ):
                 return None
-            if stage_result.proposed_action == "update_vacancy_preferences":
+            if stage_result.proposed_action in {"update_vacancy_preferences", "record_vacancy_feedback"}:
                 open_result = self.vacancy_service.execute_open_action(
                     user=user,
                     raw_message_id=raw_message_id,
@@ -503,10 +503,10 @@ class TelegramUpdateService:
             stage_result is not None
             and stage_result.stage == "PRE_INTERVIEW_REVIEW"
             and stage_result.action_accepted
-            and stage_result.proposed_action in {"interview_candidate", "skip_candidate", "update_vacancy_preferences"}
+            and stage_result.proposed_action in {"interview_candidate", "skip_candidate", "update_vacancy_preferences", "record_vacancy_feedback"}
         ):
             return None
-        if stage_result.proposed_action == "update_vacancy_preferences":
+        if stage_result.proposed_action in {"update_vacancy_preferences", "record_vacancy_feedback"}:
             open_result = self.vacancy_service.execute_open_action(
                 user=user,
                 raw_message_id=raw_message_id,

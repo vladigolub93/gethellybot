@@ -120,7 +120,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "READY": StatePolicyDefinition(
         state="READY",
         goal="Keep the candidate profile ready for matching.",
-        allowed_actions=["wait_for_match", "find_matching_vacancies", "update_matching_preferences", "delete_profile"],
+        allowed_actions=["wait_for_match", "find_matching_vacancies", "update_matching_preferences", "record_matching_feedback", "delete_profile"],
         assistance_prompt_slug="candidate_ready",
         guidance_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again now or update your matching preferences without restarting onboarding.",
         help_text="Your profile is ready. Helly will contact you when a strong match is found. If both sides approve the same role, Helly will share contacts directly. You can also ask me to check open roles again right now or update salary, format, location, English, domain, and assessment preferences here.",
@@ -128,7 +128,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "VACANCY_REVIEW": StatePolicyDefinition(
         state="VACANCY_REVIEW",
         goal="Review the current matched-vacancy batch and decide where to apply or connect.",
-        allowed_actions=["apply_to_vacancy", "skip_vacancy", "update_matching_preferences"],
+        allowed_actions=["apply_to_vacancy", "skip_vacancy", "update_matching_preferences", "record_matching_feedback"],
         assistance_prompt_slug="candidate_vacancy_review",
         guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role. If a manager already approved one, the primary button will switch to Connect. If the batch keeps missing, you can also update your matching preferences right here.",
         help_text=(
@@ -199,6 +199,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
             "wait_for_matches",
             "find_matching_candidates",
             "update_vacancy_preferences",
+            "record_vacancy_feedback",
             "create_new_vacancy",
             "list_open_vacancies",
             "delete_vacancy",
@@ -250,7 +251,7 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "PRE_INTERVIEW_REVIEW": StatePolicyDefinition(
         state="PRE_INTERVIEW_REVIEW",
         goal="Review matched candidates and decide who should receive a direct contact approval request.",
-        allowed_actions=["interview_candidate", "skip_candidate", "update_vacancy_preferences"],
+        allowed_actions=["interview_candidate", "skip_candidate", "update_vacancy_preferences", "record_vacancy_feedback"],
         assistance_prompt_slug="pre_interview_review",
         guidance_text="Review the current candidate cards and use the Connect or Skip buttons under each profile. If the batch keeps missing, you can also update the vacancy here.",
         help_text=(

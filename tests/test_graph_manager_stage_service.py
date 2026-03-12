@@ -777,6 +777,36 @@ def test_graph_manager_stage_accepts_open_vacancy_update_intent() -> None:
     assert result.structured_payload["primary_tech_stack_json"][:2] == ["python", "fastapi"]
 
 
+def test_graph_manager_stage_accepts_open_feedback_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6feedback", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m6feedback",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="These candidates feel weak on stack and English.",
+    )
+
+    assert result is not None
+    assert result.stage == "OPEN"
+    assert result.action_accepted is True
+    assert result.proposed_action == "record_vacancy_feedback"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["feedback_text"] == "These candidates feel weak on stack and English."
+    assert result.structured_payload["source_stage"] == "OPEN"
+
+
 def test_graph_manager_stage_accepts_pre_interview_vacancy_update_intent() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
@@ -809,6 +839,38 @@ def test_graph_manager_stage_accepts_pre_interview_vacancy_update_intent() -> No
     assert result.structured_payload["budget_max"] == 9000
     assert result.structured_payload["required_english_level"] == "b2"
     assert result.structured_payload["has_live_coding"] is False
+
+
+def test_graph_manager_stage_accepts_pre_interview_feedback_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6prefeedback", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository(
+        pre_interview_review_match=SimpleNamespace(id="m6prefeedback", status="manager_decision_pending")
+    )
+
+    user = SimpleNamespace(
+        id="m6prefeedback",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="These candidates keep missing on stack and process.",
+    )
+
+    assert result is not None
+    assert result.stage == "PRE_INTERVIEW_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "record_vacancy_feedback"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["feedback_text"] == "These candidates keep missing on stack and process."
+    assert result.structured_payload["source_stage"] == "PRE_INTERVIEW_REVIEW"
 
 
 def test_graph_manager_stage_handles_manager_review_help() -> None:

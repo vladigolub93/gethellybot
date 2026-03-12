@@ -115,6 +115,36 @@ class VacancyService:
                 notification_text=self._format_open_vacancies(user),
             )
 
+        if action == "record_vacancy_feedback":
+            vacancy = self._resolve_open_target_vacancy(user, latest_user_message=latest_user_message)
+            if vacancy is None:
+                return VacancyOpenActionResult(
+                    status="no_open_vacancy",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy("I couldn’t find an open vacancy to attach that feedback to right now."),
+                )
+            feedback_text = self._normalize_vacancy_feedback_text((structured_payload or {}).get("feedback_text"))
+            if not feedback_text:
+                return VacancyOpenActionResult(
+                    status="vacancy_feedback_missing",
+                    notification_template="vacancy_open",
+                    notification_text=self._copy(
+                        "Tell me what keeps missing in these candidates and I’ll save that feedback for matching."
+                    ),
+                )
+            categories = self._categorize_vacancy_feedback(feedback_text)
+            self._store_vacancy_feedback(
+                vacancy,
+                feedback_text=feedback_text,
+                categories=categories,
+                source_stage=(structured_payload or {}).get("source_stage") or "OPEN",
+            )
+            return VacancyOpenActionResult(
+                status="vacancy_feedback_recorded",
+                notification_template="vacancy_open",
+                notification_text=self._copy(self._vacancy_feedback_acknowledgement(categories)),
+            )
+
         if action == "update_vacancy_preferences":
             vacancy = self._resolve_open_target_vacancy(user, latest_user_message=latest_user_message)
             if vacancy is None:
@@ -815,6 +845,74 @@ class VacancyService:
         deletion.setdefault("pending", False)
         current["deletion"] = deletion
         return current
+
+    @staticmethod
+    def _normalize_vacancy_feedback_text(value: str | None) -> str | None:
+        if not value:
+            return None
+        text = " ".join(str(value).split()).strip()
+        return text or None
+
+    @classmethod
+    def _categorize_vacancy_feedback(cls, text: str) -> list[str]:
+        lowered = text.lower()
+        categories: list[str] = []
+        category_markers = {
+            "compensation": ["salary", "budget", "compensation", "money", "дорого", "дешево", "бюджет", "зарплат", "денег", "too expensive", "too low"],
+            "location": ["remote", "hybrid", "office", "onsite", "location", "city", "country", "office city", "офис", "гибрид", "гібрид", "город", "місто", "локац", "країн"],
+            "english": ["english", "b2", "c1", "c2", "англий", "англій", "english level"],
+            "domain": ["domain", "fintech", "saas", "ecommerce", "healthtech", "gaming", "ai", "домен"],
+            "process": ["take-home", "take home", "test task", "live coding", "interview stages", "too many stages", "процесс", "процес", "тестов", "лайвкод", "етап", "этап"],
+            "stack": ["stack", "technology", "technologies", "tech", "tooling", "language", "framework", "react", "node", "python", "java", "стек", "технолог", "фреймворк"],
+            "role": ["seniority", "junior", "middle", "senior", "staff", "lead", "role", "позици", "роль", "сеньор", "мидл", "джун"],
+        }
+        for category, markers in category_markers.items():
+            if any(marker in lowered for marker in markers):
+                categories.append(category)
+        return categories
+
+    def _store_vacancy_feedback(self, vacancy, *, feedback_text: str, categories: list[str], source_stage: str) -> None:
+        current = dict(vacancy.questions_context_json or {})
+        matching_feedback = dict(current.get("matching_feedback") or {})
+        events = list(matching_feedback.get("manager_feedback_events") or [])
+        events.append(
+            {
+                "text": feedback_text,
+                "categories": categories,
+                "source_stage": source_stage,
+            }
+        )
+        matching_feedback["manager_feedback_events"] = events[-6:]
+        current["matching_feedback"] = matching_feedback
+        self.repo.update_questions_context(vacancy, current)
+
+    @staticmethod
+    def _vacancy_feedback_acknowledgement(categories: list[str]) -> str:
+        label_map = {
+            "compensation": "compensation",
+            "location": "location",
+            "english": "English",
+            "domain": "domain",
+            "process": "hiring process",
+            "stack": "stack",
+            "role": "role level",
+        }
+        labels = [label_map[key] for key in categories if key in label_map]
+        if labels:
+            if len(labels) == 1:
+                summary = labels[0]
+            elif len(labels) == 2:
+                summary = f"{labels[0]} and {labels[1]}"
+            else:
+                summary = f"{', '.join(labels[:-1])}, and {labels[-1]}"
+            return (
+                f"Got it. I saved that these candidates keep missing on {summary}. "
+                "If you want, I can also turn that into a concrete vacancy update right here."
+            )
+        return (
+            "Got it. I saved that feedback for future matching. "
+            "If you want, I can also turn it into a concrete vacancy update right here."
+        )
 
     def _vacancy_label(self, vacancy, *, index: int | None = None) -> str:
         label = (vacancy.role_title or "").strip()

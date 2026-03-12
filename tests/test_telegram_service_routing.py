@@ -1877,6 +1877,56 @@ def test_graph_ready_stage_can_update_matching_preferences() -> None:
     }
 
 
+def test_graph_ready_stage_can_record_matching_feedback() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="READY",
+            reply_text="I can save that matching feedback here.",
+            stage_status="ready_for_transition",
+            proposed_action="record_matching_feedback",
+            action_accepted=True,
+            structured_payload={
+                "feedback_text": "These roles keep missing on salary and process.",
+                "source_stage": "READY",
+            },
+            validation_result={"accepted": True, "normalized_action": "record_matching_feedback"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.ready_action_result = SimpleNamespace(
+        status="matching_feedback_recorded",
+        notification_template="candidate_ready",
+        notification_text="I saved that feedback for matching.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5cf",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5cf",
+        build_update(text="These roles keep missing on salary and process."),
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.ready_action_calls
+    assert service.candidate_service.ready_action_calls[-1]["action"] == "record_matching_feedback"
+    assert service.candidate_service.ready_action_calls[-1]["structured_payload"] == {
+        "feedback_text": "These roles keep missing on salary and process.",
+        "source_stage": "READY",
+    }
+
+
 def test_graph_candidate_vacancy_review_stage_can_apply_to_vacancy() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -1955,6 +2005,56 @@ def test_graph_candidate_vacancy_review_stage_can_update_preferences() -> None:
     }
 
 
+def test_graph_candidate_vacancy_review_stage_can_record_feedback() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VACANCY_REVIEW",
+            reply_text="I can save that feedback from this batch.",
+            stage_status="ready_for_transition",
+            proposed_action="record_matching_feedback",
+            action_accepted=True,
+            structured_payload={
+                "feedback_text": "These roles keep missing on salary and process.",
+                "source_stage": "VACANCY_REVIEW",
+            },
+            validation_result={"accepted": True, "normalized_action": "record_matching_feedback"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.ready_action_result = SimpleNamespace(
+        status="matching_feedback_recorded",
+        notification_template="candidate_ready",
+        notification_text="I saved that feedback for matching.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5cuf",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5cuf",
+        build_update(text="These roles keep missing on salary and process."),
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.ready_action_calls
+    assert service.candidate_service.ready_action_calls[-1]["action"] == "record_matching_feedback"
+    assert service.candidate_service.ready_action_calls[-1]["structured_payload"] == {
+        "feedback_text": "These roles keep missing on salary and process.",
+        "source_stage": "VACANCY_REVIEW",
+    }
+
+
 def test_graph_pre_interview_stage_can_update_vacancy_preferences() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -2003,6 +2103,59 @@ def test_graph_pre_interview_stage_can_update_vacancy_preferences() -> None:
     }
     assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
         "Raise budget to 7000-9000 and English to B2"
+    )
+
+
+def test_graph_pre_interview_stage_can_record_vacancy_feedback() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="PRE_INTERVIEW_REVIEW",
+            reply_text="I can save that feedback from this batch.",
+            stage_status="ready_for_transition",
+            proposed_action="record_vacancy_feedback",
+            action_accepted=True,
+            structured_payload={
+                "feedback_text": "These candidates keep missing on stack and process.",
+                "source_stage": "PRE_INTERVIEW_REVIEW",
+            },
+            validation_result={"accepted": True, "normalized_action": "record_vacancy_feedback"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="vacancy_feedback_recorded",
+        notification_template="vacancy_open",
+        notification_text="I saved that feedback for matching.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5prf",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5prf",
+        build_update(text="These candidates keep missing on stack and process."),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "record_vacancy_feedback"
+    assert service.vacancy_service.open_action_calls[-1]["structured_payload"] == {
+        "feedback_text": "These candidates keep missing on stack and process.",
+        "source_stage": "PRE_INTERVIEW_REVIEW",
+    }
+    assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
+        "These candidates keep missing on stack and process."
     )
 
 
@@ -4290,6 +4443,60 @@ def test_graph_open_stage_can_update_vacancy_preferences() -> None:
     }
     assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
         "Update the vacancy budget to 7000-9000 and English to B2"
+    )
+
+
+def test_graph_open_stage_can_record_vacancy_feedback() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="OPEN",
+            reply_text="I can save that feedback for this vacancy.",
+            stage_status="ready_for_transition",
+            proposed_action="record_vacancy_feedback",
+            action_accepted=True,
+            structured_payload={
+                "feedback_text": "These candidates feel weak on stack and English.",
+                "source_stage": "OPEN",
+            },
+            validation_result={"accepted": True, "normalized_action": "record_vacancy_feedback"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="vacancy_feedback_recorded",
+        notification_template="vacancy_open",
+        notification_text="I saved that feedback for matching.",
+    )
+    service.evaluation_service = FakeEvaluationService()
+    service.evaluation_service.result = None
+
+    user = SimpleNamespace(
+        id="u12openfeedback",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw12openfeedback",
+        build_update(text="These candidates feel weak on stack and English."),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "record_vacancy_feedback"
+    assert service.vacancy_service.open_action_calls[-1]["structured_payload"] == {
+        "feedback_text": "These candidates feel weak on stack and English.",
+        "source_stage": "OPEN",
+    }
+    assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
+        "These candidates feel weak on stack and English."
     )
 
 

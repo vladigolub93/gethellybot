@@ -926,10 +926,10 @@ def candidate_ready_decision_with_llm(
         prompt_version="candidate_ready_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "delete_profile", "find_matching_vacancies", "update_matching_preferences"}:
+    if proposed_action not in {None, "delete_profile", "find_matching_vacancies", "update_matching_preferences", "record_matching_feedback"}:
         proposed_action = None
     answer_text = _clean_text(result.payload.get("answer_text"), limit=1000)
-    if proposed_action == "update_matching_preferences" and not answer_text:
+    if proposed_action in {"update_matching_preferences", "record_matching_feedback"} and not answer_text:
         answer_text = _clean_text(latest_user_message, limit=1000)
     return LLMResult(
         payload={
@@ -964,10 +964,10 @@ def candidate_vacancy_review_decision_with_llm(
         prompt_version="candidate_vacancy_review_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "apply_to_vacancy", "skip_vacancy", "update_matching_preferences"}:
+    if proposed_action not in {None, "apply_to_vacancy", "skip_vacancy", "update_matching_preferences", "record_matching_feedback"}:
         proposed_action = None
     answer_text = _clean_text(result.payload.get("answer_text"), limit=1000)
-    if proposed_action == "update_matching_preferences" and not answer_text:
+    if proposed_action in {"update_matching_preferences", "record_matching_feedback"} and not answer_text:
         answer_text = _clean_text(latest_user_message, limit=1000)
     vacancy_slot = result.payload.get("vacancy_slot")
     if not isinstance(vacancy_slot, int) or vacancy_slot < 1:
@@ -1071,10 +1071,10 @@ def pre_interview_review_decision_with_llm(
         prompt_version="pre_interview_review_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "interview_candidate", "skip_candidate", "update_vacancy_preferences"}:
+    if proposed_action not in {None, "interview_candidate", "skip_candidate", "update_vacancy_preferences", "record_vacancy_feedback"}:
         proposed_action = None
     answer_text = _clean_text(result.payload.get("answer_text"), limit=5000)
-    if proposed_action == "update_vacancy_preferences" and not answer_text:
+    if proposed_action in {"update_vacancy_preferences", "record_vacancy_feedback"} and not answer_text:
         answer_text = _clean_text(latest_user_message, limit=5000)
     candidate_slot = result.payload.get("candidate_slot")
     if not isinstance(candidate_slot, int) or candidate_slot < 1:
@@ -1360,13 +1360,14 @@ def vacancy_open_decision_with_llm(
         None,
         "find_matching_candidates",
         "update_vacancy_preferences",
+        "record_vacancy_feedback",
         "create_new_vacancy",
         "list_open_vacancies",
         "delete_vacancy",
     }:
         proposed_action = None
     answer_text = _clean_text(result.payload.get("answer_text"), limit=5000)
-    if proposed_action == "update_vacancy_preferences" and not answer_text:
+    if proposed_action in {"update_vacancy_preferences", "record_vacancy_feedback"} and not answer_text:
         answer_text = _clean_text(latest_user_message, limit=5000)
     return LLMResult(
         payload={
@@ -3188,7 +3189,45 @@ def safe_candidate_ready_decision(
             "не показывай",
             "показывай",
         ]
-        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 18):
+        feedback_markers = [
+            "keep missing",
+            "do not fit",
+            "don't fit",
+            "not right for me",
+            "do not like these roles",
+            "don't like these roles",
+            "do not like these vacancies",
+            "don't like these vacancies",
+            "keep skipping",
+            "wrong for me",
+            "too low",
+            "не подходят",
+            "не нравится",
+            "не нравятся",
+            "не то",
+            "скипаю",
+            "пропускаю",
+            "мимо",
+        ]
+        has_explicit_update_markers = any(
+            marker in lowered
+            for marker in [
+                "change",
+                "update",
+                "switch",
+                "set",
+                "now",
+                "instead",
+                "теперь",
+                "измени",
+                "обнови",
+                "поменяй",
+                "убери",
+                "добавь",
+            ]
+        )
+        has_feedback_markers = any(marker in lowered for marker in feedback_markers)
+        if parsed and (has_explicit_update_markers or (len(normalized_text.split()) <= 18 and not has_feedback_markers)):
             payload.update(
                 {
                     "intent": "update_preferences",
@@ -3197,6 +3236,17 @@ def safe_candidate_ready_decision(
                     "answer_text": normalized_text,
                     "needs_follow_up": False,
                     "reason_code": "candidate_ready_update_preferences",
+                }
+            )
+        elif has_feedback_markers:
+            payload.update(
+                {
+                    "intent": "matching_feedback",
+                    "response_text": "Got it. Tell me what keeps missing and I can save that feedback or turn it into a preference update.",
+                    "proposed_action": "record_matching_feedback",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "candidate_ready_matching_feedback",
                 }
             )
     return LLMResult(
@@ -3308,7 +3358,41 @@ def safe_candidate_vacancy_review_decision(
             "не показывай",
             "показывай",
         ]
-        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 18):
+        feedback_markers = [
+            "keep missing",
+            "do not fit",
+            "don't fit",
+            "not right for me",
+            "keep skipping",
+            "wrong for me",
+            "too low",
+            "не подходят",
+            "не нравится",
+            "не нравятся",
+            "не то",
+            "скипаю",
+            "пропускаю",
+            "мимо",
+        ]
+        has_explicit_update_markers = any(
+            marker in lowered
+            for marker in [
+                "change",
+                "update",
+                "switch",
+                "set",
+                "now",
+                "instead",
+                "теперь",
+                "измени",
+                "обнови",
+                "поменяй",
+                "убери",
+                "добавь",
+            ]
+        )
+        has_feedback_markers = any(marker in lowered for marker in feedback_markers)
+        if parsed and (has_explicit_update_markers or (len(normalized_text.split()) <= 18 and not has_feedback_markers)):
             payload.update(
                 {
                     "intent": "update_preferences",
@@ -3317,6 +3401,17 @@ def safe_candidate_vacancy_review_decision(
                     "answer_text": normalized_text,
                     "needs_follow_up": False,
                     "reason_code": "candidate_vacancy_review_update_preferences",
+                }
+            )
+        elif has_feedback_markers:
+            payload.update(
+                {
+                    "intent": "matching_feedback",
+                    "response_text": "Got it. Tell me what keeps missing and I can save that feedback or turn it into a preference update right here.",
+                    "proposed_action": "record_matching_feedback",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "candidate_vacancy_review_matching_feedback",
                 }
             )
     return LLMResult(
@@ -3603,7 +3698,66 @@ def safe_pre_interview_review_decision(
             "убери",
             "добавь",
         ]
-        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 22):
+        feedback_markers = [
+            "keep missing",
+            "not right",
+            "missing the mark",
+            "too weak",
+            "feel weak",
+            "weak on",
+            "too low",
+            "keep skipping",
+            "wrong candidates",
+            "bad fit",
+            "не подходят",
+            "не те",
+            "не то",
+            "скипаю",
+            "пропускаю",
+            "слабые",
+            "мимо",
+        ]
+        has_explicit_update_markers = any(
+            marker in lowered
+            for marker in [
+                "change",
+                "update",
+                "switch",
+                "set",
+                "now",
+                "instead",
+                "теперь",
+                "измени",
+                "обнови",
+                "поменяй",
+                "убери",
+                "добавь",
+            ]
+        )
+        has_feedback_markers = any(marker in lowered for marker in feedback_markers)
+        has_specific_update_values = any(char.isdigit() for char in normalized_text) or any(
+            marker in lowered
+            for marker in [
+                "remote",
+                "hybrid",
+                "office",
+                "b1",
+                "b2",
+                "c1",
+                "c2",
+                "a1",
+                "a2",
+                "native",
+                "no live coding",
+                "no take-home",
+                "no take home",
+                "paid take-home",
+                "unpaid take-home",
+            ]
+        )
+        if parsed and (
+            has_explicit_update_markers or (has_specific_update_values and not has_feedback_markers)
+        ):
             payload.update(
                 {
                     "intent": "update_vacancy_preferences",
@@ -3612,6 +3766,17 @@ def safe_pre_interview_review_decision(
                     "answer_text": normalized_text,
                     "needs_follow_up": False,
                     "reason_code": "pre_interview_review_update_vacancy",
+                }
+            )
+        elif has_feedback_markers:
+            payload.update(
+                {
+                    "intent": "vacancy_feedback",
+                    "response_text": "Got it. Tell me what keeps missing and I can save that feedback or turn it into a vacancy update right here.",
+                    "proposed_action": "record_vacancy_feedback",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "pre_interview_review_feedback",
                 }
             )
     return LLMResult(
@@ -3928,7 +4093,66 @@ def safe_vacancy_open_decision(
             "убери",
             "добавь",
         ]
-        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 22):
+        feedback_markers = [
+            "keep missing",
+            "not right",
+            "missing the mark",
+            "too weak",
+            "feel weak",
+            "weak on",
+            "too low",
+            "keep skipping",
+            "wrong candidates",
+            "bad fit",
+            "не подходят",
+            "не те",
+            "не то",
+            "скипаю",
+            "пропускаю",
+            "слабые",
+            "мимо",
+        ]
+        has_explicit_update_markers = any(
+            marker in lowered
+            for marker in [
+                "change",
+                "update",
+                "switch",
+                "set",
+                "now",
+                "instead",
+                "теперь",
+                "измени",
+                "обнови",
+                "поменяй",
+                "убери",
+                "добавь",
+            ]
+        )
+        has_feedback_markers = any(marker in lowered for marker in feedback_markers)
+        has_specific_update_values = any(char.isdigit() for char in normalized_text) or any(
+            marker in lowered
+            for marker in [
+                "remote",
+                "hybrid",
+                "office",
+                "b1",
+                "b2",
+                "c1",
+                "c2",
+                "a1",
+                "a2",
+                "native",
+                "no live coding",
+                "no take-home",
+                "no take home",
+                "paid take-home",
+                "unpaid take-home",
+            ]
+        )
+        if parsed and (
+            has_explicit_update_markers or (has_specific_update_values and not has_feedback_markers)
+        ):
             payload.update(
                 {
                     "intent": "update_vacancy_preferences",
@@ -3937,6 +4161,17 @@ def safe_vacancy_open_decision(
                     "answer_text": normalized_text,
                     "needs_follow_up": False,
                     "reason_code": "vacancy_open_update_preferences",
+                }
+            )
+        elif has_feedback_markers:
+            payload.update(
+                {
+                    "intent": "vacancy_feedback",
+                    "response_text": "Got it. Tell me what keeps missing and I can save that feedback or turn it into a vacancy update.",
+                    "proposed_action": "record_vacancy_feedback",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "vacancy_open_feedback",
                 }
             )
     return LLMResult(

@@ -225,6 +225,13 @@ def build_candidate_stage_detect_node(session):
                         payload.get("response_text")
                         or "Tell me exactly what you want to change in salary, format, location, English, domains, or assessment preferences."
                     )
+            elif payload.get("proposed_action") == "record_matching_feedback":
+                state.proposed_action = "record_matching_feedback"
+                state.parsed_input["intent"] = "stage_completion_input"
+                state.structured_payload = {
+                    "feedback_text": payload.get("answer_text") or text,
+                    "source_stage": "READY",
+                }
             elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.parsed_input["intent"] = "stage_completion_input"
@@ -260,6 +267,13 @@ def build_candidate_stage_detect_node(session):
                         payload.get("response_text")
                         or "Tell me exactly what to change in salary, format, location, English, domains, or assessment preferences."
                     )
+            elif payload.get("proposed_action") == "record_matching_feedback":
+                state.proposed_action = "record_matching_feedback"
+                state.structured_payload = {
+                    "feedback_text": payload.get("answer_text") or text,
+                    "source_stage": "VACANCY_REVIEW",
+                }
+                state.parsed_input["intent"] = "stage_completion_input"
             elif payload.get("proposed_action") is not None:
                 state.proposed_action = payload.get("proposed_action")
                 state.structured_payload = {"vacancy_slot": payload.get("vacancy_slot")}
