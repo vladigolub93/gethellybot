@@ -802,15 +802,7 @@
 
   function renderCandidateProfileCard(profile) {
     const title = firstNonEmpty(profile.targetRole, profile.headline, "Your profile");
-    const summaryFallback = firstNonEmpty(
-      profile.summary && profile.summary.approvalSummaryText,
-      profile.summary && profile.summary.experienceExcerpt,
-      "Open your summary, skills, and answers."
-    );
-    const subtitle = firstNonEmpty(
-      profile.headline && profile.headline !== title ? profile.headline : "",
-      summaryFallback !== title ? truncateText(summaryFallback, 140) : ""
-    );
+    const subtitle = profile.headline && profile.headline !== title ? profile.headline : "";
     const facts = [];
     if (profile.summary && profile.summary.yearsExperience) {
       facts.push(`${profile.summary.yearsExperience}+ years`);
@@ -825,8 +817,12 @@
       facts.push(compactCompensation(profile.salaryExpectation));
     }
     const skills = (profile.fullHardSkills || (profile.summary && profile.summary.skills) || []).slice(0, 4);
-    const summaryText = summaryFallback && summaryFallback !== title && summaryFallback !== subtitle
-      ? truncateText(summaryFallback, 150)
+    const summaryText = firstNonEmpty(
+      profile.summary && profile.summary.approvalSummaryText,
+      profile.summary && profile.summary.experienceExcerpt
+    );
+    const renderedSummary = summaryText && summaryText !== title && summaryText !== subtitle
+      ? truncateText(summaryText, 150)
       : "";
 
     return `
@@ -835,7 +831,7 @@
           <p class="eyebrow">${isTerminalTheme() ? "profile" : "Profile"}</p>
           <h3 class="profile-home-title">${escapeHtml(title)}</h3>
           ${subtitle ? `<p class="profile-home-subtitle">${escapeHtml(subtitle)}</p>` : ""}
-          ${summaryText ? renderCardNote(summaryText, "profile-home-summary") : ""}
+          ${renderedSummary ? renderCardNote(renderedSummary, "profile-home-summary") : ""}
           ${renderBadgeRow(facts, "accent")}
           ${skills.length ? `<div class="profile-home-skills">${listChips(skills)}</div>` : ""}
         </div>
