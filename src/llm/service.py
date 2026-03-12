@@ -44,6 +44,7 @@ from src.llm.prompts import (
     interview_question_plan_prompt,
     interview_session_conductor_prompt,
     recovery_prompt,
+    match_card_copy_prompt,
     response_copywriter_prompt,
     role_selection_prompt,
     small_talk_prompt,
@@ -1938,6 +1939,46 @@ def copywrite_response_with_llm(*, approved_intent: str) -> LLMResult:
     )
     return LLMResult(
         payload={"message": _clean_text(result.payload.get("message"), limit=400) or approved_intent[:400]},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def build_match_card_copy_with_llm(
+    *,
+    audience: str,
+    role_title: str | None,
+    candidate_name: str | None = None,
+    candidate_summary: str | None = None,
+    project_summary: str | None = None,
+    fit_reason: str | None = None,
+    compensation_details: str | None = None,
+    process_details: str | None = None,
+    fit_band_label: str | None = None,
+    gap_context: str | None = None,
+    action_hint: str | None = None,
+) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("messaging", "match_card_copy"),
+        user_prompt=match_card_copy_prompt(
+            audience=audience,
+            role_title=role_title,
+            candidate_name=candidate_name,
+            candidate_summary=candidate_summary,
+            project_summary=project_summary,
+            fit_reason=fit_reason,
+            compensation_details=compensation_details,
+            process_details=process_details,
+            fit_band_label=fit_band_label,
+            gap_context=gap_context,
+            action_hint=action_hint,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="match_card_copy_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=700) or ""},
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -4309,6 +4350,49 @@ def safe_copywrite_response(session, *, approved_intent: str) -> LLMResult:
         payload={"message": approved_intent[:400]},
         model_name="baseline-deterministic",
         prompt_version="baseline_response_copywriter_v1",
+    )
+
+
+def safe_build_match_card_copy(
+    session,
+    *,
+    audience: str,
+    role_title: str | None,
+    candidate_name: str | None = None,
+    candidate_summary: str | None = None,
+    project_summary: str | None = None,
+    fit_reason: str | None = None,
+    compensation_details: str | None = None,
+    process_details: str | None = None,
+    fit_band_label: str | None = None,
+    gap_context: str | None = None,
+    action_hint: str | None = None,
+    fallback_message: str,
+) -> LLMResult:
+    if should_use_llm_runtime(session):
+        try:
+            result = build_match_card_copy_with_llm(
+                audience=audience,
+                role_title=role_title,
+                candidate_name=candidate_name,
+                candidate_summary=candidate_summary,
+                project_summary=project_summary,
+                fit_reason=fit_reason,
+                compensation_details=compensation_details,
+                process_details=process_details,
+                fit_band_label=fit_band_label,
+                gap_context=gap_context,
+                action_hint=action_hint,
+            )
+            message = str((result.payload or {}).get("message") or "").strip()
+            if message:
+                return result
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("match_card_copy_fallback_to_baseline", error=str(exc), audience=audience)
+    return LLMResult(
+        payload={"message": fallback_message[:700]},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_match_card_copy_v1",
     )
 
 

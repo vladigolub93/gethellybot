@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.llm.service import (
     safe_build_interview_invitation_copy,
+    safe_build_match_card_copy,
     safe_build_recovery_message,
     safe_build_role_selection_reply,
     safe_build_small_talk_reply,
@@ -17,6 +18,38 @@ class MessagingService:
         return safe_copywrite_response(
             self.session,
             approved_intent=approved_intent,
+        ).payload["message"]
+
+    def compose_match_card(
+        self,
+        *,
+        audience: str,
+        role_title: str | None,
+        candidate_name: str | None = None,
+        candidate_summary: str | None = None,
+        project_summary: str | None = None,
+        fit_reason: str | None = None,
+        compensation_details: str | None = None,
+        process_details: str | None = None,
+        fit_band_label: str | None = None,
+        gap_context: str | None = None,
+        action_hint: str | None = None,
+        fallback_message: str,
+    ) -> str:
+        return safe_build_match_card_copy(
+            self.session,
+            audience=audience,
+            role_title=role_title,
+            candidate_name=candidate_name,
+            candidate_summary=candidate_summary,
+            project_summary=project_summary,
+            fit_reason=fit_reason,
+            compensation_details=compensation_details,
+            process_details=process_details,
+            fit_band_label=fit_band_label,
+            gap_context=gap_context,
+            action_hint=action_hint,
+            fallback_message=fallback_message,
         ).payload["message"]
 
     def compose_small_talk(self, *, latest_user_message: str, current_step_guidance: str | None) -> str:

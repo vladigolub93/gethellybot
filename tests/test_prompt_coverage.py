@@ -77,6 +77,7 @@ def test_core_prompt_families_exist() -> None:
         ("messaging", "role_selection"),
         ("messaging", "deletion_confirmation"),
         ("messaging", "interview_invitation_copy"),
+        ("messaging", "match_card_copy"),
         ("messaging", "response_copywriter"),
     ]
 

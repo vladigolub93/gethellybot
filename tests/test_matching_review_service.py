@@ -149,6 +149,9 @@ class FakeMessagingService:
     def compose(self, approved_intent: str) -> str:
         return approved_intent
 
+    def compose_match_card(self, **kwargs) -> str:
+        return kwargs.get("fallback_message", "")
+
     def compose_interview_invitation(self, *, role_title: str | None) -> str:
         return f"Interview invitation for {role_title or 'this role'}"
 
@@ -170,13 +173,7 @@ class FakeStateService:
         return entity
 
 
-def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(monkeypatch) -> None:
-    monkeypatch.setattr("src.matching.review.build_candidate_package", lambda **kwargs: {"candidate_name": "Test Candidate"})
-    monkeypatch.setattr(
-        "src.matching.review.render_notification_text",
-        lambda *, template_key, payload: f"Candidate package: {(payload.get('candidate_package') or {}).get('candidate_name')}",
-    )
-
+def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies() -> None:
     vacancy = SimpleNamespace(id="vacancy-1", manager_user_id="manager-1", role_title="Senior Backend Engineer")
     candidate = SimpleNamespace(id="candidate-1", user_id="candidate-user-1")
     match = SimpleNamespace(
@@ -219,7 +216,9 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
     assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 strong-fit candidate matches")
-    assert notification.payload_json["message_entries"][1]["text"].startswith("Fit: Strong fit")
+    assert notification.payload_json["message_entries"][1]["text"].startswith("I found you Test Candidate for the Senior Backend Engineer role.")
+    assert "This looks like a strong fit." in notification.payload_json["message_entries"][1]["text"]
+    assert "Use Connect or Skip below." in notification.payload_json["message_entries"][1]["text"]
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
@@ -280,8 +279,9 @@ def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies(
     assert notification.user_id == candidate.user_id
     assert notification.template_key == "candidate_vacancy_review_ready"
     assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 matching roles")
-    assert "Vacancy package:" in notification.payload_json["message_entries"][1]["text"]
-    assert "Role: Python Engineer" in notification.payload_json["message_entries"][1]["text"]
+    assert notification.payload_json["message_entries"][1]["text"].startswith("I found you a vacancy for Python Engineer.")
+    assert "The client is offering 5000-6500 USD / month in a remote setup." in notification.payload_json["message_entries"][1]["text"]
+    assert "Use Apply or Skip below." in notification.payload_json["message_entries"][1]["text"]
     assert (
         notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
         == "cand_pre:apply:match-2"
@@ -794,7 +794,7 @@ def test_execute_manager_pre_interview_action_accepts_match_id_from_inline_butto
     assert candidate_notification.template_key == "candidate_vacancy_review_ready"
     assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
     assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
-    assert "Vacancy package:" in candidate_notification.payload_json["message_entries"][1]["text"]
+    assert "The hiring manager already approved the connection" in candidate_notification.payload_json["message_entries"][1]["text"]
 
 
 def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> None:

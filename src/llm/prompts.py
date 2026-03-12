@@ -971,6 +971,44 @@ Approved response intent:
 """
 
 
+def match_card_copy_prompt(
+    *,
+    audience: str,
+    role_title: str | None,
+    candidate_name: str | None = None,
+    candidate_summary: str | None = None,
+    project_summary: str | None = None,
+    fit_reason: str | None = None,
+    compensation_details: str | None = None,
+    process_details: str | None = None,
+    fit_band_label: str | None = None,
+    gap_context: str | None = None,
+    action_hint: str | None = None,
+) -> str:
+    return f"""Task: write a concise Telegram match card for Helly.
+
+Audience: {audience}
+Role title: {role_title or ""}
+Candidate name: {candidate_name or ""}
+Candidate summary: {candidate_summary or ""}
+Project summary: {project_summary or ""}
+Why it fits: {fit_reason or ""}
+Compensation and work details: {compensation_details or ""}
+Hiring/process details: {process_details or ""}
+Fit level: {fit_band_label or ""}
+Tradeoff or gap context: {gap_context or ""}
+Action hint: {action_hint or ""}
+
+Writing requirements:
+- usually write 2 short paragraphs
+- paragraph 1 should explain who or what was found and why it looks relevant
+- paragraph 2 should include the key decision facts: money, format, location, English, or process, depending on the audience
+- if there is a tradeoff, mention it naturally as an FYI, not as a robotic label
+- keep it compact but decision-useful
+- do not use bullets, labels, or markdown
+"""
+
+
 def deletion_confirmation_prompt(
     *,
     entity_type: str,

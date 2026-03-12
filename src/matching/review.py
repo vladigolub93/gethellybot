@@ -10,10 +10,7 @@ from src.db.repositories.matching import MatchingRepository
 from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
-from src.evaluation.package_builder import build_candidate_package
-from src.evaluation.package_builder import build_vacancy_package
 from src.messaging.service import MessagingService
-from src.notifications.rendering import render_notification_text
 from src.state.service import StateService
 from src.telegram.keyboards import (
     candidate_vacancy_inline_keyboard,
@@ -36,6 +33,7 @@ from src.matching.policy import (
     next_manager_review_batch_size,
 )
 from src.matching.scoring import FIT_BAND_PRIORITY, fit_band_label
+from src.shared.hiring_taxonomy import display_english_level, display_hiring_stages
 
 
 @dataclass(frozen=True)
@@ -111,6 +109,74 @@ class MatchingReviewService:
             or "Candidate"
         )
 
+    @staticmethod
+    def _normalize_sentence(value: str | None) -> str | None:
+        if not value:
+            return None
+        text = " ".join(str(value).split()).strip()
+        if not text:
+            return None
+        return text if text.endswith((".", "!", "?")) else f"{text}."
+
+    @classmethod
+    def _lower_lead(cls, value: str | None) -> str | None:
+        normalized = cls._normalize_sentence(value)
+        if not normalized:
+            return None
+        if len(normalized) == 1:
+            return normalized.lower()
+        return normalized[:1].lower() + normalized[1:].rstrip(".")
+
+    @staticmethod
+    def _join_with_and(values: list[str]) -> str:
+        if not values:
+            return ""
+        if len(values) == 1:
+            return values[0]
+        return f"{', '.join(values[:-1])} and {values[-1]}"
+
+    @classmethod
+    def _match_reason_text(cls, match) -> str | None:
+        rationale = getattr(match, "rationale_json", None) or {}
+        llm_rationale = cls._truncate_text(rationale.get("llm_rationale"), limit=180)
+        if llm_rationale:
+            return cls._normalize_sentence(llm_rationale)
+        signals = cls._match_gapless_signals(match)
+        if not signals:
+            return None
+        rendered = cls._join_with_and([cls._lower_lead(value) or "" for value in signals[:2] if cls._lower_lead(value)])
+        if not rendered:
+            return None
+        return cls._normalize_sentence(f"It looks relevant because of {rendered}")
+
+    @classmethod
+    def _match_gapless_signals(cls, match) -> list[str]:
+        rationale = getattr(match, "rationale_json", None) or {}
+        result = []
+        seen = set()
+        for value in rationale.get("matched_signals") or []:
+            cleaned = " ".join(str(value or "").split()).strip().rstrip(".")
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(cleaned)
+            if len(result) >= 3:
+                break
+        return result
+
+    def _match_gap_context(self, match) -> str | None:
+        gaps = self._match_gap_signals(match)
+        if not gaps:
+            return None
+        supporting = self._match_gapless_signals(match)
+        if supporting:
+            support_text = self._join_with_and(supporting[:2])
+            return self._normalize_sentence(f"{gaps[0]} The upside is {support_text}")
+        return self._normalize_sentence(gaps[0])
+
     def _render_candidate_package_message(self, *, match, vacancy, slot_no: int | None = None) -> str:
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
         if candidate is None:
@@ -119,29 +185,89 @@ class MatchingReviewService:
             return f"{slot_no}. Candidate data is unavailable."
         candidate_user = self.users.get_by_id(candidate.user_id)
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
-        verification = self.verifications.get_latest_submitted_by_profile_id(candidate.id)
-        package = build_candidate_package(
-            candidate_user=candidate_user,
-            candidate_summary=(candidate_version.summary_json or {}) if candidate_version else {},
-            candidate_profile=candidate,
-            vacancy=vacancy,
-            evaluation={},
-            verification=verification,
+        summary = (candidate_version.summary_json or {}) if candidate_version else {}
+        role_title = getattr(vacancy, "role_title", None) or "this role"
+        candidate_name = (
+            getattr(candidate_user, "display_name", None)
+            or getattr(candidate_user, "username", None)
+            or "a candidate"
         )
-        body = render_notification_text(
-            template_key="manager_candidate_review_ready",
-            payload={"candidate_package": package},
-        )
-        fit_band = self._match_fit_band(match)
-        fit_band_text = fit_band_label(fit_band) or "Fit"
+        approval_summary = self._truncate_text(summary.get("approval_summary_text"), limit=190)
+        match_reason = self._match_reason_text(match)
+        fit_band = fit_band_label(self._match_fit_band(match)) or "Relevant fit"
+        location = getattr(candidate, "location_text", None)
+        work_format = getattr(candidate, "work_format", None)
+        english_level = display_english_level(getattr(candidate, "english_level", None))
+        salary_label = self._candidate_salary_label(candidate)
+        compensation_bits = []
+        if salary_label:
+            compensation_bits.append(f"salary expectation {salary_label}")
+        if work_format:
+            compensation_bits.append(f"prefers a {work_format} setup")
+        if location:
+            compensation_bits.append(f"based in {location}")
+        if english_level:
+            compensation_bits.append(f"English level {english_level}")
+
+        paragraph_one_parts = [
+            self._normalize_sentence(f"I found you {candidate_name} for the {role_title} role"),
+            self._normalize_sentence(approval_summary),
+            match_reason,
+        ]
+        paragraph_one = " ".join(part for part in paragraph_one_parts if part)
+
+        paragraph_two_parts = []
+        if compensation_bits:
+            paragraph_two_parts.append(self._normalize_sentence(f"They want {self._join_with_and(compensation_bits)}"))
+        paragraph_two_parts.append(self._normalize_sentence(f"This looks like a {fit_band.lower()}"))
         gap_signals = self._match_gap_signals(match)
-        header_lines = [f"Fit: {fit_band_text}"]
         if gap_signals:
-            header_lines.append(f"Gaps: {' '.join(gap_signals[:2])}")
-        body = "\n".join(header_lines + [body])
+            paragraph_two_parts.append(
+                self._normalize_sentence(f"Worth noting: {gap_signals[0]}")
+            )
+        paragraph_two_parts.append(self._normalize_sentence("Use Connect or Skip below"))
+
+        fallback_message = "\n\n".join(
+            paragraph
+            for paragraph in [
+                paragraph_one,
+                " ".join(part for part in paragraph_two_parts if part),
+            ]
+            if paragraph
+        )
+        body = self.messaging.compose_match_card(
+            audience="manager",
+            role_title=role_title,
+            candidate_name=candidate_name,
+            candidate_summary=approval_summary,
+            fit_reason=match_reason,
+            compensation_details=self._join_with_and(compensation_bits) if compensation_bits else None,
+            fit_band_label=fit_band,
+            gap_context=self._match_gap_context(match),
+            action_hint="Use Connect or Skip below.",
+            fallback_message=fallback_message,
+        )
         if slot_no is None:
             return body
         return f"{slot_no}.\n{body}"
+
+    @staticmethod
+    def _candidate_salary_label(candidate_profile) -> str | None:
+        salary_min = getattr(candidate_profile, "salary_min", None)
+        salary_max = getattr(candidate_profile, "salary_max", None)
+        currency = getattr(candidate_profile, "salary_currency", None)
+        period = getattr(candidate_profile, "salary_period", None)
+        if salary_min is None and salary_max is None:
+            return None
+        if salary_min is not None and salary_max is not None:
+            amount = f"{salary_min:.0f}-{salary_max:.0f}"
+        else:
+            amount = f"{(salary_min if salary_min is not None else salary_max):.0f}"
+        if currency:
+            amount = f"{amount} {currency}"
+        if period:
+            amount = f"{amount} per {period}"
+        return amount
 
     @staticmethod
     def _vacancy_budget_label(vacancy) -> str | None:
@@ -178,22 +304,86 @@ class MatchingReviewService:
             return f"{slot_no}. Vacancy data is unavailable."
 
         vacancy_version = self.vacancies.get_version_by_id(getattr(match, "vacancy_version_id", None))
-        package = build_vacancy_package(
-            vacancy=vacancy,
-            vacancy_summary=(vacancy_version.summary_json or {}) if vacancy_version else {},
+        summary = (vacancy_version.summary_json or {}) if vacancy_version else {}
+        role_title = getattr(vacancy, "role_title", None) or "this role"
+        vacancy_summary = self._truncate_text(
+            summary.get("approval_summary_text") or getattr(vacancy, "project_description", None),
+            limit=190,
         )
-        intro_text = None
-        if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
-            intro_text = self._copy(
-                f"The hiring manager already approved you for {getattr(vacancy, 'role_title', None) or 'this role'}. "
-                "If you still want to move forward, tap Connect and I will share contacts right away."
+        project_description = self._truncate_text(getattr(vacancy, "project_description", None), limit=170)
+        match_reason = self._match_reason_text(match)
+        budget_label = self._vacancy_budget_label(vacancy)
+        work_format = getattr(vacancy, "work_format", None)
+        english_level = display_english_level(getattr(vacancy, "required_english_level", None))
+        hiring_stages = display_hiring_stages(getattr(vacancy, "hiring_stages_json", None))
+        compensation_sentence = None
+        if budget_label and work_format:
+            compensation_sentence = self._normalize_sentence(
+                f"The client is offering {budget_label} in a {work_format} setup"
             )
-        body = render_notification_text(
-            template_key="candidate_vacancy_review_ready",
-            payload={
-                "text": intro_text,
-                "vacancy_package": package,
-            },
+        elif budget_label:
+            compensation_sentence = self._normalize_sentence(f"The client is offering {budget_label}")
+        elif work_format:
+            compensation_sentence = self._normalize_sentence(f"The role is set up as {work_format}")
+
+        process_bits = []
+        if english_level:
+            process_bits.append(f"{english_level} English")
+        if hiring_stages:
+            process_bits.append(f"process: {', '.join(hiring_stages[:4])}")
+        if getattr(vacancy, "has_take_home_task", None) is True:
+            process_bits.append("a take-home task")
+        if getattr(vacancy, "has_live_coding", None) is True:
+            process_bits.append("live coding")
+
+        paragraph_one_parts = [
+            self._normalize_sentence(f"I found you a vacancy for {role_title}"),
+            self._normalize_sentence(vacancy_summary or project_description),
+            match_reason,
+        ]
+        paragraph_one = " ".join(part for part in paragraph_one_parts if part)
+
+        paragraph_two_parts = []
+        if compensation_sentence:
+            paragraph_two_parts.append(compensation_sentence)
+        if process_bits:
+            paragraph_two_parts.append(
+                self._normalize_sentence(f"Hiring details: {self._join_with_and(process_bits)}")
+            )
+        gap_signals = self._match_gap_signals(match)
+        if gap_signals:
+            paragraph_two_parts.append(self._normalize_sentence(f"Worth noting: {gap_signals[0]}"))
+        if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+            paragraph_two_parts.append(
+                self._normalize_sentence(
+                    "The hiring manager already approved the connection, so tapping Connect will share contacts right away"
+                )
+            )
+        else:
+            paragraph_two_parts.append(self._normalize_sentence("Use Apply or Skip below"))
+
+        fallback_message = "\n\n".join(
+            paragraph
+            for paragraph in [
+                paragraph_one,
+                " ".join(part for part in paragraph_two_parts if part),
+            ]
+            if paragraph
+        )
+        body = self.messaging.compose_match_card(
+            audience="candidate",
+            role_title=role_title,
+            project_summary=vacancy_summary or project_description,
+            fit_reason=match_reason,
+            compensation_details=compensation_sentence.rstrip(".") if compensation_sentence else None,
+            process_details=self._join_with_and(process_bits) if process_bits else None,
+            gap_context=self._match_gap_context(match),
+            action_hint=(
+                "Use Connect or Skip below."
+                if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED
+                else "Use Apply or Skip below."
+            ),
+            fallback_message=fallback_message,
         )
         if slot_no is None:
             return body
