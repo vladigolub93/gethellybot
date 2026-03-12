@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.matching.filters import evaluate_hard_filters
 from src.shared.hiring_taxonomy import display_domains, display_english_level, display_hiring_stages
 
 
@@ -42,6 +43,113 @@ def _clean_list(values, *, limit: int = 6) -> list[str]:
         if len(result) >= limit:
             break
     return result
+
+
+_CANDIDATE_BLOCKER_LABELS = {
+    "location_mismatch": "your location is outside the allowed countries on many open roles",
+    "work_format_mismatch": "many open roles use a different work format",
+    "office_city_mismatch": "office or hybrid roles often need a specific city",
+    "salary_above_budget": "your salary floor is above many vacancy budgets",
+    "seniority_mismatch": "many roles are calibrated for a higher seniority",
+    "english_level_mismatch": "many roles require a higher English level",
+    "take_home_preference_mismatch": "some roles include take-home tasks that you asked to hide",
+    "live_coding_preference_mismatch": "some roles include live coding that you asked to hide",
+}
+
+_MANAGER_BLOCKER_LABELS = {
+    "location_mismatch": "many ready candidates are outside the allowed countries",
+    "work_format_mismatch": "many ready candidates prefer a different work format",
+    "office_city_mismatch": "office or hybrid city requirements are too narrow for many ready candidates",
+    "salary_above_budget": "candidate salary floors are above the current budget",
+    "seniority_mismatch": "many ready candidates are below the target seniority",
+    "english_level_mismatch": "the English requirement is too high for many ready candidates",
+    "take_home_preference_mismatch": "some candidates hide take-home roles",
+    "live_coding_preference_mismatch": "some candidates hide live-coding roles",
+}
+
+
+def _top_matching_blockers(reason_counts: dict[str, int], *, labels: dict[str, str], limit: int = 2) -> list[str]:
+    ranked = sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))
+    results: list[str] = []
+    for reason, _count in ranked:
+        label = labels.get(reason)
+        if label and label not in results:
+            results.append(label)
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _join_reasons(reasons: list[str]) -> str:
+    if not reasons:
+        return ""
+    if len(reasons) == 1:
+        return reasons[0]
+    return f"{', '.join(reasons[:-1])}, and {reasons[-1]}"
+
+
+def _candidate_matching_blockers_memory(*, stage: str | None, candidate, vacancies) -> list[str]:
+    if candidate is None or stage != "READY":
+        return []
+
+    open_vacancies = _call_optional(vacancies, "get_open_vacancies") or []
+    if not open_vacancies:
+        return ["Matching blocker snapshot: there are no open roles right now."]
+
+    pass_count = 0
+    reason_counts: dict[str, int] = {}
+    for vacancy in open_vacancies:
+        reasons = evaluate_hard_filters(candidate, vacancy)
+        if not reasons:
+            pass_count += 1
+            continue
+        for reason in set(reasons):
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    snippets: list[str] = []
+    if pass_count:
+        snippets.append(
+            f"Matching blocker snapshot: {pass_count} open roles currently pass your hard filters, so the main constraint is stronger fit on stack, role, or domain rather than a hard blocker."
+        )
+    if reason_counts:
+        blockers = _top_matching_blockers(reason_counts, labels=_CANDIDATE_BLOCKER_LABELS)
+        if blockers:
+            snippets.append(
+                f"Current matching blockers: across {len(open_vacancies)} open roles, the biggest blockers right now are {_join_reasons(blockers)}."
+            )
+    return snippets
+
+
+def _manager_matching_blockers_memory(*, stage: str | None, vacancy, candidates) -> list[str]:
+    if vacancy is None or stage != "OPEN":
+        return []
+
+    ready_candidates = _call_optional(candidates, "get_ready_profiles") or []
+    if not ready_candidates:
+        return ["Matching blocker snapshot: there are no ready candidates in the pool right now."]
+
+    pass_count = 0
+    reason_counts: dict[str, int] = {}
+    for candidate in ready_candidates:
+        reasons = evaluate_hard_filters(candidate, vacancy)
+        if not reasons:
+            pass_count += 1
+            continue
+        for reason in set(reasons):
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    snippets: list[str] = []
+    if pass_count:
+        snippets.append(
+            f"Matching blocker snapshot: {pass_count} ready candidates currently pass hard filters for this vacancy, so Helly is mainly waiting for stronger fit on stack, role, or domain before sending profiles."
+        )
+    if reason_counts:
+        blockers = _top_matching_blockers(reason_counts, labels=_MANAGER_BLOCKER_LABELS)
+        if blockers:
+            snippets.append(
+                f"Current matching blockers: across {len(ready_candidates)} ready candidates, the biggest blockers right now are {_join_reasons(blockers)}."
+            )
+    return snippets
 
 
 def _format_budget(vacancy) -> str | None:
@@ -391,6 +499,13 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
             cv_challenges=cv_challenges,
         )
     )
+    snippets.extend(
+        _candidate_matching_blockers_memory(
+            stage=stage,
+            candidate=candidate,
+            vacancies=vacancies,
+        )
+    )
 
     return _dedupe(snippets)
 
@@ -471,6 +586,14 @@ def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancie
                     )
                 evaluation = _call_optional(evaluations, "get_by_match_id", getattr(review_match, "id", None))
                 snippets.extend(_evaluation_memory(evaluation))
+
+    snippets.extend(
+        _manager_matching_blockers_memory(
+            stage=stage,
+            vacancy=vacancy,
+            candidates=candidates,
+        )
+    )
 
     return _dedupe(snippets)
 

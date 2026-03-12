@@ -89,6 +89,20 @@ class FakeCvChallengesRepository:
         return self.active_attempt
 
 
+class FakeVacanciesRepository:
+    def __init__(self, vacancies):
+        self.vacancies = list(vacancies)
+
+    def get_open_vacancies(self):
+        return list(self.vacancies)
+
+    def get_by_id(self, vacancy_id):
+        for vacancy in self.vacancies:
+            if getattr(vacancy, "id", None) == vacancy_id:
+                return vacancy
+        return None
+
+
 def test_graph_candidate_stage_help_receives_saved_profile_memory(monkeypatch) -> None:
     captured = {}
 
@@ -233,6 +247,75 @@ def test_graph_candidate_ready_help_receives_cv_challenge_memory(monkeypatch) ->
     assert "last run lost" in combined_context
     assert "score 7" in combined_context
     assert "missed skills: Docker; GraphQL" in combined_context
+
+
+def test_graph_candidate_ready_help_explains_matching_blockers(monkeypatch) -> None:
+    monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: False)
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.raw_messages = FakeRawMessagesRepository(rows=[])
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp-blockers",
+            state="READY",
+            current_version_id="cpv-blockers",
+            salary_min=6000,
+            salary_currency="USD",
+            salary_period="month",
+            country_code="PL",
+            city="Warsaw",
+            location_text="Warsaw, Poland",
+            work_format="remote",
+            english_level="b1",
+            preferred_domains_json=["fintech"],
+        ),
+        current_version=SimpleNamespace(
+            id="cpv-blockers",
+            summary_json={
+                "approval_summary_text": "You are a Python backend engineer.",
+                "skills": ["python", "postgresql"],
+            },
+        ),
+    )
+    service.vacancies = FakeVacanciesRepository(
+        [
+            SimpleNamespace(
+                id="v-blockers",
+                state="OPEN",
+                budget_max=4500,
+                countries_allowed_json=["PL"],
+                work_format="remote",
+                office_city=None,
+                seniority_normalized=None,
+                required_english_level="c1",
+                has_take_home_task=False,
+                has_live_coding=False,
+            )
+        ]
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+    service.cv_challenges = FakeCvChallengesRepository()
+
+    user = SimpleNamespace(
+        id="u-blockers",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Why am I not seeing more roles yet?",
+    )
+
+    assert reply is not None
+    lowered = reply.lower()
+    assert "matching blockers" in lowered
+    assert "salary floor is above many vacancy budgets" in lowered
+    assert "higher english level" in lowered
 
 
 def test_graph_candidate_stage_handles_cv_pending_help() -> None:

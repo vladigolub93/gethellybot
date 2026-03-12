@@ -58,6 +58,14 @@ class FakeMatchingRepository:
         return None
 
 
+class FakeCandidateProfilesRepository:
+    def __init__(self, candidates):
+        self.candidates = list(candidates)
+
+    def get_ready_profiles(self):
+        return list(self.candidates)
+
+
 class FakeEvaluationsRepository:
     def __init__(self, evaluation=None):
         self.evaluation = evaluation
@@ -143,6 +151,80 @@ def test_graph_manager_stage_help_receives_saved_vacancy_memory(monkeypatch) -> 
     assert "budget 6000-7000 USD per month" in combined_context
     assert "work format remote" in combined_context
     assert "stack python, postgresql" in combined_context
+
+
+def test_graph_manager_open_help_explains_matching_blockers(monkeypatch) -> None:
+    monkeypatch.setattr("src.llm.service.should_use_llm_runtime", lambda _session: False)
+
+    vacancy = SimpleNamespace(
+        id="vac-blockers",
+        state="OPEN",
+        manager_user_id="m-blockers",
+        current_version_id="vv-blockers",
+        role_title="Senior Python Engineer",
+        seniority_normalized="senior",
+        budget_min=4000,
+        budget_max=5000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        office_city=None,
+        required_english_level="c1",
+        has_take_home_task=False,
+        take_home_paid=None,
+        has_live_coding=False,
+        hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
+        primary_tech_stack_json=["python", "postgresql"],
+        project_description="Backend APIs for a hiring product.",
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        vacancy,
+        current_version=SimpleNamespace(
+            id="vv-blockers",
+            approval_summary_text="This vacancy is for a senior Python engineer.",
+            summary_json={"approval_summary_text": "This vacancy is for a senior Python engineer."},
+        ),
+    )
+    service.candidates = FakeCandidateProfilesRepository(
+        [
+            SimpleNamespace(
+                id="cp-blockers",
+                state="READY",
+                salary_min=6500,
+                country_code="PL",
+                city="Warsaw",
+                work_format="remote",
+                seniority_normalized="middle",
+                english_level="b1",
+                show_take_home_task_roles=True,
+                show_live_coding_roles=True,
+            )
+        ]
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m-blockers",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Why am I not seeing candidates yet?",
+    )
+
+    assert reply is not None
+    lowered = reply.lower()
+    assert "matching blockers" in lowered
+    assert "salary floors are above the current budget" in lowered
+    assert "english requirement is too high" in lowered
 
 
 def test_graph_manager_stage_handles_intake_pending_help() -> None:
