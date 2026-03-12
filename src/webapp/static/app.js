@@ -759,11 +759,28 @@
   }
 
   function renderCandidateVacancyCard(item) {
+    const highlights = [];
+    if (item.requiredEnglishLevel) {
+      highlights.push(`${item.requiredEnglishLevel} English`);
+    }
+    if (item.officeCity) {
+      highlights.push(item.officeCity);
+    }
+    if (item.hasTakeHomeTask === true) {
+      highlights.push("Take-home");
+    }
+    if (item.hasLiveCoding === true) {
+      highlights.push("Live coding");
+    }
+    if (item.hiringStages && item.hiringStages.length) {
+      highlights.push(`${item.hiringStages.length} ${pluralize(item.hiringStages.length, "stage", "stages")}`);
+    }
     return renderShortcutCard({
       route: `candidate-vacancy:${item.id}`,
       title: item.roleTitle || "Vacancy",
       badge: item.stageLabel || "Status",
       badgeTone: badgeTone(item.stageLabel || item.stage),
+      note: highlights.join(" • "),
       metrics: [
         { label: "Budget", value: item.budget || "Not set" },
         { label: "Format", value: item.workFormat || "Not set" },
@@ -806,6 +823,9 @@
     const facts = [];
     if (profile.summary && profile.summary.yearsExperience) {
       facts.push(`${profile.summary.yearsExperience}+ years`);
+    }
+    if (profile.englishLevel) {
+      facts.push(profile.englishLevel);
     }
     if (profile.workFormat) {
       facts.push(profile.workFormat);
@@ -872,8 +892,8 @@
       note: truncateText(summaryText, 110),
       metrics: [
         { label: "Location", value: item.location || "Not set" },
+        { label: "English", value: item.englishLevel || "Not set" },
         { label: "Salary", value: item.salaryExpectation || "Not set" },
-        { label: "Updated", value: formatRelativeTime(item.updatedAt) },
       ],
     });
   }

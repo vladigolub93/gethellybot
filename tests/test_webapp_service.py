@@ -186,6 +186,11 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             budget_currency="USD",
             budget_period="month",
             work_format="remote",
+            office_city=None,
+            required_english_level="B2",
+            hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
+            has_take_home_task=True,
+            has_live_coding=False,
         )
     )
     service.interviews = FakeInterviewsRepository(
@@ -218,6 +223,11 @@ def test_list_candidate_opportunities_includes_challenge_card_and_serialized_mat
             "roleTitle": "Senior Backend Engineer",
             "budget": "6000-7000 USD per month",
             "workFormat": "remote",
+            "officeCity": None,
+            "requiredEnglishLevel": "B2",
+            "hiringStages": ["Recruiter screen", "Technical interview", "Final interview"],
+            "hasTakeHomeTask": True,
+            "hasLiveCoding": False,
             "stage": "candidate_decision_pending",
             "stageLabel": "Your reply",
             "stageDescription": "Your reply is needed to keep this opportunity moving.",
@@ -616,6 +626,8 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "location": "Kyiv",
             "salaryExpectation": "5000-6000 USD per month",
             "workFormat": "remote",
+            "englishLevel": "C1",
+            "preferredDomains": ["Any domain"],
             "stage": "approved",
             "stageLabel": "Connected",
             "stageDescription": "Contacts were shared and this candidate moved into direct communication.",
