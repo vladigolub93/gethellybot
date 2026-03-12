@@ -492,6 +492,9 @@ def test_candidate_match_detail_uses_real_matching_rationale() -> None:
                 candidate_response_at=None,
                 manager_decision_at=None,
                 rationale_json={
+                    "fit_band": "strong",
+                    "fit_band_label": "Strong fit",
+                    "gap_signals": [],
                     "llm_rationale": "Strong direct overlap with the vacancy stack and clear backend role fit.",
                     "matched_signals": [
                         "Strong overlap with Node.js and PostgreSQL",
@@ -555,6 +558,9 @@ def test_candidate_match_detail_uses_real_matching_rationale() -> None:
     ]
     assert payload["match"]["rationale"]["summary"] == payload["vacancy"]["whyThisRole"]
     assert payload["match"]["rationale"]["concerns"] == []
+    assert payload["match"]["rationale"]["fitBand"] == "strong"
+    assert payload["match"]["rationale"]["fitBandLabel"] == "Strong fit"
+    assert payload["match"]["rationale"]["gapSignals"] == []
 
 
 def test_finish_candidate_cv_challenge_commits_result() -> None:
@@ -755,6 +761,9 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
                 "targetRole": None,
                 "experienceExcerpt": None,
             },
+            "fitBand": None,
+            "fitBandLabel": None,
+            "gapSignals": [],
             "updatedAt": now.isoformat(),
         }
     ]
@@ -886,6 +895,12 @@ def test_manager_match_detail_includes_real_rationale_and_concerns() -> None:
                 candidate_response_at=now,
                 manager_decision_at=now,
                 rationale_json={
+                    "fit_band": "medium",
+                    "fit_band_label": "Medium fit",
+                    "gap_signals": [
+                        "Core stack overlap is partial.",
+                        "Hiring process may feel heavier than ideal.",
+                    ],
                     "llm_rationale": "Strong direct stack fit with clear backend product experience.",
                     "matched_signals": [
                         "Direct overlap on Node.js and PostgreSQL",
@@ -940,9 +955,16 @@ def test_manager_match_detail_includes_real_rationale_and_concerns() -> None:
     assert payload["candidate"]["whyThisCandidate"] == (
         "Strong direct stack fit with clear backend product experience."
     )
+    assert payload["candidate"]["fitBand"] == "medium"
+    assert payload["candidate"]["fitBandLabel"] == "Medium fit"
+    assert payload["candidate"]["gapSignals"] == [
+        "Core stack overlap is partial.",
+        "Hiring process may feel heavier than ideal.",
+    ]
     assert payload["candidate"]["matchSignals"] == [
         "Direct overlap on Node.js and PostgreSQL",
         "Candidate location already fits the vacancy",
     ]
     assert payload["candidate"]["concerns"] == ["Take-home task is unpaid"]
     assert payload["match"]["rationale"]["concerns"] == ["Take-home task is unpaid"]
+    assert payload["match"]["rationale"]["fitBand"] == "medium"

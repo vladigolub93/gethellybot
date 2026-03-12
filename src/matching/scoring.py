@@ -31,6 +31,25 @@ def _normalize_hiring_stages(values) -> list[str]:
     return stages
 
 
+FIT_BAND_PRIORITY = {
+    "strong": 0,
+    "medium": 1,
+    "low": 2,
+    "not_fit": 3,
+}
+
+
+def fit_band_label(value: str | None) -> str | None:
+    labels = {
+        "strong": "Strong fit",
+        "medium": "Medium fit",
+        "low": "Low fit",
+        "not_fit": "Not fit",
+    }
+    normalized = str(value or "").strip().lower()
+    return labels.get(normalized)
+
+
 def _compute_process_fit(
     *,
     candidate_show_take_home_task_roles,
@@ -73,6 +92,49 @@ def _compute_process_fit(
         score -= 0.05
 
     return round(max(0.0, min(1.0, score)), 4)
+
+
+def build_gap_signals(*, score_breakdown: dict) -> list[str]:
+    gaps: list[str] = []
+    if float(score_breakdown.get("core_skill_overlap_ratio") or 0.0) < 0.65:
+        gaps.append("Core stack overlap is partial.")
+    if float(score_breakdown.get("role_fit") or 0.0) < 0.45:
+        gaps.append("Role alignment is not exact.")
+    if float(score_breakdown.get("experience_score") or 0.0) < 0.5:
+        gaps.append("Experience level is closer to the lower bound of the role.")
+    if float(score_breakdown.get("domain_fit") or 0.0) < 0.35:
+        gaps.append("Domain background is not a close match.")
+    if float(score_breakdown.get("process_fit") or 0.0) < 0.7:
+        gaps.append("Hiring process may feel heavier than ideal.")
+    return gaps[:3]
+
+
+def classify_fit_band(
+    *,
+    deterministic_score: float,
+    llm_fit_score: float | None,
+    score_breakdown: dict,
+) -> str:
+    if float(score_breakdown.get("core_skill_overlap_ratio") or 0.0) < 0.2:
+        return "not_fit"
+
+    effective_score = float(llm_fit_score if llm_fit_score is not None else deterministic_score or 0.0)
+    full_overlap = float(score_breakdown.get("full_skill_overlap_ratio") or 0.0)
+    role_fit = float(score_breakdown.get("role_fit") or 0.0)
+    process_fit = float(score_breakdown.get("process_fit") or 0.0)
+
+    if (
+        effective_score >= 0.8
+        and full_overlap >= 0.7
+        and role_fit >= 0.45
+        and process_fit >= 0.55
+    ):
+        return "strong"
+    if effective_score >= 0.62 and full_overlap >= 0.45:
+        return "medium"
+    if effective_score >= 0.4:
+        return "low"
+    return "not_fit"
 
 
 def compute_skill_seed_score(

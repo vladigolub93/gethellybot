@@ -574,6 +574,14 @@ class WebAppService:
         profile = self.candidate_profiles.get_by_id(match.candidate_profile_id)
         candidate_user = self.users.get_by_id(profile.user_id) if profile is not None else None
         candidate_version = self.candidate_profiles.get_current_version(profile) if profile is not None else None
+        rationale = self._build_match_rationale_payload(
+            match=match,
+            perspective="manager",
+            vacancy=None,
+            candidate_profile=profile,
+            candidate_summary=candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
+            vacancy_summary=None,
+        )
         return {
             "id": str(match.id),
             "candidateProfileId": str(match.candidate_profile_id),
@@ -593,6 +601,9 @@ class WebAppService:
             "stageDescription": match_status_description(match.status, perspective="manager"),
             "needsAction": match_requires_action(match.status, perspective="manager"),
             "summary": candidate_summary_snapshot(getattr(candidate_version, "summary_json", None)),
+            "fitBand": rationale.get("fitBand"),
+            "fitBandLabel": rationale.get("fitBandLabel"),
+            "gapSignals": rationale.get("gapSignals") or [],
             "updatedAt": isoformat_or_none(match.updated_at),
         }
 
@@ -663,6 +674,9 @@ class WebAppService:
         candidate_payload["whyThisCandidate"] = manager_rationale.get("summary")
         candidate_payload["matchSignals"] = manager_rationale.get("signals") or []
         candidate_payload["concerns"] = manager_rationale.get("concerns") or []
+        candidate_payload["fitBand"] = manager_rationale.get("fitBand")
+        candidate_payload["fitBandLabel"] = manager_rationale.get("fitBandLabel")
+        candidate_payload["gapSignals"] = manager_rationale.get("gapSignals") or []
 
         return {
             "match": {
@@ -742,6 +756,28 @@ class WebAppService:
         if not normalized:
             return None
         return normalized[:limit]
+
+    @classmethod
+    def _clean_fit_band(cls, value: Any) -> Optional[str]:
+        normalized = " ".join(str(value or "").split()).strip().lower()
+        if normalized in {"strong", "medium", "low", "not_fit"}:
+            return normalized
+        return None
+
+    @classmethod
+    def _fit_band_label(cls, rationale_json: Dict[str, Any]) -> Optional[str]:
+        explicit = cls._clean_reason_text(rationale_json.get("fit_band_label"), limit=40)
+        if explicit:
+            return explicit
+        fit_band = cls._clean_fit_band(rationale_json.get("fit_band"))
+        if not fit_band:
+            return None
+        return {
+            "strong": "Strong fit",
+            "medium": "Medium fit",
+            "low": "Low fit",
+            "not_fit": "Not fit",
+        }.get(fit_band)
 
     @classmethod
     def _clean_reason_list(cls, values: Any, *, limit: int) -> List[str]:
@@ -886,8 +922,11 @@ class WebAppService:
         vacancy_summary: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         rationale_json = getattr(match, "rationale_json", None) or {}
+        fit_band = self._clean_fit_band(rationale_json.get("fit_band"))
+        fit_band_label = self._fit_band_label(rationale_json)
         matched_signals = self._clean_reason_list(rationale_json.get("matched_signals"), limit=3)
         concerns = self._clean_reason_list(rationale_json.get("concerns"), limit=2)
+        gap_signals = self._clean_reason_list(rationale_json.get("gap_signals"), limit=3)
         llm_rationale = self._clean_reason_text(rationale_json.get("llm_rationale"))
         summary = llm_rationale or self._reason_text_from_signals(matched_signals)
 
@@ -896,6 +935,9 @@ class WebAppService:
                 "summary": summary,
                 "signals": matched_signals,
                 "concerns": [] if perspective == "candidate" else concerns,
+                "fitBand": fit_band,
+                "fitBandLabel": fit_band_label,
+                "gapSignals": [] if perspective == "candidate" else gap_signals,
             }
 
         fallback_summary = (
@@ -917,4 +959,7 @@ class WebAppService:
             "summary": fallback_summary,
             "signals": [],
             "concerns": [],
+            "fitBand": fit_band,
+            "fitBandLabel": fit_band_label,
+            "gapSignals": [] if perspective == "candidate" else gap_signals,
         }

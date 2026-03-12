@@ -185,6 +185,7 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
         candidate_profile_id=candidate.id,
         candidate_profile_version_id="cpv-1",
         status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
     )
 
     service = MatchingReviewService(FakeSession())
@@ -217,7 +218,8 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies(mo
     notification = service.notifications.rows[0]
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
-    assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 candidate matches")
+    assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 strong-fit candidate matches")
+    assert notification.payload_json["message_entries"][1]["text"].startswith("Fit: Strong fit")
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
@@ -346,6 +348,7 @@ def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refres
         candidate_profile_id=new_candidate.id,
         candidate_profile_version_id="cpv-new-2",
         status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
     )
 
     service = MatchingReviewService(FakeSession())
@@ -385,9 +388,197 @@ def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refres
     assert result["promoted_count"] == 1
     assert len(service.notifications.rows) == 1
     entries = service.notifications.rows[0].payload_json["message_entries"]
-    assert entries[0]["text"].startswith("I found 1 candidate matches")
+    assert entries[0]["text"].startswith("I found 1 strong-fit candidate matches")
     assert len(entries) == 2
     assert entries[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-new-2"
+
+
+def test_dispatch_manager_batch_for_vacancy_prefers_strong_fit_candidates_first() -> None:
+    vacancy = SimpleNamespace(id="vacancy-fit-1", manager_user_id="manager-fit-1", role_title="Node.js Developer")
+    strong_candidate = SimpleNamespace(id="candidate-strong", user_id="candidate-user-strong")
+    medium_candidate = SimpleNamespace(id="candidate-medium", user_id="candidate-user-medium")
+    low_candidate = SimpleNamespace(id="candidate-low", user_id="candidate-user-low")
+    strong_match = SimpleNamespace(
+        id="match-strong",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=strong_candidate.id,
+        candidate_profile_version_id="cpv-strong",
+        status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+        llm_rank_position=2,
+        llm_rank_score=0.82,
+        deterministic_score=0.83,
+    )
+    medium_match = SimpleNamespace(
+        id="match-medium",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=medium_candidate.id,
+        candidate_profile_version_id="cpv-medium",
+        status="shortlisted",
+        rationale_json={"fit_band": "medium", "gap_signals": ["Core stack overlap is partial."]},
+        llm_rank_position=1,
+        llm_rank_score=0.91,
+        deterministic_score=0.79,
+    )
+    low_match = SimpleNamespace(
+        id="match-low",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=low_candidate.id,
+        candidate_profile_version_id="cpv-low",
+        status="shortlisted",
+        rationale_json={"fit_band": "low", "gap_signals": ["Role alignment is not exact."]},
+        llm_rank_position=1,
+        llm_rank_score=0.95,
+        deterministic_score=0.7,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={
+            strong_candidate.id: strong_candidate,
+            medium_candidate.id: medium_candidate,
+            low_candidate.id: low_candidate,
+        },
+        versions={
+            "cpv-strong": SimpleNamespace(summary_json={}),
+            "cpv-medium": SimpleNamespace(summary_json={}),
+            "cpv-low": SimpleNamespace(summary_json={}),
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(
+        shortlisted_for_vacancy=[low_match, medium_match, strong_match],
+    )
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            strong_candidate.user_id: SimpleNamespace(id=strong_candidate.user_id, display_name="Strong Candidate"),
+            medium_candidate.user_id: SimpleNamespace(id=medium_candidate.user_id, display_name="Medium Candidate"),
+            low_candidate.user_id: SimpleNamespace(id=low_candidate.user_id, display_name="Low Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=False, trigger_type="job")
+
+    assert result["status"] == "dispatched"
+    assert result["fit_band"] == "strong"
+    assert result["batch_count"] == 1
+    assert strong_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
+    assert medium_match.status == "shortlisted"
+    assert low_match.status == "shortlisted"
+
+
+def test_dispatch_manager_batch_for_vacancy_does_not_mix_lower_fit_band_into_existing_batch() -> None:
+    vacancy = SimpleNamespace(id="vacancy-fit-2", manager_user_id="manager-fit-2", role_title="Node.js Developer")
+    strong_candidate = SimpleNamespace(id="candidate-strong-2", user_id="candidate-user-strong-2")
+    medium_candidate = SimpleNamespace(id="candidate-medium-2", user_id="candidate-user-medium-2")
+    existing_match = SimpleNamespace(
+        id="match-existing-strong",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=strong_candidate.id,
+        candidate_profile_version_id="cpv-existing-strong",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+    medium_match = SimpleNamespace(
+        id="match-medium-2",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=medium_candidate.id,
+        candidate_profile_version_id="cpv-medium-2",
+        status="shortlisted",
+        rationale_json={"fit_band": "medium", "gap_signals": ["Core stack overlap is partial."]},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={
+            strong_candidate.id: strong_candidate,
+            medium_candidate.id: medium_candidate,
+        },
+        versions={
+            "cpv-existing-strong": SimpleNamespace(summary_json={}),
+            "cpv-medium-2": SimpleNamespace(summary_json={}),
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(
+        pre_vacancy=[existing_match],
+        shortlisted_for_vacancy=[medium_match],
+    )
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            strong_candidate.user_id: SimpleNamespace(id=strong_candidate.user_id, display_name="Strong Candidate"),
+            medium_candidate.user_id: SimpleNamespace(id=medium_candidate.user_id, display_name="Medium Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=True, trigger_type="job")
+
+    assert result["status"] == "already_presented"
+    assert result["batch_count"] == 1
+    assert medium_match.status == "shortlisted"
+    assert service.notifications.rows == []
+
+
+def test_dispatch_manager_batch_for_vacancy_moves_to_medium_fit_when_no_strong_left() -> None:
+    vacancy = SimpleNamespace(id="vacancy-fit-3", manager_user_id="manager-fit-3", role_title="Node.js Developer")
+    medium_candidate = SimpleNamespace(id="candidate-medium-3", user_id="candidate-user-medium-3")
+    medium_match = SimpleNamespace(
+        id="match-medium-3",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=medium_candidate.id,
+        candidate_profile_version_id="cpv-medium-3",
+        status="shortlisted",
+        rationale_json={"fit_band": "medium", "gap_signals": ["Core stack overlap is partial."]},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={medium_candidate.id: medium_candidate},
+        versions={"cpv-medium-3": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(shortlisted_for_vacancy=[medium_match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            medium_candidate.user_id: SimpleNamespace(id=medium_candidate.user_id, display_name="Medium Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=False, trigger_type="job")
+
+    assert result["status"] == "dispatched"
+    assert result["fit_band"] == "medium"
+    assert medium_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
+    assert service.notifications.rows[0].payload_json["message_entries"][0]["text"].startswith(
+        "I found 1 medium-fit candidate matches"
+    )
 
 
 def test_dispatch_candidate_batch_for_profile_does_not_resend_existing_cards_on_force_refresh() -> None:

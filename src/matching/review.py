@@ -35,6 +35,7 @@ from src.matching.policy import (
     next_candidate_vacancy_batch_size,
     next_manager_review_batch_size,
 )
+from src.matching.scoring import FIT_BAND_PRIORITY, fit_band_label
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,43 @@ class MatchingReviewService:
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
+
+    @staticmethod
+    def _match_fit_band(match) -> str:
+        rationale = getattr(match, "rationale_json", None) or {}
+        value = str(rationale.get("fit_band") or "").strip().lower()
+        if value in FIT_BAND_PRIORITY:
+            return value
+        return "strong"
+
+    @staticmethod
+    def _match_gap_signals(match) -> list[str]:
+        rationale = getattr(match, "rationale_json", None) or {}
+        result = []
+        seen = set()
+        for value in rationale.get("gap_signals") or []:
+            cleaned = " ".join(str(value or "").split()).strip()
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(cleaned)
+            if len(result) >= 3:
+                break
+        return result
+
+    def _sort_matches_for_manager_review(self, matches: list) -> list:
+        return sorted(
+            matches,
+            key=lambda match: (
+                FIT_BAND_PRIORITY.get(self._match_fit_band(match), 99),
+                getattr(match, "llm_rank_position", None) or 999,
+                -(float(getattr(match, "llm_rank_score", None) or 0.0)),
+                -(float(getattr(match, "deterministic_score", None) or 0.0)),
+            ),
+        )
 
     def _candidate_label(self, candidate_profile) -> str:
         candidate_user = self.users.get_by_id(candidate_profile.user_id)
@@ -94,6 +132,13 @@ class MatchingReviewService:
             template_key="manager_candidate_review_ready",
             payload={"candidate_package": package},
         )
+        fit_band = self._match_fit_band(match)
+        fit_band_text = fit_band_label(fit_band) or "Fit"
+        gap_signals = self._match_gap_signals(match)
+        header_lines = [f"Fit: {fit_band_text}"]
+        if gap_signals:
+            header_lines.append(f"Gaps: {' '.join(gap_signals[:2])}")
+        body = "\n".join(header_lines + [body])
         if slot_no is None:
             return body
         return f"{slot_no}.\n{body}"
@@ -204,12 +249,25 @@ class MatchingReviewService:
 
     def _build_manager_batch_entries(self, *, vacancy, batch: list) -> list[dict]:
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
+        fit_band = self._match_fit_band(batch[0]) if batch else None
+        if fit_band == "medium":
+            intro_text = (
+                f"I found {len(batch)} medium-fit candidate matches for {role_title}. "
+                "Strong-fit candidates are exhausted for now, so each card calls out the main gaps."
+            )
+        elif fit_band == "low":
+            intro_text = (
+                f"I found {len(batch)} low-fit candidate matches for {role_title}. "
+                "Only review these if you want to stretch beyond the stronger options. Main gaps are called out in each card."
+            )
+        else:
+            intro_text = (
+                f"I found {len(batch)} strong-fit candidate matches for {role_title}. "
+                "Review the candidate cards below and use the buttons under each profile to connect or skip."
+            )
         entries = [
             {
-                "text": self._copy(
-                    f"I found {len(batch)} candidate matches for {role_title}. "
-                    "Review the candidate cards below and use the buttons under each profile to connect or skip."
-                )
+                "text": self._copy(intro_text)
             }
         ]
         for match in batch:
@@ -321,11 +379,22 @@ class MatchingReviewService:
         newly_promoted: list = []
         promoted_count = 0
         if len(current_batch) < presentation_limit:
-            shortlisted = self.matches.list_shortlisted_for_vacancy(
-                vacancy_id,
-                limit=MATCH_BATCH_SIZE * 3,
+            shortlisted = self._sort_matches_for_manager_review(
+                self.matches.list_shortlisted_for_vacancy(
+                    vacancy_id,
+                    limit=MATCH_BATCH_SIZE * 6,
+                )
             )
-            for match in shortlisted:
+            available_shortlisted = [
+                match for match in shortlisted if match.id not in current_batch_ids
+            ]
+            if current_batch:
+                target_fit_band = self._match_fit_band(self._sort_matches_for_manager_review(current_batch)[0])
+            else:
+                target_fit_band = self._match_fit_band(available_shortlisted[0]) if available_shortlisted else None
+            for match in available_shortlisted:
+                if target_fit_band and self._match_fit_band(match) != target_fit_band:
+                    continue
                 if match.id in current_batch_ids:
                     continue
                 self.state_service.transition(
@@ -378,6 +447,7 @@ class MatchingReviewService:
             "batch_count": len(current_batch),
             "notified_count": len(notification_batch),
             "promoted_count": promoted_count,
+            "fit_band": self._match_fit_band(notification_batch[0]) if notification_batch else None,
             "notified": True,
         }
 

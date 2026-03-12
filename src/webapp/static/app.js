@@ -176,6 +176,9 @@
 
   function badgeTone(value) {
     const text = String(value || "").toLowerCase();
+    if (text.includes("strong")) return "good";
+    if (text.includes("medium")) return "warn";
+    if (text.includes("low")) return "bad";
     if (text.includes("approved") || text.includes("completed") || text.includes("accepted") || text.includes("connected")) return "good";
     if (text.includes("reject") || text.includes("declined") || text.includes("expired")) return "bad";
     if (text.includes("queued") || text.includes("review") || text.includes("waiting")) return "warn";
@@ -418,12 +421,23 @@
     }
   }
 
+  function fitBandPriority(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized === "strong") return 0;
+    if (normalized === "medium") return 1;
+    if (normalized === "low") return 2;
+    if (normalized === "not_fit") return 3;
+    return 9;
+  }
+
   function sortManagerCandidates(items, sortKey) {
     const allItems = [...(items || [])];
     const byUpdated = (left, right) => timeValue(right && right.updatedAt) - timeValue(left && left.updatedAt);
     if (sortKey === "needs-action") {
       allItems.sort((left, right) => (
         Number(Boolean(right && right.needsAction)) - Number(Boolean(left && left.needsAction))
+      ) || (
+        fitBandPriority(left && left.fitBand) - fitBandPriority(right && right.fitBand)
       ) || byUpdated(left, right));
       return allItems;
     }
@@ -879,7 +893,10 @@
   }
 
   function renderManagerCandidateCard(item) {
+    const fitLabel = item.fitBandLabel || "";
+    const gapText = formatJoinedValues(item.gapSignals || []);
     const summaryText = firstNonEmpty(
+      gapText,
       item.needsAction ? item.stageDescription : "",
       (item.summary || {}).approvalSummaryText,
       "Candidate summary is still being prepared."
@@ -887,10 +904,11 @@
     return renderShortcutCard({
       route: `manager-candidate:${item.id}`,
       title: item.candidateName || "Candidate",
-      badge: item.stageLabel || "Status",
-      badgeTone: badgeTone(item.stageLabel || item.stage),
+      badge: fitLabel || item.stageLabel || "Status",
+      badgeTone: badgeTone(fitLabel || item.stageLabel || item.stage),
       note: truncateText(summaryText, 110),
       metrics: [
+        { label: "Stage", value: item.stageLabel || "Not set" },
         { label: "Location", value: item.location || "Not set" },
         { label: "English", value: item.englishLevel || "Not set" },
         { label: "Salary", value: item.salaryExpectation || "Not set" },
@@ -1253,6 +1271,7 @@
       ${renderScreenHeader(payload.candidate.name || "Candidate", payload.vacancy.roleTitle || "", "candidate")}
       ${renderStatsStrip([
         { label: "Stage", value: payload.match.statusLabel || "Unknown" },
+        { label: "Fit", value: payload.candidate.fitBandLabel || "Unrated" },
         { label: "Salary", value: payload.candidate.salaryExpectation || "Not specified" },
         { label: "Location", value: payload.candidate.location || "Not specified" },
         { label: "Format", value: payload.candidate.workFormat || "Not specified" },
@@ -1260,6 +1279,7 @@
       ])}
       ${renderTextPanel("What happens now", payload.match.statusDescription || "", "")}
       ${renderTextPanel("Why this candidate", payload.candidate.whyThisCandidate || "", "")}
+      ${renderChipPanel("Fit gaps", payload.candidate.gapSignals || [], "")}
       ${renderChipPanel("Strong signals", payload.candidate.matchSignals || [], "")}
       ${renderChipPanel("Watchouts", payload.candidate.concerns || [], "")}
       ${renderDetailSection("Timeline", [

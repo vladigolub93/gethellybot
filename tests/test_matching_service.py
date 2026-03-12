@@ -291,6 +291,8 @@ def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest
         "Good Python and PostgreSQL overlap",
     ]
     assert candidate_b_match.rationale_json["concerns"] == ["Less explicit backend platform ownership"]
+    assert candidate_b_match.rationale_json["fit_band"] in {"strong", "medium", "low"}
+    assert isinstance(candidate_b_match.rationale_json["gap_signals"], list)
     assert captured["vacancy_context"]["required_english_level"] == "B2"
     assert captured["vacancy_context"]["vacancy_skill_universe"] == ["python", "postgresql"]
     candidate_payload = next(

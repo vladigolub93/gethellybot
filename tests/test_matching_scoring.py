@@ -1,4 +1,6 @@
 from src.matching.scoring import (
+    build_gap_signals,
+    classify_fit_band,
     compute_deterministic_score,
     compute_embedding_score,
     compute_skill_seed_score,
@@ -126,6 +128,38 @@ def test_compute_deterministic_score_rewards_cleaner_process() -> None:
 
     assert paid_score > unpaid_score
     assert paid_breakdown["process_fit"] > unpaid_breakdown["process_fit"]
+
+
+def test_classify_fit_band_and_gap_signals() -> None:
+    fit_band = classify_fit_band(
+        deterministic_score=0.66,
+        llm_fit_score=0.68,
+        score_breakdown={
+            "core_skill_overlap_ratio": 0.5,
+            "full_skill_overlap_ratio": 0.55,
+            "role_fit": 0.35,
+            "experience_score": 0.45,
+            "domain_fit": 0.2,
+            "process_fit": 0.6,
+        },
+    )
+
+    gaps = build_gap_signals(
+        score_breakdown={
+            "core_skill_overlap_ratio": 0.5,
+            "role_fit": 0.35,
+            "experience_score": 0.45,
+            "domain_fit": 0.2,
+            "process_fit": 0.6,
+        }
+    )
+
+    assert fit_band == "medium"
+    assert gaps == [
+        "Core stack overlap is partial.",
+        "Role alignment is not exact.",
+        "Experience level is closer to the lower bound of the role.",
+    ]
 
 
 def test_compute_vector_similarity() -> None:
