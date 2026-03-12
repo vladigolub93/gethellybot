@@ -134,6 +134,8 @@ Rules:
 - only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
 - propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, or stack after reviewing candidates
 - if the manager is clearly updating the vacancy, include the original update request in `answer_text`
+- treat questions like "why did you show this candidate?", "what are the current vacancy settings?", and "what do you have saved for this role?" as help
+- treat complaints like "these profiles are not right" or "I keep skipping these candidates" as help unless the manager also gives a concrete vacancy change
 - extract the numbered candidate slot into `candidate_slot`
 - treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after connect?" as help
 - do not invent a slot number if the manager did not specify one
@@ -375,6 +377,8 @@ Valid outcomes:
 
 Rules:
 - treat questions like "what happens now?", "what should I do next?", "when will I hear back?", "when will I get opportunities?", and "do I need to do anything else?" as help, not as delete intent
+- treat questions like "remind me my preferences", "what salary do you have for me?", "what English level do you have saved?", "what location do you have?", and "what are my current matching settings?" as help, not as update intent
+- treat dissatisfaction without a concrete new preference, like "these roles do not fit me", "I do not like these vacancies", or "why are these roles wrong for me?", as help unless the candidate also states an explicit change
 - treat comments or questions about the Helly WebApp, CV Challenge, waiting time, or recent game results as help, not as delete intent
 - propose `find_matching_vacancies` when the candidate is clearly asking to check current vacancies, look for jobs now, or see whether there is anything suitable right now
 - propose `update_matching_preferences` when the candidate is clearly changing saved salary, work format, location, English, domain preferences, or assessment preferences
@@ -414,6 +418,8 @@ Rules:
 - only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
 - propose `update_matching_preferences` when the candidate is clearly changing salary, work format, location, English, domain preferences, or assessment preferences after reviewing roles
 - if the candidate is clearly updating preferences, include the original update request in `answer_text`
+- treat questions like "why did you show this?", "what do you have saved for me?", and "what are my current preferences?" as help
+- treat complaints like "these roles are not right for me" or "I keep skipping these" as help unless the candidate also gives a concrete change to saved preferences
 - extract the numbered vacancy slot into `vacancy_slot`
 - treat questions like "what does this mean?", "what happens after I apply?", "what happens after I connect?", and "how does this work?" as help
 - do not invent a slot number if the candidate did not specify one
@@ -647,6 +653,8 @@ Valid outcomes:
 
 Rules:
 - treat questions like "what happens now?", "when will I see candidates?", "how does matching work?", and "do I need to do anything else?" as help, not as delete intent
+- treat questions like "remind me this vacancy", "what budget do you have saved?", "what English level is set?", "what are the hiring stages now?", and "what does this vacancy currently require?" as help, not as update intent
+- treat dissatisfaction without a concrete new vacancy change, like "these candidates are not right", "why are profiles missing the mark?", or "this flow is too weak", as help unless the manager also states an explicit vacancy update
 - propose `find_matching_candidates` when the manager is clearly asking to search for candidates now, refresh matching, or check whether suitable candidates are available right now
 - propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, team size, or stack
 - if the manager is clearly updating vacancy details, include the original update request in `answer_text`
