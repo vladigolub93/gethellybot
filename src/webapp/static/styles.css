@@ -1,18 +1,17 @@
 :root {
-  --bg: #f4efe7;
-  --bg-soft: #fff8f0;
-  --panel: rgba(255, 255, 255, 0.84);
-  --panel-strong: #ffffff;
-  --text: #17211d;
-  --muted: #6d756f;
-  --line: rgba(23, 33, 29, 0.08);
-  --accent: #0d8f83;
-  --accent-soft: #daf2ef;
-  --accent-strong: #0b6b63;
-  --good: #1f8a57;
-  --warn: #b87a15;
-  --bad: #b85045;
-  --shadow: 0 18px 40px rgba(79, 56, 31, 0.08);
+  --bg: #030304;
+  --bg-soft: #0a0a0d;
+  --panel: #0d0d11;
+  --panel-strong: #121219;
+  --text: #f8f8fb;
+  --muted: #a9a6b7;
+  --line: rgba(255, 255, 255, 0.11);
+  --accent: #8c28ff;
+  --accent-soft: rgba(187, 121, 255, 0.12);
+  --good: #42cf8d;
+  --warn: #f2c15d;
+  --bad: #ff7a85;
+  --shadow: 0 20px 56px rgba(0, 0, 0, 0.34);
   --radius-xl: 28px;
   --radius-lg: 22px;
   --radius-md: 16px;
@@ -33,12 +32,18 @@ body {
   margin: 0;
   min-height: 100%;
   overflow-x: hidden;
-  color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(13, 143, 131, 0.16), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(222, 141, 87, 0.14), transparent 26%),
-    linear-gradient(180deg, #fff8f0, #f4efe7 70%);
-  font-family: "Avenir Next", "SF Pro Text", "Segoe UI", sans-serif;
+    radial-gradient(circle at top left, rgba(140, 40, 255, 0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(187, 121, 255, 0.1), transparent 32%),
+    var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "Segoe UI",
+    sans-serif;
 }
 
 body::before {
@@ -46,14 +51,14 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 20%),
-    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.75), transparent 18%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 28%),
+    radial-gradient(circle at 18% 14%, rgba(140, 40, 255, 0.12), transparent 18%);
   pointer-events: none;
 }
 
 .app-shell {
   position: relative;
-  width: min(100%, 760px);
+  width: min(100%, 720px);
   min-height: var(--tg-viewport-stable-height, var(--app-height, 100dvh));
   margin: 0 auto;
   padding:
@@ -91,10 +96,21 @@ body::before {
 }
 
 .brand-mark {
-  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
-  font-size: clamp(2rem, 11vw, 3.3rem);
-  font-weight: 800;
-  letter-spacing: -0.06em;
+  margin: 0;
+  max-width: 100%;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: clamp(2rem, 11vw, 3.6rem);
+  font-weight: 500;
+  line-height: 0.95;
+  letter-spacing: -0.09em;
   color: var(--text);
 }
 
@@ -108,7 +124,7 @@ body::before {
   margin: 0;
   max-width: 26rem;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .page {
@@ -129,8 +145,8 @@ body::before {
 .detail-title,
 .section-bar h2 {
   margin: 0;
-  font-family: "Avenir Next", "Futura", "Trebuchet MS", sans-serif;
-  letter-spacing: -0.03em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .page-header h1 {
@@ -141,7 +157,7 @@ body::before {
 .page-note {
   margin: 0;
   color: var(--muted);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .stats-grid,
@@ -169,9 +185,10 @@ body::before {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
+    var(--panel);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
 }
 
 .metric-card,
@@ -188,9 +205,9 @@ body::before {
   content: "";
   position: absolute;
   inset: 0 auto auto 0;
-  width: 78px;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), rgba(13, 143, 131, 0));
+  width: min(84px, 42%);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(140, 40, 255, 0.92), rgba(140, 40, 255, 0));
 }
 
 .metric-card {
@@ -203,19 +220,33 @@ body::before {
   font-size: 1.24rem;
   font-weight: 800;
   line-height: 1;
+  color: var(--text);
 }
 
 .metric-label,
 .card-label,
 .mini-metric-label,
 .detail-list dt,
-.section-count {
+.section-count,
+.status-note,
+.page-note {
   color: var(--muted);
-  font-size: 0.82rem;
 }
 
 .metric-label,
-.card-label {
+.card-label,
+.mini-metric-label,
+.detail-list dt {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -223,7 +254,7 @@ body::before {
 .nav-card,
 .entity-card {
   cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
 .nav-card:hover,
@@ -231,8 +262,10 @@ body::before {
 .nav-card:focus-visible,
 .entity-card:focus-visible {
   transform: translateY(-2px);
-  box-shadow: 0 22px 44px rgba(79, 56, 31, 0.12);
-  border-color: rgba(13, 143, 131, 0.18);
+  border-color: rgba(187, 121, 255, 0.44);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    var(--panel-strong);
   outline: none;
 }
 
@@ -250,41 +283,61 @@ body::before {
 }
 
 .card-title {
-  font-size: 1.15rem;
-  line-height: 1.15;
+  font-size: 1.08rem;
+  line-height: 1.2;
+  color: var(--text);
 }
 
 .card-note {
   margin: 12px 0 0;
   color: var(--muted);
-  line-height: 1.52;
+  line-height: 1.5;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.badge[data-tone="accent"] {
+  background: rgba(140, 40, 255, 0.16);
+  border-color: rgba(187, 121, 255, 0.32);
 }
 
 .badge[data-tone="good"] {
-  background: rgba(31, 138, 87, 0.14);
+  background: rgba(66, 207, 141, 0.16);
+  border-color: rgba(66, 207, 141, 0.34);
   color: var(--good);
 }
 
 .badge[data-tone="warn"] {
-  background: rgba(184, 122, 21, 0.14);
+  background: rgba(242, 193, 93, 0.16);
+  border-color: rgba(242, 193, 93, 0.34);
   color: var(--warn);
 }
 
 .badge[data-tone="bad"] {
-  background: rgba(184, 80, 69, 0.14);
+  background: rgba(255, 122, 133, 0.16);
+  border-color: rgba(255, 122, 133, 0.34);
   color: var(--bad);
 }
 
@@ -307,7 +360,8 @@ body::before {
   gap: 6px;
   padding: 8px 10px;
   border-radius: 999px;
-  background: var(--bg-soft);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .mini-metric-value,
@@ -319,7 +373,7 @@ body::before {
 .meta-strip {
   margin-top: 14px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   line-height: 1.45;
 }
 
@@ -336,7 +390,7 @@ body::before {
 }
 
 .section-bar h2 {
-  font-size: 1.1rem;
+  font-size: 1.06rem;
 }
 
 .section-count {
@@ -349,6 +403,16 @@ body::before {
   border-radius: 999px;
   background: var(--panel-strong);
   border: 1px solid var(--line);
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    "SFMono-Regular",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 0.78rem;
 }
 
 .stack {
@@ -358,13 +422,13 @@ body::before {
 }
 
 .detail-title {
-  font-size: 1.06rem;
+  font-size: 1rem;
   margin-bottom: 14px;
 }
 
 .detail-subtitle {
   margin: 0 0 10px;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   color: var(--muted);
   font-weight: 700;
 }
@@ -381,8 +445,8 @@ body::before {
   gap: 6px;
   padding: 12px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.56);
-  border: 1px solid rgba(23, 33, 29, 0.05);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .detail-list dt,
@@ -392,7 +456,8 @@ body::before {
 }
 
 .detail-list dd {
-  line-height: 1.52;
+  color: var(--text);
+  line-height: 1.6;
 }
 
 .text-block {

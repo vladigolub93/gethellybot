@@ -59,7 +59,7 @@
   }
 
   function applyTelegramChrome() {
-    const backgroundColor = "#f4efe7";
+    const backgroundColor = "#141415";
     updateThemeColorMeta(backgroundColor);
     if (!tg) return;
     try {
@@ -78,7 +78,7 @@
         typeof tg.isVersionAtLeast === "function" &&
         tg.isVersionAtLeast("7.10")
       ) {
-        tg.setBottomBarColor(backgroundColor);
+        tg.setBottomBarColor("#1c1c1e");
       }
     } catch (_) {}
   }
