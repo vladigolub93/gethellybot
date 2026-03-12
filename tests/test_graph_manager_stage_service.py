@@ -48,14 +48,15 @@ class FakeVacanciesRepository:
 
 
 class FakeMatchingRepository:
-    def __init__(self, manager_review_match=None):
+    def __init__(self, manager_review_match=None, pre_interview_review_match=None):
         self.manager_review_match = manager_review_match
+        self.pre_interview_review_match = pre_interview_review_match
 
     def get_latest_manager_review_for_manager(self, vacancy_ids, *, manager_review_only: bool = True):
         return self.manager_review_match
 
     def get_latest_pre_interview_review_for_manager(self, vacancy_ids):
-        return None
+        return self.pre_interview_review_match
 
 
 class FakeCandidateProfilesRepository:
@@ -774,6 +775,40 @@ def test_graph_manager_stage_accepts_open_vacancy_update_intent() -> None:
         "final",
     ]
     assert result.structured_payload["primary_tech_stack_json"][:2] == ["python", "fastapi"]
+
+
+def test_graph_manager_stage_accepts_pre_interview_vacancy_update_intent() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6pre", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository(
+        pre_interview_review_match=SimpleNamespace(id="m6pre", status="manager_decision_pending")
+    )
+
+    user = SimpleNamespace(
+        id="m6pre",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Budget 7000-9000, B2 English, and no live coding.",
+    )
+
+    assert result is not None
+    assert result.stage == "PRE_INTERVIEW_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "update_vacancy_preferences"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload["budget_min"] == 7000
+    assert result.structured_payload["budget_max"] == 9000
+    assert result.structured_payload["required_english_level"] == "b2"
+    assert result.structured_payload["has_live_coding"] is False
 
 
 def test_graph_manager_stage_handles_manager_review_help() -> None:

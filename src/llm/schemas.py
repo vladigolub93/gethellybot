@@ -65,6 +65,7 @@ class CandidateVacancyReviewDecisionSchema(BaseModel):
     intent: str
     response_text: Optional[str] = None
     proposed_action: Optional[str] = None
+    answer_text: Optional[str] = None
     vacancy_slot: Optional[int] = None
     keep_current_state: bool = True
     needs_follow_up: bool = False
@@ -180,6 +181,7 @@ class PreInterviewReviewDecisionSchema(BaseModel):
     intent: str
     response_text: Optional[str] = None
     proposed_action: Optional[str] = None
+    answer_text: Optional[str] = None
     candidate_slot: Optional[int] = None
     keep_current_state: bool = True
     needs_follow_up: bool = False

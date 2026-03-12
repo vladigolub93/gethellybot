@@ -126,11 +126,14 @@ Valid outcomes:
 - help question or clarification
 - explicit connect-candidate intent for one numbered candidate
 - explicit skip-candidate intent for one numbered candidate
+- explicit update-vacancy intent
 
 Rules:
 - if the manager uses text instead of tapping buttons, they may still write things like `Connect 1`, `Approve 2`, `Interview 1`, or `Skip 3`
 - only propose `interview_candidate` when the manager is clearly approving that numbered candidate for the next step
 - only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
+- propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, or stack after reviewing candidates
+- if the manager is clearly updating the vacancy, include the original update request in `answer_text`
 - extract the numbered candidate slot into `candidate_slot`
 - treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after connect?" as help
 - do not invent a slot number if the manager did not specify one
@@ -403,11 +406,14 @@ Valid outcomes:
 - help question or clarification
 - explicit apply intent for one numbered vacancy
 - explicit skip intent for one numbered vacancy
+- explicit update-preferences intent
 
 Rules:
 - if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Connect 1`, `Skip 2`, or `Apply vacancy 3`
 - only propose `apply_to_vacancy` when the candidate is clearly applying to or connecting with that numbered vacancy
 - only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
+- propose `update_matching_preferences` when the candidate is clearly changing salary, work format, location, English, domain preferences, or assessment preferences after reviewing roles
+- if the candidate is clearly updating preferences, include the original update request in `answer_text`
 - extract the numbered vacancy slot into `vacancy_slot`
 - treat questions like "what does this mean?", "what happens after I apply?", "what happens after I connect?", and "how does this work?" as help
 - do not invent a slot number if the candidate did not specify one

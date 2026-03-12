@@ -33,6 +33,10 @@ class FakeCandidateRepository:
     def get_version_by_id(self, version_id):
         return self.versions.get(version_id)
 
+    def update_questions_context(self, candidate, questions_context_json):
+        candidate.questions_context_json = questions_context_json
+        return candidate
+
 
 class FakeVerificationRepository:
     def get_latest_submitted_by_profile_id(self, profile_id):
@@ -143,6 +147,10 @@ class FakeVacanciesRepository:
 
     def get_version_by_id(self, version_id):
         return self.versions.get(version_id)
+
+    def update_questions_context(self, vacancy, questions_context_json):
+        vacancy.questions_context_json = questions_context_json
+        return vacancy
 
 
 class FakeMessagingService:
@@ -844,6 +852,111 @@ def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> 
     assert len(service.notifications.rows) == 3
     assert service.notifications.rows[1].user_id == candidate.user_id
     assert "not to move forward" in service.notifications.rows[1].payload_json["text"].lower()
+
+
+def test_execute_candidate_pre_interview_skip_prompts_feedback_after_three_skips() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-feedback", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(
+        id="candidate-feedback",
+        user_id=candidate_user.id,
+        questions_context_json={"matching_feedback": {"candidate_skip_streak": 2}},
+    )
+    vacancy = SimpleNamespace(id="vacancy-feedback", manager_user_id="manager-feedback", role_title="Platform Engineer")
+    match = SimpleNamespace(
+        id="match-feedback",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match], active_candidate=[])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(vacancies={vacancy.id: vacancy})
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+    service.dispatch_candidate_batch_for_profile = lambda **kwargs: {
+        "status": "empty",
+        "batch_count": 0,
+        "notified": False,
+    }
+
+    result = service.execute_candidate_pre_interview_action(
+        user=candidate_user,
+        raw_message_id="raw-feedback-candidate",
+        action="skip_vacancy",
+        vacancy_slot=1,
+    )
+
+    assert result is not None
+    assert result.status == "skipped"
+    assert candidate.questions_context_json["matching_feedback"]["candidate_skip_streak"] == 3
+    assert any(
+        "I’ve seen a few skips in a row" in row.payload_json["text"]
+        and "update your matching preferences right here" in row.payload_json["text"]
+        for row in service.notifications.rows
+    )
+
+
+def test_execute_manager_pre_interview_skip_prompts_feedback_after_three_skips() -> None:
+    manager_user = SimpleNamespace(id="manager-user-feedback", is_candidate=False, is_hiring_manager=True)
+    candidate = SimpleNamespace(id="candidate-manager-feedback", user_id="candidate-manager-user-feedback")
+    vacancy = SimpleNamespace(
+        id="vacancy-manager-feedback",
+        manager_user_id=manager_user.id,
+        role_title="Staff Engineer",
+        questions_context_json={"matching_feedback": {"manager_skip_streak": 2}},
+    )
+    match = SimpleNamespace(
+        id="match-manager-feedback",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate})
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match], active_vacancy=[])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+    service.dispatch_manager_batch_for_vacancy = lambda **kwargs: {
+        "status": "empty",
+        "batch_count": 0,
+        "notified": False,
+    }
+
+    result = service.execute_manager_pre_interview_action(
+        user=manager_user,
+        raw_message_id="raw-feedback-manager",
+        action="skip_candidate",
+        candidate_slot=1,
+    )
+
+    assert result is not None
+    assert result.status == "skipped"
+    assert vacancy.questions_context_json["matching_feedback"]["manager_skip_streak"] == 3
+    assert any(
+        "I’ve seen a few skips in a row on this vacancy" in row.payload_json["text"]
+        and "update the vacancy right here" in row.payload_json["text"]
+        for row in service.notifications.rows
+    )
 
 
 def test_execute_candidate_pre_interview_apply_is_blocked_when_candidate_cap_reached() -> None:

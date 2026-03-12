@@ -366,9 +366,27 @@ class TelegramUpdateService:
             stage_result is not None
             and stage_result.stage == "VACANCY_REVIEW"
             and stage_result.action_accepted
-            and stage_result.proposed_action in {"apply_to_vacancy", "skip_vacancy"}
+            and stage_result.proposed_action in {"apply_to_vacancy", "skip_vacancy", "update_matching_preferences"}
         ):
             return None
+        if stage_result.proposed_action == "update_matching_preferences":
+            ready_result = self.candidate_service.execute_ready_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action="update_matching_preferences",
+                structured_payload=stage_result.structured_payload or {},
+            )
+            if ready_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=ready_result.notification_template,
+                    text=ready_result.notification_text,
+                    reply_markup=getattr(ready_result, "reply_markup", None),
+                    allow_duplicate=True,
+                )
+            ]
         result = self.matching_review_service.execute_candidate_pre_interview_action(
             user=user,
             raw_message_id=raw_message_id,
@@ -478,15 +496,33 @@ class TelegramUpdateService:
         *,
         user,
         raw_message_id,
+        latest_user_message: str | None,
         stage_result,
     ) -> List[str] | None:
         if not (
             stage_result is not None
             and stage_result.stage == "PRE_INTERVIEW_REVIEW"
             and stage_result.action_accepted
-            and stage_result.proposed_action in {"interview_candidate", "skip_candidate"}
+            and stage_result.proposed_action in {"interview_candidate", "skip_candidate", "update_vacancy_preferences"}
         ):
             return None
+        if stage_result.proposed_action == "update_vacancy_preferences":
+            open_result = self.vacancy_service.execute_open_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                action=stage_result.proposed_action,
+                structured_payload=stage_result.structured_payload or {},
+                latest_user_message=latest_user_message,
+            )
+            if open_result is None:
+                return None
+            return [
+                self._notify_result(
+                    user_id=user.id,
+                    template_key=open_result.notification_template,
+                    text=open_result.notification_text,
+                )
+            ]
         result = self.matching_review_service.execute_manager_pre_interview_action(
             user=user,
             raw_message_id=raw_message_id,
@@ -1483,6 +1519,7 @@ class TelegramUpdateService:
         templates = self._handle_manager_pre_interview_stage_action(
             user=user,
             raw_message_id=raw_message_id,
+            latest_user_message=latest_user_message,
             stage_result=stage_result,
         )
         if templates is not None:

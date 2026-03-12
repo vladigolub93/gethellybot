@@ -63,6 +63,47 @@ class MatchingReviewService:
         return self.messaging.compose(approved_intent)
 
     @staticmethod
+    def _feedback_context(context_json: dict | None) -> dict:
+        current = dict(context_json or {})
+        feedback = dict(current.get("matching_feedback") or {})
+        feedback.setdefault("candidate_skip_streak", 0)
+        feedback.setdefault("manager_skip_streak", 0)
+        current["matching_feedback"] = feedback
+        return current
+
+    def _record_candidate_skip(self, candidate) -> int:
+        context = self._feedback_context(getattr(candidate, "questions_context_json", None))
+        feedback = context["matching_feedback"]
+        feedback["candidate_skip_streak"] = int(feedback.get("candidate_skip_streak") or 0) + 1
+        self.candidates.update_questions_context(candidate, context)
+        return int(feedback["candidate_skip_streak"])
+
+    def _reset_candidate_skip_streak(self, candidate) -> None:
+        context = self._feedback_context(getattr(candidate, "questions_context_json", None))
+        if context["matching_feedback"].get("candidate_skip_streak", 0) == 0:
+            return
+        context["matching_feedback"]["candidate_skip_streak"] = 0
+        self.candidates.update_questions_context(candidate, context)
+
+    def _record_manager_skip(self, vacancy) -> int:
+        context = self._feedback_context(getattr(vacancy, "questions_context_json", None))
+        feedback = context["matching_feedback"]
+        feedback["manager_skip_streak"] = int(feedback.get("manager_skip_streak") or 0) + 1
+        self.vacancies.update_questions_context(vacancy, context)
+        return int(feedback["manager_skip_streak"])
+
+    def _reset_manager_skip_streak(self, vacancy) -> None:
+        context = self._feedback_context(getattr(vacancy, "questions_context_json", None))
+        if context["matching_feedback"].get("manager_skip_streak", 0) == 0:
+            return
+        context["matching_feedback"]["manager_skip_streak"] = 0
+        self.vacancies.update_questions_context(vacancy, context)
+
+    @staticmethod
+    def _should_prompt_skip_feedback(streak: int) -> bool:
+        return streak >= 3 and streak % 3 == 0
+
+    @staticmethod
     def _match_fit_band(match) -> str:
         rationale = getattr(match, "rationale_json", None) or {}
         value = str(rationale.get("fit_band") or "").strip().lower()
@@ -830,6 +871,7 @@ class MatchingReviewService:
         shared_contacts = False
 
         if action == "apply_to_vacancy":
+            self._reset_candidate_skip_streak(candidate)
             if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
                 self.state_service.transition(
                     entity_type="match",
@@ -886,6 +928,7 @@ class MatchingReviewService:
                 status = "applied"
         elif action == "skip_vacancy":
             previous_status = getattr(match, "status", None)
+            skip_streak = self._record_candidate_skip(candidate)
             self.state_service.transition(
                 entity_type="match",
                 entity=match,
@@ -915,6 +958,21 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"{candidate_user.display_name if candidate_user and getattr(candidate_user, 'display_name', None) else 'The candidate'} skipped the approved opportunity for {role_title}."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
+            if self._should_prompt_skip_feedback(skip_streak):
+                self.notifications.create(
+                    user_id=user.id,
+                    entity_type="candidate_profile",
+                    entity_id=candidate.id,
+                    template_key="candidate_vacancy_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            "I’ve seen a few skips in a row. If these roles keep missing, tell me what’s off for you and I can update your matching preferences right here. "
+                            "You can mention salary, format, location, English, domain, take-home, or live coding. "
+                            "For example: remote only, from 5000, no live coding."
                         ),
                     },
                     allow_duplicate=True,
@@ -1018,6 +1076,7 @@ class MatchingReviewService:
         shared_contacts = False
 
         if action == "interview_candidate":
+            self._reset_manager_skip_streak(vacancy)
             if previous_status != MATCH_STATUS_CANDIDATE_APPLIED and self._manager_batch_limit(vacancy.id) <= 0:
                 self.notifications.create(
                     user_id=user.id,
@@ -1108,6 +1167,7 @@ class MatchingReviewService:
                 )
                 status = "awaiting_candidate"
         elif action == "skip_candidate":
+            skip_streak = self._record_manager_skip(vacancy)
             self.state_service.transition(
                 entity_type="match",
                 entity=match,
@@ -1137,6 +1197,21 @@ class MatchingReviewService:
                     payload_json={
                         "text": self._copy(
                             f"The hiring manager decided not to move forward with {role_title}."
+                        ),
+                    },
+                    allow_duplicate=True,
+                )
+            if self._should_prompt_skip_feedback(skip_streak):
+                self.notifications.create(
+                    user_id=user.id,
+                    entity_type="vacancy",
+                    entity_id=vacancy.id,
+                    template_key="manager_pre_interview_review_ready",
+                    payload_json={
+                        "text": self._copy(
+                            "I’ve seen a few skips in a row on this vacancy. Tell me what keeps missing and I can update the vacancy right here. "
+                            "You can mention budget, English, format, city, process, project, or stack. "
+                            "For example: budget 7000-9000, B2 English, no live coding."
                         ),
                     },
                     allow_duplicate=True,

@@ -1908,6 +1908,104 @@ def test_graph_candidate_vacancy_review_stage_can_apply_to_vacancy() -> None:
     assert service.matching_review_service.candidate_calls[-1]["vacancy_slot"] == 2
 
 
+def test_graph_candidate_vacancy_review_stage_can_update_preferences() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VACANCY_REVIEW",
+            reply_text="I can update your preferences from this batch.",
+            stage_status="ready_for_transition",
+            proposed_action="update_matching_preferences",
+            action_accepted=True,
+            structured_payload={"salary_min": 5000, "show_live_coding_roles": False},
+            validation_result={"accepted": True, "normalized_action": "update_matching_preferences"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FakeCandidateService()
+    service.candidate_service.ready_action_result = SimpleNamespace(
+        status="preferences_updated_matching_requested",
+        notification_template="candidate_ready",
+        notification_text="I updated your preferences and I’m rechecking open roles now.",
+    )
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5cu",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5cu",
+        build_update(text="No live coding and from 5000"),
+    )
+
+    assert templates == ["candidate_ready"]
+    assert service.candidate_service.ready_action_calls
+    assert service.candidate_service.ready_action_calls[-1]["action"] == "update_matching_preferences"
+    assert service.candidate_service.ready_action_calls[-1]["structured_payload"] == {
+        "salary_min": 5000,
+        "show_live_coding_roles": False,
+    }
+
+
+def test_graph_pre_interview_stage_can_update_vacancy_preferences() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="PRE_INTERVIEW_REVIEW",
+            reply_text="I can update this vacancy from here.",
+            stage_status="ready_for_transition",
+            proposed_action="update_vacancy_preferences",
+            action_accepted=True,
+            structured_payload={"budget_min": 7000, "budget_max": 9000, "required_english_level": "b2"},
+            validation_result={"accepted": True, "normalized_action": "update_vacancy_preferences"},
+        ),
+    )
+    service.bot_controller = FakeBotController(None)
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.open_action_result = SimpleNamespace(
+        status="vacancy_updated_matching_requested",
+        notification_template="vacancy_open",
+        notification_text="I updated the vacancy and I’m refreshing matching now.",
+    )
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5pru",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5pru",
+        build_update(text="Raise budget to 7000-9000 and English to B2"),
+    )
+
+    assert templates == ["vacancy_open"]
+    assert service.vacancy_service.open_action_calls
+    assert service.vacancy_service.open_action_calls[-1]["action"] == "update_vacancy_preferences"
+    assert service.vacancy_service.open_action_calls[-1]["structured_payload"] == {
+        "budget_min": 7000,
+        "budget_max": 9000,
+        "required_english_level": "b2",
+    }
+    assert service.vacancy_service.open_action_calls[-1]["latest_user_message"] == (
+        "Raise budget to 7000-9000 and English to B2"
+    )
+
+
 def test_candidate_vacancy_review_help_does_not_attach_bottom_keyboard() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(

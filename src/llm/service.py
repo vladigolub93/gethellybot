@@ -964,8 +964,11 @@ def candidate_vacancy_review_decision_with_llm(
         prompt_version="candidate_vacancy_review_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "apply_to_vacancy", "skip_vacancy"}:
+    if proposed_action not in {None, "apply_to_vacancy", "skip_vacancy", "update_matching_preferences"}:
         proposed_action = None
+    answer_text = _clean_text(result.payload.get("answer_text"), limit=1000)
+    if proposed_action == "update_matching_preferences" and not answer_text:
+        answer_text = _clean_text(latest_user_message, limit=1000)
     vacancy_slot = result.payload.get("vacancy_slot")
     if not isinstance(vacancy_slot, int) or vacancy_slot < 1:
         vacancy_slot = None
@@ -974,6 +977,7 @@ def candidate_vacancy_review_decision_with_llm(
             "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
+            "answer_text": answer_text,
             "vacancy_slot": vacancy_slot,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
@@ -1067,8 +1071,11 @@ def pre_interview_review_decision_with_llm(
         prompt_version="pre_interview_review_decision_llm_v1",
     )
     proposed_action = result.payload.get("proposed_action")
-    if proposed_action not in {None, "interview_candidate", "skip_candidate"}:
+    if proposed_action not in {None, "interview_candidate", "skip_candidate", "update_vacancy_preferences"}:
         proposed_action = None
+    answer_text = _clean_text(result.payload.get("answer_text"), limit=5000)
+    if proposed_action == "update_vacancy_preferences" and not answer_text:
+        answer_text = _clean_text(latest_user_message, limit=5000)
     candidate_slot = result.payload.get("candidate_slot")
     if not isinstance(candidate_slot, int) or candidate_slot < 1:
         candidate_slot = None
@@ -1077,6 +1084,7 @@ def pre_interview_review_decision_with_llm(
             "intent": _clean_text(result.payload.get("intent"), limit=80) or "help",
             "response_text": _clean_text(result.payload.get("response_text"), limit=400),
             "proposed_action": proposed_action,
+            "answer_text": answer_text,
             "candidate_slot": candidate_slot,
             "keep_current_state": bool(result.payload.get("keep_current_state", True)),
             "needs_follow_up": bool(result.payload.get("needs_follow_up", False)),
@@ -3223,6 +3231,7 @@ def safe_candidate_vacancy_review_decision(
         "response_text": current_step_guidance
         or "Review the current vacancy cards and use the Apply or Skip buttons under each role.",
         "proposed_action": None,
+        "answer_text": None,
         "vacancy_slot": None,
         "keep_current_state": True,
         "needs_follow_up": True,
@@ -3276,6 +3285,40 @@ def safe_candidate_vacancy_review_decision(
                 "reason_code": "candidate_vacancy_review_help_question",
             }
         )
+    else:
+        parsed = dict(safe_parse_candidate_questions(session, normalized_text).payload or {})
+        update_markers = [
+            "change",
+            "update",
+            "switch",
+            "set",
+            "now",
+            "only",
+            "instead",
+            "prefer",
+            "from ",
+            "теперь",
+            "измени",
+            "обнови",
+            "поменяй",
+            "поставь",
+            "предпочитаю",
+            "только",
+            "больше не",
+            "не показывай",
+            "показывай",
+        ]
+        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 18):
+            payload.update(
+                {
+                    "intent": "update_preferences",
+                    "response_text": "Got it. I can update your matching preferences from here.",
+                    "proposed_action": "update_matching_preferences",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "candidate_vacancy_review_update_preferences",
+                }
+            )
     return LLMResult(
         payload=payload,
         model_name="baseline-deterministic",
@@ -3475,6 +3518,7 @@ def safe_pre_interview_review_decision(
         "response_text": current_step_guidance
         or "Review the current candidate cards and use the Connect or Skip buttons under each profile.",
         "proposed_action": None,
+        "answer_text": None,
         "candidate_slot": None,
         "keep_current_state": True,
         "needs_follow_up": True,
@@ -3528,6 +3572,48 @@ def safe_pre_interview_review_decision(
                 "reason_code": "pre_interview_review_help_question",
             }
         )
+    else:
+        parsed = dict(safe_parse_vacancy_clarifications(session, normalized_text).payload or {})
+        update_markers = [
+            "change",
+            "update",
+            "switch",
+            "set",
+            "now",
+            "instead",
+            "budget",
+            "english",
+            "stages",
+            "stack",
+            "format",
+            "city",
+            "теперь",
+            "измени",
+            "обнови",
+            "поменяй",
+            "бюджет",
+            "английский",
+            "англійська",
+            "этапы",
+            "етапи",
+            "стек",
+            "формат",
+            "город",
+            "місто",
+            "убери",
+            "добавь",
+        ]
+        if parsed and (any(marker in lowered for marker in update_markers) or len(normalized_text.split()) <= 22):
+            payload.update(
+                {
+                    "intent": "update_vacancy_preferences",
+                    "response_text": "Got it. I can update this vacancy from here.",
+                    "proposed_action": "update_vacancy_preferences",
+                    "answer_text": normalized_text,
+                    "needs_follow_up": False,
+                    "reason_code": "pre_interview_review_update_vacancy",
+                }
+            )
     return LLMResult(
         payload=payload,
         model_name="baseline-deterministic",

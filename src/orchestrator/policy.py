@@ -128,12 +128,13 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "VACANCY_REVIEW": StatePolicyDefinition(
         state="VACANCY_REVIEW",
         goal="Review the current matched-vacancy batch and decide where to apply or connect.",
-        allowed_actions=["apply_to_vacancy", "skip_vacancy"],
+        allowed_actions=["apply_to_vacancy", "skip_vacancy", "update_matching_preferences"],
         assistance_prompt_slug="candidate_vacancy_review",
-        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role. If a manager already approved one, the primary button will switch to Connect.",
+        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role. If a manager already approved one, the primary button will switch to Connect. If the batch keeps missing, you can also update your matching preferences right here.",
         help_text=(
             "You are reviewing matched vacancies. "
-            "Use the Apply or Skip buttons under the vacancy cards in the current batch. If a manager already approved one, use Connect or Skip under that card."
+            "Use the Apply or Skip buttons under the vacancy cards in the current batch. If a manager already approved one, use Connect or Skip under that card. "
+            "If the roles keep missing, you can also update salary, format, location, English, domain, or assessment preferences here."
         ),
         missing_requirements=["candidate_vacancy_decision"],
     ),
@@ -249,12 +250,13 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     "PRE_INTERVIEW_REVIEW": StatePolicyDefinition(
         state="PRE_INTERVIEW_REVIEW",
         goal="Review matched candidates and decide who should receive a direct contact approval request.",
-        allowed_actions=["interview_candidate", "skip_candidate"],
+        allowed_actions=["interview_candidate", "skip_candidate", "update_vacancy_preferences"],
         assistance_prompt_slug="pre_interview_review",
-        guidance_text="Review the current candidate cards and use the Connect or Skip buttons under each profile.",
+        guidance_text="Review the current candidate cards and use the Connect or Skip buttons under each profile. If the batch keeps missing, you can also update the vacancy here.",
         help_text=(
             "You are reviewing matched candidates before direct contact sharing. "
-            "Use the Connect or Skip buttons under the candidate cards in the current batch."
+            "Use the Connect or Skip buttons under the candidate cards in the current batch. "
+            "If the profiles keep missing, you can also update budget, format, location, English, process, project, or stack here."
         ),
         missing_requirements=["pre_interview_manager_decision"],
     ),
