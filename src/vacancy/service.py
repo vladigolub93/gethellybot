@@ -96,6 +96,40 @@ class VacancyService:
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
 
+    @staticmethod
+    def _normalize_dependent_clarification_fields(vacancy, parsed: dict | None) -> dict:
+        normalized = dict(parsed or {})
+        if not normalized:
+            return normalized
+
+        stages = list(
+            normalized.get("hiring_stages_json")
+            if "hiring_stages_json" in normalized
+            else getattr(vacancy, "hiring_stages_json", None) or []
+        )
+
+        if "has_take_home_task" in normalized:
+            if normalized.get("has_take_home_task") is False:
+                stages = [stage for stage in stages if stage != "take_home"]
+                normalized["take_home_paid"] = None
+            elif normalized.get("has_take_home_task") is True and "take_home" not in stages:
+                stages.append("take_home")
+
+        if "has_live_coding" in normalized:
+            if normalized.get("has_live_coding") is False:
+                stages = [stage for stage in stages if stage != "live_coding"]
+            elif normalized.get("has_live_coding") is True and "live_coding" not in stages:
+                stages.append("live_coding")
+
+        if (
+            "hiring_stages_json" in normalized
+            or "has_take_home_task" in normalized
+            or "has_live_coding" in normalized
+        ):
+            normalized["hiring_stages_json"] = stages
+
+        return normalized
+
     def execute_open_action(
         self,
         *,
@@ -160,7 +194,10 @@ class VacancyService:
                     notification_template="vacancy_open",
                     notification_text=self._copy("I couldn’t find an open vacancy to update right now."),
                 )
-            parsed = dict(structured_payload or {})
+            parsed = self._normalize_dependent_clarification_fields(
+                vacancy,
+                dict(structured_payload or {}),
+            )
             if not parsed:
                 return VacancyOpenActionResult(
                     status="vacancy_update_missing",
@@ -602,6 +639,7 @@ class VacancyService:
             current_question_key = current_vacancy_question_key(vacancy)
 
         parsed = self._filter_clarification_payload(parsed, current_question_key)
+        parsed = self._normalize_dependent_clarification_fields(vacancy, parsed)
         if parsed:
             self.repo.update_clarifications(vacancy, **parsed)
             confirmed_fields.update(self._answered_clarification_keys(vacancy, parsed))

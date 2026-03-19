@@ -636,6 +636,60 @@ def test_dispatch_manager_batch_for_vacancy_labels_not_fit_batch_explicitly() ->
     )
 
 
+def test_render_vacancy_card_suppresses_stale_take_home_stage_when_flag_disabled() -> None:
+    vacancy = SimpleNamespace(
+        id="vacancy-card-1",
+        manager_user_id="manager-card-1",
+        role_title="Node.js Developer",
+        project_description="AI repricing platform for ecommerce sellers.",
+        budget_min=6000,
+        budget_max=6000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        required_english_level="B2",
+        hiring_stages_json=["take_home", "technical_interview"],
+        has_take_home_task=False,
+        has_live_coding=False,
+    )
+    candidate = SimpleNamespace(id="candidate-card-1", user_id="candidate-user-card-1")
+    match = SimpleNamespace(
+        id="match-card-1",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-card-1",
+        status="candidate_decision_pending",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-card-1": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    message = service._render_vacancy_card_message(match=match)
+
+    assert "take-home task" not in message.lower()
+    assert "technical interview" in message.lower()
+
+
 def test_dispatch_candidate_batch_for_profile_does_not_resend_existing_cards_on_force_refresh() -> None:
     candidate = SimpleNamespace(id="candidate-force-1", user_id="candidate-user-force-1")
     vacancy = SimpleNamespace(id="vacancy-force-cand-1", role_title="Python Engineer")

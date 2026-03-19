@@ -177,6 +177,17 @@ class MatchingReviewService:
             return values[0]
         return f"{', '.join(values[:-1])} and {values[-1]}"
 
+    @staticmethod
+    def _effective_hiring_stages(vacancy) -> list[str]:
+        hiring_stages = display_hiring_stages(getattr(vacancy, "hiring_stages_json", None))
+        if not hiring_stages:
+            return []
+        if getattr(vacancy, "has_take_home_task", None) is False:
+            hiring_stages = [stage for stage in hiring_stages if stage.lower() != "take-home task"]
+        if getattr(vacancy, "has_live_coding", None) is False:
+            hiring_stages = [stage for stage in hiring_stages if stage.lower() != "live coding"]
+        return hiring_stages
+
     @classmethod
     def _match_reason_text(cls, match) -> str | None:
         rationale = getattr(match, "rationale_json", None) or {}
@@ -357,7 +368,7 @@ class MatchingReviewService:
         budget_label = self._vacancy_budget_label(vacancy)
         work_format = getattr(vacancy, "work_format", None)
         english_level = display_english_level(getattr(vacancy, "required_english_level", None))
-        hiring_stages = display_hiring_stages(getattr(vacancy, "hiring_stages_json", None))
+        hiring_stages = self._effective_hiring_stages(vacancy)
         compensation_sentence = None
         if budget_label and work_format:
             compensation_sentence = self._normalize_sentence(

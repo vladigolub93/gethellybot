@@ -301,6 +301,47 @@ def test_execute_open_action_requests_follow_up_for_hybrid_without_office_city()
     assert len(service.queue.messages) == 0
 
 
+def test_execute_open_action_removes_take_home_from_existing_hiring_stages() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    service.repo = fake_repo
+    service.state_service = FakeStateService()
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_OPEN)
+    vacancy.role_title = "Node.js Developer"
+    vacancy.budget_min = 6000
+    vacancy.budget_max = 7000
+    vacancy.budget_currency = "USD"
+    vacancy.budget_period = "month"
+    vacancy.work_format = "remote"
+    vacancy.countries_allowed_json = ["UA"]
+    vacancy.required_english_level = "b2"
+    vacancy.has_take_home_task = True
+    vacancy.take_home_paid = False
+    vacancy.has_live_coding = False
+    vacancy.hiring_stages_json = ["recruiter_screen", "take_home", "technical_interview"]
+    vacancy.team_size = 5
+    vacancy.project_description = "Pricing platform"
+    vacancy.primary_tech_stack_json = ["node.js", "redis"]
+
+    result = service.execute_open_action(
+        user=user,
+        raw_message_id="raw-open-update-3",
+        action="update_vacancy_preferences",
+        structured_payload={"has_take_home_task": False},
+        latest_user_message="Remove the take-home task.",
+    )
+
+    assert result is not None
+    assert result.status == "vacancy_updated_matching_requested"
+    assert vacancy.has_take_home_task is False
+    assert vacancy.take_home_paid is None
+    assert vacancy.hiring_stages_json == ["recruiter_screen", "technical_interview"]
+    assert len(service.queue.messages) == 1
+
+
 def test_execute_open_action_records_vacancy_feedback() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()
