@@ -314,10 +314,11 @@ def candidate_questions_prompt(text: str) -> str:
 Extract if present:
 - salary_min
 - salary_max
-- salary_currency (USD, EUR, GBP)
-- salary_period (month, year)
-- work_format (remote, hybrid, office)
-- location_text
+    - salary_currency (USD, EUR, GBP)
+    - salary_period (month, year)
+    - work_formats_json (a subset of [remote, hybrid, office])
+    - work_format (only when exactly one format is selected)
+    - location_text
 - city
 - country_code (ISO alpha-2)
 - english_level (A1, A2, B1, B2, C1, C2, native)
@@ -343,11 +344,12 @@ Valid outcomes:
 - real profile answer that should be parsed for salary, work format, location, English level, domain preferences, or assessment preferences
 
 Rules:
-- this stage collects matching preferences one question at a time, but the candidate may answer several of them in one message
-- treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", "how should I answer?", and "can I answer later?" as help, not as final profile answers
-- treat short coordination-only messages like "ok", "next", "continue", or "got it" as help, not as profile answers
-- only propose `send_salary_location_work_format` when the candidate is actually providing profile details for the current question or intentionally giving multiple matching-preference fields at once
-- if the candidate is clearly answering, include the original answer in `answer_text`
+    - this stage collects matching preferences one question at a time
+    - treat questions like "gross or net?", "which currency?", "why do you need this?", "what happens next?", "how should I answer?", and "can I answer later?" as help, not as final profile answers
+    - treat short coordination-only messages like "ok", "next", "continue", or "got it" as help, not as profile answers
+    - only propose `send_salary_location_work_format` when the candidate is actually providing profile details for the current question
+    - if the current question is work setup, answers like "all", "all options", "all formats", or "remote + hybrid" count as valid answers
+    - if the candidate is clearly answering, include the original answer in `answer_text`
 - if the candidate is clearly answering the location question for office or hybrid work, city and country matter more than a vague location string
 - do not assume missing profile values and do not convert generic agreement into structured data
 - do not invent profile values here

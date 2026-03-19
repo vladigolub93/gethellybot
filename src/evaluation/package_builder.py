@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.candidate_profile.work_formats import display_work_formats
+
 
 def _clean_list(values) -> list[str]:
     result: list[str] = []
@@ -24,8 +26,9 @@ def build_candidate_package(
     work_preferences = []
     if getattr(candidate_profile, "location_text", None):
         work_preferences.append(f"Location: {candidate_profile.location_text}")
-    if getattr(candidate_profile, "work_format", None):
-        work_preferences.append(f"Work format: {candidate_profile.work_format}")
+    candidate_work_formats = display_work_formats(candidate_profile)
+    if candidate_work_formats:
+        work_preferences.append(f"Work format: {candidate_work_formats}")
     if getattr(candidate_profile, "salary_min", None) is not None:
         salary_bits = [str(candidate_profile.salary_min)]
         if getattr(candidate_profile, "salary_currency", None):

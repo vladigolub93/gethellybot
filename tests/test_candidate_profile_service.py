@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+from src.candidate_profile.work_formats import build_work_formats_payload
 from src.candidate_profile.service import CandidateProfileService
 from src.candidate_profile.states import (
     CANDIDATE_STATE_CV_PENDING,
@@ -34,6 +35,7 @@ class FakeCandidateProfilesRepository:
             user_id=user_id,
             state=state,
             current_version_id=None,
+            work_formats_json=[],
             questions_context_json={},
             ready_at=None,
             deleted_at=None,
@@ -61,6 +63,14 @@ class FakeCandidateProfilesRepository:
         return profile
 
     def update_question_answers(self, profile, **kwargs):
+        if "work_formats_json" in kwargs:
+            normalized_payload = build_work_formats_payload(kwargs["work_formats_json"])
+            kwargs["work_formats_json"] = normalized_payload.get("work_formats_json") or []
+            kwargs["work_format"] = normalized_payload.get("work_format")
+        elif "work_format" in kwargs and kwargs["work_format"] is not None:
+            normalized_payload = build_work_formats_payload([kwargs["work_format"]])
+            kwargs["work_formats_json"] = normalized_payload.get("work_formats_json") or []
+            kwargs["work_format"] = normalized_payload.get("work_format")
         for key, value in kwargs.items():
             setattr(profile, key, value)
         return profile
@@ -638,6 +648,46 @@ def test_questions_require_city_for_hybrid_or_office() -> None:
     assert result.status == "follow_up"
     assert "city and country" in result.notification_text.lower()
     assert profile.questions_context_json["current_question_key"] == "location"
+
+
+def test_questions_accept_all_formats_and_move_to_location() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_question_answers(
+        profile,
+        salary_min=5000,
+        salary_currency="USD",
+        salary_period="month",
+    )
+    fake_repo.update_questions_context(
+        profile,
+        {
+            "follow_up_used": {"salary": False, "location": False, "work_format": False},
+            "current_question_key": "work_format",
+        },
+    )
+
+    result = service.handle_questions_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="all formats",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert profile.work_formats_json == ["remote", "hybrid", "office"]
+    assert getattr(profile, "work_format", None) is None
+    assert profile.questions_context_json["current_question_key"] == "location"
+    assert "city and country" in result.notification_text.lower()
 
 
 def test_questions_complete_after_new_matching_preferences() -> None:

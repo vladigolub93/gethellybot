@@ -116,7 +116,8 @@ def test_candidate_graph_flow_progresses_across_stage_sequence() -> None:
     assert questions_result.stage == "QUESTIONS_PENDING"
     assert questions_result.action_accepted is True
     assert questions_result.proposed_action == "send_salary_location_work_format"
-    assert questions_result.structured_payload["work_format"] == "remote"
+    assert questions_result.structured_payload["salary_min"] == 3000
+    assert "work_format" not in questions_result.structured_payload
 
     candidate.state = "VERIFICATION_PENDING"
     verification_help = service.maybe_build_stage_reply(

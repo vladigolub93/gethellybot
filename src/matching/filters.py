@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from src.candidate_profile.work_formats import candidate_accepts_vacancy_work_format
 from src.shared.hiring_taxonomy import compare_english_levels
 
 
@@ -26,8 +27,9 @@ def evaluate_hard_filters(candidate, vacancy) -> list[str]:
         if candidate.country_code not in vacancy.countries_allowed_json:
             reasons.append("location_mismatch")
 
-    if vacancy.work_format and candidate.work_format:
-        if vacancy.work_format != candidate.work_format:
+    if vacancy.work_format:
+        accepts_work_format = candidate_accepts_vacancy_work_format(candidate, vacancy.work_format)
+        if accepts_work_format is False:
             reasons.append("work_format_mismatch")
 
     if vacancy.work_format in {"office", "hybrid"} and getattr(vacancy, "office_city", None):

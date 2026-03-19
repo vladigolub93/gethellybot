@@ -11,6 +11,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.messaging.service import MessagingService
+from src.candidate_profile.work_formats import display_work_formats
 from src.state.service import StateService
 from src.telegram.keyboards import (
     candidate_vacancy_inline_keyboard,
@@ -237,7 +238,7 @@ class MatchingReviewService:
         match_reason = self._match_reason_text(match)
         fit_band = fit_band_label(self._match_fit_band(match)) or "Relevant fit"
         location = getattr(candidate, "location_text", None)
-        work_format = getattr(candidate, "work_format", None)
+        work_format = display_work_formats(candidate)
         english_level = display_english_level(getattr(candidate, "english_level", None))
         salary_label = self._candidate_salary_label(candidate)
         compensation_bits = []

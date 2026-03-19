@@ -39,6 +39,11 @@ class CandidateProfile(Base, UpdateTimestampMixin):
     country_code: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     work_format: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    work_formats_json: Mapped[list] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
+    )
     english_level: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preferred_domains_json: Mapped[list] = mapped_column(
         JSONB,

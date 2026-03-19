@@ -72,6 +72,33 @@ def test_compute_deterministic_score() -> None:
     assert breakdown["process_fit"] == 0.5
 
 
+def test_compute_deterministic_score_supports_multiple_candidate_work_formats() -> None:
+    score, breakdown = compute_deterministic_score(
+        candidate_core_skills=["python", "fastapi"],
+        candidate_full_skills=["python", "fastapi", "postgresql"],
+        vacancy_skills=["python", "postgresql"],
+        candidate_years_experience=6,
+        vacancy_seniority="senior",
+        candidate_seniority="senior",
+        candidate_target_role="Senior Python Backend Developer",
+        vacancy_role_title="Senior Python Engineer",
+        candidate_work_format=None,
+        candidate_work_formats_json=["remote", "hybrid"],
+        vacancy_work_format="hybrid",
+        candidate_country_code="PL",
+        candidate_city="Warsaw",
+        candidate_english_level="C1",
+        candidate_preferred_domains=["saas"],
+        vacancy_countries_allowed=["PL"],
+        vacancy_office_city="Warsaw",
+        vacancy_required_english_level="B2",
+        vacancy_project_description="B2B SaaS platform for developer analytics.",
+    )
+
+    assert score > 0.7
+    assert breakdown["work_format_fit"] == 1.0
+
+
 def test_compute_deterministic_score_rewards_cleaner_process() -> None:
     paid_score, paid_breakdown = compute_deterministic_score(
         candidate_core_skills=["python"],

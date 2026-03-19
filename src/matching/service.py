@@ -5,6 +5,7 @@ from src.candidate_profile.skills_inventory import (
     extract_full_hard_skills,
     normalize_skill_list,
 )
+from src.candidate_profile.work_formats import candidate_work_formats, display_work_formats
 from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.matching import MatchingRepository
@@ -295,6 +296,7 @@ class MatchingService:
                 candidate_target_role=getattr(candidate, "target_role", None),
                 vacancy_role_title=getattr(vacancy, "role_title", None),
                 candidate_work_format=getattr(candidate, "work_format", None),
+                candidate_work_formats_json=candidate_work_formats(candidate),
                 vacancy_work_format=getattr(vacancy, "work_format", None),
                 candidate_country_code=getattr(candidate, "country_code", None),
                 candidate_city=getattr(candidate, "city", None),
@@ -343,7 +345,8 @@ class MatchingService:
                 "candidate_summary": item["candidate_version"].summary_json or {},
                 "candidate_target_role": getattr(item["candidate"], "target_role", None),
                 "candidate_english_level": getattr(item["candidate"], "english_level", None),
-                "candidate_work_format": getattr(item["candidate"], "work_format", None),
+                "candidate_work_format": display_work_formats(item["candidate"]),
+                "candidate_work_formats": candidate_work_formats(item["candidate"]),
                 "candidate_country_code": getattr(item["candidate"], "country_code", None),
                 "candidate_city": getattr(item["candidate"], "city", None),
                 "candidate_preferred_domains": getattr(item["candidate"], "preferred_domains_json", None),

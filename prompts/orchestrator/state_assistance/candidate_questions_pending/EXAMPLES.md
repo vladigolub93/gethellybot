@@ -3,5 +3,5 @@ Example user message:
 
 Expected response style:
 - explain matching relevance
-- mention salary, location, and work format
+- guide the candidate back to the current field only
 - give a short example if useful

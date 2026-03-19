@@ -43,6 +43,7 @@ from src.graph.stages.manager import (
     load_manager_stage_context_node,
     load_manager_stage_knowledge_node,
 )
+from src.candidate_profile.questions import current_candidate_question_key
 from src.orchestrator.policy import resolve_state_context
 from src.orchestrator.state_memory import build_state_memory
 
@@ -401,11 +402,23 @@ class LangGraphStageAgentService:
     ) -> dict[str, Any]:
         compiled = self._get_compiled_graph(stage)
         context = resolve_state_context(role=self._resolve_role(user), state=stage)
+        entity_type = None
+        entity_id = None
+        current_question_key = None
+        if self._resolve_role(user) == "candidate":
+            candidate = self.candidates.get_active_by_user_id(getattr(user, "id", None))
+            if candidate is not None:
+                entity_type = "candidate_profile"
+                entity_id = str(candidate.id)
+                current_question_key = current_candidate_question_key(candidate)
         state_input = self.router.build_initial_state(
             stage=stage,
             user_id=str(getattr(user, "id", "")) or None,
             telegram_chat_id=str(getattr(user, "telegram_chat_id", "")) or None,
             role=self._resolve_role(user),
+            entity_type=entity_type,
+            entity_id=entity_id,
+            current_question_key=current_question_key,
             latest_user_message=latest_user_message,
             latest_message_type=latest_message_type,
             allowed_actions=context.allowed_actions,

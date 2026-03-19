@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from src.candidate_profile.work_formats import parse_work_formats
 from src.shared.hiring_taxonomy import extract_domains, normalize_english_level
 
 
@@ -114,14 +115,7 @@ def parse_salary_expectations(text: str) -> dict:
 
 
 def parse_work_format(text: str) -> dict:
-    lowered = _normalize_text(text).lower()
-    if any(token in lowered for token in ("remote", "удаленно", "удалённо", "віддалено", "дистанційно")):
-        return {"work_format": "remote"}
-    if any(token in lowered for token in ("hybrid", "гибрид", "гібрид")):
-        return {"work_format": "hybrid"}
-    if any(token in lowered for token in ("office", "onsite", "on-site", "офис", "офіс", "онсайт")):
-        return {"work_format": "office"}
-    return {}
+    return parse_work_formats(text)
 
 
 def parse_english_level(text: str) -> dict:

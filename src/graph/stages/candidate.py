@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from src.candidate_profile.questions import (
+    enrich_candidate_question_payload_for_current_question,
+)
 from src.candidate_profile.verification import format_verification_phrase_feedback
 from src.db.repositories.candidate_verifications import CandidateVerificationsRepository
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
@@ -128,7 +131,12 @@ def build_candidate_stage_detect_node(session):
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
             if payload.get("proposed_action") == "send_salary_location_work_format":
                 answer_text = payload.get("answer_text") or text
-                parsed_payload = safe_parse_candidate_questions(session, answer_text).payload
+                parsed_payload = dict(safe_parse_candidate_questions(session, answer_text).payload or {})
+                parsed_payload = enrich_candidate_question_payload_for_current_question(
+                    parsed=parsed_payload,
+                    text=answer_text,
+                    current_question_key=state.current_question_key,
+                )
                 if parsed_payload:
                     state.proposed_action = "send_salary_location_work_format"
                     state.structured_payload = parsed_payload

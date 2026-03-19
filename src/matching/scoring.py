@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from math import sqrt
 
+from src.candidate_profile.work_formats import candidate_accepts_vacancy_work_format, candidate_work_formats
 from src.candidate_profile.skills_inventory import normalize_skill_list
 from src.shared.hiring_taxonomy import compare_english_levels, extract_domains
 
@@ -311,6 +312,7 @@ def compute_deterministic_score(
     candidate_target_role=None,
     vacancy_role_title=None,
     candidate_work_format=None,
+    candidate_work_formats_json=None,
     vacancy_work_format=None,
     candidate_country_code=None,
     candidate_city=None,
@@ -357,8 +359,16 @@ def compute_deterministic_score(
         role_fit = overlap / union
 
     work_format_fit = 0.5
-    if candidate_work_format and vacancy_work_format:
-        work_format_fit = 1.0 if str(candidate_work_format).lower() == str(vacancy_work_format).lower() else 0.0
+    candidate_work_format_state = type(
+        "_WorkFormatCandidate",
+        (),
+        {
+            "work_format": candidate_work_format,
+            "work_formats_json": candidate_work_formats_json,
+        },
+    )()
+    if candidate_work_formats(candidate_work_format_state) and vacancy_work_format:
+        work_format_fit = 1.0 if candidate_accepts_vacancy_work_format(candidate_work_format_state, vacancy_work_format) else 0.0
 
     english_fit = 0.5
     english_comparison = compare_english_levels(candidate_english_level, vacancy_required_english_level)

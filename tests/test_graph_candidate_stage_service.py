@@ -801,7 +801,7 @@ def test_graph_candidate_stage_accepts_real_questions_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.candidates = FakeCandidateProfilesRepository(
-        SimpleNamespace(id="cp6", state="QUESTIONS_PENDING")
+        SimpleNamespace(id="cp6", state="QUESTIONS_PENDING", questions_context_json={})
     )
     service.interviews = FakeInterviewsRepository()
     service.matches = FakeMatchesRepository()
@@ -824,8 +824,80 @@ def test_graph_candidate_stage_accepts_real_questions_answer() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "send_salary_location_work_format"
     assert result.structured_payload["salary_min"] == 3000
-    assert result.structured_payload["location_text"] == "Warsaw"
-    assert result.structured_payload["work_format"] == "remote"
+    assert "location_text" not in result.structured_payload
+    assert "work_format" not in result.structured_payload
+
+
+def test_graph_candidate_stage_accepts_all_formats_for_work_setup_question() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp6work",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            questions_context_json={"current_question_key": "work_format"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9work",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="all formats",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["work_formats_json"] == ["remote", "hybrid", "office"]
+    assert result.structured_payload["work_format"] is None
+
+
+def test_graph_candidate_stage_rejects_location_when_waiting_for_work_setup() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp6location",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            questions_context_json={"current_question_key": "work_format"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9location",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Warsaw, Poland",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is False
+    assert result.proposed_action is None
 
 
 def test_graph_candidate_stage_handles_verification_pending_help() -> None:

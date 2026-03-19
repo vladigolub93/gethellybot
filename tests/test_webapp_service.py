@@ -302,6 +302,7 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
         "countryCode": "UA",
         "city": "Kyiv",
         "workFormat": "remote",
+        "workFormats": ["remote"],
         "englishLevel": "B2",
         "preferredDomains": ["Fintech", "SaaS"],
         "showTakeHomeTaskRoles": True,
@@ -403,7 +404,7 @@ def test_candidate_opportunity_detail_includes_why_this_role() -> None:
 
     assert payload["vacancy"]["whyThisRole"] == (
         "Your profile overlaps with this role on Node.js, PostgreSQL. "
-        "It also matches your preferred work format: remote."
+        "It also matches your preferred work setup: remote."
     )
 
 
@@ -747,6 +748,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "location": "Kyiv",
             "salaryExpectation": "5000-6000 USD per month",
             "workFormat": "remote",
+            "workFormats": ["remote"],
             "englishLevel": "C1",
             "preferredDomains": ["Any domain"],
             "stage": "approved",
@@ -773,7 +775,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
     assert match_detail_payload["match"]["needsManagerAction"] is False
     assert match_detail_payload["vacancy"]["whyThisRole"] == (
         "Your profile overlaps with this role on Node.js. "
-        "It also matches your preferred work format: remote."
+        "It also matches your preferred work setup: remote."
     )
     assert match_detail_payload["vacancy"]["requiredEnglishLevel"] == "B2"
     assert match_detail_payload["vacancy"]["hiringStages"] == ["Recruiter screen", "Technical interview", "Final interview"]

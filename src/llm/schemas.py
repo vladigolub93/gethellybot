@@ -35,6 +35,7 @@ class CandidateQuestionParseSchema(BaseModel):
     city: Optional[str] = None
     country_code: Optional[str] = None
     work_format: Optional[str] = None
+    work_formats_json: List[str] = Field(default_factory=list)
     english_level: Optional[str] = None
     preferred_domains_json: List[str] = Field(default_factory=list)
     show_take_home_task_roles: Optional[bool] = None

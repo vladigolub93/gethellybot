@@ -21,6 +21,7 @@ class HellyGraphState:
     parsed_input: dict[str, Any] = field(default_factory=dict)
     proposed_action: Optional[str] = None
     structured_payload: dict[str, Any] = field(default_factory=dict)
+    current_question_key: Optional[str] = None
     validation_result: dict[str, Any] = field(default_factory=dict)
     reply_text: Optional[str] = None
     follow_up_needed: bool = False
@@ -48,6 +49,7 @@ class HellyGraphState:
             "parsed_input": dict(self.parsed_input),
             "proposed_action": self.proposed_action,
             "structured_payload": dict(self.structured_payload),
+            "current_question_key": self.current_question_key,
             "validation_result": dict(self.validation_result),
             "reply_text": self.reply_text,
             "follow_up_needed": self.follow_up_needed,

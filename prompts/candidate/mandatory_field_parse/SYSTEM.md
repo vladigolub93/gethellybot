@@ -6,7 +6,9 @@ Task:
 Rules:
 - extract only information explicitly stated or strongly implied
 - normalize currency to `USD`, `EUR`, or `GBP` when possible
-- normalize work format to `remote`, `hybrid`, or `office`
+- normalize work formats to values from `remote`, `hybrid`, `office`
+- if the candidate allows more than one format, return all of them in `work_formats_json`
+- use `work_format` only when exactly one format is selected
 - normalize country to ISO alpha-2 if derivable
 - normalize English level to `A1`, `A2`, `B1`, `B2`, `C1`, `C2`, or `native`
 - for preferred domains, return normalized lowercase values and use `["any"]` if the candidate says there is no preference
@@ -23,6 +25,7 @@ Required output fields:
 - `city`
 - `country_code`
 - `work_format`
+- `work_formats_json`
 - `english_level`
 - `preferred_domains_json`
 - `show_take_home_task_roles`

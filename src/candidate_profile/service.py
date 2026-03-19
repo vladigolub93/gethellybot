@@ -13,6 +13,13 @@ from src.candidate_profile.question_prompts import (
     missing_questions_prompt,
     question_prompt,
 )
+from src.candidate_profile.questions import (
+    current_candidate_question_key,
+    enrich_candidate_question_payload_for_current_question,
+    filter_candidate_question_payload,
+    missing_candidate_question_keys,
+)
+from src.candidate_profile.work_formats import candidate_work_formats
 from src.candidate_profile.verification import build_verification_phrase
 from src.candidate_profile.verification import format_verification_phrase_feedback
 from src.candidate_profile.verification import phrase_matches_verification
@@ -498,6 +505,12 @@ class CandidateProfileService:
 
         llm_result = safe_parse_candidate_questions(self.session, normalized_text)
         parsed = dict(llm_result.payload or {})
+        current_question_key = current_candidate_question_key(profile)
+        parsed = enrich_candidate_question_payload_for_current_question(
+            parsed=parsed,
+            text=normalized_text,
+            current_question_key=current_question_key,
+        )
         return self._apply_question_payload(
             profile=profile,
             raw_message_id=raw_message_id,
@@ -519,7 +532,7 @@ class CandidateProfileService:
         questions_context = self._ensure_questions_context(profile)
         current_question_key = questions_context.get("current_question_key")
         if current_question_key not in QUESTION_KEYS:
-            current_question_key = missing_before[0] if missing_before else None
+            current_question_key = current_candidate_question_key(profile)
 
         parsed = self._filter_question_payload(parsed, current_question_key)
         if parsed:
@@ -554,61 +567,27 @@ class CandidateProfileService:
             return CandidateQuestionsResult(
                 status="next_question",
                 notification_template="candidate_questions_follow_up",
-                notification_text=question_prompt(next_question_key, work_format=getattr(profile, "work_format", None)),
+                notification_text=question_prompt(next_question_key, work_formats=candidate_work_formats(profile)),
             )
 
         if parsed:
             return CandidateQuestionsResult(
                 status="follow_up",
                 notification_template="candidate_questions_follow_up",
-                notification_text=follow_up_prompt(current_question_key, work_format=getattr(profile, "work_format", None)),
+                notification_text=follow_up_prompt(current_question_key, work_formats=candidate_work_formats(profile)),
             )
 
         return CandidateQuestionsResult(
             status="incomplete",
             notification_template="candidate_questions_missing",
-            notification_text=question_prompt(next_question_key, work_format=getattr(profile, "work_format", None)),
+            notification_text=question_prompt(next_question_key, work_formats=candidate_work_formats(profile)),
         )
 
     def _filter_question_payload(self, parsed: dict, current_question_key: str | None) -> dict:
-        if not parsed or current_question_key is None:
-            return dict(parsed or {})
-
-        allowed_by_question = {
-            "salary": {"salary_min", "salary_max", "salary_currency", "salary_period"},
-            "work_format": {"work_format"},
-            "location": {"location_text", "city", "country_code"},
-            "english_level": {"english_level"},
-            "preferred_domains": {"preferred_domains_json"},
-            "assessment_preferences": {"show_take_home_task_roles", "show_live_coding_roles"},
-        }
-        allowed_keys = allowed_by_question.get(current_question_key, set())
-        return {key: value for key, value in parsed.items() if key in allowed_keys}
+        return filter_candidate_question_payload(parsed, current_question_key)
 
     def _missing_question_keys(self, profile) -> list[str]:
-        missing = []
-        salary_min = getattr(profile, "salary_min", None)
-        salary_max = getattr(profile, "salary_max", None)
-        work_format = getattr(profile, "work_format", None)
-        country_code = getattr(profile, "country_code", None)
-        city = getattr(profile, "city", None)
-        english_level = getattr(profile, "english_level", None)
-        preferred_domains_json = list(getattr(profile, "preferred_domains_json", None) or [])
-        show_take_home_task_roles = getattr(profile, "show_take_home_task_roles", None)
-        show_live_coding_roles = getattr(profile, "show_live_coding_roles", None)
-        if salary_min is None and salary_max is None:
-            missing.append("salary")
-        if not work_format:
-            missing.append("work_format")
-        if not country_code or (work_format in {"office", "hybrid"} and not city):
-            missing.append("location")
-        if not english_level:
-            missing.append("english_level")
-        if not preferred_domains_json:
-            missing.append("preferred_domains")
-        if show_take_home_task_roles is None or show_live_coding_roles is None:
-            missing.append("assessment_preferences")
-        return missing
+        return missing_candidate_question_keys(profile)
 
     def _ensure_questions_context(self, profile) -> dict:
         current = dict(profile.questions_context_json or {})
@@ -626,10 +605,7 @@ class CandidateProfileService:
         return None
 
     def _next_missing_question_key(self, profile) -> Optional[str]:
-        missing_keys = self._missing_question_keys(profile)
-        if not missing_keys:
-            return None
-        return missing_keys[0]
+        return current_candidate_question_key(profile)
 
     def execute_deletion_action(
         self,
@@ -746,7 +722,7 @@ class CandidateProfileService:
                     notification_template="candidate_ready",
                     notification_text=self._copy(
                         f"{lead} To use this cleanly in matching, I still need one more thing: "
-                        f"{question_prompt(next_key, work_format=getattr(profile, 'work_format', None))}"
+                        f"{question_prompt(next_key, work_formats=candidate_work_formats(profile))}"
                     ),
                 )
             open_vacancies = self.vacancies.get_open_vacancies()
@@ -830,7 +806,7 @@ class CandidateProfileService:
         labels = []
         if any(key in parsed for key in {"salary_min", "salary_max", "salary_currency", "salary_period"}):
             labels.append("salary preferences")
-        if "work_format" in parsed:
+        if any(key in parsed for key in {"work_format", "work_formats_json"}):
             labels.append("work format")
         if any(key in parsed for key in {"location_text", "country_code", "city"}):
             labels.append("location")

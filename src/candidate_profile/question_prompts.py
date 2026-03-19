@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.candidate_profile.work_formats import work_formats_require_city
+
 QUESTION_KEYS = (
     "salary",
     "work_format",
@@ -24,13 +26,13 @@ def initial_questions_prompt() -> str:
     return question_prompt("salary")
 
 
-def question_prompt(question_key: str, *, work_format: str | None = None) -> str:
+def question_prompt(question_key: str, *, work_formats: list[str] | None = None) -> str:
     prompts = {
         "salary": "Let’s lock in your preferences. What salary range would feel right for your next role?",
-        "work_format": "What work setup are you open to: remote only, or also hybrid / office?",
+        "work_format": "What work setups are okay for you: remote, hybrid, office, or any combination?",
         "location": (
             "Thanks. For office or hybrid roles I need your current city and country."
-            if work_format in {"office", "hybrid"}
+            if work_formats_require_city(work_formats or [])
             else "Thanks. What country are you currently based in? You can add your city too if you want."
         ),
         "english_level": "What English level would you be comfortable interviewing and working in? For example: B1, B2, or C1.",
@@ -40,13 +42,13 @@ def question_prompt(question_key: str, *, work_format: str | None = None) -> str
     return prompts[question_key]
 
 
-def follow_up_prompt(question_key: str, *, work_format: str | None = None) -> str:
+def follow_up_prompt(question_key: str, *, work_formats: list[str] | None = None) -> str:
     prompts = {
         "salary": "Quick clarification: share the amount, currency, and period for your salary expectations.",
-        "work_format": "Quick clarification: tell me if you want remote, hybrid, or office.",
+        "work_format": "Quick clarification: tell me which setups are okay for you, for example remote, remote + hybrid, or all formats.",
         "location": (
             "Quick clarification: for office or hybrid roles I need your current city and country."
-            if work_format in {"office", "hybrid"}
+            if work_formats_require_city(work_formats or [])
             else "Quick clarification: share your current country. You can add city too."
         ),
         "english_level": "Quick clarification: share your English level in a simple format like B1, B2, or C1.",
@@ -56,7 +58,7 @@ def follow_up_prompt(question_key: str, *, work_format: str | None = None) -> st
     return prompts[question_key]
 
 
-def missing_questions_prompt(missing_keys, *, work_format: str | None = None) -> str:
+def missing_questions_prompt(missing_keys, *, work_formats: list[str] | None = None) -> str:
     if not missing_keys:
         return "I have everything I need here."
-    return question_prompt(missing_keys[0], work_format=work_format)
+    return question_prompt(missing_keys[0], work_formats=work_formats)

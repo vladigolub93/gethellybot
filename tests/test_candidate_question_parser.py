@@ -14,6 +14,7 @@ def test_parse_candidate_questions_combined_text() -> None:
     assert parsed["city"] == "Warsaw"
     assert parsed["country_code"] == "PL"
     assert parsed["work_format"] == "remote"
+    assert parsed["work_formats_json"] == ["remote"]
 
 
 def test_parse_candidate_questions_partial_text() -> None:
@@ -21,6 +22,7 @@ def test_parse_candidate_questions_partial_text() -> None:
 
     assert parsed["location_text"] == "Berlin, Germany"
     assert parsed["work_format"] == "hybrid"
+    assert parsed["work_formats_json"] == ["hybrid"]
 
 
 def test_parse_candidate_questions_extracts_matching_preferences() -> None:
@@ -46,7 +48,22 @@ def test_parse_candidate_questions_ru_ua_matching_preferences() -> None:
     assert parsed["salary_period"] == "month"
     assert parsed["country_code"] == "UA"
     assert parsed["work_format"] == "remote"
+    assert parsed["work_formats_json"] == ["remote"]
     assert parsed["english_level"] == "b2"
     assert parsed["preferred_domains_json"] == ["fintech", "saas"]
     assert parsed["show_take_home_task_roles"] is True
     assert parsed["show_live_coding_roles"] is False
+
+
+def test_parse_candidate_questions_all_formats() -> None:
+    parsed = parse_candidate_questions("All formats are fine.")
+
+    assert parsed["work_formats_json"] == ["remote", "hybrid", "office"]
+    assert parsed["work_format"] is None
+
+
+def test_parse_candidate_questions_remote_and_hybrid() -> None:
+    parsed = parse_candidate_questions("Remote + hybrid only.")
+
+    assert parsed["work_formats_json"] == ["remote", "hybrid"]
+    assert parsed["work_format"] is None

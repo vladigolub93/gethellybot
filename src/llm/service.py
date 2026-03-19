@@ -7,6 +7,7 @@ from typing import Optional, TypeVar
 
 from pydantic import BaseModel
 
+from src.candidate_profile.work_formats import build_work_formats_payload, parse_work_formats
 from src.candidate_profile.skills_inventory import normalize_skill_list
 from src.candidate_profile.question_parser import COUNTRY_CODES, parse_candidate_questions
 from src.candidate_profile.summary_builder import build_approval_summary_text, build_candidate_summary
@@ -769,6 +770,12 @@ def parse_candidate_questions_with_llm(text: str) -> LLMResult:
         primary_model=get_settings().openai_model_extraction,
         prompt_version="candidate_questions_parse_llm_v1",
     )
+    work_formats_payload = build_work_formats_payload(result.payload.get("work_formats_json") or [])
+    if not work_formats_payload and result.payload.get("work_format"):
+        work_formats_payload = build_work_formats_payload([result.payload.get("work_format")])
+    deterministic_work_formats = parse_work_formats(text)
+    if deterministic_work_formats:
+        work_formats_payload = deterministic_work_formats
     payload = {
         "salary_min": result.payload.get("salary_min"),
         "salary_max": result.payload.get("salary_max"),
@@ -777,7 +784,8 @@ def parse_candidate_questions_with_llm(text: str) -> LLMResult:
         "location_text": _clean_text(result.payload.get("location_text"), limit=160),
         "city": _clean_text(result.payload.get("city"), limit=80),
         "country_code": (result.payload.get("country_code") or "").strip().upper() or None,
-        "work_format": _normalize_work_format(result.payload.get("work_format")),
+        "work_format": work_formats_payload.get("work_format"),
+        "work_formats_json": work_formats_payload.get("work_formats_json"),
         "english_level": normalize_english_level(result.payload.get("english_level")),
         "preferred_domains_json": _normalize_domain_list(
             result.payload.get("preferred_domains_json") or []
@@ -2242,7 +2250,7 @@ def safe_candidate_questions_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Answer the current question. I collect salary expectations, location, and work format one by one, and if anything is unclear you can ask me.",
+        or "Answer the current question. I collect salary expectations, work setup, location, and the rest one by one, and if anything is unclear you can ask me.",
         "proposed_action": None,
         "answer_text": None,
         "keep_current_state": True,

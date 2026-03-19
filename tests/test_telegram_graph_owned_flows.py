@@ -319,11 +319,9 @@ class DispatchingStageAgentService:
                     proposed_action="send_salary_location_work_format",
                     action_accepted=True,
                     structured_payload={
-                        "salary_amount": 3000,
+                        "salary_min": 3000,
                         "salary_currency": "USD",
                         "salary_period": "month",
-                        "location": "Warsaw",
-                        "work_format": "remote",
                     },
                 )
             if command == "accept interview":
@@ -465,7 +463,8 @@ def test_graph_owned_candidate_text_flow_routes_entry_cv_and_questions() -> None
     )
     assert templates == ["candidate_questions_follow_up"]
     assert service.candidate_service.question_calls
-    assert service.candidate_service.question_calls[-1]["parsed_payload"]["work_format"] == "remote"
+    assert service.candidate_service.question_calls[-1]["parsed_payload"]["salary_min"] == 3000
+    assert "work_format" not in service.candidate_service.question_calls[-1]["parsed_payload"]
 
 
 def test_graph_owned_manager_text_flow_routes_entry_intake_and_clarifications() -> None:

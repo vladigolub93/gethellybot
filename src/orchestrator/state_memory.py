@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.candidate_profile.work_formats import display_work_formats
 from src.matching.filters import evaluate_hard_filters
 from src.shared.hiring_taxonomy import display_domains, display_english_level, display_hiring_stages
 
@@ -267,9 +268,9 @@ def _candidate_preferences_line(candidate) -> str | None:
     location_text = getattr(candidate, "location_text", None)
     if location_text:
         parts.append(f"location {location_text}")
-    work_format = getattr(candidate, "work_format", None)
-    if work_format:
-        parts.append(f"work format {work_format}")
+    work_formats = display_work_formats(candidate)
+    if work_formats:
+        parts.append(f"work format {work_formats}")
     english_level = display_english_level(getattr(candidate, "english_level", None))
     if english_level:
         parts.append(f"english {english_level}")

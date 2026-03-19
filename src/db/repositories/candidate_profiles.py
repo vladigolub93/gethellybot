@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
+from src.candidate_profile.work_formats import build_work_formats_payload, normalize_work_format
 from src.db.models.candidates import CandidateProfile, CandidateProfileVersion
 
 
@@ -145,6 +146,7 @@ class CandidateProfilesRepository:
         country_code=None,
         city=None,
         work_format=None,
+        work_formats_json=None,
         english_level=None,
         preferred_domains_json=None,
         show_take_home_task_roles=None,
@@ -164,8 +166,14 @@ class CandidateProfilesRepository:
             profile.country_code = country_code
         if city is not None:
             profile.city = city
-        if work_format is not None:
-            profile.work_format = work_format
+        if work_formats_json is not None:
+            normalized_payload = build_work_formats_payload(work_formats_json)
+            profile.work_formats_json = normalized_payload.get("work_formats_json") or []
+            profile.work_format = normalized_payload.get("work_format")
+        elif work_format is not None:
+            normalized_work_format = normalize_work_format(work_format)
+            profile.work_formats_json = [normalized_work_format] if normalized_work_format else []
+            profile.work_format = normalized_work_format
         if english_level is not None:
             profile.english_level = english_level
         if preferred_domains_json is not None:

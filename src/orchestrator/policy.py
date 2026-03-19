@@ -96,12 +96,10 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
         allowed_actions=["send_salary_location_work_format"],
         assistance_prompt_slug="candidate_questions_pending",
         guidance_text=(
-            "Answer the current profile question so I can save the right matching preferences. "
-            "You can also answer several of these in one message if that is easier."
+            "Answer the current profile question so I can save the right matching preferences."
         ),
         help_text=(
-            "I collect salary, work format, location, English level, domain preferences, and assessment preferences one by one so matching stays clean. "
-            "If you prefer, you can answer several of them in one message."
+            "I collect salary, work setup, location, English level, domain preferences, and assessment preferences one by one so matching stays clean."
         ),
         missing_requirements=["candidate_questions"],
     ),

@@ -9,6 +9,11 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from src.candidate_profile.skills_inventory import candidate_version_full_hard_skills, display_skill_list
+from src.candidate_profile.work_formats import (
+    candidate_accepts_vacancy_work_format,
+    candidate_work_formats,
+    display_work_formats,
+)
 from src.cv_challenge.service import CandidateCvChallengeService
 from src.config.settings import get_settings
 from src.db.models.core import User
@@ -426,7 +431,8 @@ class WebAppService:
             "location": getattr(profile, "location_text", None),
             "countryCode": getattr(profile, "country_code", None),
             "city": getattr(profile, "city", None),
-            "workFormat": getattr(profile, "work_format", None),
+            "workFormat": display_work_formats(profile),
+            "workFormats": candidate_work_formats(profile),
             "englishLevel": display_english_level(getattr(profile, "english_level", None)),
             "preferredDomains": display_domains(getattr(profile, "preferred_domains_json", None)),
             "showTakeHomeTaskRoles": getattr(profile, "show_take_home_task_roles", None),
@@ -467,7 +473,8 @@ class WebAppService:
                 "location": getattr(profile, "location_text", None),
                 "countryCode": getattr(profile, "country_code", None),
                 "city": getattr(profile, "city", None),
-                "workFormat": getattr(profile, "work_format", None),
+                "workFormat": display_work_formats(profile),
+                "workFormats": candidate_work_formats(profile),
                 "englishLevel": display_english_level(getattr(profile, "english_level", None)),
                 "preferredDomains": display_domains(getattr(profile, "preferred_domains_json", None)),
                 "showTakeHomeTaskRoles": getattr(profile, "show_take_home_task_roles", None),
@@ -593,7 +600,8 @@ class WebAppService:
                 getattr(profile, "salary_currency", None),
                 getattr(profile, "salary_period", None),
             ),
-            "workFormat": getattr(profile, "work_format", None),
+            "workFormat": display_work_formats(profile),
+            "workFormats": candidate_work_formats(profile),
             "englishLevel": display_english_level(getattr(profile, "english_level", None)),
             "preferredDomains": display_domains(getattr(profile, "preferred_domains_json", None)),
             "stage": match.status,
@@ -662,6 +670,7 @@ class WebAppService:
                     "countryCode": None,
                     "city": None,
                     "workFormat": None,
+                    "workFormats": [],
                     "englishLevel": None,
                     "preferredDomains": [],
                     "showTakeHomeTaskRoles": None,
@@ -841,10 +850,10 @@ class WebAppService:
             elif role_title:
                 reasons.append(f"This candidate looks relevant for the role {role_title}.")
 
-        candidate_work_format = getattr(candidate_profile, "work_format", None)
+        candidate_work_format = display_work_formats(candidate_profile)
         vacancy_work_format = getattr(vacancy, "work_format", None)
-        if candidate_work_format and vacancy_work_format and str(candidate_work_format).lower() == str(vacancy_work_format).lower():
-            reasons.append(f"Preferred work format already matches {candidate_work_format}.")
+        if candidate_work_format and vacancy_work_format and candidate_accepts_vacancy_work_format(candidate_profile, vacancy_work_format):
+            reasons.append(f"Preferred work format already includes {vacancy_work_format}.")
 
         candidate_country = getattr(candidate_profile, "country_code", None)
         countries_allowed = list(getattr(vacancy, "countries_allowed_json", None) or [])
@@ -893,10 +902,10 @@ class WebAppService:
             elif role_title:
                 reasons.append(f"This role is relevant to your current profile for {role_title}.")
 
-        candidate_work_format = getattr(candidate_profile, "work_format", None)
+        candidate_work_format = display_work_formats(candidate_profile)
         vacancy_work_format = getattr(vacancy, "work_format", None)
-        if candidate_work_format and vacancy_work_format and str(candidate_work_format).lower() == str(vacancy_work_format).lower():
-            reasons.append(f"It also matches your preferred work format: {candidate_work_format}.")
+        if candidate_work_format and vacancy_work_format and candidate_accepts_vacancy_work_format(candidate_profile, vacancy_work_format):
+            reasons.append(f"It also matches your preferred work setup: {vacancy_work_format}.")
 
         candidate_country = getattr(candidate_profile, "country_code", None)
         countries_allowed = list(getattr(vacancy, "countries_allowed_json", None) or [])
