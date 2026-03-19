@@ -13,11 +13,18 @@ from src.vacancy.questions import enrich_vacancy_clarification_payload_for_curre
         ("english_level", "выше среднего", {"english_level": "b2"}),
         ("english_level", "б2", {"english_level": "b2"}),
         ("preferred_domains", "нет", {"preferred_domains_json": ["any"]}),
+        ("preferred_domains", "No", {"preferred_domains_json": ["any"]}),
+        ("preferred_domains", "Nope", {"preferred_domains_json": ["any"]}),
         ("preferred_domains", "мне все равно", {"preferred_domains_json": ["any"]}),
         ("preferred_domains", "мне все рано", {"preferred_domains_json": ["any"]}),
         (
             "assessment_preferences",
             "не хочу",
+            {"show_take_home_task_roles": False, "show_live_coding_roles": False},
+        ),
+        (
+            "assessment_preferences",
+            "No test and live code",
             {"show_take_home_task_roles": False, "show_live_coding_roles": False},
         ),
         (
@@ -45,6 +52,7 @@ def test_candidate_current_question_utterance_corpus(question_key: str, text: st
         ("office_city", "Warsaw", {"office_city": "Warsaw"}),
         ("english_level", "с1", {"required_english_level": "c1"}),
         ("assessment", "оба", {"has_take_home_task": True, "has_live_coding": True}),
+        ("assessment", "No test and live code", {"has_take_home_task": False, "has_live_coding": False}),
         ("assessment", "только тестовая таска", {"has_take_home_task": True, "has_live_coding": False}),
         ("take_home_paid", "оплачиваемое", {"take_home_paid": True}),
         ("take_home_paid", "неоплачиваемое", {"take_home_paid": False}),

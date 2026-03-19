@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src.candidate_profile.question_parser import (
     COUNTRY_CODES,
     parse_assessment_preferences,
@@ -27,6 +29,8 @@ _DOMAIN_NO_PREFERENCE_VALUES = {
     "any",
     "anything",
     "whatever",
+    "no",
+    "nope",
     "нет",
     "нету",
     "никаких",
@@ -57,6 +61,7 @@ _ASSESSMENT_TAKE_HOME_TOKENS = (
 _ASSESSMENT_LIVE_CODING_TOKENS = (
     "live coding",
     "live-coding",
+    "live code",
     "coding interview",
     "pair programming",
     "лайвкодинг",
@@ -161,6 +166,34 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
     has_only = any(token in normalized for token in _ASSESSMENT_ONLY_TOKENS)
     has_take_home = any(token in normalized for token in _ASSESSMENT_TAKE_HOME_TOKENS)
     has_live_coding = any(token in normalized for token in _ASSESSMENT_LIVE_CODING_TOKENS)
+    negative_take_home = bool(
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b", normalized)
+    )
+    negative_live_coding = bool(
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b", normalized)
+    )
+    shared_negative_assessment = bool(
+        re.search(
+            r"\b(no|nope|not|нет|ні|без)\b.*\b(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b.*\b(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b",
+            normalized,
+        )
+    )
+    if shared_negative_assessment:
+        negative_take_home = True
+        negative_live_coding = True
+
+    if negative_take_home or negative_live_coding:
+        payload = {}
+        if negative_take_home:
+            payload["show_take_home_task_roles"] = False
+        if negative_live_coding:
+            payload["show_live_coding_roles"] = False
+        if payload:
+            if "show_take_home_task_roles" not in payload and explicit.get("show_take_home_task_roles") is not None:
+                payload["show_take_home_task_roles"] = explicit["show_take_home_task_roles"]
+            if "show_live_coding_roles" not in payload and explicit.get("show_live_coding_roles") is not None:
+                payload["show_live_coding_roles"] = explicit["show_live_coding_roles"]
+            return payload
 
     if normalized in {
         "только take-home",

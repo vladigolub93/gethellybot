@@ -48,6 +48,7 @@ _ASSESSMENT_TAKE_HOME_TOKENS = (
 _ASSESSMENT_LIVE_CODING_TOKENS = (
     "live coding",
     "live-coding",
+    "live code",
     "coding interview",
     "pair programming",
     "лайвкодинг",
@@ -157,6 +158,34 @@ def _fallback_assessment_payload(text: str | None) -> dict:
     has_only = any(token in normalized for token in _ASSESSMENT_ONLY_TOKENS)
     has_take_home = any(token in normalized for token in _ASSESSMENT_TAKE_HOME_TOKENS)
     has_live_coding = any(token in normalized for token in _ASSESSMENT_LIVE_CODING_TOKENS)
+    negative_take_home = bool(
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b", normalized)
+    )
+    negative_live_coding = bool(
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b", normalized)
+    )
+    shared_negative_assessment = bool(
+        re.search(
+            r"\b(no|nope|not|нет|ні|без)\b.*\b(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b.*\b(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b",
+            normalized,
+        )
+    )
+    if shared_negative_assessment:
+        negative_take_home = True
+        negative_live_coding = True
+
+    if negative_take_home or negative_live_coding:
+        payload = {}
+        if negative_take_home:
+            payload["has_take_home_task"] = False
+        if negative_live_coding:
+            payload["has_live_coding"] = False
+        if payload:
+            if "has_take_home_task" not in payload and explicit.get("has_take_home_task") is not None:
+                payload["has_take_home_task"] = explicit["has_take_home_task"]
+            if "has_live_coding" not in payload and explicit.get("has_live_coding") is not None:
+                payload["has_live_coding"] = explicit["has_live_coding"]
+            return payload
 
     if (has_only and has_take_home and not has_live_coding) or normalized in {
         "only take-home",
