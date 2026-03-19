@@ -744,6 +744,58 @@ def test_questions_complete_after_new_matching_preferences() -> None:
     assert getattr(profile, "show_live_coding_roles", None) is False
 
 
+def test_questions_accept_assessment_shorthand_and_complete() -> None:
+    service = CandidateProfileService(FakeSession())
+    fake_repo = FakeCandidateProfilesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.verifications = FakeCandidateVerificationsRepository()
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    profile = fake_repo.create(user_id=user.id, state=CANDIDATE_STATE_QUESTIONS_PENDING)
+    fake_repo.update_question_answers(
+        profile,
+        salary_min=5000,
+        salary_currency="USD",
+        salary_period="month",
+        work_formats_json=["remote", "hybrid", "office"],
+        location_text="Kyiv",
+        city="Kyiv",
+        country_code="UA",
+        english_level="B2",
+        preferred_domains_json=["any"],
+    )
+    fake_repo.update_questions_context(
+        profile,
+        {
+            "follow_up_used": {
+                "salary": False,
+                "work_format": False,
+                "location": False,
+                "english_level": False,
+                "preferred_domains": False,
+                "assessment_preferences": False,
+            },
+            "current_question_key": "assessment_preferences",
+        },
+    )
+
+    result = service.handle_questions_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="не хочу",
+    )
+
+    assert result is not None
+    assert result.status == "completed"
+    assert profile.state == CANDIDATE_STATE_VERIFICATION_PENDING
+    assert getattr(profile, "show_take_home_task_roles", None) is False
+    assert getattr(profile, "show_live_coding_roles", None) is False
+
+
 def test_questions_voice_answer_enqueues_processing_job() -> None:
     service = CandidateProfileService(FakeSession())
     fake_repo = FakeCandidateProfilesRepository()

@@ -20,7 +20,19 @@ _ALL_FORMAT_PATTERNS = (
     r"\ball of them\b",
 )
 
-_SHORTHAND_ALL_VALUES = {"all", "any"}
+_SHORTHAND_ALL_VALUES = {
+    "all",
+    "any",
+    "все",
+    "всё",
+    "усі",
+    "любой",
+    "будь-який",
+    "без разницы",
+    "без різниці",
+    "не важно",
+    "неважно",
+}
 
 
 def _normalize_text(text: str | None) -> str:

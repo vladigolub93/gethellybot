@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.candidate_profile.question_prompts import QUESTION_LABELS
 from src.candidate_profile.questions import (
     enrich_candidate_question_payload_for_current_question,
 )
@@ -22,6 +23,7 @@ from src.llm.service import (
     safe_state_assistance_decision,
 )
 from src.orchestrator.policy import resolve_state_context
+from src.shared.text import normalize_command_text
 
 
 def _combined_recent_context(state: HellyGraphState) -> list[str]:
@@ -30,6 +32,69 @@ def _combined_recent_context(state: HellyGraphState) -> list[str]:
         if item and item not in combined:
             combined.append(item)
     return combined
+
+
+def _looks_like_questions_help_question(text: str) -> bool:
+    normalized = normalize_command_text(text)
+    lowered = (text or "").strip().lower()
+    if not normalized:
+        return True
+    if (text or "").strip().endswith("?"):
+        return True
+    return any(
+        token in lowered
+        for token in [
+            "why",
+            "how",
+            "help",
+            "what next",
+            "what happens after",
+            "gross or net",
+            "net or gross",
+            "which currency",
+            "what currency",
+            "how should i answer",
+            "почему",
+            "зачем",
+            "как ответить",
+            "что дальше",
+            "что потом",
+            "пример",
+            "валюта",
+            "gross or net",
+            "net or gross",
+        ]
+    )
+
+
+def _looks_like_questions_non_answer(text: str) -> bool:
+    normalized = normalize_command_text(text)
+    if not normalized:
+        return True
+    if _looks_like_questions_help_question(text):
+        return True
+    return normalized in {
+        "ok",
+        "okay",
+        "ок",
+        "окей",
+        "next",
+        "continue",
+        "дальше",
+        "далее",
+        "понял",
+        "поняла",
+        "ясно",
+        "продолжай",
+    }
+
+
+def _current_question_repeat_text(state: HellyGraphState) -> str:
+    label = QUESTION_LABELS.get(state.current_question_key or "", "current question")
+    return (
+        f"I still need your {label}. "
+        "Send just the answer to the current question in one message and I’ll move on."
+    )
 
 
 def load_candidate_stage_context_node(state: HellyGraphState) -> HellyGraphState:
@@ -129,30 +194,21 @@ def build_candidate_stage_detect_node(session):
             state.intent = payload.get("intent") or "help"
             state.reply_text = payload.get("response_text")
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
-            if payload.get("proposed_action") == "send_salary_location_work_format":
-                answer_text = payload.get("answer_text") or text
-                parsed_payload = dict(safe_parse_candidate_questions(session, answer_text).payload or {})
-                parsed_payload = enrich_candidate_question_payload_for_current_question(
-                    parsed=parsed_payload,
-                    text=answer_text,
-                    current_question_key=state.current_question_key,
-                )
-                if parsed_payload:
-                    state.proposed_action = "send_salary_location_work_format"
-                    state.structured_payload = parsed_payload
-                    state.parsed_input["intent"] = "stage_completion_input"
-                else:
-                    state.parsed_input["intent"] = "help"
-                    state.follow_up_needed = True
-                    state.follow_up_question = (
-                        payload.get("response_text")
-                        or "Answer the current question first and I’ll move to the next one."
-                    )
+            answer_text = payload.get("answer_text") or text
+            parsed_payload = dict(safe_parse_candidate_questions(session, answer_text).payload or {})
+            parsed_payload = enrich_candidate_question_payload_for_current_question(
+                parsed=parsed_payload,
+                text=answer_text,
+                current_question_key=state.current_question_key,
+            )
+            if parsed_payload and not _looks_like_questions_non_answer(answer_text):
+                state.proposed_action = "send_salary_location_work_format"
+                state.structured_payload = parsed_payload
+                state.parsed_input["intent"] = "stage_completion_input"
             else:
                 state.parsed_input["intent"] = "help"
-                if payload.get("needs_follow_up"):
-                    state.follow_up_needed = True
-                    state.follow_up_question = payload.get("response_text")
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text") or _current_question_repeat_text(state)
             return state
         elif state.active_stage == "VERIFICATION_PENDING":
             if state.latest_message_type == "video":
@@ -420,6 +476,14 @@ def build_candidate_stage_reply_node(session):
         state.follow_up_needed = False
         state.confidence = 0.85
         if state.parsed_input.get("intent") == "help":
+            if state.active_stage == "QUESTIONS_PENDING":
+                if _looks_like_questions_help_question(state.latest_user_message):
+                    state.reply_text = state.reply_text or _current_question_repeat_text(state)
+                else:
+                    state.reply_text = _current_question_repeat_text(state)
+                state.follow_up_needed = True
+                state.follow_up_question = state.reply_text
+                return state
             if state.active_stage == "INTERVIEW_IN_PROGRESS" and state.reply_text:
                 state.follow_up_needed = True
                 state.follow_up_question = state.reply_text

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.candidate_profile.question_parser import COUNTRY_CODES, parse_assessment_preferences
 from src.candidate_profile.question_prompts import QUESTION_KEYS
 from src.candidate_profile.work_formats import (
     candidate_work_formats,
@@ -25,6 +26,100 @@ def filter_candidate_question_payload(parsed: dict, current_question_key: str | 
     return {key: value for key, value in parsed.items() if key in allowed_keys}
 
 
+def _normalize_text(text: str | None) -> str:
+    return " ".join(str(text or "").split()).strip()
+
+
+def _fallback_location_payload(text: str | None) -> dict:
+    normalized = _normalize_text(text).strip(" .,")
+    if not normalized:
+        return {}
+    lowered = normalized.lower()
+    country_code = COUNTRY_CODES.get(lowered)
+    if country_code is not None:
+        return {
+            "location_text": normalized,
+            "country_code": country_code,
+            "city": None,
+        }
+    return {
+        "location_text": normalized,
+        "city": normalized,
+    }
+
+
+def _fallback_assessment_preferences_payload(text: str | None) -> dict:
+    normalized = _normalize_text(text).lower()
+    if not normalized:
+        return {}
+
+    explicit = parse_assessment_preferences(normalized)
+    if explicit:
+        return explicit
+
+    if normalized in {
+        "не хочу",
+        "нет",
+        "ні",
+        "no",
+        "nope",
+        "neither",
+        "none",
+        "никакие",
+        "жодні",
+    }:
+        return {
+            "show_take_home_task_roles": False,
+            "show_live_coding_roles": False,
+        }
+
+    if normalized in {
+        "готов к обоим",
+        "готова к обоим",
+        "готовий до обох",
+        "готова до обох",
+        "оба",
+        "оба",
+        "обоим",
+        "обидва",
+        "both",
+        "both are fine",
+        "all good",
+    }:
+        return {
+            "show_take_home_task_roles": True,
+            "show_live_coding_roles": True,
+        }
+
+    if normalized in {
+        "только take-home",
+        "only take-home",
+        "take-home only",
+        "только тестовое",
+        "лише take-home",
+        "лише тестове",
+    }:
+        return {
+            "show_take_home_task_roles": True,
+            "show_live_coding_roles": False,
+        }
+
+    if normalized in {
+        "только live-coding",
+        "only live-coding",
+        "live-coding only",
+        "только лайвкодинг",
+        "лише live-coding",
+        "лише лайвкодинг",
+    }:
+        return {
+            "show_take_home_task_roles": False,
+            "show_live_coding_roles": True,
+        }
+
+    return {}
+
+
 def enrich_candidate_question_payload_for_current_question(
     *,
     parsed: dict,
@@ -34,6 +129,10 @@ def enrich_candidate_question_payload_for_current_question(
     enriched = dict(parsed or {})
     if current_question_key == "work_format" and not filter_candidate_question_payload(enriched, current_question_key):
         enriched.update(parse_work_formats(text, allow_shorthand_all=True))
+    if current_question_key == "location" and not filter_candidate_question_payload(enriched, current_question_key):
+        enriched.update(_fallback_location_payload(text))
+    if current_question_key == "assessment_preferences" and not filter_candidate_question_payload(enriched, current_question_key):
+        enriched.update(_fallback_assessment_preferences_payload(text))
     return filter_candidate_question_payload(enriched, current_question_key)
 
 
