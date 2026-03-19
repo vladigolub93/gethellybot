@@ -580,10 +580,63 @@ class MatchingReviewService:
             )
         return any(all(part in normalized for part in group) for group in groups)
 
+    def _looks_like_current_card_detail_request(self, text: str | None, *, audience: str) -> bool:
+        normalized = " ".join((text or "").split()).strip().lower()
+        if not normalized:
+            return False
+        if audience == "candidate":
+            markers = (
+                "detail",
+                "details",
+                "about this role",
+                "about this vacancy",
+                "about the vacancy",
+                "project",
+                "product",
+                "team",
+                "stack",
+                "description",
+                "full description",
+                "job description",
+                "jd",
+                "детал",
+                "подроб",
+                "по этой ваканс",
+                "по текущей ваканс",
+                "описан",
+                "проект",
+                "продукт",
+                "команд",
+                "стек",
+            )
+        else:
+            markers = (
+                "detail",
+                "details",
+                "about this candidate",
+                "about the candidate",
+                "profile",
+                "background",
+                "experience",
+                "skills",
+                "summary",
+                "детал",
+                "подроб",
+                "по этому кандид",
+                "по текущему кандид",
+                "профил",
+                "опыт",
+                "скилл",
+                "саммар",
+            )
+        return self._contains_any(normalized, markers)
+
     def block_candidate_more_request(self, *, user, text: str) -> str | None:
         if self._current_candidate_review_match_for_user(user.id) is None:
             return None
         if not self._matches_more_queue_request(text, audience="candidate"):
+            return None
+        if self._looks_like_current_card_detail_request(text, audience="candidate"):
             return None
         ru = self._has_cyrillic(text)
         if ru:
@@ -600,6 +653,8 @@ class MatchingReviewService:
         if self._current_manager_review_match_for_user(user.id) is None:
             return None
         if not self._matches_more_queue_request(text, audience="manager"):
+            return None
+        if self._looks_like_current_card_detail_request(text, audience="manager"):
             return None
         ru = self._has_cyrillic(text)
         if ru:
@@ -659,12 +714,14 @@ class MatchingReviewService:
             limit=240,
         )
         project = self._truncate_text(getattr(vacancy, "project_description", None), limit=240)
+        source_excerpt = self._truncate_text(getattr(vacancy_version, "extracted_text", None), limit=420) if vacancy_version else None
         stack = list(getattr(vacancy, "primary_tech_stack_json", None) or [])[:8]
         budget = self._vacancy_budget_label(vacancy)
         setup = self._vacancy_setup_details(vacancy, ru=ru)
         process = self._vacancy_process_details(vacancy, ru=ru)
         fit_reason = self._match_reason_text(match)
         gap_context = self._match_gap_context(match)
+        team_size = getattr(vacancy, "team_size", None)
 
         if self._contains_any(lowered, ("why", "fit", "showed", "selected", "почему", "зачем", "показал", "подходит")):
             parts = []
@@ -680,6 +737,45 @@ class MatchingReviewService:
                 )
             if parts:
                 return " ".join(parts)
+
+        if self._contains_any(lowered, ("team", "team size", "команд")):
+            if team_size is not None:
+                return (
+                    f"По этой вакансии вижу команду примерно {int(team_size)} человек."
+                    if ru
+                    else f"For this role, the saved team size is about {int(team_size)} people."
+                )
+            return (
+                "По этой карточке размер команды у меня не сохранен."
+                if ru
+                else "I do not have a saved team size on this card."
+            )
+
+        if self._contains_any(
+            lowered,
+            (
+                "full description",
+                "job description",
+                "jd",
+                "role description",
+                "описан",
+                "полное описание",
+                "полный текст",
+                "джд",
+            ),
+        ):
+            if source_excerpt:
+                return (
+                    "Полного JD целиком в карточке не держу, но вот сохраненный excerpt из описания: " + source_excerpt
+                    if ru
+                    else "I do not keep the full JD inline on the card, but here is the saved excerpt from the description: " + source_excerpt
+                )
+            if project:
+                return (
+                    "Отдельного полного описания у меня нет, но по проекту сохранено: " + project
+                    if ru
+                    else "I do not have a separate full description saved, but the project note says: " + project
+                )
 
         if self._contains_any(lowered, ("project", "product", "domain", "о чем", "проект", "продукт", "домен")):
             if project:
@@ -751,6 +847,51 @@ class MatchingReviewService:
                 "По процессу у меня в этой карточке только базовые поля без дополнительных деталей."
                 if ru
                 else "For process details, I only have the basic fields on this card."
+            )
+
+        if self._contains_any(
+            lowered,
+            (
+                "what else",
+                "anything else",
+                "something else",
+                "more details",
+                "что еще",
+                "что ещё",
+                "что то еще",
+                "что-то еще",
+                "еще детали",
+                "ещё детали",
+                "детали",
+                "подроб",
+            ),
+        ):
+            parts = []
+            if team_size is not None:
+                parts.append(
+                    f"команда примерно {int(team_size)} человек"
+                    if ru
+                    else f"team size is about {int(team_size)}"
+                )
+            if source_excerpt:
+                parts.append(
+                    f"в исходном описании есть требования: {source_excerpt}"
+                    if ru
+                    else f"the source description includes: {source_excerpt}"
+                )
+            elif project:
+                parts.append(
+                    f"по проекту сохранено: {project}"
+                    if ru
+                    else f"the saved project note is: {project}"
+                )
+            if parts:
+                prefix = "Дополнительно по этой карточке вижу: " if ru else "Additional saved details on this card: "
+                return prefix + "; ".join(parts) + "."
+            return (
+                "По этой карточке у меня нет дополнительных деталей сверх уже показанных."
+                if ru
+                else "I do not have extra saved details on this card beyond what I already showed."
             )
 
         rag_answer = self._candidate_review_dossier_answer(

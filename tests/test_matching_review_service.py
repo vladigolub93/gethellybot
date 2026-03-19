@@ -1197,6 +1197,174 @@ def test_answer_candidate_review_question_uses_current_vacancy_details() -> None
     assert "Realtime data pipeline" in answer
 
 
+def test_block_candidate_more_request_allows_detail_question_about_current_vacancy() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-block", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-block", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-block",
+        role_title="Senior Node.js Developer",
+        current_version_id="vacancy-version-block",
+    )
+    match = SimpleNamespace(
+        id="match-block",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-block",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-block": SimpleNamespace()},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    blocked = service.block_candidate_more_request(
+        user=candidate_user,
+        text="а есть еще детали по этой вакансии?",
+    )
+
+    assert blocked is None
+
+
+def test_answer_candidate_review_question_returns_team_size_directly() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-team-direct", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-team-direct", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-team-direct",
+        role_title="Senior Backend Engineer",
+        team_size=6,
+        current_version_id="vacancy-version-team-direct",
+    )
+    match = SimpleNamespace(
+        id="match-team-direct",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-team-direct",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-team-direct": SimpleNamespace()},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="а сколько человек в команде?",
+    )
+
+    assert answer is not None
+    assert "6" in answer
+
+
+def test_answer_candidate_review_question_returns_source_excerpt_for_full_description() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-full-jd", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-full-jd", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-full-jd",
+        role_title="Senior Node.js Developer",
+        current_version_id="vacancy-version-full-jd",
+    )
+    match = SimpleNamespace(
+        id="match-full-jd",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-full-jd",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={
+            "vacancy-version-full-jd": SimpleNamespace(
+                extracted_text="5+ years with Node.js, Express, MongoDB, Redis, APIs, and testing in an international team."
+            )
+        },
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="а полное описание вакансии?",
+    )
+
+    assert answer is not None
+    assert "Node.js" in answer
+    assert "Express" in answer
+
+
+def test_answer_candidate_review_question_handles_generic_more_details_without_repeating_full_summary() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-more-details", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-more-details", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-more-details",
+        role_title="Senior Backend Engineer",
+        team_size=6,
+        project_description="repriced.ai",
+        current_version_id="vacancy-version-more-details",
+    )
+    match = SimpleNamespace(
+        id="match-more-details",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-more-details",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-more-details": SimpleNamespace()},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="что то еще?",
+    )
+
+    assert answer is not None
+    assert "6" in answer
+    assert "repriced.ai" in answer
+
+
 def test_answer_manager_review_question_uses_current_candidate_details() -> None:
     manager_user = SimpleNamespace(id="manager-user-q", is_hiring_manager=True, is_candidate=False)
     candidate = SimpleNamespace(
@@ -1260,11 +1428,11 @@ def test_answer_manager_review_question_uses_current_candidate_details() -> None
     assert "5000 USD per month" in answer
 
 
-def test_answer_candidate_review_question_uses_dossier_fallback_for_team_size(monkeypatch) -> None:
-    candidate_user = SimpleNamespace(id="candidate-user-team", is_candidate=True, is_hiring_manager=False)
-    candidate = SimpleNamespace(id="candidate-team", user_id=candidate_user.id)
+def test_answer_candidate_review_question_uses_dossier_fallback_for_company_question(monkeypatch) -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-company", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-company", user_id=candidate_user.id)
     vacancy = SimpleNamespace(
-        id="vacancy-team",
+        id="vacancy-company",
         role_title="Senior Backend Engineer",
         project_description=None,
         budget_min=6000,
@@ -1275,13 +1443,13 @@ def test_answer_candidate_review_question_uses_dossier_fallback_for_team_size(mo
         required_english_level="B2",
         primary_tech_stack_json=["Node.js"],
         team_size=9,
-        current_version_id="vacancy-version-team",
+        current_version_id="vacancy-version-company",
     )
     match = SimpleNamespace(
-        id="match-team",
+        id="match-company",
         vacancy_id=vacancy.id,
         candidate_profile_id=candidate.id,
-        vacancy_version_id="vacancy-version-team",
+        vacancy_version_id="vacancy-version-company",
         status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
         rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
     )
@@ -1291,7 +1459,7 @@ def test_answer_candidate_review_question_uses_dossier_fallback_for_team_size(mo
     def _fake_safe_answer(session, *, question_text, dossier):
         captured["question_text"] = question_text
         captured["dossier"] = dossier
-        return SimpleNamespace(payload={"message": "Команда по этой роли сейчас около 9 человек."})
+        return SimpleNamespace(payload={"message": "По этой карточке вижу только проект repriced.ai, без отдельного company profile."})
 
     monkeypatch.setattr("src.matching.review.safe_answer_candidate_review_object_question", _fake_safe_answer)
 
@@ -1304,17 +1472,17 @@ def test_answer_candidate_review_question_uses_dossier_fallback_for_team_size(mo
     service.users = FakeUsersRepository({candidate_user.id: candidate_user})
     service.vacancies = FakeVacanciesRepository(
         vacancies={vacancy.id: vacancy},
-        versions={"vacancy-version-team": SimpleNamespace(approval_summary_text="Backend team role.")},
+        versions={"vacancy-version-company": SimpleNamespace(approval_summary_text="Backend team role.")},
     )
     service.messaging = FakeMessagingService()
     service.state_service = FakeStateService(service.matches)
 
     answer = service.answer_candidate_review_question(
         user=candidate_user,
-        question_text="Какая команда?",
+        question_text="Какая компания?",
     )
 
-    assert answer == "Команда по этой роли сейчас около 9 человек."
+    assert answer == "По этой карточке вижу только проект repriced.ai, без отдельного company profile."
     assert captured["dossier"]["vacancy"]["team_size"] == 9
 
 
