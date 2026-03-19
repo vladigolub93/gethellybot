@@ -101,6 +101,24 @@ def filter_vacancy_clarification_payload(parsed: dict, current_question_key: str
     return {key: value for key, value in parsed.items() if key in allowed_keys}
 
 
+def _has_meaningful_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _payload_has_meaningful_values(payload: dict) -> bool:
+    return any(_has_meaningful_value(value) for value in (payload or {}).values())
+
+
+def _payload_has_meaningful_key(payload: dict, key: str) -> bool:
+    return key in (payload or {}) and _has_meaningful_value(payload.get(key))
+
+
 def _normalize_text(text: str | None) -> str:
     return " ".join(str(text or "").split()).strip()
 
@@ -298,31 +316,30 @@ def enrich_vacancy_clarification_payload_for_current_question(
     enriched = dict(parsed or {})
     filtered = filter_vacancy_clarification_payload(enriched, current_question_key)
 
-    if current_question_key == "budget" and not filtered:
+    if current_question_key == "budget" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_budget(text or ""))
-    if current_question_key == "work_format" and not filtered:
+    if current_question_key == "work_format" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_work_format(text or ""))
-    if current_question_key == "office_city" and not filtered:
+    if current_question_key == "office_city" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_office_city_payload(text))
-    if current_question_key == "countries" and not filtered:
+    if current_question_key == "countries" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_countries(text or ""))
-    if current_question_key == "english_level" and not filtered:
+    if current_question_key == "english_level" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_required_english_level_payload(text))
     if current_question_key == "assessment" and (
-        not filtered
-        or "has_take_home_task" not in filtered
-        or "has_live_coding" not in filtered
+        not _payload_has_meaningful_key(filtered, "has_take_home_task")
+        or not _payload_has_meaningful_key(filtered, "has_live_coding")
     ):
         enriched.update(_fallback_assessment_payload(text))
-    if current_question_key == "take_home_paid" and not filtered:
+    if current_question_key == "take_home_paid" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_take_home_paid_payload(text))
-    if current_question_key == "hiring_stages" and not filtered:
+    if current_question_key == "hiring_stages" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_hiring_stages(text or ""))
-    if current_question_key == "team_size" and not filtered:
+    if current_question_key == "team_size" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_team_size_payload(text))
-    if current_question_key == "project_description" and not filtered:
+    if current_question_key == "project_description" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_project_description_payload(text))
-    if current_question_key == "primary_tech_stack" and not filtered:
+    if current_question_key == "primary_tech_stack" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_primary_tech_stack(text or ""))
     return filter_vacancy_clarification_payload(enriched, current_question_key)
 

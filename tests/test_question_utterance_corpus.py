@@ -31,3 +31,23 @@ def test_manager_current_question_utterance_corpus(question_key: str, text: str,
     )
 
     assert parsed == expected
+
+
+def test_candidate_current_question_falls_back_when_llm_payload_is_semantically_empty() -> None:
+    parsed = enrich_candidate_question_payload_for_current_question(
+        parsed={"preferred_domains_json": []},
+        text="нет",
+        current_question_key="preferred_domains",
+    )
+
+    assert parsed == {"preferred_domains_json": ["any"]}
+
+
+def test_manager_current_question_falls_back_when_llm_payload_is_semantically_empty() -> None:
+    parsed = enrich_vacancy_clarification_payload_for_current_question(
+        parsed={"countries_allowed_json": []},
+        text="Ukraine, Poland",
+        current_question_key="countries",
+    )
+
+    assert parsed == {"countries_allowed_json": ["UA", "PL"]}

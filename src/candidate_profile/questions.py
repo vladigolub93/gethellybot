@@ -85,6 +85,24 @@ def filter_candidate_question_payload(parsed: dict, current_question_key: str | 
     return {key: value for key, value in parsed.items() if key in allowed_keys}
 
 
+def _has_meaningful_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _payload_has_meaningful_values(payload: dict) -> bool:
+    return any(_has_meaningful_value(value) for value in (payload or {}).values())
+
+
+def _payload_has_meaningful_key(payload: dict, key: str) -> bool:
+    return key in (payload or {}) and _has_meaningful_value(payload.get(key))
+
+
 def _normalize_text(text: str | None) -> str:
     return " ".join(str(text or "").split()).strip()
 
@@ -271,18 +289,17 @@ def enrich_candidate_question_payload_for_current_question(
 ) -> dict:
     enriched = dict(parsed or {})
     filtered = filter_candidate_question_payload(enriched, current_question_key)
-    if current_question_key == "work_format" and not filtered:
+    if current_question_key == "work_format" and not _payload_has_meaningful_values(filtered):
         enriched.update(parse_work_formats(text, allow_shorthand_all=True))
-    if current_question_key == "location" and not filtered:
+    if current_question_key == "location" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_location_payload(text))
-    if current_question_key == "english_level" and not filtered:
+    if current_question_key == "english_level" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_english_level_payload(text))
-    if current_question_key == "preferred_domains" and not filtered:
+    if current_question_key == "preferred_domains" and not _payload_has_meaningful_values(filtered):
         enriched.update(_fallback_preferred_domains_payload(text))
     if current_question_key == "assessment_preferences" and (
-        not filtered
-        or "show_take_home_task_roles" not in filtered
-        or "show_live_coding_roles" not in filtered
+        not _payload_has_meaningful_key(filtered, "show_take_home_task_roles")
+        or not _payload_has_meaningful_key(filtered, "show_live_coding_roles")
     ):
         enriched.update(_fallback_assessment_preferences_payload(text))
     return filter_candidate_question_payload(enriched, current_question_key)

@@ -1068,6 +1068,62 @@ def test_graph_candidate_stage_accepts_no_domain_preference_when_decision_return
     assert result.structured_payload["preferred_domains_json"] == ["any"]
 
 
+def test_graph_candidate_stage_ignores_semantically_empty_llm_domains_payload(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_questions_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_parse_candidate_questions",
+        lambda *args, **kwargs: SimpleNamespace(payload={"preferred_domains_json": []}),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp5domains-empty",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            work_formats_json=["remote", "hybrid", "office"],
+            location_text="Kyiv",
+            city="Kyiv",
+            country_code="UA",
+            english_level="b2",
+            questions_context_json={"current_question_key": "preferred_domains"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9domains-empty",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="нет",
+    )
+
+    assert result is not None
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["preferred_domains_json"] == ["any"]
+
+
 def test_graph_candidate_stage_accepts_assessment_shorthand_when_decision_returns_help(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.graph.stages.candidate.safe_candidate_questions_decision",
