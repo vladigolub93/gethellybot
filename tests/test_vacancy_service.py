@@ -982,6 +982,70 @@ def test_clarification_partial_assessment_answer_asks_targeted_live_coding_follo
     assert "take-home task" in result.notification_text.lower()
 
 
+def test_clarification_accepts_nothing_for_assessment_and_moves_to_hiring_stages() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        required_english_level="c1",
+        team_size=6,
+        project_description="Payments platform.",
+        primary_tech_stack_json=["python"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "take_home_paid": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": [
+                "budget",
+                "work_format",
+                "countries",
+                "english_level",
+                "team_size",
+                "project_description",
+                "primary_tech_stack",
+            ],
+            "current_question_key": "assessment",
+        },
+    )
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="ничего нету!",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert vacancy.has_take_home_task is False
+    assert vacancy.has_live_coding is False
+    assert vacancy.questions_context_json["current_question_key"] == "hiring_stages"
+
+
 def test_clarification_accepts_short_paid_answer_and_moves_to_hiring_stages() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()

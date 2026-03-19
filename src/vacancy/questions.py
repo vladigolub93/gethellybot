@@ -54,6 +54,27 @@ _ASSESSMENT_LIVE_CODING_TOKENS = (
     "лайвкодинг",
     "лайв кодинг",
 )
+_ASSESSMENT_NONE_VALUES = {
+    "не будет",
+    "не буде",
+    "нет",
+    "ні",
+    "no",
+    "neither",
+    "none",
+    "nothing",
+    "без этапов",
+    "без етапів",
+    "ничего",
+    "нічого",
+    "ничего нет",
+    "нічого нема",
+    "ничего нету",
+    "нічого немає",
+    "нет ничего",
+    "нема нічого",
+    "нету ничего",
+}
 _AFFIRMATIVE_VALUES = {
     "yes",
     "yeah",
@@ -149,7 +170,7 @@ def _fallback_required_english_level_payload(text: str | None) -> dict:
 
 
 def _fallback_assessment_payload(text: str | None) -> dict:
-    normalized = _normalize_text(text).lower()
+    normalized = _normalize_text(text).lower().strip(" .,!?:;")
     if not normalized:
         return {}
 
@@ -160,17 +181,7 @@ def _fallback_assessment_payload(text: str | None) -> dict:
     }.issubset(explicit):
         return explicit
 
-    if normalized in {
-        "не будет",
-        "не буде",
-        "нет",
-        "ні",
-        "no",
-        "neither",
-        "none",
-        "без этапов",
-        "без етапів",
-    }:
+    if normalized in _ASSESSMENT_NONE_VALUES:
         return {
             "has_take_home_task": False,
             "has_live_coding": False,

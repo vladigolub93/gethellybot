@@ -688,6 +688,51 @@ def test_graph_manager_stage_accepts_take_home_only_when_decision_returns_help(m
     assert result.structured_payload["has_live_coding"] is False
 
 
+def test_graph_manager_stage_accepts_nothing_for_assessment_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_clarification_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4assessmentnone",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "assessment"},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4assessmentnone",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="ничего нету!",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["has_take_home_task"] is False
+    assert result.structured_payload["has_live_coding"] is False
+
+
 def test_graph_manager_stage_accepts_free_take_home_payment_when_decision_returns_help(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.graph.stages.manager.safe_vacancy_clarification_decision",
