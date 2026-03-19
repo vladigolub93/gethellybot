@@ -392,6 +392,81 @@ class MatchingReviewService:
             ),
         )
 
+    def _looks_like_helly_interview_capability_question(self, text: str | None) -> bool:
+        normalized = " ".join((text or "").split()).strip().lower()
+        if not normalized:
+            return False
+        if not self._contains_any(
+            normalized,
+            (
+                "interview",
+                "interviews",
+                "evaluation",
+                "evaluate",
+                "интерв",
+                "собес",
+                "оценк",
+            ),
+        ):
+            return False
+        return self._contains_any(
+            normalized,
+            (
+                "helly",
+                "system",
+                "бот",
+                "система",
+                "ты ",
+                "ты?",
+                "you ",
+                "you?",
+                "can you",
+                "do you",
+                "можешь",
+                "умеешь",
+                "делаешь",
+                "делать",
+                "проводишь",
+                "проводит",
+                "run ",
+                "conduct",
+            ),
+        )
+
+    def _candidate_no_helly_interview_answer(self, *, process: str | None, ru: bool) -> str:
+        if ru:
+            if process:
+                return (
+                    "Нет, Helly сейчас сам интервью не проводит. "
+                    + process
+                    + " Это этапы процесса у работодателя, если они указаны по вакансии."
+                )
+            return (
+                "Нет, Helly сейчас сам интервью не проводит. "
+                "Я могу только показать сохраненные детали по вакансии и шаги процесса, если работодатель их указал."
+            )
+        if process:
+            return (
+                "No, Helly does not conduct interviews itself now. "
+                + process
+                + " Those are the employer's hiring stages when they are saved on the card."
+            )
+        return (
+            "No, Helly does not conduct interviews itself now. "
+            "I can only show the saved vacancy details and any employer hiring stages that are present on the card."
+        )
+
+    def _manager_no_helly_interview_answer(self, *, candidate_name: str, ru: bool) -> str:
+        if ru:
+            return (
+                "Нет, Helly сейчас не проводит интервью и не хранит по этой карточке интервью-оценки. "
+                f"По {candidate_name} у меня здесь только summary, skills, ожидания, объяснение мэтча и верификация."
+            )
+        return (
+            "No, Helly does not run interviews or interview evaluations on this card now. "
+            f"For {candidate_name}, I only have the saved summary, skills, preferences, matching rationale, and verification."
+        )
+
     @staticmethod
     def _format_country_codes(codes: list[str] | None) -> str | None:
         values = [str(code).strip().upper() for code in (codes or []) if str(code).strip()]
@@ -726,7 +801,6 @@ class MatchingReviewService:
             candidate=candidate,
             candidate_version=candidate_version,
             latest_verification=self.verifications.get_latest_submitted_by_profile_id(candidate.id),
-            evaluation_result=self.evaluations.get_by_match_id(match.id),
         )
         result = safe_answer_manager_review_object_question(
             self.session,
@@ -761,6 +835,9 @@ class MatchingReviewService:
         fit_reason = self._match_reason_text(match)
         gap_context = self._match_gap_context(match)
         team_size = getattr(vacancy, "team_size", None)
+
+        if self._looks_like_helly_interview_capability_question(question_text):
+            return self._candidate_no_helly_interview_answer(process=process, ru=ru)
 
         rag_answer = self._candidate_review_dossier_answer(
             question_text=question_text,
@@ -1014,6 +1091,30 @@ class MatchingReviewService:
         assessments = self._candidate_assessment_preferences_details(candidate, ru=ru)
         fit_reason = self._match_reason_text(match)
         gap_context = self._match_gap_context(match)
+
+        if self._contains_any(
+            lowered,
+            (
+                "interview",
+                "interviews",
+                "evaluation",
+                "evaluate",
+                "интерв",
+                "собес",
+                "оценк",
+            ),
+        ) and not self._contains_any(
+            lowered,
+            (
+                "take-home",
+                "take home",
+                "live coding",
+                "таск",
+                "тестов",
+                "лайвкод",
+            ),
+        ):
+            return self._manager_no_helly_interview_answer(candidate_name=candidate_name, ru=ru)
 
         rag_answer = self._manager_review_dossier_answer(
             question_text=question_text,

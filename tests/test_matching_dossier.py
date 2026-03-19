@@ -59,7 +59,7 @@ def test_build_candidate_review_dossier_includes_team_size_and_source_excerpts()
     assert "backend team" in dossier["source_excerpts"]["extracted_text_excerpt"]
 
 
-def test_build_manager_review_dossier_includes_verification_and_evaluation() -> None:
+def test_build_manager_review_dossier_keeps_verification_but_excludes_evaluation() -> None:
     candidate = SimpleNamespace(
         target_role="Backend Engineer",
         seniority_normalized="senior",
@@ -102,26 +102,17 @@ def test_build_manager_review_dossier_includes_verification_and_evaluation() -> 
         attempt_no=1,
         submitted_at="2026-03-19 12:00:00+00:00",
     )
-    evaluation_result = SimpleNamespace(
-        status="completed",
-        final_score=0.82,
-        recommendation="strong_yes",
-        strengths_json=["Clear ownership", "Strong backend depth"],
-        risks_json=["Less direct Node.js time"],
-    )
-
     dossier = build_manager_review_dossier(
         match=match,
         vacancy=vacancy,
         candidate=candidate,
         candidate_version=candidate_version,
         latest_verification=latest_verification,
-        evaluation_result=evaluation_result,
     )
 
     assert dossier["candidate"]["work_formats"] == "remote + hybrid"
     assert dossier["verification"]["latest_submitted_status"] == "submitted"
-    assert dossier["evaluation"]["recommendation"] == "strong_yes"
+    assert "evaluation" not in dossier
     assert "Python" in dossier["candidate_summary"]["skills"]
 
 
@@ -186,13 +177,6 @@ def test_review_dossiers_are_json_serializable_with_db_like_scalar_types() -> No
         attempt_no=1,
         submitted_at=datetime(2026, 3, 19, 15, 0, tzinfo=timezone.utc),
     )
-    evaluation_result = SimpleNamespace(
-        status="completed",
-        final_score=Decimal("0.82"),
-        recommendation="strong_yes",
-        strengths_json=["API depth"],
-        risks_json=[],
-    )
     match = SimpleNamespace(
         id=uuid4(),
         status="candidate_decision_pending",
@@ -215,7 +199,6 @@ def test_review_dossiers_are_json_serializable_with_db_like_scalar_types() -> No
         candidate=candidate,
         candidate_version=candidate_version,
         latest_verification=latest_verification,
-        evaluation_result=evaluation_result,
     )
 
     json.dumps(candidate_dossier, ensure_ascii=False)

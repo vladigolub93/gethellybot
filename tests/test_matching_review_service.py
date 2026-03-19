@@ -1784,6 +1784,102 @@ def test_answer_manager_review_question_uses_dossier_fallback_for_verification(m
 
     assert answer == "Да, по этой карточке вижу, что кандидат прошел verification."
     assert captured["dossier"]["verification"]["latest_submitted_status"] == "submitted"
+    assert "evaluation" not in captured["dossier"]
+
+
+def test_answer_manager_review_question_does_not_claim_helly_interviews() -> None:
+    manager_user = SimpleNamespace(id="manager-user-no-interview", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(
+        id="candidate-manager-no-interview",
+        user_id="candidate-user-no-interview",
+        current_version_id="cpv-manager-no-interview",
+    )
+    vacancy = SimpleNamespace(id="vacancy-manager-no-interview", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-manager-no-interview",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-manager-no-interview",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "medium", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-manager-no-interview": SimpleNamespace(summary_json={"approval_summary_text": "Senior backend engineer."})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Milana"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_manager_review_question(
+        user=manager_user,
+        question_text="а ты можешь делать интервью?",
+    )
+
+    assert answer is not None
+    assert "не проводит интервью" in answer.lower()
+    assert "summary" in answer.lower()
+
+
+def test_answer_candidate_review_question_does_not_claim_helly_interviews() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-no-interview", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-no-interview", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-no-interview",
+        role_title="Senior Node.js Developer",
+        work_format="remote",
+        required_english_level="B2",
+        hiring_stages_json=["recruiter_screen", "technical_interview"],
+        has_take_home_task=False,
+        has_live_coding=False,
+        current_version_id="vacancy-version-no-interview",
+    )
+    match = SimpleNamespace(
+        id="match-no-interview",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-no-interview",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-no-interview": SimpleNamespace(approval_summary_text="Backend team role.")},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="а ты можешь делать интервью?",
+    )
+
+    assert answer is not None
+    assert "helly" in answer.lower()
+    assert "не проводит" in answer.lower() or "does not conduct" in answer.lower()
 
 
 def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> None:

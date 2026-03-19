@@ -178,7 +178,6 @@ def build_manager_review_dossier(
     candidate,
     candidate_version,
     latest_verification=None,
-    evaluation_result=None,
 ) -> dict:
     summary_json = getattr(candidate_version, "summary_json", None) or {}
     extracted_text_excerpt = _clean_text(getattr(candidate_version, "extracted_text", None), limit=360)
@@ -217,13 +216,6 @@ def build_manager_review_dossier(
             "latest_submitted_attempt_no": getattr(latest_verification, "attempt_no", None),
             "submitted_at": str(getattr(latest_verification, "submitted_at", None)) if latest_verification else None,
         },
-        "evaluation": {
-            "status": _clean_text(getattr(evaluation_result, "status", None), limit=32),
-            "final_score": getattr(evaluation_result, "final_score", None),
-            "recommendation": _clean_text(getattr(evaluation_result, "recommendation", None), limit=120),
-            "strengths": _clean_list(getattr(evaluation_result, "strengths_json", None), item_limit=5, item_text_limit=140),
-            "risks": _clean_list(getattr(evaluation_result, "risks_json", None), item_limit=5, item_text_limit=140),
-        },
         "source_excerpts": {
             "extracted_text_excerpt": extracted_text_excerpt,
             "transcript_excerpt": transcript_excerpt,
@@ -237,7 +229,6 @@ def build_manager_review_dossier(
             "has_extracted_text_excerpt": bool(extracted_text_excerpt),
             "has_transcript_excerpt": bool(transcript_excerpt),
             "has_verification": bool(getattr(latest_verification, "status", None)),
-            "has_evaluation": bool(getattr(evaluation_result, "status", None)),
         },
         "available_sections": [
             name
@@ -251,7 +242,6 @@ def build_manager_review_dossier(
                 ("domains", display_domains(getattr(candidate, "preferred_domains_json", None))),
                 ("assessment_preferences", getattr(candidate, "show_take_home_task_roles", None)),
                 ("verification", getattr(latest_verification, "status", None)),
-                ("evaluation", getattr(evaluation_result, "status", None)),
                 ("resume_excerpt", extracted_text_excerpt),
             )
             if value not in (None, "", [])
@@ -264,7 +254,6 @@ def build_manager_review_dossier(
                 ("english_level", display_english_level(getattr(candidate, "english_level", None))),
                 ("location", getattr(candidate, "location_text", None)),
                 ("verification", getattr(latest_verification, "status", None)),
-                ("evaluation", getattr(evaluation_result, "status", None)),
             )
             if value in (None, "", [])
         ],
