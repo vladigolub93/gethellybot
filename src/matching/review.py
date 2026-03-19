@@ -13,6 +13,14 @@ from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.messaging.service import MessagingService
 from src.candidate_profile.work_formats import display_work_formats
+from src.llm.service import (
+    safe_answer_candidate_review_object_question,
+    safe_answer_manager_review_object_question,
+)
+from src.matching.dossier import (
+    build_candidate_review_dossier,
+    build_manager_review_dossier,
+)
 from src.state.service import StateService
 from src.telegram.keyboards import (
     candidate_vacancy_inline_keyboard,
@@ -273,6 +281,26 @@ class MatchingReviewService:
                 "summary",
                 "experience",
                 "assessment",
+                "team",
+                "company",
+                "benefit",
+                "benefits",
+                "visa",
+                "relocat",
+                "contract",
+                "availability",
+                "notice",
+                "verified",
+                "verification",
+                "evaluation",
+                "score",
+                "strength",
+                "risk",
+                "github",
+                "linkedin",
+                "portfolio",
+                "education",
+                "cert",
                 "детал",
                 "подроб",
                 "проект",
@@ -306,6 +334,23 @@ class MatchingReviewService:
                 "скилл",
                 "опыт",
                 "саммар",
+                "команд",
+                "компан",
+                "бенефит",
+                "виз",
+                "релок",
+                "контракт",
+                "доступ",
+                "вериф",
+                "оценк",
+                "скор",
+                "сильн",
+                "риск",
+                "образован",
+                "сертиф",
+                "портф",
+                "гитхаб",
+                "линкедин",
             ),
         )
 
@@ -567,6 +612,37 @@ class MatchingReviewService:
             "As soon as this card is resolved, I’ll show the next candidate in the queue."
         )
 
+    def _candidate_review_dossier_answer(self, *, question_text: str, match, vacancy, vacancy_version) -> str | None:
+        dossier = build_candidate_review_dossier(
+            match=match,
+            vacancy=vacancy,
+            vacancy_version=vacancy_version,
+        )
+        result = safe_answer_candidate_review_object_question(
+            self.session,
+            question_text=question_text,
+            dossier=dossier,
+        )
+        message = str((result.payload or {}).get("message") or "").strip()
+        return message or None
+
+    def _manager_review_dossier_answer(self, *, question_text: str, match, vacancy, candidate, candidate_version) -> str | None:
+        dossier = build_manager_review_dossier(
+            match=match,
+            vacancy=vacancy,
+            candidate=candidate,
+            candidate_version=candidate_version,
+            latest_verification=self.verifications.get_latest_submitted_by_profile_id(candidate.id),
+            evaluation_result=self.evaluations.get_by_match_id(match.id),
+        )
+        result = safe_answer_manager_review_object_question(
+            self.session,
+            question_text=question_text,
+            dossier=dossier,
+        )
+        message = str((result.payload or {}).get("message") or "").strip()
+        return message or None
+
     def answer_candidate_review_question(self, *, user, question_text: str) -> str | None:
         if not self._looks_like_review_object_question(question_text):
             return None
@@ -605,7 +681,7 @@ class MatchingReviewService:
             if parts:
                 return " ".join(parts)
 
-        if self._contains_any(lowered, ("project", "product", "domain", "company", "о чем", "проект", "продукт", "домен", "компан")):
+        if self._contains_any(lowered, ("project", "product", "domain", "о чем", "проект", "продукт", "домен")):
             if project:
                 return (
                     f"По {role_title} у меня сохранено такое описание проекта: {project}"
@@ -676,6 +752,15 @@ class MatchingReviewService:
                 if ru
                 else "For process details, I only have the basic fields on this card."
             )
+
+        rag_answer = self._candidate_review_dossier_answer(
+            question_text=question_text,
+            match=match,
+            vacancy=vacancy,
+            vacancy_version=vacancy_version,
+        )
+        if rag_answer:
+            return rag_answer
 
         parts = []
         if project:
@@ -844,6 +929,16 @@ class MatchingReviewService:
                 if ru
                 else "I do not have separate assessment-preference constraints on this card."
             )
+
+        rag_answer = self._manager_review_dossier_answer(
+            question_text=question_text,
+            match=match,
+            vacancy=vacancy,
+            candidate=candidate,
+            candidate_version=candidate_version,
+        )
+        if rag_answer:
+            return rag_answer
 
         parts = []
         if summary_text:

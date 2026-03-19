@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     openai_embedding_dimensions: int = Field(
         default=256, alias="OPENAI_EMBEDDING_DIMENSIONS"
     )
+    review_object_rag_enabled: bool = Field(
+        default=True,
+        alias="REVIEW_OBJECT_RAG_ENABLED",
+    )
 
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
     supabase_db_url: str = Field(default="", alias="SUPABASE_DB_URL")

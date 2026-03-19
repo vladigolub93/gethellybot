@@ -19,6 +19,7 @@ from src.llm.assets import build_user_facing_grounded_system_prompt, load_system
 from src.llm.prompts import (
     STATE_ASSISTANCE_SYSTEM_PROMPT,
     bot_controller_prompt,
+    candidate_review_object_qa_prompt,
     candidate_cv_decision_prompt,
     candidate_cv_processing_decision_prompt,
     contact_required_decision_prompt,
@@ -44,6 +45,7 @@ from src.llm.prompts import (
     interview_followup_decision_prompt,
     interview_question_plan_prompt,
     interview_session_conductor_prompt,
+    manager_review_object_qa_prompt,
     recovery_prompt,
     match_card_copy_prompt,
     response_copywriter_prompt,
@@ -2103,6 +2105,42 @@ def build_interview_invitation_copy_with_llm(*, role_title: str | None) -> LLMRe
     )
     return LLMResult(
         payload={"message": _clean_text(result.payload.get("message"), limit=350) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def answer_candidate_review_object_question_with_llm(*, question_text: str, dossier: dict) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("review", "candidate_object_qa"),
+        user_prompt=candidate_review_object_qa_prompt(
+            question_text=question_text,
+            dossier=dossier,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="candidate_review_object_qa_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=700) or ""},
+        model_name=result.model_name,
+        prompt_version=result.prompt_version,
+    )
+
+
+def answer_manager_review_object_question_with_llm(*, question_text: str, dossier: dict) -> LLMResult:
+    result = _client.parse(
+        schema=ResponseCopywriterSchema,
+        system_prompt=build_user_facing_grounded_system_prompt("review", "manager_object_qa"),
+        user_prompt=manager_review_object_qa_prompt(
+            question_text=question_text,
+            dossier=dossier,
+        ),
+        primary_model=get_settings().openai_model_reasoning,
+        prompt_version="manager_review_object_qa_llm_v1",
+    )
+    return LLMResult(
+        payload={"message": _clean_text(result.payload.get("message"), limit=700) or ""},
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -4997,4 +5035,58 @@ def safe_build_interview_invitation_copy(session, *, role_title: str | None) -> 
         payload={"message": f"We found a strong-fit opportunity{role_text}. The next step is a short AI interview. Review the vacancy card below and use Accept interview or Skip opportunity."},
         model_name="baseline-deterministic",
         prompt_version="baseline_interview_invitation_copy_v1",
+    )
+
+
+def safe_answer_candidate_review_object_question(
+    session,
+    *,
+    question_text: str,
+    dossier: dict,
+) -> LLMResult:
+    if not get_settings().review_object_rag_enabled:
+        return LLMResult(
+            payload={"message": ""},
+            model_name="baseline-disabled",
+            prompt_version="baseline_candidate_review_object_qa_disabled_v1",
+        )
+    if should_use_llm_runtime(session):
+        try:
+            return answer_candidate_review_object_question_with_llm(
+                question_text=question_text,
+                dossier=dossier,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("candidate_review_object_qa_fallback_to_empty", error=str(exc))
+    return LLMResult(
+        payload={"message": ""},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_candidate_review_object_qa_v1",
+    )
+
+
+def safe_answer_manager_review_object_question(
+    session,
+    *,
+    question_text: str,
+    dossier: dict,
+) -> LLMResult:
+    if not get_settings().review_object_rag_enabled:
+        return LLMResult(
+            payload={"message": ""},
+            model_name="baseline-disabled",
+            prompt_version="baseline_manager_review_object_qa_disabled_v1",
+        )
+    if should_use_llm_runtime(session):
+        try:
+            return answer_manager_review_object_question_with_llm(
+                question_text=question_text,
+                dossier=dossier,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("manager_review_object_qa_fallback_to_empty", error=str(exc))
+    return LLMResult(
+        payload={"message": ""},
+        model_name="baseline-deterministic",
+        prompt_version="baseline_manager_review_object_qa_v1",
     )

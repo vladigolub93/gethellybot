@@ -1132,3 +1132,25 @@ def interview_invitation_copy_prompt(*, role_title: str | None) -> str:
 Vacancy role title:
 {role_title or ""}
 """
+
+
+def candidate_review_object_qa_prompt(*, question_text: str, dossier: dict) -> str:
+    return f"""Task: answer the candidate's question about the current vacancy review card.
+
+Question:
+{question_text}
+
+Current vacancy dossier (JSON):
+{json.dumps(dossier, ensure_ascii=False, indent=2)}
+"""
+
+
+def manager_review_object_qa_prompt(*, question_text: str, dossier: dict) -> str:
+    return f"""Task: answer the hiring manager's question about the current candidate review card.
+
+Question:
+{question_text}
+
+Current candidate dossier (JSON):
+{json.dumps(dossier, ensure_ascii=False, indent=2)}
+"""
