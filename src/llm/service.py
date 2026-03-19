@@ -224,6 +224,33 @@ def _clean_text(value: Optional[str], *, limit: int) -> Optional[str]:
     return normalized[:limit]
 
 
+def _clean_user_facing_message(value: Optional[str], *, limit: int) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = " ".join(value.split()).strip()
+    if not normalized:
+        return None
+    if len(normalized) <= limit:
+        return normalized
+
+    preferred_breaks = (
+        ". ",
+        "! ",
+        "? ",
+        "; ",
+        ": ",
+    )
+    for token in preferred_breaks:
+        idx = normalized.rfind(token, 0, limit)
+        if idx >= max(80, int(limit * 0.55)):
+            return normalized[: idx + 1].rstrip()
+
+    space_idx = normalized.rfind(" ", 0, limit - 3)
+    if space_idx >= max(80, int(limit * 0.55)):
+        return normalized[:space_idx].rstrip(" ,;:-") + "..."
+    return normalized[: limit - 3].rstrip(" ,;:-") + "..."
+
+
 def _clean_text_list(values, *, limit: int, item_limit: int) -> list[str]:
     result: list[str] = []
     seen = set()
@@ -2122,7 +2149,7 @@ def answer_candidate_review_object_question_with_llm(*, question_text: str, doss
         prompt_version="candidate_review_object_qa_llm_v1",
     )
     return LLMResult(
-        payload={"message": _clean_text(result.payload.get("message"), limit=700) or ""},
+        payload={"message": _clean_user_facing_message(result.payload.get("message"), limit=1200) or ""},
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )
@@ -2140,7 +2167,7 @@ def answer_manager_review_object_question_with_llm(*, question_text: str, dossie
         prompt_version="manager_review_object_qa_llm_v1",
     )
     return LLMResult(
-        payload={"message": _clean_text(result.payload.get("message"), limit=700) or ""},
+        payload={"message": _clean_user_facing_message(result.payload.get("message"), limit=1200) or ""},
         model_name=result.model_name,
         prompt_version=result.prompt_version,
     )

@@ -186,6 +186,44 @@ class MatchingReviewService:
             return values[0]
         return f"{', '.join(values[:-1])} and {values[-1]}"
 
+    @classmethod
+    def _excerpt_highlights(
+        cls,
+        value: str | None,
+        *,
+        item_limit: int = 3,
+        item_text_limit: int = 110,
+    ) -> list[str]:
+        normalized = " ".join(
+            str(value or "")
+            .replace("•", " | ")
+            .replace("·", " | ")
+            .replace(" - ", " | ")
+            .split()
+        ).strip()
+        if not normalized:
+            return []
+        chunks = re.split(r"\s*\|\s*|(?<=[.!?;])\s+", normalized)
+        result: list[str] = []
+        seen: set[str] = set()
+        for chunk in chunks:
+            cleaned = chunk.strip(" -•;,.")
+            if len(cleaned) < 8:
+                continue
+            if len(cleaned) > item_text_limit:
+                shortened = cleaned[: item_text_limit - 3].rstrip()
+                if " " in shortened:
+                    shortened = shortened.rsplit(" ", 1)[0]
+                cleaned = shortened.rstrip(" ,;:-") + "..."
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(cleaned)
+            if len(result) >= item_limit:
+                break
+        return result
+
     @staticmethod
     def _effective_hiring_stages(vacancy) -> list[str]:
         hiring_stages = display_hiring_stages(getattr(vacancy, "hiring_stages_json", None))
@@ -715,6 +753,7 @@ class MatchingReviewService:
         )
         project = self._truncate_text(getattr(vacancy, "project_description", None), limit=240)
         source_excerpt = self._truncate_text(getattr(vacancy_version, "extracted_text", None), limit=420) if vacancy_version else None
+        source_highlights = self._excerpt_highlights(getattr(vacancy_version, "extracted_text", None) if vacancy_version else None)
         stack = list(getattr(vacancy, "primary_tech_stack_json", None) or [])[:8]
         budget = self._vacancy_budget_label(vacancy)
         setup = self._vacancy_setup_details(vacancy, ru=ru)
@@ -773,11 +812,15 @@ class MatchingReviewService:
                 "джд",
             ),
         ):
-            if source_excerpt:
+            if source_highlights:
                 return (
-                    "Полного JD целиком в карточке не держу, но вот сохраненный excerpt из описания: " + source_excerpt
+                    "Полного JD целиком в карточке не держу, но по сохраненному описанию вижу главное: "
+                    + "; ".join(source_highlights)
+                    + "."
                     if ru
-                    else "I do not keep the full JD inline on the card, but here is the saved excerpt from the description: " + source_excerpt
+                    else "I do not keep the full JD inline on the card, but the saved description boils down to: "
+                    + "; ".join(source_highlights)
+                    + "."
                 )
             if project:
                 return (
@@ -882,11 +925,11 @@ class MatchingReviewService:
                     if ru
                     else f"team size is about {int(team_size)}"
                 )
-            if source_excerpt:
+            if source_highlights:
                 parts.append(
-                    f"в исходном описании есть требования: {source_excerpt}"
+                    "по исходному описанию видно: " + "; ".join(source_highlights[:2])
                     if ru
-                    else f"the source description includes: {source_excerpt}"
+                    else "from the source description, I can also see: " + "; ".join(source_highlights[:2])
                 )
             elif project:
                 parts.append(
@@ -964,6 +1007,7 @@ class MatchingReviewService:
         summary_json = getattr(candidate_version, "summary_json", None) or {}
         summary_text = self._truncate_text(summary_json.get("approval_summary_text") or summary_json.get("headline"), limit=240)
         source_excerpt = self._truncate_text(getattr(candidate_version, "extracted_text", None), limit=420)
+        source_highlights = self._excerpt_highlights(getattr(candidate_version, "extracted_text", None))
         years = summary_json.get("years_experience")
         skills = list(summary_json.get("skills") or [])[:8]
         preferences = self._candidate_preferences_details(candidate, ru=ru)
@@ -1023,9 +1067,17 @@ class MatchingReviewService:
                 extras.append(assessments.rstrip("."))
             if source_excerpt:
                 extras.append(
-                    f"в extracted resume text вижу: {source_excerpt}"
-                    if ru
-                    else f"in the extracted resume text I can see: {source_excerpt}"
+                    "в extracted resume text дополнительно вижу: " + "; ".join(source_highlights[:2])
+                    if ru and source_highlights
+                    else (
+                        f"в extracted resume text вижу: {source_excerpt}"
+                        if ru
+                        else (
+                            "in the extracted resume text I can also see: " + "; ".join(source_highlights[:2])
+                            if source_highlights
+                            else f"in the extracted resume text I can see: {source_excerpt}"
+                        )
+                    )
                 )
             if extras:
                 return (
@@ -1043,16 +1095,16 @@ class MatchingReviewService:
             lowered,
             ("resume", "cv", "full resume", "full cv", "резюме", "полное резюме", "полное cv", "си ви"),
         ):
-            if source_excerpt:
+            if source_highlights:
                 prefix = (
                     "Полного CV файлом я здесь не показываю, но по карточке у меня есть summary и extracted resume text. "
                     if ru
                     else "I do not show the full CV file inline here, but on this card I do have the summary plus extracted resume text. "
                 )
                 details = (
-                    f"Самый полезный кусок, который вижу: {source_excerpt}"
+                    "Самое полезное, что по нему видно: " + "; ".join(source_highlights)
                     if ru
-                    else f"The most useful saved excerpt I can see is: {source_excerpt}"
+                    else "The most useful parts I can see are: " + "; ".join(source_highlights)
                 )
                 return prefix + details
             if summary_text:

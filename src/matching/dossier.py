@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from src.candidate_profile.work_formats import display_work_formats
 from src.shared.hiring_taxonomy import (
@@ -51,6 +54,14 @@ def _compact(value: Any):
                 continue
             result.append(compacted)
         return result
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
     return value
 
 

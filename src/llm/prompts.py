@@ -23,6 +23,10 @@ Rules:
 """
 
 
+def _safe_json_dumps(payload: dict) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+
 def contact_required_decision_prompt(
     *,
     latest_user_message: str,
@@ -1141,7 +1145,7 @@ Question:
 {question_text}
 
 Current vacancy dossier (JSON):
-{json.dumps(dossier, ensure_ascii=False, indent=2)}
+{_safe_json_dumps(dossier)}
 """
 
 
@@ -1152,5 +1156,5 @@ Question:
 {question_text}
 
 Current candidate dossier (JSON):
-{json.dumps(dossier, ensure_ascii=False, indent=2)}
+{_safe_json_dumps(dossier)}
 """
