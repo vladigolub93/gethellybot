@@ -589,6 +589,53 @@ def test_dispatch_manager_batch_for_vacancy_moves_to_medium_fit_when_no_strong_l
     )
 
 
+def test_dispatch_manager_batch_for_vacancy_labels_not_fit_batch_explicitly() -> None:
+    vacancy = SimpleNamespace(id="vacancy-fit-4", manager_user_id="manager-fit-4", role_title="Node.js Developer")
+    candidate = SimpleNamespace(id="candidate-not-fit", user_id="candidate-user-not-fit")
+    not_fit_match = SimpleNamespace(
+        id="match-not-fit-4",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-not-fit-4",
+        status="shortlisted",
+        rationale_json={"fit_band": "not_fit", "gap_signals": ["Core stack overlap is partial."]},
+        llm_rank_position=1,
+        llm_rank_score=0.41,
+        deterministic_score=0.39,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-not-fit-4": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(shortlisted_for_vacancy=[not_fit_match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Stretch Candidate"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=False, trigger_type="job")
+
+    assert result["status"] == "dispatched"
+    assert result["fit_band"] == "not_fit"
+    assert not_fit_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
+    assert service.notifications.rows[0].payload_json["message_entries"][0]["text"].startswith(
+        "I found 1 below-threshold candidate matches"
+    )
+
+
 def test_dispatch_candidate_batch_for_profile_does_not_resend_existing_cards_on_force_refresh() -> None:
     candidate = SimpleNamespace(id="candidate-force-1", user_id="candidate-user-force-1")
     vacancy = SimpleNamespace(id="vacancy-force-cand-1", role_title="Python Engineer")

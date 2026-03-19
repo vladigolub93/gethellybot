@@ -301,6 +301,103 @@ def test_execute_for_vacancy_applies_llm_rerank_to_shortlist(monkeypatch: pytest
     assert candidate_payload["candidate_full_hard_skills"] == ["python", "postgresql"]
 
 
+def test_execute_for_vacancy_does_not_shortlist_not_fit_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    vacancy = make_vacancy(
+        role_title="Node.js Developer",
+        project_description="Backend platform role using Node.js and Express.",
+        primary_tech_stack_json=[
+            "node.js",
+            "express",
+            "mongodb",
+            "mongoose",
+            "redis",
+            "mocha",
+            "chai",
+            "supertest",
+            "git",
+            "gcp",
+            "rest api",
+        ],
+        countries_allowed_json=["UA", "PL"],
+        required_english_level="B2",
+    )
+    vacancy_version = SimpleNamespace(
+        id=uuid4(),
+        semantic_embedding=None,
+        extracted_text="Node.js Express MongoDB Mongoose Redis Mocha Chai Supertest Git GCP REST API",
+        transcript_text=None,
+        approval_summary_text=None,
+        summary_json={"primary_tech_stack": vacancy.primary_tech_stack_json},
+    )
+
+    candidate_a = make_candidate(
+        country_code="UA",
+        city="Kyiv",
+        work_format="remote",
+        english_level="B2",
+        target_role="Senior JS Engineer",
+        preferred_domains_json=["any"],
+    )
+    candidate_b = make_candidate(
+        country_code="UA",
+        city="Kyiv",
+        work_format="remote",
+        english_level="B2",
+        target_role="Senior Backend Engineer",
+        preferred_domains_json=["any"],
+    )
+    candidate_versions = {
+        candidate_a.id: make_candidate_version(
+            core_skills=["node.js", "express"],
+            full_skills=["node.js", "express", "mongodb", "gcp"],
+        ),
+        candidate_b.id: make_candidate_version(
+            core_skills=["mongodb"],
+            full_skills=["mongodb", "redis", "python"],
+        ),
+    }
+
+    service = MatchingService(FakeSession())
+    service.candidates = FakeCandidateRepository([candidate_a, candidate_b], candidate_versions)
+    service.vacancies = FakeVacancyRepository(vacancy, vacancy_version)
+    service.matching = FakeMatchingRepository()
+    monkeypatch.setattr(
+        "src.matching.service.safe_rerank_candidates",
+        lambda *args, **kwargs: SimpleNamespace(
+            prompt_version="matching_candidate_rerank_llm_v2",
+            payload={
+                "ranked_candidates": [
+                    {
+                        "candidate_ref": str(candidate_a.id),
+                        "rank": 1,
+                        "fit_score": 0.78,
+                        "rationale": "Best available, but partial stack overlap.",
+                    },
+                    {
+                        "candidate_ref": str(candidate_b.id),
+                        "rank": 2,
+                        "fit_score": 0.42,
+                        "rationale": "Broader backend profile, but weak stack fit.",
+                    },
+                ]
+            },
+        ),
+    )
+
+    result = service.execute_for_vacancy(vacancy_id=vacancy.id, trigger_type="manager_manual_request")
+
+    shortlisted = [match for match in service.matching.matches if match.status == "shortlisted"]
+    filtered = [match for match in service.matching.matches if match.status == "filtered_out"]
+
+    assert result["candidate_pool_count"] == 2
+    assert result["hard_filtered_count"] == 0
+    assert result["shortlisted_count"] == 0
+    assert shortlisted == []
+    assert len(filtered) == 2
+    assert {match.filter_reason_codes_json[0] for match in filtered} == {"below_fit_band_cutoff"}
+    assert {match.rationale_json["fit_band"] for match in filtered} == {"not_fit"}
+
+
 def test_execute_for_vacancy_uses_hybrid_vector_pool_and_skill_rescue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

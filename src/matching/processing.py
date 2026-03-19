@@ -226,11 +226,25 @@ class MatchingProcessingService:
         elif shortlisted_count > 0:
             notified_count = max(int((review_dispatch_result or {}).get("notified_count") or 0), 0)
             sent_count = notified_count or min(shortlisted_count, MATCH_BATCH_SIZE)
-            text = (
-                f"I refreshed matching for this vacancy and found {shortlisted_count} strong "
-                f"{self._pluralize_candidates(shortlisted_count)}. I’ve sent "
-                f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
-            )
+            fit_band = str((review_dispatch_result or {}).get("fit_band") or "").strip().lower()
+            if fit_band == "medium":
+                text = (
+                    f"I refreshed matching for this vacancy and found {shortlisted_count} medium-fit "
+                    f"{self._pluralize_candidates(shortlisted_count)}. I’ve sent "
+                    f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
+                )
+            elif fit_band == "low":
+                text = (
+                    f"I refreshed matching for this vacancy and found {shortlisted_count} low-fit "
+                    f"{self._pluralize_candidates(shortlisted_count)}. I’ve sent "
+                    f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
+                )
+            else:
+                text = (
+                    f"I refreshed matching for this vacancy and found {shortlisted_count} strong "
+                    f"{self._pluralize_candidates(shortlisted_count)}. I’ve sent "
+                    f"{sent_count} new {self._pluralize_candidates(sent_count)} for review."
+                )
         else:
             active_match_count = len(self.matching.list_active_for_vacancy(vacancy.id))
             if active_match_count > 0:

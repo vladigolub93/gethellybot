@@ -308,6 +308,45 @@ def test_matching_processing_notifies_manager_after_manual_refresh_with_new_cand
     assert service.review_service.candidate_calls == []
 
 
+def test_matching_processing_notifies_manager_with_medium_fit_copy_after_manual_refresh() -> None:
+    service = MatchingProcessingService(FakeSession())
+    service.queue = FakeQueue()
+    service.vacancies = FakeVacanciesRepository(
+        vacancy=SimpleNamespace(id="vacancy-1", manager_user_id="manager-1")
+    )
+    service.matching = FakeMatchingRepository()
+    service.notifications = FakeNotificationsRepository()
+    service.matching_service = FakeMatchingService(
+        result={
+            "matching_run_id": "run-2b",
+            "candidate_pool_count": 4,
+            "hard_filtered_count": 2,
+            "shortlisted_count": 2,
+        }
+    )
+    service.review_service = FakeReviewService(
+        manager_result={
+            "status": "dispatched",
+            "batch_count": 2,
+            "notified_count": 2,
+            "promoted_count": 2,
+            "notified": True,
+            "fit_band": "medium",
+        }
+    )
+
+    service.process_job(
+        SimpleNamespace(
+            job_type="matching_run_for_vacancy_v1",
+            payload_json={"vacancy_id": "vacancy-1", "trigger_type": "manager_manual_request"},
+        )
+    )
+
+    text = service.notifications.rows[0].payload_json["text"].lower()
+    assert "found 2 medium-fit candidates" in text
+    assert "strong candidates" not in text
+
+
 def test_matching_processing_notifies_manager_when_no_new_candidates_but_active_pipeline_exists() -> None:
     service = MatchingProcessingService(FakeSession())
     service.queue = FakeQueue()

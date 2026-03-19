@@ -492,6 +492,11 @@ class MatchingReviewService:
                 f"I found {len(batch)} low-fit candidate matches for {role_title}. "
                 "Only review these if you want to stretch beyond the stronger options. Main gaps are called out in each card."
             )
+        elif fit_band == "not_fit":
+            intro_text = (
+                f"I found {len(batch)} below-threshold candidate matches for {role_title}. "
+                "These do not meet the normal fit bar, so review only if you explicitly want broad stretch options."
+            )
         else:
             intro_text = (
                 f"I found {len(batch)} strong-fit candidate matches for {role_title}. "

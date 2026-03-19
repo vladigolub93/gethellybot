@@ -377,10 +377,8 @@ class MatchingService:
                 self.DETERMINISTIC_POOL_LIMIT + 1,
             ),
         )
-        final_shortlist = reranked_pool[: self.FINAL_SHORTLIST_LIMIT]
-        llm_filtered = reranked_pool[self.FINAL_SHORTLIST_LIMIT :]
-
-        for rank, item in enumerate(final_shortlist, start=1):
+        reranked_entries = []
+        for item in reranked_pool:
             rerank_item = rerank_map.get(str(item["candidate"].id), {})
             fit_band = classify_fit_band(
                 deterministic_score=item["deterministic_score"],
@@ -388,6 +386,28 @@ class MatchingService:
                 score_breakdown=item["score_breakdown"],
             )
             gap_signals = build_gap_signals(score_breakdown=item["score_breakdown"])
+            reranked_entries.append(
+                {
+                    "item": item,
+                    "rerank_item": rerank_item,
+                    "fit_band": fit_band,
+                    "gap_signals": gap_signals,
+                }
+            )
+
+        shortlistable_entries = [
+            entry for entry in reranked_entries if entry["fit_band"] != "not_fit"
+        ]
+        final_shortlist = shortlistable_entries[: self.FINAL_SHORTLIST_LIMIT]
+        shortlisted_candidate_ids = {
+            entry["item"]["candidate"].id for entry in final_shortlist
+        }
+
+        for rank, entry in enumerate(final_shortlist, start=1):
+            item = entry["item"]
+            rerank_item = entry["rerank_item"]
+            fit_band = entry["fit_band"]
+            gap_signals = entry["gap_signals"]
             self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
@@ -415,9 +435,16 @@ class MatchingService:
                 },
             )
 
-        for item in llm_filtered:
-            rerank_item = rerank_map.get(str(item["candidate"].id), {})
-            gap_signals = build_gap_signals(score_breakdown=item["score_breakdown"])
+        for entry in reranked_entries:
+            item = entry["item"]
+            if item["candidate"].id in shortlisted_candidate_ids:
+                continue
+            rerank_item = entry["rerank_item"]
+            gap_signals = entry["gap_signals"]
+            fit_band = entry["fit_band"]
+            filter_reason = (
+                "below_fit_band_cutoff" if fit_band == "not_fit" else "below_llm_rerank_cutoff"
+            )
             self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
@@ -426,15 +453,15 @@ class MatchingService:
                 candidate_profile_version_id=item["candidate_version"].id,
                 status="filtered_out",
                 hard_filter_passed=True,
-                filter_reason_codes_json=["below_llm_rerank_cutoff"],
+                filter_reason_codes_json=[filter_reason],
                 embedding_score=item["embedding_score"],
                 deterministic_score=item["deterministic_score"],
                 llm_rank_score=rerank_item.get("fit_score"),
                 llm_rank_position=rerank_item.get("rank"),
                 rationale_json={
                     "stage": "llm_rerank",
-                    "fit_band": "not_fit",
-                    "fit_band_label": fit_band_label("not_fit"),
+                    "fit_band": fit_band,
+                    "fit_band_label": fit_band_label(fit_band),
                     "gap_signals": gap_signals,
                     "score_breakdown": item["score_breakdown"],
                     "llm_fit_score": rerank_item.get("fit_score"),
