@@ -1345,6 +1345,19 @@ class TelegramUpdateService:
             )
             if direct_action_templates is not None:
                 return direct_action_templates
+            queue_block_text = self.matching_review_service.block_candidate_more_request(
+                user=user,
+                text=latest_user_message,
+            )
+            if queue_block_text:
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key="candidate_vacancy_review_ready",
+                        text=queue_block_text,
+                        allow_duplicate=True,
+                    )
+                ]
             review_answer = self.matching_review_service.answer_candidate_review_question(
                 user=user,
                 question_text=latest_user_message,
@@ -1603,6 +1616,19 @@ class TelegramUpdateService:
             )
             if direct_action_templates is not None:
                 return direct_action_templates
+            queue_block_text = self.matching_review_service.block_manager_more_request(
+                user=user,
+                text=latest_user_message,
+            )
+            if queue_block_text:
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key="manager_pre_interview_review_ready",
+                        text=queue_block_text,
+                        allow_duplicate=True,
+                    )
+                ]
             review_answer = self.matching_review_service.answer_manager_review_question(
                 user=user,
                 question_text=latest_user_message,

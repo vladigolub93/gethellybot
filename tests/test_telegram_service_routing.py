@@ -381,6 +381,8 @@ class FakeMatchingReviewService:
         self.candidate_result = SimpleNamespace(status="applied")
         self.candidate_answer = None
         self.manager_answer = None
+        self.candidate_queue_block = None
+        self.manager_queue_block = None
 
     def execute_manager_pre_interview_action(self, **kwargs):
         self.manager_calls.append(kwargs)
@@ -401,6 +403,12 @@ class FakeMatchingReviewService:
 
     def answer_manager_review_question(self, **kwargs):
         return self.manager_answer
+
+    def block_candidate_more_request(self, **kwargs):
+        return self.candidate_queue_block
+
+    def block_manager_more_request(self, **kwargs):
+        return self.manager_queue_block
 
 
 class FakeIdentityService:
@@ -2326,6 +2334,44 @@ def test_candidate_vacancy_review_question_uses_current_card_answer_before_graph
     assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Saved vacancy details for the current role."
 
 
+def test_candidate_vacancy_review_blocks_more_roles_until_current_card_is_resolved() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="VACANCY_REVIEW",
+            reply_text="Review the current vacancy card.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.matching_review_service.candidate_queue_block = "Сначала нужно принять решение по текущей вакансии."
+    service.bot_controller = FakeBotController("Old fallback should not be used.")
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5dqb",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5dqb",
+        build_update(text="покажи еще вакансии"),
+    )
+
+    assert templates == ["candidate_vacancy_review_ready"]
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Сначала нужно принять решение по текущей вакансии."
+
+
 def test_manager_pre_interview_question_uses_current_card_answer_before_graph_help() -> None:
     service = build_service()
     service.stage_agents = FakeStageAgentService(
@@ -2362,6 +2408,44 @@ def test_manager_pre_interview_question_uses_current_card_answer_before_graph_he
 
     assert templates == ["manager_pre_interview_review_ready"]
     assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Saved candidate details for the current profile."
+
+
+def test_manager_pre_interview_blocks_more_candidates_until_current_card_is_resolved() -> None:
+    service = build_service()
+    service.stage_agents = FakeStageAgentService(
+        None,
+        stage_result=StageAgentExecutionResult(
+            stage="PRE_INTERVIEW_REVIEW",
+            reply_text="Review the current candidate card.",
+            stage_status="in_progress",
+            proposed_action=None,
+            action_accepted=False,
+            structured_payload={},
+            validation_result={"accepted": False, "normalized_action": None},
+        ),
+    )
+    service.matching_review_service.manager_queue_block = "Сначала нужно принять решение по текущему кандидату."
+    service.bot_controller = FakeBotController("Old fallback should not be used.")
+    service.candidate_service = FailIfCalledService()
+    service.interview_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.evaluation_service = FailIfCalledService()
+
+    user = SimpleNamespace(
+        id="u5mrqb",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._apply_identity_flow(
+        user,
+        "raw5mrqb",
+        build_update(text="покажи еще кандидатов"),
+    )
+
+    assert templates == ["manager_pre_interview_review_ready"]
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Сначала нужно принять решение по текущему кандидату."
 
 
 def test_manager_pre_interview_callback_routes_action_by_match_id() -> None:

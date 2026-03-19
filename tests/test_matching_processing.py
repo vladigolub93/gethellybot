@@ -446,7 +446,8 @@ def test_matching_processing_notifies_manager_when_candidates_already_presented(
     assert len(service.notifications.rows) == 1
     text = service.notifications.rows[0].payload_json["text"].lower()
     assert "found more promising candidates" in text
-    assert "2 active candidates waiting in the current review batch" in text
+    assert "current candidate card waiting in review" in text
+    assert "send the next candidate after that" in text
 
 
 def test_matching_processing_notifies_candidate_after_manual_refresh_when_no_new_roles() -> None:
@@ -599,7 +600,8 @@ def test_matching_processing_notifies_candidate_when_roles_exist_but_cards_are_a
     notification = service.notifications.rows[0]
     text = notification.payload_json["text"].lower()
     assert "found more roles worth a look" in text
-    assert "2 active opportunity cards waiting in chat" in text
+    assert "current vacancy card waiting in chat" in text
+    assert "show the next one after that" in text
     assert "helly cv challenge" in text
 
 

@@ -211,18 +211,11 @@ class MatchingProcessingService:
                 "so review one of the current profiles first and I’ll send the next ones after that."
             )
         elif review_dispatch_result and review_dispatch_result.get("status") == "already_presented":
-            batch_count = int(review_dispatch_result.get("batch_count") or 0)
-            if batch_count > 0:
-                text = (
-                    "I refreshed matching and found more promising candidates, "
-                    f"but you already have {batch_count} active "
-                    f"{self._pluralize_candidates(batch_count)} waiting in the current review batch for this vacancy."
-                )
-            else:
-                text = (
-                    "I refreshed matching and found more promising candidates, but your current review batch is still active. "
-                    "Review those profiles first and I’ll send the next candidates when the queue moves."
-                )
+            text = (
+                "I refreshed matching and found more promising candidates, "
+                "but you still have a current candidate card waiting in review. "
+                "Resolve that profile first and I’ll send the next candidate after that."
+            )
         elif shortlisted_count > 0:
             notified_count = max(int((review_dispatch_result or {}).get("notified_count") or 0), 0)
             sent_count = notified_count or min(shortlisted_count, MATCH_BATCH_SIZE)
@@ -306,15 +299,15 @@ class MatchingProcessingService:
         elif total_shortlisted > 0 and already_presented:
             shown_count = current_batch_count or active_match_count
             if shown_count > 0:
-                noun = "opportunity card" if shown_count == 1 else "opportunity cards"
                 text = (
                     "I checked current open roles again and found more roles worth a look, "
-                    f"but you already have {shown_count} active {noun} waiting in chat."
+                    "but you still have a current vacancy card waiting in chat. "
+                    "Decide on that role first and I’ll show the next one after that."
                 )
             else:
                 text = (
                     "I checked current open roles again and found more matching signals, "
-                    "but your current vacancy review batch is still active in chat, so I didn’t resend it."
+                    "but your current vacancy card is still active in chat, so I didn’t send another one yet."
                 )
         elif active_match_count > 0:
             verb = "is" if active_match_count == 1 else "are"

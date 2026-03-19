@@ -8,6 +8,7 @@ from src.matching.policy import (
     MATCH_STATUS_CANDIDATE_DECISION_PENDING,
     MATCH_STATUS_MANAGER_DECISION_PENDING,
     MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+    MATCH_STATUS_MANAGER_SKIPPED,
     PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES,
     PRE_INTERVIEW_MANAGER_REVIEW_STATUSES,
 )
@@ -88,7 +89,10 @@ class FakeMatchingRepository:
 
     def get_latest_pre_interview_review_for_manager(self, vacancy_ids):
         for match in self.pre_vacancy:
-            if match.vacancy_id in vacancy_ids:
+            if (
+                match.vacancy_id in vacancy_ids
+                and getattr(match, "status", None) in PRE_INTERVIEW_MANAGER_REVIEW_STATUSES
+            ):
                 return match
         return None
 
@@ -105,7 +109,10 @@ class FakeMatchingRepository:
 
     def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
         for match in self.pre_candidate:
-            if match.candidate_profile_id == candidate_profile_id:
+            if (
+                match.candidate_profile_id == candidate_profile_id
+                and getattr(match, "status", None) in PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES
+            ):
                 return match
         return None
 
@@ -997,6 +1004,149 @@ def test_execute_manager_pre_interview_action_without_slot_uses_current_card() -
     assert result is not None
     assert result.status == "awaiting_candidate"
     assert match.status == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED
+
+
+def test_dispatch_manager_batch_for_vacancy_blocks_new_card_when_other_vacancy_already_has_active_review() -> None:
+    manager_user_id = "manager-multi-queue"
+    vacancy_a = SimpleNamespace(id="vacancy-a", manager_user_id=manager_user_id, role_title="Node.js Developer")
+    vacancy_b = SimpleNamespace(id="vacancy-b", manager_user_id=manager_user_id, role_title="Python Developer")
+    current_candidate = SimpleNamespace(id="candidate-current-a", user_id="candidate-user-current-a")
+    queued_candidate = SimpleNamespace(id="candidate-queued-b", user_id="candidate-user-queued-b")
+    current_match = SimpleNamespace(
+        id="match-current-a",
+        vacancy_id=vacancy_a.id,
+        candidate_profile_id=current_candidate.id,
+        candidate_profile_version_id="cpv-current-a",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+    queued_match = SimpleNamespace(
+        id="match-queued-b",
+        vacancy_id=vacancy_b.id,
+        candidate_profile_id=queued_candidate.id,
+        candidate_profile_version_id="cpv-queued-b",
+        status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={
+            current_candidate.id: current_candidate,
+            queued_candidate.id: queued_candidate,
+        },
+        versions={
+            "cpv-current-a": SimpleNamespace(summary_json={}),
+            "cpv-queued-b": SimpleNamespace(summary_json={}),
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(
+        pre_vacancy=[current_match],
+        shortlisted_for_vacancy=[queued_match],
+    )
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            current_candidate.user_id: SimpleNamespace(id=current_candidate.user_id, display_name="Current Candidate"),
+            queued_candidate.user_id: SimpleNamespace(id=queued_candidate.user_id, display_name="Queued Candidate"),
+            manager_user_id: SimpleNamespace(id=manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy_a.id: vacancy_a, vacancy_b.id: vacancy_b},
+        manager_vacancies={manager_user_id: [vacancy_a, vacancy_b]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(
+        vacancy_id=vacancy_b.id,
+        force=False,
+        trigger_type="job",
+    )
+
+    assert result["status"] == "already_presented"
+    assert result["active_vacancy_id"] == vacancy_a.id
+    assert queued_match.status == "shortlisted"
+    assert service.notifications.rows == []
+
+
+def test_execute_manager_pre_interview_action_dispatches_next_card_from_other_vacancy_queue() -> None:
+    manager_user = SimpleNamespace(id="manager-next-queue", is_hiring_manager=True, is_candidate=False)
+    current_candidate = SimpleNamespace(id="candidate-current-next", user_id="candidate-user-current-next")
+    queued_candidate = SimpleNamespace(id="candidate-queued-next", user_id="candidate-user-queued-next")
+    vacancy_a = SimpleNamespace(id="vacancy-a-next", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    vacancy_b = SimpleNamespace(id="vacancy-b-next", manager_user_id=manager_user.id, role_title="Python Developer")
+    current_match = SimpleNamespace(
+        id="match-current-next",
+        vacancy_id=vacancy_a.id,
+        candidate_profile_id=current_candidate.id,
+        candidate_profile_version_id="cpv-current-next",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+    queued_match = SimpleNamespace(
+        id="match-queued-next",
+        vacancy_id=vacancy_b.id,
+        candidate_profile_id=queued_candidate.id,
+        candidate_profile_version_id="cpv-queued-next",
+        status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={
+            current_candidate.id: current_candidate,
+            queued_candidate.id: queued_candidate,
+        },
+        versions={
+            "cpv-current-next": SimpleNamespace(summary_json={}),
+            "cpv-queued-next": SimpleNamespace(summary_json={}),
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(
+        pre_vacancy=[current_match],
+        shortlisted_for_vacancy=[queued_match],
+        active_vacancy=[],
+    )
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            current_candidate.user_id: SimpleNamespace(id=current_candidate.user_id, display_name="Current Candidate"),
+            queued_candidate.user_id: SimpleNamespace(id=queued_candidate.user_id, display_name="Queued Candidate"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy_a.id: vacancy_a, vacancy_b.id: vacancy_b},
+        manager_vacancies={manager_user.id: [vacancy_a, vacancy_b]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_manager_pre_interview_action(
+        user=manager_user,
+        raw_message_id="raw-next-queue",
+        action="skip_candidate",
+        candidate_slot=None,
+        match_id=current_match.id,
+    )
+
+    assert result is not None
+    assert result.status == "skipped"
+    assert current_match.status == MATCH_STATUS_MANAGER_SKIPPED
+    assert queued_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
+    assert any(
+        row.template_key == "manager_pre_interview_review_ready"
+        and row.payload_json.get("message_entries")
+        and row.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-queued-next"
+        for row in service.notifications.rows
+    )
 
 
 def test_answer_candidate_review_question_uses_current_vacancy_details() -> None:

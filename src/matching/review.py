@@ -452,6 +452,121 @@ class MatchingReviewService:
         )
         return vacancy, match, candidate, version
 
+    def _manager_vacancies_for_user(self, manager_user_id) -> list:
+        getter = getattr(self.vacancies, "get_open_by_manager_user_id", None)
+        vacancies = getter(manager_user_id) if callable(getter) else self.vacancies.get_by_manager_user_id(manager_user_id)
+        return [vacancy for vacancy in (vacancies or []) if getattr(vacancy, "deleted_at", None) is None]
+
+    def _current_manager_review_match_for_user(self, manager_user_id):
+        vacancy_ids = [vacancy.id for vacancy in self._manager_vacancies_for_user(manager_user_id)]
+        if not vacancy_ids:
+            return None
+        return self.matches.get_latest_pre_interview_review_for_manager(vacancy_ids)
+
+    def _current_candidate_review_match_for_user(self, candidate_user_id):
+        candidate = self.candidates.get_active_by_user_id(candidate_user_id)
+        if candidate is None:
+            return None
+        review_matches = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=1)
+        return review_matches[0] if review_matches else None
+
+    def _ordered_manager_vacancies(self, *, manager_user_id, preferred_vacancy_id=None) -> list:
+        vacancies = self._manager_vacancies_for_user(manager_user_id)
+        if preferred_vacancy_id is None:
+            return vacancies
+        preferred: list = []
+        rest: list = []
+        for vacancy in vacancies:
+            if str(getattr(vacancy, "id", "")) == str(preferred_vacancy_id):
+                preferred.append(vacancy)
+            else:
+                rest.append(vacancy)
+        return preferred + rest
+
+    def _collect_shortlisted_matches_for_manager(self, *, manager_user_id, preferred_vacancy_id=None) -> list:
+        ranked: list = []
+        seen: set[str] = set()
+        for vacancy in self._ordered_manager_vacancies(
+            manager_user_id=manager_user_id,
+            preferred_vacancy_id=preferred_vacancy_id,
+        ):
+            if self._manager_batch_limit(vacancy.id) <= 0:
+                continue
+            for match in self.matches.list_shortlisted_for_vacancy(vacancy.id, limit=MATCH_BATCH_SIZE * 2):
+                key = str(getattr(match, "id", ""))
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                ranked.append(match)
+        return self._sort_matches_for_manager_review(ranked)
+
+    def _matches_more_queue_request(self, text: str | None, *, audience: str) -> bool:
+        normalized = " ".join((text or "").split()).strip().lower()
+        if not normalized:
+            return False
+        if audience == "candidate":
+            groups = (
+                ("more", "role"),
+                ("more", "vacanc"),
+                ("another", "role"),
+                ("another", "vacanc"),
+                ("next", "role"),
+                ("next", "vacanc"),
+                ("ещ", "ваканс"),
+                ("ещ", "рол"),
+                ("друг", "ваканс"),
+                ("следующ", "ваканс"),
+                ("следующ", "рол"),
+                ("покажи", "ваканс"),
+                ("дай", "ваканс"),
+            )
+        else:
+            groups = (
+                ("more", "candidate"),
+                ("another", "candidate"),
+                ("next", "candidate"),
+                ("ещ", "кандид"),
+                ("друг", "кандид"),
+                ("следующ", "кандид"),
+                ("покажи", "кандид"),
+                ("дай", "кандид"),
+                ("more", "profile"),
+                ("another", "profile"),
+            )
+        return any(all(part in normalized for part in group) for group in groups)
+
+    def block_candidate_more_request(self, *, user, text: str) -> str | None:
+        if self._current_candidate_review_match_for_user(user.id) is None:
+            return None
+        if not self._matches_more_queue_request(text, audience="candidate"):
+            return None
+        ru = self._has_cyrillic(text)
+        if ru:
+            return (
+                "Сначала нужно принять решение по текущей вакансии: Connect или Skip. "
+                "Как только закроем эту карточку, я сразу покажу следующую из очереди."
+            )
+        return (
+            "First, decide on the current vacancy card with Apply/Connect or Skip. "
+            "As soon as this card is resolved, I’ll show the next one in the queue."
+        )
+
+    def block_manager_more_request(self, *, user, text: str) -> str | None:
+        if self._current_manager_review_match_for_user(user.id) is None:
+            return None
+        if not self._matches_more_queue_request(text, audience="manager"):
+            return None
+        ru = self._has_cyrillic(text)
+        if ru:
+            return (
+                "Сначала нужно принять решение по текущему кандидату: Connect или Skip. "
+                "Как только закроем эту карточку, я покажу следующего кандидата из очереди."
+            )
+        return (
+            "First, decide on the current candidate card with Connect or Skip. "
+            "As soon as this card is resolved, I’ll show the next candidate in the queue."
+        )
+
     def answer_candidate_review_question(self, *, user, question_text: str) -> str | None:
         if not self._looks_like_review_object_question(question_text):
             return None
@@ -1169,120 +1284,128 @@ class MatchingReviewService:
                 "batch_count": 0,
                 "notified": False,
             }
-
-        presentation_limit = self._manager_batch_limit(vacancy.id)
-        if presentation_limit <= 0:
-            if force:
+        manager_user_id = vacancy.manager_user_id
+        current_match = self._current_manager_review_match_for_user(manager_user_id)
+        if current_match is not None:
+            current_vacancy = self.vacancies.get_by_id(current_match.vacancy_id)
+            if force and trigger_type == "user_action" and current_vacancy is not None:
                 self.notifications.create(
-                    user_id=vacancy.manager_user_id,
+                    user_id=manager_user_id,
                     entity_type="vacancy",
-                    entity_id=vacancy.id,
+                    entity_id=current_vacancy.id,
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
-                        "text": self._copy(
-                            f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidate decisions "
-                            "open on this vacancy. Review one of the current profiles first and I’ll send more as soon as there’s room."
+                        "message_entries": self._build_manager_batch_entries(
+                            vacancy=current_vacancy,
+                            batch=[current_match],
                         ),
                     },
                     allow_duplicate=True,
                 )
+                return {
+                    "status": "dispatched",
+                    "vacancy_id": str(vacancy_id),
+                    "active_vacancy_id": str(current_vacancy.id),
+                    "batch_count": 1,
+                    "notified_count": 1,
+                    "promoted_count": 0,
+                    "fit_band": self._match_fit_band(current_match),
+                    "notified": True,
+                }
             return {
-                "status": "vacancy_cap_reached",
+                "status": "already_presented",
                 "vacancy_id": str(vacancy_id),
-                "batch_count": 0,
+                "active_vacancy_id": str(getattr(current_match, "vacancy_id", vacancy_id)),
+                "batch_count": 1,
                 "promoted_count": 0,
-                "notified": force,
+                "notified": False,
             }
 
-        current_batch = list(
-            self.matches.list_pre_interview_review_for_vacancy(
-                vacancy_id,
-                limit=1,
+        if trigger_type == "user_action":
+            shortlisted = self._collect_shortlisted_matches_for_manager(
+                manager_user_id=manager_user_id,
+                preferred_vacancy_id=vacancy_id,
             )
-        )
-        preexisting_count = len(current_batch)
-        current_batch_ids = {match.id for match in current_batch}
-        newly_promoted: list = []
-        promoted_count = 0
-        if len(current_batch) < 1:
+        else:
+            if self._manager_batch_limit(vacancy.id) <= 0:
+                if force:
+                    self.notifications.create(
+                        user_id=manager_user_id,
+                        entity_type="vacancy",
+                        entity_id=vacancy.id,
+                        template_key="manager_pre_interview_review_ready",
+                        payload_json={
+                            "text": self._copy(
+                                f"You already have {MAX_ACTIVE_INTERVIEW_CANDIDATES_PER_VACANCY} active candidate decisions "
+                                "open on this vacancy. Review one of the current profiles first and I’ll send more as soon as there’s room."
+                            ),
+                        },
+                        allow_duplicate=True,
+                    )
+                return {
+                    "status": "vacancy_cap_reached",
+                    "vacancy_id": str(vacancy_id),
+                    "batch_count": 0,
+                    "promoted_count": 0,
+                    "notified": force,
+                }
             shortlisted = self._sort_matches_for_manager_review(
                 self.matches.list_shortlisted_for_vacancy(
                     vacancy_id,
                     limit=MATCH_BATCH_SIZE * 6,
                 )
             )
-            available_shortlisted = [
-                match for match in shortlisted if match.id not in current_batch_ids
-            ]
-            if current_batch:
-                target_fit_band = self._match_fit_band(self._sort_matches_for_manager_review(current_batch)[0])
-            else:
-                target_fit_band = self._match_fit_band(available_shortlisted[0]) if available_shortlisted else None
-            for match in available_shortlisted:
-                if target_fit_band and self._match_fit_band(match) != target_fit_band:
-                    continue
-                if match.id in current_batch_ids:
-                    continue
-                self.state_service.transition(
-                    entity_type="match",
-                    entity=match,
-                    to_state=MATCH_STATUS_MANAGER_DECISION_PENDING,
-                    trigger_type=trigger_type,
-                    state_field="status",
-                    metadata_json={"vacancy_id": str(vacancy_id), "presentation": "manager_pre_interview_review"},
-                )
-                current_batch.append(match)
-                current_batch_ids.add(match.id)
-                newly_promoted.append(match)
-                promoted_count += 1
-                if len(current_batch) >= 1:
-                    break
 
-        if not current_batch:
+        if not shortlisted:
             return {
                 "status": "empty",
                 "vacancy_id": str(vacancy_id),
                 "batch_count": 0,
-                "promoted_count": promoted_count,
+                "promoted_count": 0,
                 "notified": False,
             }
 
-        if promoted_count == 0 and preexisting_count > 0 and not (force and trigger_type == "user_action"):
+        match = shortlisted[0]
+        selected_vacancy = self.vacancies.get_by_id(match.vacancy_id)
+        if selected_vacancy is None:
             return {
-                "status": "already_presented",
+                "status": "empty",
                 "vacancy_id": str(vacancy_id),
-                "batch_count": len(current_batch),
-                "promoted_count": promoted_count,
+                "batch_count": 0,
+                "promoted_count": 0,
                 "notified": False,
             }
-
-        notification_batch = current_batch if promoted_count == 0 else newly_promoted
+        self.state_service.transition(
+            entity_type="match",
+            entity=match,
+            to_state=MATCH_STATUS_MANAGER_DECISION_PENDING,
+            trigger_type=trigger_type,
+            state_field="status",
+            metadata_json={"vacancy_id": str(selected_vacancy.id), "presentation": "manager_pre_interview_review"},
+        )
         self.notifications.create(
-            user_id=vacancy.manager_user_id,
+            user_id=manager_user_id,
             entity_type="vacancy",
-            entity_id=vacancy.id,
+            entity_id=selected_vacancy.id,
             template_key="manager_pre_interview_review_ready",
             payload_json={
-                "message_entries": self._build_manager_batch_entries(vacancy=vacancy, batch=notification_batch),
+                "message_entries": self._build_manager_batch_entries(vacancy=selected_vacancy, batch=[match]),
             },
             allow_duplicate=True,
         )
         return {
             "status": "dispatched",
             "vacancy_id": str(vacancy_id),
-            "batch_count": len(current_batch),
-            "notified_count": len(notification_batch),
-            "promoted_count": promoted_count,
-            "fit_band": self._match_fit_band(notification_batch[0]) if notification_batch else None,
+            "active_vacancy_id": str(selected_vacancy.id),
+            "batch_count": 1,
+            "notified_count": 1,
+            "promoted_count": 1,
+            "fit_band": self._match_fit_band(match),
             "notified": True,
         }
 
     def current_batch_size_for_manager(self, *, manager_user_id) -> int:
-        vacancy_ids = [vacancy.id for vacancy in self.vacancies.get_by_manager_user_id(manager_user_id)]
-        latest = self.matches.get_latest_pre_interview_review_for_manager(vacancy_ids)
-        if latest is None:
-            return 0
-        return len(self.matches.list_pre_interview_review_for_vacancy(latest.vacancy_id, limit=1))
+        return 1 if self._current_manager_review_match_for_user(manager_user_id) is not None else 0
 
     def dispatch_candidate_batch_for_profile(
         self,
@@ -1617,6 +1740,7 @@ class MatchingReviewService:
             return None
 
         match = self.matches.get_by_id(match_id) if match_id else None
+        current_match = self._current_manager_review_match_for_user(user.id)
         vacancy = self.vacancies.get_by_id(match.vacancy_id) if match is not None else None
         if vacancy is None and latest is not None:
             vacancy = self.vacancies.get_by_id(latest.vacancy_id)
@@ -1630,7 +1754,7 @@ class MatchingReviewService:
             limit=1,
         )
         if match is not None:
-            if not batch or batch[0].id != match.id:
+            if current_match is None or current_match.id != match.id or not batch or batch[0].id != match.id:
                 self.notifications.create(
                     user_id=user.id,
                     entity_type="vacancy",
