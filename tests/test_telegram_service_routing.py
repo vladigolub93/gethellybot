@@ -30,6 +30,11 @@ class FakeMessagingService:
         return f"Recovery for {state}: {latest_user_message}"
 
 
+class MutatingMessagingService(FakeMessagingService):
+    def compose(self, approved_intent: str) -> str:
+        return f"MUTATED: {approved_intent}"
+
+
 class FakeBotController:
     def __init__(self, response: Optional[str]):
         self.response = response
@@ -4132,6 +4137,7 @@ def test_manager_clarification_answer_passthrough_reaches_clarification_handler(
 
 def test_graph_manager_clarification_stage_can_own_text_completion() -> None:
     service = build_service()
+    service.messaging = MutatingMessagingService()
     service.stage_agents = FakeStageAgentService(
         None,
         stage_result=StageAgentExecutionResult(
@@ -4178,6 +4184,37 @@ def test_graph_manager_clarification_stage_can_own_text_completion() -> None:
     assert templates == ["vacancy_open"]
     assert service.vacancy_service.clarification_calls
     assert service.vacancy_service.clarification_calls[-1]["parsed_payload"]["budget_min"] == 5000
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == "Vacancy is now open."
+
+
+def test_manager_clarification_message_preserves_service_question_text() -> None:
+    service = build_service()
+    service.messaging = MutatingMessagingService()
+    service.vacancy_service = FakeVacancyService()
+    service.vacancy_service.clarification_result = SimpleNamespace(
+        status="next_question",
+        notification_template="vacancy_clarification_follow_up",
+        notification_text="If there is a take-home task, will it be paid or unpaid?",
+    )
+
+    user = SimpleNamespace(
+        id="u12clarify",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+    )
+
+    templates = service._handle_manager_clarification_message(
+        user=user,
+        raw_message_id="raw12clarify",
+        normalized_update=build_update(text="бесплатная"),
+        file_id=None,
+    )
+
+    assert templates == ["vacancy_clarification_follow_up"]
+    assert service.notifications_repo.calls[-1]["payload_json"]["text"] == (
+        "If there is a take-home task, will it be paid or unpaid?"
+    )
 
 
 def test_manager_open_help_is_intercepted_before_fallback() -> None:

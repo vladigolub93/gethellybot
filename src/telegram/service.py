@@ -906,7 +906,7 @@ class TelegramUpdateService:
             self._notify_result(
                 user_id=user.id,
                 template_key=clarification_result.notification_template,
-                text=self._copy(clarification_result.notification_text),
+                text=clarification_result.notification_text,
             )
         ]
 
@@ -1150,7 +1150,7 @@ class TelegramUpdateService:
             self._notify_result(
                 user_id=user.id,
                 template_key=clarification_result.notification_template,
-                text=self._copy(clarification_result.notification_text),
+                text=clarification_result.notification_text,
             )
         ]
 
