@@ -18,6 +18,30 @@ class NotificationDeliveryService:
         self.raw_messages = RawMessagesRepository(session)
         self.telegram = TelegramBotClient()
 
+    @staticmethod
+    def _reply_anchor_template_keys(notification) -> list[str]:
+        template_key = str(getattr(notification, "template_key", "") or "")
+        if template_key == "candidate_approved_introduction":
+            return ["candidate_vacancy_review_ready"]
+        if template_key == "manager_candidate_approved":
+            return ["manager_pre_interview_review_ready"]
+        return []
+
+    def _resolve_reply_to_message_id(self, *, notification, user, target_chat_id: int) -> int | None:
+        payload = getattr(notification, "payload_json", None) or {}
+        match_id = payload.get("reply_to_match_id")
+        if not match_id or user is None:
+            return None
+        template_keys = self._reply_anchor_template_keys(notification)
+        if not template_keys:
+            return None
+        return self.raw_messages.get_latest_reply_anchor_message_id(
+            user_id=user.id,
+            match_id=match_id,
+            template_keys=template_keys,
+            telegram_chat_id=target_chat_id,
+        )
+
     def process_job(self, job) -> dict:
         if job.job_type != "notification_send_telegram_v1":
             raise ValueError(f"Unsupported notification job type: {job.job_type}")
@@ -97,13 +121,19 @@ class NotificationDeliveryService:
                     }
                     for index, text in enumerate(messages)
                 ]
+            reply_to_message_id = self._resolve_reply_to_message_id(
+                notification=notification,
+                user=user,
+                target_chat_id=target_chat_id,
+            )
             telegram_results = []
-            for entry in messages_to_send:
+            for index, entry in enumerate(messages_to_send):
                 text = entry["text"]
                 telegram_result = self.telegram.send_text_message(
                     chat_id=target_chat_id,
                     text=text,
                     reply_markup=entry.get("reply_markup"),
+                    reply_to_message_id=reply_to_message_id if index == 0 else None,
                 )
                 telegram_results.append(telegram_result)
                 self.raw_messages.create(

@@ -250,6 +250,7 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies() 
     notification = service.notifications.rows[0]
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
+    assert notification.payload_json["match_id"] == str(match.id)
     assert notification.payload_json["message_entries"][0]["text"].startswith("I found a strong-fit candidate")
     assert notification.payload_json["message_entries"][1]["text"].startswith("I found you Test Candidate for the Senior Backend Engineer role.")
     assert "This looks like a strong fit." in notification.payload_json["message_entries"][1]["text"]
@@ -313,6 +314,7 @@ def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies(
     notification = service.notifications.rows[0]
     assert notification.user_id == candidate.user_id
     assert notification.template_key == "candidate_vacancy_review_ready"
+    assert notification.payload_json["match_id"] == str(match.id)
     assert notification.payload_json["message_entries"][0]["text"].startswith("I found a role worth reviewing")
     assert notification.payload_json["message_entries"][1]["text"].startswith("I found you a vacancy for Python Engineer.")
     assert "The client is offering 5000-6500 USD / month in a remote setup." in notification.payload_json["message_entries"][1]["text"]
@@ -2091,6 +2093,8 @@ def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_c
     assert len(service.notifications.rows) == 2
     assert service.notifications.rows[0].template_key == "candidate_approved_introduction"
     assert service.notifications.rows[1].template_key == "manager_candidate_approved"
+    assert service.notifications.rows[0].payload_json["reply_to_match_id"] == str(match.id)
+    assert service.notifications.rows[1].payload_json["reply_to_match_id"] == str(match.id)
 
 
 def test_execute_candidate_pre_interview_action_shares_contacts_immediately_when_manager_already_approved() -> None:
@@ -2147,3 +2151,5 @@ def test_execute_candidate_pre_interview_action_shares_contacts_immediately_when
     assert len(service.notifications.rows) == 2
     assert service.notifications.rows[0].template_key == "candidate_approved_introduction"
     assert service.notifications.rows[1].template_key == "manager_candidate_approved"
+    assert service.notifications.rows[0].payload_json["reply_to_match_id"] == str(match.id)
+    assert service.notifications.rows[1].payload_json["reply_to_match_id"] == str(match.id)

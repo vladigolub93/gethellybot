@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
-from src.db.models.core import RawMessage
+from src.db.models.core import Notification, RawMessage
 
 
 class RawMessagesRepository:
@@ -67,6 +67,34 @@ class RawMessagesRepository:
             )
         )
         return bool(self.session.execute(stmt).scalar())
+
+    def get_latest_reply_anchor_message_id(
+        self,
+        *,
+        user_id,
+        match_id,
+        template_keys: List[str],
+        telegram_chat_id: Optional[int] = None,
+    ) -> Optional[int]:
+        if not template_keys:
+            return None
+        stmt = (
+            select(RawMessage.telegram_message_id)
+            .join(Notification, Notification.id == RawMessage.correlation_id)
+            .where(
+                RawMessage.direction == "outbound",
+                RawMessage.user_id == user_id,
+                RawMessage.telegram_message_id.is_not(None),
+                Notification.user_id == user_id,
+                Notification.template_key.in_(template_keys),
+                Notification.payload_json["match_id"].astext == str(match_id),
+            )
+            .order_by(Notification.created_at.desc(), RawMessage.created_at.desc())
+            .limit(1)
+        )
+        if telegram_chat_id is not None:
+            stmt = stmt.where(RawMessage.telegram_chat_id == telegram_chat_id)
+        return self.session.execute(stmt).scalar_one_or_none()
 
     def attach_file(self, raw_message: RawMessage, file_id: UUID) -> RawMessage:
         raw_message.file_id = file_id

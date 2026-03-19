@@ -1537,6 +1537,7 @@ class MatchingReviewService:
             payload_json={
                 "text": candidate_text,
                 "counterparty": self._build_counterparty_payload(manager_user),
+                "reply_to_match_id": str(match.id),
             },
         )
         self.notifications.create(
@@ -1547,6 +1548,7 @@ class MatchingReviewService:
             payload_json={
                 "text": manager_text,
                 "counterparty": self._build_counterparty_payload(candidate_user),
+                "reply_to_match_id": str(match.id),
             },
         )
 
@@ -1755,6 +1757,7 @@ class MatchingReviewService:
             entity_id=selected_vacancy.id,
             template_key="manager_pre_interview_review_ready",
             payload_json={
+                "match_id": str(match.id),
                 "message_entries": self._build_manager_batch_entries(vacancy=selected_vacancy, batch=[match]),
             },
             allow_duplicate=True,
@@ -1874,6 +1877,7 @@ class MatchingReviewService:
             entity_id=candidate.id,
             template_key="candidate_vacancy_review_ready",
             payload_json={
+                "match_id": str(notification_batch[0].id),
                 "message_entries": self._build_candidate_batch_entries(batch=notification_batch),
             },
             allow_duplicate=True,
@@ -2221,6 +2225,7 @@ class MatchingReviewService:
                     entity_id=match.id,
                     template_key="candidate_vacancy_review_ready",
                     payload_json={
+                        "match_id": str(match.id),
                         "message_entries": [
                             {
                                 "text": self._copy(

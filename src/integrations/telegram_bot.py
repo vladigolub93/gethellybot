@@ -17,7 +17,14 @@ class TelegramBotClient:
         self.file_base_url = f"https://api.telegram.org/file/bot{self.token}"
         self.timeout_seconds = timeout_seconds
 
-    def send_text_message(self, *, chat_id: int, text: str, reply_markup: Optional[dict] = None) -> dict:
+    def send_text_message(
+        self,
+        *,
+        chat_id: int,
+        text: str,
+        reply_markup: Optional[dict] = None,
+        reply_to_message_id: Optional[int] = None,
+    ) -> dict:
         body = {
             "chat_id": chat_id,
             "text": text,
@@ -25,6 +32,9 @@ class TelegramBotClient:
         }
         if reply_markup is not None:
             body["reply_markup"] = reply_markup
+        if reply_to_message_id is not None:
+            body["reply_to_message_id"] = int(reply_to_message_id)
+            body["allow_sending_without_reply"] = True
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(
                 f"{self.api_base_url}/sendMessage",

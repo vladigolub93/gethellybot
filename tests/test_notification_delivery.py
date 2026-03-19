@@ -41,6 +41,7 @@ class FakeRawMessagesRepository:
     def __init__(self):
         self.created = []
         self.outbound_correlation_ids = set()
+        self.reply_anchor_message_id = None
 
     def create(self, **kwargs):
         self.created.append(kwargs)
@@ -52,17 +53,21 @@ class FakeRawMessagesRepository:
     def has_outbound_for_correlation(self, *, correlation_id):
         return str(correlation_id) in self.outbound_correlation_ids
 
+    def get_latest_reply_anchor_message_id(self, *, user_id, match_id, template_keys, telegram_chat_id=None):
+        return self.reply_anchor_message_id
+
 
 class FakeTelegramBotClient:
     def __init__(self):
         self.calls = []
 
-    def send_text_message(self, *, chat_id, text, reply_markup=None):
+    def send_text_message(self, *, chat_id, text, reply_markup=None, reply_to_message_id=None):
         self.calls.append(
             {
                 "chat_id": chat_id,
                 "text": text,
                 "reply_markup": reply_markup,
+                "reply_to_message_id": reply_to_message_id,
             }
         )
         return {"message_id": len(self.calls)}
@@ -198,3 +203,24 @@ def test_send_notification_supports_per_message_reply_markup_entries() -> None:
     assert len(service.telegram.calls) == 2
     assert service.telegram.calls[0]["reply_markup"] is None
     assert service.telegram.calls[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
+
+
+def test_send_notification_replies_to_original_review_card_when_reply_anchor_is_present() -> None:
+    service = _build_service()
+    service.raw_messages.reply_anchor_message_id = 777
+    notification = SimpleNamespace(
+        id="notification-7",
+        user_id="user-1",
+        template_key="candidate_approved_introduction",
+        payload_json={
+            "text": "Manager approved.",
+            "reply_to_match_id": "match-7",
+        },
+        status="pending",
+    )
+    service.notifications.rows[str(notification.id)] = notification
+
+    result = service.send_notification_by_id(notification.id)
+
+    assert result["status"] == "sent"
+    assert service.telegram.calls[0]["reply_to_message_id"] == 777
