@@ -723,6 +723,15 @@ class MatchingReviewService:
         gap_context = self._match_gap_context(match)
         team_size = getattr(vacancy, "team_size", None)
 
+        rag_answer = self._candidate_review_dossier_answer(
+            question_text=question_text,
+            match=match,
+            vacancy=vacancy,
+            vacancy_version=vacancy_version,
+        )
+        if rag_answer:
+            return rag_answer
+
         if self._contains_any(lowered, ("why", "fit", "showed", "selected", "почему", "зачем", "показал", "подходит")):
             parts = []
             if fit_reason:
@@ -894,15 +903,6 @@ class MatchingReviewService:
                 else "I do not have extra saved details on this card beyond what I already showed."
             )
 
-        rag_answer = self._candidate_review_dossier_answer(
-            question_text=question_text,
-            match=match,
-            vacancy=vacancy,
-            vacancy_version=vacancy_version,
-        )
-        if rag_answer:
-            return rag_answer
-
         parts = []
         if project:
             parts.append(
@@ -963,12 +963,23 @@ class MatchingReviewService:
         )
         summary_json = getattr(candidate_version, "summary_json", None) or {}
         summary_text = self._truncate_text(summary_json.get("approval_summary_text") or summary_json.get("headline"), limit=240)
+        source_excerpt = self._truncate_text(getattr(candidate_version, "extracted_text", None), limit=420)
         years = summary_json.get("years_experience")
         skills = list(summary_json.get("skills") or [])[:8]
         preferences = self._candidate_preferences_details(candidate, ru=ru)
         assessments = self._candidate_assessment_preferences_details(candidate, ru=ru)
         fit_reason = self._match_reason_text(match)
         gap_context = self._match_gap_context(match)
+
+        rag_answer = self._manager_review_dossier_answer(
+            question_text=question_text,
+            match=match,
+            vacancy=vacancy,
+            candidate=candidate,
+            candidate_version=candidate_version,
+        )
+        if rag_answer:
+            return rag_answer
 
         if self._contains_any(lowered, ("why", "fit", "showed", "selected", "почему", "зачем", "показал", "подходит")):
             parts = []
@@ -978,6 +989,83 @@ class MatchingReviewService:
                 parts.append(("Основной tradeoff: " + gap_context) if ru else ("Main tradeoff: " + gap_context))
             if parts:
                 return " ".join(parts)
+
+        if self._contains_any(
+            lowered,
+            (
+                "what else",
+                "anything else",
+                "more info",
+                "more information",
+                "besides summary",
+                "кроме summary",
+                "кроме саммари",
+                "что еще",
+                "что ещё",
+                "что то еще",
+                "что-то еще",
+                "еще есть",
+                "ещё есть",
+                "какая информация еще",
+                "какая информация ещё",
+            ),
+        ):
+            extras = []
+            if skills:
+                extras.append(
+                    "ключевые скиллы: " + ", ".join(skills[:6])
+                    if ru
+                    else "key skills: " + ", ".join(skills[:6])
+                )
+            if preferences:
+                extras.append(preferences.rstrip("."))
+            if assessments:
+                extras.append(assessments.rstrip("."))
+            if source_excerpt:
+                extras.append(
+                    f"в extracted resume text вижу: {source_excerpt}"
+                    if ru
+                    else f"in the extracted resume text I can see: {source_excerpt}"
+                )
+            if extras:
+                return (
+                    "Кроме summary по этой карточке у меня ещё есть: " + "; ".join(extras[:3]) + "."
+                    if ru
+                    else "Besides the summary, on this card I also have: " + "; ".join(extras[:3]) + "."
+                )
+            return (
+                "Кроме summary по этой карточке у меня сейчас нет дополнительных сохраненных деталей."
+                if ru
+                else "Besides the summary, I do not currently have extra saved details on this card."
+            )
+
+        if self._contains_any(
+            lowered,
+            ("resume", "cv", "full resume", "full cv", "резюме", "полное резюме", "полное cv", "си ви"),
+        ):
+            if source_excerpt:
+                prefix = (
+                    "Полного CV файлом я здесь не показываю, но по карточке у меня есть summary и extracted resume text. "
+                    if ru
+                    else "I do not show the full CV file inline here, but on this card I do have the summary plus extracted resume text. "
+                )
+                details = (
+                    f"Самый полезный кусок, который вижу: {source_excerpt}"
+                    if ru
+                    else f"The most useful saved excerpt I can see is: {source_excerpt}"
+                )
+                return prefix + details
+            if summary_text:
+                return (
+                    f"Полного CV у меня в карточке нет, но есть сохраненное summary: {summary_text}"
+                    if ru
+                    else f"I do not have the full CV on this card, but I do have the saved summary: {summary_text}"
+                )
+            return (
+                "Полного CV по этой карточке у меня нет."
+                if ru
+                else "I do not have the full CV saved on this card."
+            )
 
         if self._contains_any(lowered, ("summary", "background", "experience", "опыт", "бэкгра", "саммар")):
             if summary_text:
@@ -1070,16 +1158,6 @@ class MatchingReviewService:
                 if ru
                 else "I do not have separate assessment-preference constraints on this card."
             )
-
-        rag_answer = self._manager_review_dossier_answer(
-            question_text=question_text,
-            match=match,
-            vacancy=vacancy,
-            candidate=candidate,
-            candidate_version=candidate_version,
-        )
-        if rag_answer:
-            return rag_answer
 
         parts = []
         if summary_text:

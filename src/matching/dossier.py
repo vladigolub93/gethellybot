@@ -110,6 +110,7 @@ def build_candidate_review_dossier(*, match, vacancy, vacancy_version) -> dict:
             "has_live_coding": getattr(vacancy, "has_live_coding", None),
         },
         "vacancy_summary": {
+            "source_type": _clean_text(getattr(vacancy_version, "source_type", None), limit=60),
             "approval_summary_text": approval_summary,
             "project_description_excerpt": _clean_text(summary_json.get("project_description_excerpt"), limit=220),
             "role_title": _clean_text(summary_json.get("role_title"), limit=120),
@@ -123,6 +124,27 @@ def build_candidate_review_dossier(*, match, vacancy, vacancy_version) -> dict:
             "extracted_text_excerpt": _clean_text(getattr(vacancy_version, "extracted_text", None), limit=360),
             "transcript_excerpt": _clean_text(getattr(vacancy_version, "transcript_text", None), limit=360),
         },
+        "source_availability": {
+            "has_project_description": bool(project_description),
+            "has_summary": bool(approval_summary),
+            "has_extracted_text_excerpt": bool(_clean_text(getattr(vacancy_version, "extracted_text", None), limit=360)),
+            "has_transcript_excerpt": bool(_clean_text(getattr(vacancy_version, "transcript_text", None), limit=360)),
+        },
+        "available_sections": [
+            name
+            for name, value in (
+                ("project_description", project_description),
+                ("team_size", getattr(vacancy, "team_size", None)),
+                ("budget", getattr(vacancy, "budget_min", None) or getattr(vacancy, "budget_max", None)),
+                ("setup", getattr(vacancy, "work_format", None) or getattr(vacancy, "countries_allowed_json", None)),
+                ("english_level", display_english_level(getattr(vacancy, "required_english_level", None))),
+                ("primary_tech_stack", getattr(vacancy, "primary_tech_stack_json", None)),
+                ("hiring_stages", _effective_hiring_stages(vacancy)),
+                ("summary", approval_summary),
+                ("source_excerpt", _clean_text(getattr(vacancy_version, "extracted_text", None), limit=360)),
+            )
+            if value not in (None, "", [])
+        ],
         "known_missing_fields": [
             name
             for name, value in (
@@ -148,6 +170,8 @@ def build_manager_review_dossier(
     evaluation_result=None,
 ) -> dict:
     summary_json = getattr(candidate_version, "summary_json", None) or {}
+    extracted_text_excerpt = _clean_text(getattr(candidate_version, "extracted_text", None), limit=360)
+    transcript_excerpt = _clean_text(getattr(candidate_version, "transcript_text", None), limit=360)
     dossier = {
         "scope": "current candidate review card only",
         "vacancy_role_title": _clean_text(getattr(vacancy, "role_title", None), limit=120),
@@ -170,6 +194,7 @@ def build_manager_review_dossier(
             "show_live_coding_roles": getattr(candidate, "show_live_coding_roles", None),
         },
         "candidate_summary": {
+            "source_type": _clean_text(getattr(candidate_version, "source_type", None), limit=60),
             "headline": _clean_text(summary_json.get("headline"), limit=180),
             "experience_excerpt": _clean_text(summary_json.get("experience_excerpt"), limit=260),
             "approval_summary_text": _clean_text(summary_json.get("approval_summary_text"), limit=260),
@@ -189,9 +214,37 @@ def build_manager_review_dossier(
             "risks": _clean_list(getattr(evaluation_result, "risks_json", None), item_limit=5, item_text_limit=140),
         },
         "source_excerpts": {
-            "extracted_text_excerpt": _clean_text(getattr(candidate_version, "extracted_text", None), limit=360),
-            "transcript_excerpt": _clean_text(getattr(candidate_version, "transcript_text", None), limit=360),
+            "extracted_text_excerpt": extracted_text_excerpt,
+            "transcript_excerpt": transcript_excerpt,
         },
+        "source_availability": {
+            "has_summary": bool(
+                _clean_text(summary_json.get("approval_summary_text"), limit=260)
+                or _clean_text(summary_json.get("experience_excerpt"), limit=260)
+            ),
+            "has_skills": bool(_clean_list(summary_json.get("skills"), item_limit=12)),
+            "has_extracted_text_excerpt": bool(extracted_text_excerpt),
+            "has_transcript_excerpt": bool(transcript_excerpt),
+            "has_verification": bool(getattr(latest_verification, "status", None)),
+            "has_evaluation": bool(getattr(evaluation_result, "status", None)),
+        },
+        "available_sections": [
+            name
+            for name, value in (
+                ("summary", summary_json.get("approval_summary_text") or summary_json.get("experience_excerpt")),
+                ("skills", summary_json.get("skills")),
+                ("salary", getattr(candidate, "salary_min", None) or getattr(candidate, "salary_max", None)),
+                ("location", getattr(candidate, "location_text", None) or getattr(candidate, "country_code", None)),
+                ("work_formats", display_work_formats(candidate)),
+                ("english_level", display_english_level(getattr(candidate, "english_level", None))),
+                ("domains", display_domains(getattr(candidate, "preferred_domains_json", None))),
+                ("assessment_preferences", getattr(candidate, "show_take_home_task_roles", None)),
+                ("verification", getattr(latest_verification, "status", None)),
+                ("evaluation", getattr(evaluation_result, "status", None)),
+                ("resume_excerpt", extracted_text_excerpt),
+            )
+            if value not in (None, "", [])
+        ],
         "known_missing_fields": [
             name
             for name, value in (

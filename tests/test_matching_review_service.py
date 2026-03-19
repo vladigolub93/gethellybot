@@ -53,6 +53,9 @@ class FakeEvaluationsRepository:
     def __init__(self):
         self.rows = []
 
+    def get_by_match_id(self, match_id):
+        return None
+
     def create_introduction_event(self, **kwargs):
         row = SimpleNamespace(**kwargs)
         self.rows.append(row)
@@ -1197,6 +1200,53 @@ def test_answer_candidate_review_question_uses_current_vacancy_details() -> None
     assert "Realtime data pipeline" in answer
 
 
+def test_answer_candidate_review_question_prefers_dossier_answer_before_deterministic_project_branch(monkeypatch) -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-rag-first", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-rag-first", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-rag-first",
+        role_title="Senior Node.js Developer",
+        project_description="Realtime data pipeline for marketplace analytics.",
+        current_version_id="vacancy-version-rag-first",
+    )
+    match = SimpleNamespace(
+        id="match-rag-first",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-rag-first",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": [], "gap_signals": []},
+    )
+
+    monkeypatch.setattr(
+        "src.matching.review.safe_answer_candidate_review_object_question",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={"message": "Это pricing automation проект для e-commerce, а не просто generic Node.js backend."}
+        ),
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-rag-first": SimpleNamespace(approval_summary_text="Marketplace analytics backend role.")},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="А о чем проект?",
+    )
+
+    assert answer == "Это pricing automation проект для e-commerce, а не просто generic Node.js backend."
+
+
 def test_block_candidate_more_request_allows_detail_question_about_current_vacancy() -> None:
     candidate_user = SimpleNamespace(id="candidate-user-block", is_candidate=True, is_hiring_manager=False)
     candidate = SimpleNamespace(id="candidate-block", user_id=candidate_user.id)
@@ -1426,6 +1476,187 @@ def test_answer_manager_review_question_uses_current_candidate_details() -> None
 
     assert answer is not None
     assert "5000 USD per month" in answer
+
+
+def test_answer_manager_review_question_prefers_dossier_answer_before_deterministic_resume_dump(monkeypatch) -> None:
+    manager_user = SimpleNamespace(id="manager-user-rag-resume", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(
+        id="candidate-manager-rag-resume",
+        user_id="candidate-user-rag-resume",
+        current_version_id="cpv-manager-rag-resume",
+    )
+    vacancy = SimpleNamespace(id="vacancy-manager-rag-resume", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-manager-rag-resume",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-manager-rag-resume",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "medium", "matched_signals": [], "gap_signals": []},
+    )
+
+    monkeypatch.setattr(
+        "src.matching.review.safe_answer_manager_review_object_question",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={"message": "Да, у меня есть не только summary, но и extracted CV text. По сути это сильный senior full-stack профиль с явным Node.js бэкграундом."}
+        ),
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={
+            "cpv-manager-rag-resume": SimpleNamespace(
+                summary_json={"approval_summary_text": "Senior backend engineer."},
+                extracted_text="10+ years of software development, 8 years in JavaScript, React, Node.js, TypeScript, Nest.js, Express.js.",
+            )
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Milana"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_manager_review_question(
+        user=manager_user,
+        question_text="а есть резюме этого кандидата?",
+    )
+
+    assert answer == "Да, у меня есть не только summary, но и extracted CV text. По сути это сильный senior full-stack профиль с явным Node.js бэкграундом."
+
+
+def test_answer_manager_review_question_resume_request_uses_extracted_text_when_llm_unavailable() -> None:
+    manager_user = SimpleNamespace(id="manager-user-cv-fallback", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(
+        id="candidate-manager-cv-fallback",
+        user_id="candidate-user-cv-fallback",
+        current_version_id="cpv-manager-cv-fallback",
+    )
+    vacancy = SimpleNamespace(id="vacancy-manager-cv-fallback", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-manager-cv-fallback",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-manager-cv-fallback",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "medium", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={
+            "cpv-manager-cv-fallback": SimpleNamespace(
+                summary_json={"approval_summary_text": "Senior backend engineer."},
+                extracted_text="10+ years in software development with strong JavaScript, Node.js, Express.js, and platform integrations.",
+            )
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Milana"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_manager_review_question(
+        user=manager_user,
+        question_text="а полного резюме нету?",
+    )
+
+    assert answer is not None
+    assert "CV" in answer or "резюме" in answer
+    assert "Node.js" in answer
+
+
+def test_answer_manager_review_question_more_info_uses_targeted_extras_when_llm_unavailable() -> None:
+    manager_user = SimpleNamespace(id="manager-user-more-info", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(
+        id="candidate-manager-more-info",
+        user_id="candidate-user-more-info",
+        salary_min=5000,
+        salary_max=5000,
+        salary_currency="USD",
+        salary_period="month",
+        location_text="Ukraine",
+        work_formats_json=["remote"],
+        work_format="remote",
+        english_level="b2",
+        preferred_domains_json=["any"],
+        show_take_home_task_roles=False,
+        show_live_coding_roles=False,
+        current_version_id="cpv-manager-more-info",
+    )
+    vacancy = SimpleNamespace(id="vacancy-manager-more-info", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-manager-more-info",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-manager-more-info",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "medium", "matched_signals": [], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={
+            "cpv-manager-more-info": SimpleNamespace(
+                summary_json={
+                    "approval_summary_text": "Senior full-stack engineer.",
+                    "skills": ["javascript", "typescript", "react", "node.js", "express"],
+                },
+                extracted_text="10+ years in software development with JavaScript, React, Node.js and integrations.",
+            )
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Milana"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_manager_review_question(
+        user=manager_user,
+        question_text="кроме summary что то есть ?",
+    )
+
+    assert answer is not None
+    assert "скилл" in answer.lower() or "skills" in answer.lower()
+    assert "5000" in answer
 
 
 def test_answer_candidate_review_question_uses_dossier_fallback_for_company_question(monkeypatch) -> None:
