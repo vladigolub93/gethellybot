@@ -765,6 +765,243 @@ def test_clarification_requires_take_home_paid_when_take_home_enabled() -> None:
     assert vacancy.questions_context_json["current_question_key"] == "take_home_paid"
 
 
+def test_clarification_accepts_cyrillic_english_level_and_moves_to_assessment() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+            },
+            "confirmed_fields": ["budget", "work_format", "countries"],
+            "current_question_key": "english_level",
+        },
+    )
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="с1",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert vacancy.required_english_level == "c1"
+    assert vacancy.questions_context_json["current_question_key"] == "assessment"
+
+
+def test_clarification_accepts_take_home_only_phrase_and_moves_to_payment() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        required_english_level="c1",
+        team_size=6,
+        project_description="Payments platform.",
+        primary_tech_stack_json=["python"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "take_home_paid": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": [
+                "budget",
+                "work_format",
+                "countries",
+                "english_level",
+                "team_size",
+                "project_description",
+                "primary_tech_stack",
+            ],
+            "current_question_key": "assessment",
+        },
+    )
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="только тестовая таска",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert vacancy.has_take_home_task is True
+    assert vacancy.has_live_coding is False
+    assert vacancy.questions_context_json["current_question_key"] == "take_home_paid"
+
+
+def test_clarification_accepts_short_paid_answer_and_moves_to_hiring_stages() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        required_english_level="c1",
+        has_take_home_task=True,
+        has_live_coding=False,
+        team_size=6,
+        project_description="Payments platform.",
+        primary_tech_stack_json=["python"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "take_home_paid": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": [
+                "budget",
+                "work_format",
+                "countries",
+                "english_level",
+                "assessment",
+                "team_size",
+                "project_description",
+                "primary_tech_stack",
+            ],
+            "current_question_key": "take_home_paid",
+        },
+    )
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="да",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert vacancy.take_home_paid is True
+    assert vacancy.questions_context_json["current_question_key"] == "hiring_stages"
+
+
+def test_clarification_accepts_bare_team_size_and_moves_to_project() -> None:
+    service = VacancyService(FakeSession())
+    fake_repo = FakeVacanciesRepository()
+    fake_state = FakeStateService()
+    service.repo = fake_repo
+    service.state_service = fake_state
+    service.queue = FakeQueue()
+
+    user = SimpleNamespace(id=uuid4())
+    vacancy = fake_repo.create(manager_user_id=user.id, state=VACANCY_STATE_CLARIFICATION_QA)
+    fake_repo.update_clarifications(
+        vacancy,
+        budget_min=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        countries_allowed_json=["PL"],
+        required_english_level="c1",
+        has_take_home_task=False,
+        has_live_coding=False,
+        hiring_stages_json=["recruiter_screen", "technical_interview", "final"],
+    )
+    fake_repo.update_questions_context(
+        vacancy,
+        {
+            "follow_up_used": {
+                "budget": False,
+                "work_format": False,
+                "countries": False,
+                "english_level": False,
+                "assessment": False,
+                "hiring_stages": False,
+                "team_size": False,
+                "project_description": False,
+                "primary_tech_stack": False,
+            },
+            "confirmed_fields": [
+                "budget",
+                "work_format",
+                "countries",
+                "english_level",
+                "assessment",
+                "hiring_stages",
+            ],
+            "current_question_key": "team_size",
+        },
+    )
+
+    result = service.handle_clarification_answer(
+        user=user,
+        raw_message_id=uuid4(),
+        content_type="text",
+        text="6",
+    )
+
+    assert result is not None
+    assert result.status == "next_question"
+    assert vacancy.team_size == 6
+    assert vacancy.questions_context_json["current_question_key"] == "project_description"
+
+
 def test_parsed_clarification_payload_opens_vacancy() -> None:
     service = VacancyService(FakeSession())
     fake_repo = FakeVacanciesRepository()

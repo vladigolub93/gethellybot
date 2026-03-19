@@ -44,6 +44,7 @@ from src.graph.stages.manager import (
     load_manager_stage_knowledge_node,
 )
 from src.candidate_profile.questions import current_candidate_question_key
+from src.vacancy.questions import current_vacancy_question_key
 from src.orchestrator.policy import resolve_state_context
 from src.orchestrator.state_memory import build_state_memory
 
@@ -411,6 +412,16 @@ class LangGraphStageAgentService:
                 entity_type = "candidate_profile"
                 entity_id = str(candidate.id)
                 current_question_key = current_candidate_question_key(candidate)
+        if self._resolve_role(user) == "hiring_manager":
+            get_latest_incomplete = getattr(self.vacancies, "get_latest_incomplete_by_manager_user_id", None)
+            if callable(get_latest_incomplete):
+                vacancy = get_latest_incomplete(getattr(user, "id", None))
+            else:
+                vacancy = self.vacancies.get_latest_active_by_manager_user_id(getattr(user, "id", None))
+            if vacancy is not None:
+                entity_type = "vacancy"
+                entity_id = str(vacancy.id)
+                current_question_key = current_vacancy_question_key(vacancy)
         state_input = self.router.build_initial_state(
             stage=stage,
             user_id=str(getattr(user, "id", "")) or None,

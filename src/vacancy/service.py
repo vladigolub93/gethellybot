@@ -24,6 +24,13 @@ from src.vacancy.question_prompts import (
     missing_questions_prompt,
     question_prompt,
 )
+from src.vacancy.questions import (
+    current_vacancy_question_key,
+    enrich_vacancy_clarification_payload_for_current_question,
+    filter_vacancy_clarification_payload,
+    missing_vacancy_clarification_keys,
+    required_vacancy_clarification_keys,
+)
 from src.vacancy.states import (
     VACANCY_STATE_CLARIFICATION_QA,
     VACANCY_STATE_INTAKE_PENDING,
@@ -564,6 +571,12 @@ class VacancyService:
 
         llm_result = safe_parse_vacancy_clarifications(self.session, normalized_text)
         parsed = dict(llm_result.payload or {})
+        current_question_key = current_vacancy_question_key(vacancy)
+        parsed = enrich_vacancy_clarification_payload_for_current_question(
+            parsed=parsed,
+            text=normalized_text,
+            current_question_key=current_question_key,
+        )
         return self._apply_clarification_payload(
             vacancy=vacancy,
             raw_message_id=raw_message_id,
@@ -586,7 +599,7 @@ class VacancyService:
         missing_before = self._missing_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
         current_question_key = questions_context.get("current_question_key")
         if current_question_key not in QUESTION_KEYS:
-            current_question_key = missing_before[0] if missing_before else None
+            current_question_key = current_vacancy_question_key(vacancy)
 
         parsed = self._filter_clarification_payload(parsed, current_question_key)
         if parsed:
@@ -664,77 +677,13 @@ class VacancyService:
         )
 
     def _filter_clarification_payload(self, parsed: dict, current_question_key: str | None) -> dict:
-        if not parsed or current_question_key is None:
-            return dict(parsed or {})
-
-        allowed_by_question = {
-            "budget": {"budget_min", "budget_max", "budget_currency", "budget_period"},
-            "work_format": {"work_format"},
-            "office_city": {"office_city"},
-            "countries": {"countries_allowed_json"},
-            "english_level": {"required_english_level"},
-            "assessment": {"has_take_home_task", "has_live_coding"},
-            "take_home_paid": {"take_home_paid"},
-            "hiring_stages": {"hiring_stages_json"},
-            "team_size": {"team_size"},
-            "project_description": {"project_description"},
-            "primary_tech_stack": {"primary_tech_stack_json"},
-        }
-        allowed_keys = allowed_by_question.get(current_question_key, set())
-        return {key: value for key, value in parsed.items() if key in allowed_keys}
+        return filter_vacancy_clarification_payload(parsed, current_question_key)
 
     def _missing_clarification_keys(self, vacancy, *, confirmed_fields: set[str] | None = None) -> list[str]:
-        required_keys = self._required_clarification_keys(vacancy)
-        if confirmed_fields is not None:
-            return [key for key in required_keys if key not in confirmed_fields]
-
-        questions_context = dict(vacancy.questions_context_json or {})
-        if "confirmed_fields" in questions_context:
-            stored_confirmed_fields = set(questions_context.get("confirmed_fields") or [])
-            return [key for key in required_keys if key not in stored_confirmed_fields]
-
-        missing = []
-        if vacancy.budget_min is None and vacancy.budget_max is None:
-            missing.append("budget")
-        if not vacancy.work_format:
-            missing.append("work_format")
-        if vacancy.work_format in {"office", "hybrid"} and not getattr(vacancy, "office_city", None):
-            missing.append("office_city")
-        if not vacancy.countries_allowed_json:
-            missing.append("countries")
-        if not getattr(vacancy, "required_english_level", None):
-            missing.append("english_level")
-        if getattr(vacancy, "has_take_home_task", None) is None or getattr(vacancy, "has_live_coding", None) is None:
-            missing.append("assessment")
-        if getattr(vacancy, "has_take_home_task", None) is True and getattr(vacancy, "take_home_paid", None) is None:
-            missing.append("take_home_paid")
-        if not getattr(vacancy, "hiring_stages_json", None):
-            missing.append("hiring_stages")
-        if vacancy.team_size is None:
-            missing.append("team_size")
-        if not vacancy.project_description:
-            missing.append("project_description")
-        if not vacancy.primary_tech_stack_json:
-            missing.append("primary_tech_stack")
-        return missing
+        return missing_vacancy_clarification_keys(vacancy, confirmed_fields=confirmed_fields)
 
     def _required_clarification_keys(self, vacancy) -> list[str]:
-        required = [
-            "budget",
-            "work_format",
-            "countries",
-            "english_level",
-            "assessment",
-            "hiring_stages",
-            "team_size",
-            "project_description",
-            "primary_tech_stack",
-        ]
-        if getattr(vacancy, "work_format", None) in {"office", "hybrid"}:
-            required.insert(2, "office_city")
-        if getattr(vacancy, "has_take_home_task", None) is True:
-            required.insert(required.index("hiring_stages"), "take_home_paid")
-        return required
+        return required_vacancy_clarification_keys(vacancy)
 
     def _ensure_questions_context(self, vacancy) -> dict:
         current = dict(vacancy.questions_context_json or {})

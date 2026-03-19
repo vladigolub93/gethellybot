@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src.graph.state import HellyGraphState
 from src.llm.service import (
     safe_pre_interview_review_decision,
@@ -14,6 +16,7 @@ from src.llm.service import (
 )
 from src.orchestrator.policy import resolve_state_context
 from src.vacancy.question_prompts import follow_up_prompt, question_prompt
+from src.vacancy.questions import enrich_vacancy_clarification_payload_for_current_question
 
 
 def _combined_recent_context(state: HellyGraphState) -> list[str]:
@@ -22,6 +25,49 @@ def _combined_recent_context(state: HellyGraphState) -> list[str]:
         if item and item not in combined:
             combined.append(item)
     return combined
+
+
+def _looks_like_clarification_help_question(text: str | None) -> bool:
+    lowered = (text or "").strip().lower()
+    if not lowered:
+        return False
+    if "?" in lowered:
+        return True
+    return bool(
+        re.search(
+            r"\b(what|which|how|when|where|why|can i|do i need|gross or net|what exactly|что|как|когда|куда|зачем|сколько|уточни|поясни)\b",
+            lowered,
+        )
+    )
+
+
+def _looks_like_clarification_non_answer(text: str | None) -> bool:
+    lowered = " ".join((text or "").split()).strip().lower()
+    if not lowered:
+        return True
+    if _looks_like_clarification_help_question(lowered):
+        return True
+    return lowered in {
+        "ok",
+        "okay",
+        "thanks",
+        "thank you",
+        "got it",
+        "next",
+        "continue",
+        "understood",
+        "понял",
+        "поняла",
+        "ок",
+        "спасибо",
+        "дальше",
+        "продолжай",
+    }
+
+
+def _current_clarification_repeat_text(state: HellyGraphState) -> str:
+    question_key = state.current_question_key or "budget"
+    return question_prompt(question_key)
 
 
 def load_manager_stage_context_node(state: HellyGraphState) -> HellyGraphState:
@@ -96,23 +142,21 @@ def build_manager_stage_detect_node(session):
             state.intent = payload.get("intent") or "help"
             state.reply_text = payload.get("response_text")
             state.parsed_input["agent_reason_code"] = payload.get("reason_code")
-            if payload.get("proposed_action") is not None:
-                parsed = dict(safe_parse_vacancy_clarifications(session, payload.get("answer_text") or text).payload or {})
-                if parsed:
-                    state.proposed_action = payload.get("proposed_action")
-                    state.structured_payload = parsed
-                    state.parsed_input["intent"] = "stage_completion_input"
-                else:
-                    state.parsed_input["intent"] = "needs_clarification"
-                    state.intent = "needs_clarification"
-                    state.follow_up_needed = True
-                    state.follow_up_question = (
-                        payload.get("response_text")
-                        or state.follow_up_question
-                        or "Please answer the current vacancy question so I can continue."
-                    )
+            answer_text = payload.get("answer_text") or text
+            parsed = dict(safe_parse_vacancy_clarifications(session, answer_text).payload or {})
+            parsed = enrich_vacancy_clarification_payload_for_current_question(
+                parsed=parsed,
+                text=answer_text,
+                current_question_key=state.current_question_key,
+            )
+            if parsed and not _looks_like_clarification_non_answer(answer_text):
+                state.proposed_action = "send_vacancy_clarifications"
+                state.structured_payload = parsed
+                state.parsed_input["intent"] = "stage_completion_input"
             else:
                 state.parsed_input["intent"] = "help"
+                state.follow_up_needed = True
+                state.follow_up_question = payload.get("response_text") or _current_clarification_repeat_text(state)
             return state
         if state.active_stage == "VACANCY_SUMMARY_REVIEW":
             decision = safe_vacancy_summary_review_decision(
@@ -296,6 +340,14 @@ def build_manager_stage_reply_node(session):
         state.follow_up_needed = False
         state.confidence = 0.85
         if state.parsed_input.get("intent") == "help":
+            if state.active_stage == "CLARIFICATION_QA":
+                if _looks_like_clarification_help_question(state.latest_user_message):
+                    state.reply_text = state.reply_text or _current_clarification_repeat_text(state)
+                else:
+                    state.reply_text = state.follow_up_question or _current_clarification_repeat_text(state)
+                state.follow_up_needed = True
+                state.follow_up_question = state.reply_text
+                return state
             result = safe_state_assistance_decision(
                 session,
                 context=context,
@@ -340,15 +392,6 @@ def build_manager_stage_reply_node(session):
                 state.reply_text = context.guidance_text
                 state.follow_up_needed = True
                 state.follow_up_question = context.guidance_text
-            return state
-
-        if state.active_stage == "CLARIFICATION_QA" and state.parsed_input.get("intent") == "needs_clarification":
-            state.reply_text = (
-                state.follow_up_question
-                or question_prompt("budget")
-            )
-            state.follow_up_needed = True
-            state.follow_up_question = state.reply_text
             return state
 
         if state.active_stage == "OPEN" and state.parsed_input.get("intent") == "stage_completion_input":

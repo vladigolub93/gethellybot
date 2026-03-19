@@ -523,7 +523,11 @@ def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.vacancies = FakeVacanciesRepository(
-        SimpleNamespace(id="v4", state="CLARIFICATION_QA")
+        SimpleNamespace(
+            id="v4",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "budget"},
+        )
     )
     service.matches = FakeMatchingRepository()
 
@@ -548,14 +552,184 @@ def test_graph_manager_stage_accepts_real_clarification_answer() -> None:
     assert result.action_accepted is True
     assert result.proposed_action == "send_vacancy_clarifications"
     assert result.structured_payload["budget_min"] == 7000
-    assert result.structured_payload["work_format"] == "remote"
+
+
+def test_graph_manager_stage_accepts_office_city_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_clarification_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4city",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "office_city"},
+            work_format="hybrid",
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4city",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Warsaw",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["office_city"] == "Warsaw"
+
+
+def test_graph_manager_stage_accepts_cyrillic_english_level_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_clarification_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4english",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "english_level"},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4english",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="с1",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["required_english_level"] == "c1"
+
+
+def test_graph_manager_stage_accepts_take_home_only_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_clarification_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4assessment",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "assessment"},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4assessment",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="только тестовая таска",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["has_take_home_task"] is True
+    assert result.structured_payload["has_live_coding"] is False
+
+
+def test_graph_manager_clarification_help_does_not_call_state_assistance(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_state_assistance_decision",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("state assistance should not run")),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4help",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "budget"},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4help",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    reply = service.maybe_build_stage_reply(
+        user=user,
+        latest_user_message="Gross or net budget?",
+    )
+
+    assert reply is not None
 
 
 def test_graph_manager_stage_accepts_project_link_for_clarification() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)
     service.vacancies = FakeVacanciesRepository(
-        SimpleNamespace(id="v4link", state="CLARIFICATION_QA")
+        SimpleNamespace(
+            id="v4link",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "project_description"},
+        )
     )
     service.matches = FakeMatchingRepository()
 

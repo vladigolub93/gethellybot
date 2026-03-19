@@ -102,6 +102,26 @@ def parse_work_format(text: str) -> dict:
     return {}
 
 
+def _normalize_english_shorthand_token(value: str | None) -> str | None:
+    normalized = _normalize_text(value).lower().replace(" ", "")
+    if not normalized:
+        return None
+    match = re.fullmatch(r"([abcабс])([12])", normalized)
+    if match is None:
+        return None
+    letter = {
+        "a": "a",
+        "а": "a",
+        "b": "b",
+        "б": "b",
+        "c": "c",
+        "с": "c",
+    }.get(match.group(1))
+    if letter is None:
+        return None
+    return f"{letter}{match.group(2)}"
+
+
 def parse_office_city(text: str) -> dict:
     normalized = _normalize_text(text)
     lowered = normalized.lower()
@@ -132,10 +152,14 @@ def parse_required_english_level(text: str) -> dict:
     normalized = _normalize_text(text)
     lowered = normalized.lower()
     explicit_match = re.search(
-        r"\b(?:english|eng|английский|англійська|англійський|англ)\s*(?:level|рівень|уровень)?\s*[:\-]?\s*(a1|a2|b1|b2|c1|c2|native)\b",
+        r"\b(?:english|eng|английский|англійська|англійський|англ)\s*(?:level|рівень|уровень)?\s*[:\-]?\s*([abcабс]\s*[12]|native)\b",
         lowered,
     )
-    candidate = explicit_match.group(1) if explicit_match is not None else None
+    candidate = _normalize_english_shorthand_token(explicit_match.group(1)) if explicit_match is not None else None
+    if candidate is None and explicit_match is not None:
+        candidate = explicit_match.group(1)
+    if candidate is None:
+        candidate = _normalize_english_shorthand_token(lowered)
     if candidate is None:
         for token in (
             "native",
@@ -233,7 +257,24 @@ def parse_assessment_requirements(text: str) -> dict:
     payload = {}
     take_home = _extract_local_boolean(
         lowered,
-        keywords=("test task", "take home", "take-home", "home assignment", "тестовое задание", "тестове завдання", "домашнее задание", "домашнє завдання"),
+        keywords=(
+            "test task",
+            "take home",
+            "take-home",
+            "home assignment",
+            "тестовое задание",
+            "тестове завдання",
+            "домашнее задание",
+            "домашнє завдання",
+            "тестовая задача",
+            "тестова задача",
+            "тестовая таска",
+            "тестова таска",
+            "тестовое",
+            "тестове",
+            "таска",
+            "домашка",
+        ),
     )
     live_coding = _extract_local_boolean(
         lowered,
