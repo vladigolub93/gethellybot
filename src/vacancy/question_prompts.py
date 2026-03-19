@@ -65,6 +65,7 @@ def follow_up_prompt(
     *,
     work_format: str | None = None,
     has_take_home_task: bool | None = None,
+    has_live_coding: bool | None = None,
 ) -> str:
     prompts = {
         "budget": "Quick clarification: share the budget range with amount, currency, and period.",
@@ -81,6 +82,15 @@ def follow_up_prompt(
     }
     if question_key == "countries" and work_format in {"office", "hybrid"}:
         prompts["countries"] = "Please clarify which countries are allowed for this office or hybrid role."
+    if question_key == "assessment":
+        if has_take_home_task is True and has_live_coding is None:
+            prompts["assessment"] = "Got it, there is a take-home task. Should I also expect live coding, or is it take-home only?"
+        elif has_take_home_task is False and has_live_coding is None:
+            prompts["assessment"] = "Got it, there is no take-home task. Will this process include live coding?"
+        elif has_live_coding is True and has_take_home_task is None:
+            prompts["assessment"] = "Got it, there is live coding. Should I also expect a take-home task, or is it live-coding only?"
+        elif has_live_coding is False and has_take_home_task is None:
+            prompts["assessment"] = "Got it, there is no live coding. Will this process include a take-home task?"
     if question_key == "take_home_paid" and has_take_home_task is False:
         prompts["take_home_paid"] = "No payment detail is needed because there is no take-home task."
     return prompts[question_key]

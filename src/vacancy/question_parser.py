@@ -283,7 +283,10 @@ def parse_assessment_requirements(text: str) -> dict:
     if take_home:
         if re.search(r"\b(paid|compensated|we pay|will pay|оплачиваем|оплачуван|оплачиваемое|оплачуване|оплачивается|оплачується)\b", lowered):
             payload["take_home_paid"] = True
-        elif re.search(r"\b(unpaid|not paid|without pay|free|неоплачиваем|неоплачуван|не оплачивается|не оплачується|без оплаты|без оплати)\b", lowered):
+        elif re.search(
+            r"\b(unpaid|not paid|without pay|free|бесплат\w*|безкоштов\w*|неоплачиваем|неоплачуван|не оплачивается|не оплачується|без оплаты|без оплати)\b",
+            lowered,
+        ):
             payload["take_home_paid"] = False
     return payload
 

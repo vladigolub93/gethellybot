@@ -663,6 +663,7 @@ class VacancyService:
                     current_question_key,
                     work_format=getattr(vacancy, "work_format", None),
                     has_take_home_task=getattr(vacancy, "has_take_home_task", None),
+                    has_live_coding=getattr(vacancy, "has_live_coding", None),
                 ),
             )
 

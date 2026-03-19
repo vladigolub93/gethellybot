@@ -688,6 +688,50 @@ def test_graph_manager_stage_accepts_take_home_only_when_decision_returns_help(m
     assert result.structured_payload["has_live_coding"] is False
 
 
+def test_graph_manager_stage_accepts_free_take_home_payment_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.manager.safe_vacancy_clarification_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(
+            id="v4payment",
+            state="CLARIFICATION_QA",
+            questions_context_json={"current_question_key": "take_home_paid"},
+        )
+    )
+    service.matches = FakeMatchingRepository()
+
+    user = SimpleNamespace(
+        id="m4payment",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="бесплатная",
+    )
+
+    assert result is not None
+    assert result.stage == "CLARIFICATION_QA"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_vacancy_clarifications"
+    assert result.structured_payload["take_home_paid"] is False
+
+
 def test_graph_manager_clarification_help_does_not_call_state_assistance(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.graph.stages.manager.safe_state_assistance_decision",
