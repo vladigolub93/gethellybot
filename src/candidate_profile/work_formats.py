@@ -7,7 +7,7 @@ from typing import Iterable, Sequence
 WORK_FORMAT_ORDER = ("remote", "hybrid", "office")
 
 _WORK_FORMAT_SYNONYMS = {
-    "remote": ("remote", "удаленно", "удалённо", "віддалено", "дистанційно"),
+    "remote": ("remote", "удаленно", "удалённо", "віддалено", "дистанційно", "дистанционно"),
     "hybrid": ("hybrid", "гибрид", "гібрид"),
     "office": ("office", "onsite", "on-site", "офис", "офіс", "онсайт"),
 }
@@ -16,6 +16,7 @@ _ALL_FORMAT_PATTERNS = (
     r"\ball(?:\s+formats?)\b",
     r"\ball(?:\s+options?)\b",
     r"\bany(?:\s+formats?)\b",
+    r"\bany(?:\s+options?)\b",
     r"\bany of them\b",
     r"\ball of them\b",
     r"\b(?:все|всё|усі)\s+(?:форматы?|формати|варианты?|варіанти|подходит|подходят|підходить|підходять|ок)\b",
@@ -35,7 +36,9 @@ _SHORTHAND_ALL_VALUES = {
     "всё форматы подходят",
     "усі",
     "любой",
+    "любые",
     "будь-який",
+    "будь-які",
     "без разницы",
     "без різниці",
     "не важно",

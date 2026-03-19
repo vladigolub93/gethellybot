@@ -64,6 +64,9 @@ _AFFIRMATIVE_VALUES = {
     "ok",
     "okay",
     "paid",
+    "платная",
+    "платний",
+    "платне",
     "оплачиваемое",
     "оплачиваемый",
     "оплачуване",
@@ -75,6 +78,12 @@ _NEGATIVE_VALUES = {
     "false",
     "нет",
     "ні",
+    "не платная",
+    "неплатная",
+    "не платний",
+    "неплатний",
+    "не платне",
+    "неплатне",
     "неоплачиваемое",
     "неоплачиваемый",
     "не оплачивается",
@@ -159,7 +168,7 @@ def _fallback_assessment_payload(text: str | None) -> dict:
     has_take_home = any(token in normalized for token in _ASSESSMENT_TAKE_HOME_TOKENS)
     has_live_coding = any(token in normalized for token in _ASSESSMENT_LIVE_CODING_TOKENS)
     negative_take_home = bool(
-        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b", normalized)
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска|домашка)\b", normalized)
     )
     negative_live_coding = bool(
         re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b", normalized)
@@ -187,12 +196,38 @@ def _fallback_assessment_payload(text: str | None) -> dict:
                 payload["has_live_coding"] = explicit["has_live_coding"]
             return payload
 
+    if normalized in {
+        "без лайвкодинга",
+        "без лайв кодинга",
+        "no live coding",
+        "no live code",
+        "live coding no",
+        "live code no",
+    }:
+        return {"has_live_coding": False}
+
+    if normalized in {
+        "без тестового",
+        "без тестового задания",
+        "без тестов",
+        "no take-home",
+        "no take home",
+        "take-home no",
+        "take home no",
+    }:
+        return {"has_take_home_task": False}
+
     if (has_only and has_take_home and not has_live_coding) or normalized in {
         "only take-home",
+        "only test task",
         "take-home only",
         "только тестовое",
         "только тестовая таска",
+        "только тестовая задача",
+        "только таска",
         "лише тестове",
+        "лише тестова задача",
+        "лише тестова таска",
     }:
         return {
             "has_take_home_task": True,
@@ -201,8 +236,10 @@ def _fallback_assessment_payload(text: str | None) -> dict:
 
     if (has_only and has_live_coding and not has_take_home) or normalized in {
         "only live-coding",
+        "only live coding",
         "live-coding only",
         "только лайвкодинг",
+        "только лайв кодинг",
         "лише лайвкодинг",
     }:
         return {

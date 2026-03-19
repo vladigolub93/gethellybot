@@ -1,4 +1,6 @@
 from scripts.replay_question_utterances import (
+    ReplayFinding,
+    analyze_recent_question_answers,
     classify_payload_delta,
     evaluate_prompt_answer_pair,
     infer_prompt_context,
@@ -51,3 +53,58 @@ def test_evaluate_prompt_answer_pair_improves_manager_assessment() -> None:
     assert finding.classification in {"recovered", "improved"}
     assert finding.enriched_payload["has_take_home_task"] is True
     assert finding.enriched_payload["has_live_coding"] is False
+
+
+def test_analyze_recent_question_answers_filters(monkeypatch) -> None:
+    rows = [
+        {
+            "user_id": "u1",
+            "telegram_user_id": 1,
+            "display_name": "Candidate",
+            "created_at": "2026-03-19T10:00:00Z",
+            "direction": "outbound",
+            "text_content": candidate_question_prompt("preferred_domains", work_formats=["remote", "hybrid", "office"]),
+        },
+        {
+            "user_id": "u1",
+            "telegram_user_id": 1,
+            "display_name": "Candidate",
+            "created_at": "2026-03-19T10:00:05Z",
+            "direction": "inbound",
+            "text_content": "нет",
+        },
+        {
+            "user_id": "u2",
+            "telegram_user_id": 2,
+            "display_name": "Manager",
+            "created_at": "2026-03-19T10:01:00Z",
+            "direction": "outbound",
+            "text_content": vacancy_question_prompt("assessment", work_format="remote", has_take_home_task=True),
+        },
+        {
+            "user_id": "u2",
+            "telegram_user_id": 2,
+            "display_name": "Manager",
+            "created_at": "2026-03-19T10:01:05Z",
+            "direction": "inbound",
+            "text_content": "только тестовая таска",
+        },
+    ]
+
+    monkeypatch.setattr(
+        "scripts.replay_question_utterances._load_recent_text_messages",
+        lambda **kwargs: rows,
+    )
+
+    findings = analyze_recent_question_answers(
+        telegram_user_id=None,
+        telegram_chat_id=None,
+        hours=24,
+        role="manager",
+        question_key="assessment",
+    )
+
+    assert len(findings) == 1
+    assert isinstance(findings[0], ReplayFinding)
+    assert findings[0].role == "manager"
+    assert findings[0].question_key == "assessment"

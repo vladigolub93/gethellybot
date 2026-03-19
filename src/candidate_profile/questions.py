@@ -28,12 +28,21 @@ QUESTION_ALLOWED_KEYS = {
 _DOMAIN_NO_PREFERENCE_VALUES = {
     "any",
     "anything",
+    "anything works",
     "whatever",
     "no",
     "nope",
     "нет",
     "нету",
     "никаких",
+    "любые",
+    "что угодно",
+    "что хочешь",
+    "какие угодно",
+    "не имеет значения",
+    "не має значення",
+    "нема предпочтений",
+    "немає переваг",
     "жодних",
     "без разницы",
     "без різниці",
@@ -167,7 +176,7 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
     has_take_home = any(token in normalized for token in _ASSESSMENT_TAKE_HOME_TOKENS)
     has_live_coding = any(token in normalized for token in _ASSESSMENT_LIVE_CODING_TOKENS)
     negative_take_home = bool(
-        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска)\b", normalized)
+        re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:tests?|test task|take-home|take home|тест(?:а|ов)?|тестового|тестове|тестовая таска|тестова таска|домашка)\b", normalized)
     )
     negative_live_coding = bool(
         re.search(r"\b(no|nope|not|нет|ні|без)\s+(?:live code|live coding|live-coding|лайвкодинг|лайв кодинг)\b", normalized)
@@ -196,12 +205,40 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
             return payload
 
     if normalized in {
+        "без лайвкодинга",
+        "без лайв кодинга",
+        "no live coding",
+        "no live code",
+        "live coding no",
+        "live code no",
+    }:
+        return {"show_live_coding_roles": False}
+
+    if normalized in {
+        "без тестового",
+        "без тестового задания",
+        "без тестов",
+        "no take-home",
+        "no take home",
+        "take-home no",
+        "take home no",
+    }:
+        return {"show_take_home_task_roles": False}
+
+    if normalized in {
         "только take-home",
         "only take-home",
+        "only test task",
+        "only test",
         "take-home only",
         "только тестовое",
+        "только тестовая задача",
+        "только тестовая таска",
+        "только таска",
         "лише take-home",
         "лише тестове",
+        "лише тестова задача",
+        "лише тестова таска",
     } or (has_only and has_take_home and not has_live_coding):
         return {
             "show_take_home_task_roles": True,
@@ -211,8 +248,10 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
     if normalized in {
         "только live-coding",
         "only live-coding",
+        "only live coding",
         "live-coding only",
         "только лайвкодинг",
+        "только лайв кодинг",
         "лише live-coding",
         "лише лайвкодинг",
     } or (has_only and has_live_coding and not has_take_home):

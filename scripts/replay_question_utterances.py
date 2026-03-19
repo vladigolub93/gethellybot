@@ -226,6 +226,9 @@ def analyze_recent_question_answers(
     telegram_chat_id: int | None,
     hours: int,
     include_baseline: bool = False,
+    role: str | None = None,
+    question_key: str | None = None,
+    classification: str | None = None,
 ) -> list[ReplayFinding]:
     rows = _load_recent_text_messages(
         telegram_user_id=telegram_user_id,
@@ -252,6 +255,12 @@ def analyze_recent_question_answers(
         if finding is None:
             continue
         if not include_baseline and finding.classification == "baseline":
+            continue
+        if role is not None and finding.role != role:
+            continue
+        if question_key is not None and finding.question_key != question_key:
+            continue
+        if classification is not None and finding.classification != classification:
             continue
 
         findings.append(
@@ -302,6 +311,9 @@ def main() -> None:
     parser.add_argument("--top", type=int, default=20)
     parser.add_argument("--include-baseline", action="store_true")
     parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--role", choices=("candidate", "manager"), default=None)
+    parser.add_argument("--question-key", default=None)
+    parser.add_argument("--classification", choices=("baseline", "recovered", "improved", "unparsed"), default=None)
     args = parser.parse_args()
 
     findings = analyze_recent_question_answers(
@@ -309,6 +321,9 @@ def main() -> None:
         telegram_chat_id=args.telegram_chat_id,
         hours=args.hours,
         include_baseline=args.include_baseline,
+        role=args.role,
+        question_key=args.question_key,
+        classification=args.classification,
     )
 
     if args.format == "json":

@@ -190,6 +190,22 @@ def _extract_labeled_value(text: str, label: str) -> Optional[str]:
     return _normalize_text(match.group(1))
 
 
+def extract_country_codes(text: str | None) -> list[str]:
+    lowered = _normalize_text(text).lower()
+    if not lowered:
+        return []
+    matches: list[tuple[int, int, str]] = []
+    for country_name, code in sorted(COUNTRY_CODES.items(), key=lambda item: len(item[0]), reverse=True):
+        match = re.search(rf"(?<!\w){re.escape(country_name)}(?!\w)", lowered)
+        if match is not None:
+            matches.append((match.start(), -len(country_name), code))
+    found: list[str] = []
+    for _, _, code in sorted(matches):
+        if code not in found:
+            found.append(code)
+    return found
+
+
 def parse_location(text: str) -> dict:
     normalized = _normalize_text(text)
     location_text = (
@@ -238,11 +254,9 @@ def parse_location(text: str) -> dict:
 
     parts = [part.strip() for part in location_text.split(",") if part.strip()]
     country_code = None
-    lowered_location = location_text.lower()
-    for country_name, code in COUNTRY_CODES.items():
-        if country_name in lowered_location:
-            country_code = code
-            break
+    codes = extract_country_codes(location_text)
+    if codes:
+        country_code = codes[0]
 
     city = None
     if len(parts) >= 2:

@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+
+CANDIDATE_UTTERANCE_CASES = [
+    ("work_format", "all formats", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("work_format", "все подходит", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("work_format", "все форматы", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("work_format", "любой формат", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("work_format", "any option", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("work_format", "remote, hybrid, office", {"work_formats_json": ["remote", "hybrid", "office"], "work_format": None}),
+    ("english_level", "выше среднего", {"english_level": "b2"}),
+    ("english_level", "вище середнього", {"english_level": "b2"}),
+    ("english_level", "б2", {"english_level": "b2"}),
+    ("english_level", "с1", {"english_level": "c1"}),
+    ("english_level", "advanced", {"english_level": "c1"}),
+    ("preferred_domains", "нет", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "No", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "Nope", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "мне все равно", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "мне все рано", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "любые", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "что угодно", {"preferred_domains_json": ["any"]}),
+    ("preferred_domains", "anything works", {"preferred_domains_json": ["any"]}),
+    (
+        "assessment_preferences",
+        "не хочу",
+        {"show_take_home_task_roles": False, "show_live_coding_roles": False},
+    ),
+    (
+        "assessment_preferences",
+        "No test and live code",
+        {"show_take_home_task_roles": False, "show_live_coding_roles": False},
+    ),
+    (
+        "assessment_preferences",
+        "я же сказал что только тестовая таска ок",
+        {"show_take_home_task_roles": True, "show_live_coding_roles": False},
+    ),
+    (
+        "assessment_preferences",
+        "только тестовая таска",
+        {"show_take_home_task_roles": True, "show_live_coding_roles": False},
+    ),
+    (
+        "assessment_preferences",
+        "only live coding",
+        {"show_take_home_task_roles": False, "show_live_coding_roles": True},
+    ),
+    (
+        "assessment_preferences",
+        "без лайвкодинга",
+        {"show_live_coding_roles": False},
+    ),
+    (
+        "assessment_preferences",
+        "без тестового",
+        {"show_take_home_task_roles": False},
+    ),
+]
+
+
+MANAGER_UTTERANCE_CASES = [
+    ("budget", "7000-9000 usd per month", {"budget_min": 7000, "budget_max": 9000, "budget_currency": "USD", "budget_period": "month"}),
+    ("budget", "$8k", {"budget_min": 8000, "budget_max": 8000, "budget_currency": "USD", "budget_period": None}),
+    ("work_format", "удаленно", {"work_format": "remote"}),
+    ("work_format", "дистанционно", {"work_format": "remote"}),
+    ("office_city", "Warsaw", {"office_city": "Warsaw"}),
+    ("office_city", "Київ", {"office_city": "Київ"}),
+    ("countries", "Ukraine, Poland", {"countries_allowed_json": ["UA", "PL"]}),
+    ("english_level", "с1", {"required_english_level": "c1"}),
+    ("english_level", "вище середнього", {"required_english_level": "b2"}),
+    ("english_level", "advanced", {"required_english_level": "c1"}),
+    ("assessment", "оба", {"has_take_home_task": True, "has_live_coding": True}),
+    ("assessment", "No test and live code", {"has_take_home_task": False, "has_live_coding": False}),
+    ("assessment", "только тестовая таска", {"has_take_home_task": True, "has_live_coding": False}),
+    ("assessment", "only live coding", {"has_take_home_task": False, "has_live_coding": True}),
+    ("assessment", "без лайвкодинга", {"has_live_coding": False}),
+    ("assessment", "без тестового", {"has_take_home_task": False}),
+    ("take_home_paid", "оплачиваемое", {"take_home_paid": True}),
+    ("take_home_paid", "платная", {"take_home_paid": True}),
+    ("take_home_paid", "неоплачиваемое", {"take_home_paid": False}),
+    ("take_home_paid", "не платная", {"take_home_paid": False}),
+    ("team_size", "6", {"team_size": 6}),
+    ("team_size", "команда 6 человек", {"team_size": 6}),
+    ("project_description", "B2B payments platform for SMB merchants.", {"project_description": "B2B payments platform for SMB merchants."}),
+    ("project_description", "Internal tool for logistics ops and routing.", {"project_description": "Internal tool for logistics ops and routing."}),
+    ("primary_tech_stack", "Python, FastAPI, PostgreSQL", {"primary_tech_stack_json": ["python", "fastapi", "postgresql"]}),
+]

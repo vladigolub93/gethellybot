@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from src.candidate_profile.question_parser import COUNTRY_CODES
+from src.candidate_profile.question_parser import COUNTRY_CODES, extract_country_codes
 from src.candidate_profile.summary_builder import KNOWN_SKILLS
 from src.shared.hiring_taxonomy import extract_hiring_stages, normalize_english_level
 
@@ -83,17 +83,13 @@ def parse_budget(text: str) -> dict:
 
 
 def parse_countries(text: str) -> dict:
-    lowered = _normalize_text(text).lower()
-    found = []
-    for country_name, code in COUNTRY_CODES.items():
-        if country_name in lowered and code not in found:
-            found.append(code)
+    found = extract_country_codes(text)
     return {"countries_allowed_json": found} if found else {}
 
 
 def parse_work_format(text: str) -> dict:
     lowered = _normalize_text(text).lower()
-    if any(token in lowered for token in ("remote", "удаленно", "удалённо", "віддалено", "дистанційно")):
+    if any(token in lowered for token in ("remote", "удаленно", "удалённо", "віддалено", "дистанційно", "дистанционно")):
         return {"work_format": "remote"}
     if any(token in lowered for token in ("hybrid", "гибрид", "гібрид")):
         return {"work_format": "hybrid"}
