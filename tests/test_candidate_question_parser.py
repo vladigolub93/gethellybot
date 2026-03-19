@@ -67,3 +67,16 @@ def test_parse_candidate_questions_remote_and_hybrid() -> None:
 
     assert parsed["work_formats_json"] == ["remote", "hybrid"]
     assert parsed["work_format"] is None
+
+
+def test_parse_candidate_questions_ru_all_formats_shorthand() -> None:
+    parsed = parse_candidate_questions("все подходит")
+
+    assert parsed["work_formats_json"] == ["remote", "hybrid", "office"]
+    assert parsed["work_format"] is None
+
+
+def test_parse_candidate_questions_cyrillic_english_level() -> None:
+    parsed = parse_candidate_questions("б2")
+
+    assert parsed["english_level"] == "b2"

@@ -914,6 +914,160 @@ def test_graph_candidate_stage_accepts_russian_all_for_work_setup_even_when_deci
     assert result.structured_payload["work_format"] is None
 
 
+def test_graph_candidate_stage_accepts_russian_all_phrase_for_work_setup(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_questions_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp5phrase",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            questions_context_json={"current_question_key": "work_format"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9phrase",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="все подходит",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["work_formats_json"] == ["remote", "hybrid", "office"]
+    assert result.structured_payload["work_format"] is None
+
+
+def test_graph_candidate_stage_accepts_higher_than_average_english_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_questions_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp5english",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            work_formats_json=["remote", "hybrid", "office"],
+            location_text="Kyiv",
+            city="Kyiv",
+            country_code="UA",
+            questions_context_json={"current_question_key": "english_level"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9english",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="выше среднего",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["english_level"] == "b2"
+
+
+def test_graph_candidate_stage_accepts_no_domain_preference_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_questions_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp5domains",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            work_formats_json=["remote", "hybrid", "office"],
+            location_text="Kyiv",
+            city="Kyiv",
+            country_code="UA",
+            english_level="b2",
+            questions_context_json={"current_question_key": "preferred_domains"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9domains",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="нет",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["preferred_domains_json"] == ["any"]
+
+
 def test_graph_candidate_stage_accepts_assessment_shorthand_when_decision_returns_help(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.graph.stages.candidate.safe_candidate_questions_decision",
@@ -965,6 +1119,60 @@ def test_graph_candidate_stage_accepts_assessment_shorthand_when_decision_return
     assert result.action_accepted is True
     assert result.proposed_action == "send_salary_location_work_format"
     assert result.structured_payload["show_take_home_task_roles"] is False
+    assert result.structured_payload["show_live_coding_roles"] is False
+
+
+def test_graph_candidate_stage_accepts_take_home_only_phrase_when_decision_returns_help(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.graph.stages.candidate.safe_candidate_questions_decision",
+        lambda *args, **kwargs: SimpleNamespace(
+            payload={
+                "intent": "help",
+                "response_text": None,
+                "proposed_action": None,
+                "reason_code": "misclassified_help",
+            }
+        ),
+    )
+
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(
+            id="cp6assessment_only_take_home",
+            state="QUESTIONS_PENDING",
+            salary_min=3000,
+            salary_currency="USD",
+            salary_period="month",
+            work_formats_json=["remote", "hybrid", "office"],
+            location_text="Kyiv",
+            city="Kyiv",
+            english_level="b2",
+            preferred_domains_json=["any"],
+            questions_context_json={"current_question_key": "assessment_preferences"},
+        )
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository()
+
+    user = SimpleNamespace(
+        id="u9assessment_take_home",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="я же сказал что только тестовая таска ок",
+    )
+
+    assert result is not None
+    assert result.stage == "QUESTIONS_PENDING"
+    assert result.action_accepted is True
+    assert result.proposed_action == "send_salary_location_work_format"
+    assert result.structured_payload["show_take_home_task_roles"] is True
     assert result.structured_payload["show_live_coding_roles"] is False
 
 

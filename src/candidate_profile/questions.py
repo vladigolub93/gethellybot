@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from src.candidate_profile.question_parser import COUNTRY_CODES, parse_assessment_preferences
+from src.candidate_profile.question_parser import (
+    COUNTRY_CODES,
+    parse_assessment_preferences,
+    parse_english_level,
+    parse_preferred_domains,
+)
 from src.candidate_profile.question_prompts import QUESTION_KEYS
 from src.candidate_profile.work_formats import (
     candidate_work_formats,
@@ -17,6 +22,46 @@ QUESTION_ALLOWED_KEYS = {
     "preferred_domains": {"preferred_domains_json"},
     "assessment_preferences": {"show_take_home_task_roles", "show_live_coding_roles"},
 }
+
+_DOMAIN_NO_PREFERENCE_VALUES = {
+    "any",
+    "anything",
+    "whatever",
+    "нет",
+    "нету",
+    "никаких",
+    "жодних",
+    "без разницы",
+    "без різниці",
+    "не важно",
+    "неважно",
+    "мне все равно",
+    "мне всё равно",
+    "мне все рано",
+}
+
+_ASSESSMENT_ONLY_TOKENS = ("только", "лишь", "лише", "only", "just")
+_ASSESSMENT_TAKE_HOME_TOKENS = (
+    "take-home",
+    "take home",
+    "test task",
+    "home assignment",
+    "тестовое",
+    "тестовая задача",
+    "тестова задача",
+    "тестовая таска",
+    "тестова таска",
+    "таска",
+    "домашка",
+)
+_ASSESSMENT_LIVE_CODING_TOKENS = (
+    "live coding",
+    "live-coding",
+    "coding interview",
+    "pair programming",
+    "лайвкодинг",
+    "лайв кодинг",
+)
 
 
 def filter_candidate_question_payload(parsed: dict, current_question_key: str | None) -> dict:
@@ -48,13 +93,35 @@ def _fallback_location_payload(text: str | None) -> dict:
     }
 
 
+def _fallback_english_level_payload(text: str | None) -> dict:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return {}
+    return parse_english_level(normalized)
+
+
+def _fallback_preferred_domains_payload(text: str | None) -> dict:
+    normalized = _normalize_text(text).lower()
+    if not normalized:
+        return {}
+    explicit = parse_preferred_domains(normalized)
+    if explicit:
+        return explicit
+    if normalized in _DOMAIN_NO_PREFERENCE_VALUES:
+        return {"preferred_domains_json": ["any"]}
+    return {}
+
+
 def _fallback_assessment_preferences_payload(text: str | None) -> dict:
     normalized = _normalize_text(text).lower()
     if not normalized:
         return {}
 
-    explicit = parse_assessment_preferences(normalized)
-    if explicit:
+    explicit = dict(parse_assessment_preferences(normalized) or {})
+    if {
+        "show_take_home_task_roles",
+        "show_live_coding_roles",
+    }.issubset(explicit):
         return explicit
 
     if normalized in {
@@ -91,6 +158,10 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
             "show_live_coding_roles": True,
         }
 
+    has_only = any(token in normalized for token in _ASSESSMENT_ONLY_TOKENS)
+    has_take_home = any(token in normalized for token in _ASSESSMENT_TAKE_HOME_TOKENS)
+    has_live_coding = any(token in normalized for token in _ASSESSMENT_LIVE_CODING_TOKENS)
+
     if normalized in {
         "только take-home",
         "only take-home",
@@ -98,7 +169,7 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
         "только тестовое",
         "лише take-home",
         "лише тестове",
-    }:
+    } or (has_only and has_take_home and not has_live_coding):
         return {
             "show_take_home_task_roles": True,
             "show_live_coding_roles": False,
@@ -111,13 +182,13 @@ def _fallback_assessment_preferences_payload(text: str | None) -> dict:
         "только лайвкодинг",
         "лише live-coding",
         "лише лайвкодинг",
-    }:
+    } or (has_only and has_live_coding and not has_take_home):
         return {
             "show_take_home_task_roles": False,
             "show_live_coding_roles": True,
         }
 
-    return {}
+    return explicit
 
 
 def enrich_candidate_question_payload_for_current_question(
@@ -127,11 +198,20 @@ def enrich_candidate_question_payload_for_current_question(
     current_question_key: str | None,
 ) -> dict:
     enriched = dict(parsed or {})
-    if current_question_key == "work_format" and not filter_candidate_question_payload(enriched, current_question_key):
+    filtered = filter_candidate_question_payload(enriched, current_question_key)
+    if current_question_key == "work_format" and not filtered:
         enriched.update(parse_work_formats(text, allow_shorthand_all=True))
-    if current_question_key == "location" and not filter_candidate_question_payload(enriched, current_question_key):
+    if current_question_key == "location" and not filtered:
         enriched.update(_fallback_location_payload(text))
-    if current_question_key == "assessment_preferences" and not filter_candidate_question_payload(enriched, current_question_key):
+    if current_question_key == "english_level" and not filtered:
+        enriched.update(_fallback_english_level_payload(text))
+    if current_question_key == "preferred_domains" and not filtered:
+        enriched.update(_fallback_preferred_domains_payload(text))
+    if current_question_key == "assessment_preferences" and (
+        not filtered
+        or "show_take_home_task_roles" not in filtered
+        or "show_live_coding_roles" not in filtered
+    ):
         enriched.update(_fallback_assessment_preferences_payload(text))
     return filter_candidate_question_payload(enriched, current_question_key)
 
