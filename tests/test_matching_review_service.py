@@ -8,6 +8,8 @@ from src.matching.policy import (
     MATCH_STATUS_CANDIDATE_DECISION_PENDING,
     MATCH_STATUS_MANAGER_DECISION_PENDING,
     MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED,
+    PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES,
+    PRE_INTERVIEW_MANAGER_REVIEW_STATUSES,
 )
 from src.matching.review import MatchingReviewService
 
@@ -32,6 +34,9 @@ class FakeCandidateRepository:
 
     def get_version_by_id(self, version_id):
         return self.versions.get(version_id)
+
+    def get_current_version(self, candidate):
+        return self.versions.get(getattr(candidate, "current_version_id", None))
 
     def update_questions_context(self, candidate, questions_context_json):
         candidate.questions_context_json = questions_context_json
@@ -75,7 +80,11 @@ class FakeMatchingRepository:
         return list(self.shortlisted_for_vacancy)[:limit]
 
     def list_pre_interview_review_for_vacancy(self, vacancy_id, *, limit=3):
-        return [match for match in self.pre_vacancy if match.vacancy_id == vacancy_id][:limit]
+        return [
+            match
+            for match in self.pre_vacancy
+            if match.vacancy_id == vacancy_id and getattr(match, "status", None) in PRE_INTERVIEW_MANAGER_REVIEW_STATUSES
+        ][:limit]
 
     def get_latest_pre_interview_review_for_manager(self, vacancy_ids):
         for match in self.pre_vacancy:
@@ -87,7 +96,12 @@ class FakeMatchingRepository:
         return [match for match in self.shortlisted_for_candidate if match.candidate_profile_id == candidate_profile_id][:limit]
 
     def list_pre_interview_review_for_candidate(self, candidate_profile_id, *, limit=3):
-        return [match for match in self.pre_candidate if match.candidate_profile_id == candidate_profile_id][:limit]
+        return [
+            match
+            for match in self.pre_candidate
+            if getattr(match, "candidate_profile_id", None) == candidate_profile_id
+            and getattr(match, "status", None) in PRE_INTERVIEW_CANDIDATE_REVIEW_STATUSES
+        ][:limit]
 
     def get_latest_pre_interview_review_for_candidate(self, candidate_profile_id):
         for match in self.pre_candidate:
@@ -147,6 +161,9 @@ class FakeVacanciesRepository:
 
     def get_version_by_id(self, version_id):
         return self.versions.get(version_id)
+
+    def get_current_version(self, vacancy):
+        return self.versions.get(getattr(vacancy, "current_version_id", None))
 
     def update_questions_context(self, vacancy, questions_context_json):
         vacancy.questions_context_json = questions_context_json
@@ -223,7 +240,7 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies() 
     notification = service.notifications.rows[0]
     assert notification.user_id == vacancy.manager_user_id
     assert notification.template_key == "manager_pre_interview_review_ready"
-    assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 strong-fit candidate matches")
+    assert notification.payload_json["message_entries"][0]["text"].startswith("I found a strong-fit candidate")
     assert notification.payload_json["message_entries"][1]["text"].startswith("I found you Test Candidate for the Senior Backend Engineer role.")
     assert "This looks like a strong fit." in notification.payload_json["message_entries"][1]["text"]
     assert "Use Connect or Skip below." in notification.payload_json["message_entries"][1]["text"]
@@ -286,7 +303,7 @@ def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies(
     notification = service.notifications.rows[0]
     assert notification.user_id == candidate.user_id
     assert notification.template_key == "candidate_vacancy_review_ready"
-    assert notification.payload_json["message_entries"][0]["text"].startswith("I found 1 matching roles")
+    assert notification.payload_json["message_entries"][0]["text"].startswith("I found a role worth reviewing")
     assert notification.payload_json["message_entries"][1]["text"].startswith("I found you a vacancy for Python Engineer.")
     assert "The client is offering 5000-6500 USD / month in a remote setup." in notification.payload_json["message_entries"][1]["text"]
     assert "Use Apply or Skip below." in notification.payload_json["message_entries"][1]["text"]
@@ -339,7 +356,7 @@ def test_dispatch_manager_batch_for_vacancy_does_not_resend_existing_cards_on_fo
     assert service.notifications.rows == []
 
 
-def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refresh() -> None:
+def test_dispatch_manager_batch_for_vacancy_keeps_single_current_card_on_force_refresh() -> None:
     vacancy = SimpleNamespace(id="vacancy-force-2", manager_user_id="manager-force-2", role_title="Node.js Developer")
     existing_candidate = SimpleNamespace(id="candidate-existing-2", user_id="candidate-user-existing-2")
     new_candidate = SimpleNamespace(id="candidate-new-2", user_id="candidate-user-new-2")
@@ -390,15 +407,11 @@ def test_dispatch_manager_batch_for_vacancy_sends_only_new_cards_on_force_refres
 
     result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=True, trigger_type="job")
 
-    assert result["status"] == "dispatched"
-    assert result["batch_count"] == 2
-    assert result["notified_count"] == 1
-    assert result["promoted_count"] == 1
-    assert len(service.notifications.rows) == 1
-    entries = service.notifications.rows[0].payload_json["message_entries"]
-    assert entries[0]["text"].startswith("I found 1 strong-fit candidate matches")
-    assert len(entries) == 2
-    assert entries[1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-new-2"
+    assert result["status"] == "already_presented"
+    assert result["batch_count"] == 1
+    assert result["promoted_count"] == 0
+    assert len(service.notifications.rows) == 0
+    assert new_match.status == "shortlisted"
 
 
 def test_dispatch_manager_batch_for_vacancy_prefers_strong_fit_candidates_first() -> None:
@@ -585,7 +598,7 @@ def test_dispatch_manager_batch_for_vacancy_moves_to_medium_fit_when_no_strong_l
     assert result["fit_band"] == "medium"
     assert medium_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
     assert service.notifications.rows[0].payload_json["message_entries"][0]["text"].startswith(
-        "I found 1 medium-fit candidate matches"
+        "I found a medium-fit candidate"
     )
 
 
@@ -632,7 +645,7 @@ def test_dispatch_manager_batch_for_vacancy_labels_not_fit_batch_explicitly() ->
     assert result["fit_band"] == "not_fit"
     assert not_fit_match.status == MATCH_STATUS_MANAGER_DECISION_PENDING
     assert service.notifications.rows[0].payload_json["message_entries"][0]["text"].startswith(
-        "I found 1 below-threshold candidate matches"
+        "I found a below-threshold candidate"
     )
 
 
@@ -750,6 +763,40 @@ def test_execute_candidate_pre_interview_action_accepts_match_id_from_inline_but
         action="apply_to_vacancy",
         vacancy_slot=None,
         match_id=match.id,
+    )
+
+    assert result is not None
+    assert result.status == "applied"
+    assert match.status == MATCH_STATUS_CANDIDATE_APPLIED
+
+
+def test_execute_candidate_pre_interview_action_without_slot_uses_current_card() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-current", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-current", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(id="vacancy-current", role_title="Backend Engineer")
+    match = SimpleNamespace(
+        id="match-current",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match], active_candidate=[])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(vacancies={vacancy.id: vacancy})
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_candidate_pre_interview_action(
+        user=candidate_user,
+        raw_message_id="raw-current-candidate",
+        action="apply_to_vacancy",
+        vacancy_slot=None,
     )
 
     assert result is not None
@@ -904,6 +951,163 @@ def test_execute_manager_pre_interview_action_accepts_match_id_from_inline_butto
     assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Connect"
     assert candidate_notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][1]["text"] == "Skip"
     assert "The hiring manager already approved the connection" in candidate_notification.payload_json["message_entries"][1]["text"]
+
+
+def test_execute_manager_pre_interview_action_without_slot_uses_current_card() -> None:
+    manager_user = SimpleNamespace(id="manager-current", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(id="candidate-current-manager", user_id="candidate-user-current-manager")
+    vacancy = SimpleNamespace(id="vacancy-current-manager", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-current-manager",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-current-manager",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={"cpv-current-manager": SimpleNamespace(summary_json={})},
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match], active_vacancy=[])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Current Candidate"),
+            manager_user.id: SimpleNamespace(id=manager_user.id),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.execute_manager_pre_interview_action(
+        user=manager_user,
+        raw_message_id="raw-current-manager",
+        action="interview_candidate",
+        candidate_slot=None,
+    )
+
+    assert result is not None
+    assert result.status == "awaiting_candidate"
+    assert match.status == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED
+
+
+def test_answer_candidate_review_question_uses_current_vacancy_details() -> None:
+    candidate_user = SimpleNamespace(id="candidate-user-q", is_candidate=True, is_hiring_manager=False)
+    candidate = SimpleNamespace(id="candidate-q", user_id=candidate_user.id)
+    vacancy = SimpleNamespace(
+        id="vacancy-q",
+        role_title="Senior Node.js Developer",
+        project_description="Realtime data pipeline for marketplace analytics.",
+        budget_min=6000,
+        budget_max=7000,
+        budget_currency="USD",
+        budget_period="month",
+        work_format="remote",
+        required_english_level="B2",
+        primary_tech_stack_json=["Node.js", "Redis", "GCP"],
+        current_version_id="vacancy-version-q",
+    )
+    match = SimpleNamespace(
+        id="match-q",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        vacancy_version_id="vacancy-version-q",
+        status=MATCH_STATUS_CANDIDATE_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": ["Node.js and backend overlap"], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(candidate_by_id={candidate.id: candidate}, active_candidate=candidate)
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_candidate=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository({candidate_user.id: candidate_user})
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        versions={"vacancy-version-q": SimpleNamespace(approval_summary_text="Marketplace analytics backend role.")},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_candidate_review_question(
+        user=candidate_user,
+        question_text="А о чем проект?",
+    )
+
+    assert answer is not None
+    assert "Realtime data pipeline" in answer
+
+
+def test_answer_manager_review_question_uses_current_candidate_details() -> None:
+    manager_user = SimpleNamespace(id="manager-user-q", is_hiring_manager=True, is_candidate=False)
+    candidate = SimpleNamespace(
+        id="candidate-manager-q",
+        user_id="candidate-user-manager-q",
+        salary_min=5000,
+        salary_currency="USD",
+        salary_period="month",
+        location_text="Kyiv, Ukraine",
+        work_formats_json=["remote"],
+        work_format="remote",
+        english_level="b2",
+        current_version_id="cpv-manager-q",
+    )
+    vacancy = SimpleNamespace(id="vacancy-manager-q", manager_user_id=manager_user.id, role_title="Node.js Developer")
+    match = SimpleNamespace(
+        id="match-manager-q",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-manager-q",
+        status=MATCH_STATUS_MANAGER_DECISION_PENDING,
+        rationale_json={"fit_band": "strong", "matched_signals": ["Strong backend overlap"], "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={
+            "cpv-manager-q": SimpleNamespace(
+                summary_json={
+                    "approval_summary_text": "Senior backend engineer with REST API and platform experience.",
+                    "skills": ["Python", "Node.js", "Redis"],
+                    "years_experience": 6,
+                }
+            )
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(pre_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="Milana"),
+            manager_user.id: manager_user,
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={manager_user.id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    answer = service.answer_manager_review_question(
+        user=manager_user,
+        question_text="Какая у кандидата зарплата?",
+    )
+
+    assert answer is not None
+    assert "5000 USD per month" in answer
 
 
 def test_execute_manager_pre_interview_skip_notifies_candidate_after_apply() -> None:

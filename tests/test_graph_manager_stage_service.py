@@ -1072,6 +1072,37 @@ def test_graph_manager_stage_accepts_pre_interview_vacancy_update_intent() -> No
     assert result.structured_payload["has_live_coding"] is False
 
 
+def test_graph_manager_stage_accepts_plain_connect_for_current_candidate() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.vacancies = FakeVacanciesRepository(
+        SimpleNamespace(id="v6preplain", state="OPEN")
+    )
+    service.matches = FakeMatchingRepository(
+        pre_interview_review_match=SimpleNamespace(id="m6preplain", status="manager_decision_pending")
+    )
+
+    user = SimpleNamespace(
+        id="m6preplain",
+        phone_number="+123",
+        is_candidate=False,
+        is_hiring_manager=True,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Connect",
+    )
+
+    assert result is not None
+    assert result.stage == "PRE_INTERVIEW_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "interview_candidate"
+    assert result.stage_status == "ready_for_transition"
+    assert result.structured_payload == {"candidate_slot": None}
+
+
 def test_graph_manager_stage_accepts_pre_interview_feedback_intent() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

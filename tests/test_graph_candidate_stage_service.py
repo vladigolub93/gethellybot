@@ -1630,6 +1630,37 @@ def test_graph_candidate_stage_accepts_apply_to_vacancy_intent() -> None:
     assert result.reply_text is None
 
 
+def test_graph_candidate_stage_accepts_plain_apply_for_current_vacancy() -> None:
+    service = LangGraphStageAgentService(session=object())
+    service.consents = FakeConsentsRepository(granted=True)
+    service.candidates = FakeCandidateProfilesRepository(
+        SimpleNamespace(id="cp8dplain", state="READY")
+    )
+    service.interviews = FakeInterviewsRepository()
+    service.matches = FakeMatchesRepository(candidate_review_match=SimpleNamespace(id="m8dplain"))
+
+    user = SimpleNamespace(
+        id="u11dplain",
+        phone_number="+123",
+        is_candidate=True,
+        is_hiring_manager=False,
+        telegram_chat_id=200,
+    )
+
+    result = service.maybe_run_stage(
+        user=user,
+        latest_user_message="Apply",
+    )
+
+    assert result is not None
+    assert result.stage == "VACANCY_REVIEW"
+    assert result.action_accepted is True
+    assert result.proposed_action == "apply_to_vacancy"
+    assert result.structured_payload == {"vacancy_slot": None}
+    assert result.stage_status == "ready_for_transition"
+    assert result.reply_text is None
+
+
 def test_graph_candidate_stage_accepts_vacancy_review_preference_update_intent() -> None:
     service = LangGraphStageAgentService(session=object())
     service.consents = FakeConsentsRepository(granted=True)

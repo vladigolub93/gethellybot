@@ -539,18 +539,13 @@ def _candidate_memory(*, user_id, stage: str | None, candidates, matches, vacanc
             matches,
             "list_pre_interview_review_for_candidate",
             candidate.id,
-            limit=3,
+            limit=1,
         ) or []
-        vacancy_briefs = []
-        for index, match in enumerate(review_matches, start=1):
-            vacancy = _call_optional(vacancies, "get_by_id", getattr(match, "vacancy_id", None))
-            if vacancy is None:
-                continue
-            brief = _format_vacancy_brief(slot=index, vacancy=vacancy)
+        if review_matches:
+            vacancy = _call_optional(vacancies, "get_by_id", getattr(review_matches[0], "vacancy_id", None))
+            brief = _format_vacancy_brief(slot=1, vacancy=vacancy) if vacancy is not None else None
             if brief:
-                vacancy_briefs.append(brief)
-        if vacancy_briefs:
-            snippets.append("Current matched vacancies in review: " + " | ".join(vacancy_briefs))
+                snippets.append("Current vacancy in review: " + _strip_slot_prefix(brief).strip())
 
     current_vacancy = None
     if stage == "INTERVIEW_IN_PROGRESS":
@@ -642,17 +637,14 @@ def _manager_memory(*, user_id, stage: str | None, candidates, matches, vacancie
             matches,
             "list_pre_interview_review_for_vacancy",
             vacancy.id,
-            limit=3,
+            limit=1,
         ) or []
-        candidate_briefs = []
-        for index, match in enumerate(review_matches, start=1):
-            candidate = _call_optional(candidates, "get_by_id", getattr(match, "candidate_profile_id", None))
+        if review_matches:
+            candidate = _call_optional(candidates, "get_by_id", getattr(review_matches[0], "candidate_profile_id", None))
             version = _get_current_version(candidates, candidate)
-            brief = _format_candidate_brief(slot=index, candidate=candidate, version=version)
+            brief = _format_candidate_brief(slot=1, candidate=candidate, version=version)
             if brief:
-                candidate_briefs.append(brief)
-        if candidate_briefs:
-            snippets.append("Current candidate batch in review: " + " | ".join(candidate_briefs))
+                snippets.append("Current candidate in review: " + _strip_slot_prefix(brief).strip())
 
     if stage == "MANAGER_REVIEW":
         review_vacancy_ids = [item.id for item in open_vacancies] or [vacancy.id]

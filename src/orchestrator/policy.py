@@ -125,13 +125,14 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     ),
     "VACANCY_REVIEW": StatePolicyDefinition(
         state="VACANCY_REVIEW",
-        goal="Review the current matched-vacancy batch and decide where to apply or connect.",
+        goal="Review the current matched vacancy card, ask any clarifying questions about it, and decide whether to apply or connect.",
         allowed_actions=["apply_to_vacancy", "skip_vacancy", "update_matching_preferences", "record_matching_feedback"],
         assistance_prompt_slug="candidate_vacancy_review",
-        guidance_text="Review the current vacancy cards and use the Apply or Skip buttons under each role. If a manager already approved one, the primary button will switch to Connect. If the batch keeps missing, you can also update your matching preferences right here.",
+        guidance_text="Review the current vacancy card and use Apply or Skip under that role. If the manager already approved it, the primary button will switch to Connect. You can also ask about the current role here, or update your matching preferences if the role keeps missing.",
         help_text=(
-            "You are reviewing matched vacancies. "
-            "Use the Apply or Skip buttons under the vacancy cards in the current batch. If a manager already approved one, use Connect or Skip under that card. "
+            "You are reviewing one matched vacancy at a time. "
+            "Use the Apply or Skip buttons under the current vacancy card. If the manager already approved it, use Connect or Skip under that card. "
+            "You can also ask about the current role, project, stack, process, budget, or format here. "
             "If the roles keep missing, you can also update salary, format, location, English, domain, or assessment preferences here."
         ),
         missing_requirements=["candidate_vacancy_decision"],
@@ -248,13 +249,14 @@ STATE_POLICY_DEFINITIONS: dict[str, StatePolicyDefinition] = {
     ),
     "PRE_INTERVIEW_REVIEW": StatePolicyDefinition(
         state="PRE_INTERVIEW_REVIEW",
-        goal="Review matched candidates and decide who should receive a direct contact approval request.",
+        goal="Review the current candidate card, ask any clarifying questions about that candidate, and decide whether to connect.",
         allowed_actions=["interview_candidate", "skip_candidate", "update_vacancy_preferences", "record_vacancy_feedback"],
         assistance_prompt_slug="pre_interview_review",
-        guidance_text="Review the current candidate cards and use the Connect or Skip buttons under each profile. If the batch keeps missing, you can also update the vacancy here.",
+        guidance_text="Review the current candidate card and use Connect or Skip under that profile. You can also ask about the current candidate here, or update the vacancy if the candidate flow keeps missing.",
         help_text=(
-            "You are reviewing matched candidates before direct contact sharing. "
-            "Use the Connect or Skip buttons under the candidate cards in the current batch. "
+            "You are reviewing one matched candidate at a time before direct contact sharing. "
+            "Use the Connect or Skip buttons under the current candidate card. "
+            "You can also ask about the current candidate, skills, compensation, location, English, or process constraints here. "
             "If the profiles keep missing, you can also update budget, format, location, English, process, project, or stack here."
         ),
         missing_requirements=["pre_interview_manager_decision"],

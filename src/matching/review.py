@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Optional
 
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
@@ -34,7 +35,7 @@ from src.matching.policy import (
     next_manager_review_batch_size,
 )
 from src.matching.scoring import FIT_BAND_PRIORITY, fit_band_label
-from src.shared.hiring_taxonomy import display_english_level, display_hiring_stages
+from src.shared.hiring_taxonomy import display_domains, display_english_level, display_hiring_stages
 
 
 @dataclass(frozen=True)
@@ -187,6 +188,584 @@ class MatchingReviewService:
         if getattr(vacancy, "has_live_coding", None) is False:
             hiring_stages = [stage for stage in hiring_stages if stage.lower() != "live coding"]
         return hiring_stages
+
+    @staticmethod
+    def _has_cyrillic(text: str | None) -> bool:
+        if not text:
+            return False
+        return bool(re.search(r"[А-Яа-яЁёІіЇїЄєҐґ]", text))
+
+    @staticmethod
+    def _contains_any(text: str, tokens: tuple[str, ...]) -> bool:
+        lowered = (text or "").lower()
+        return any(token in lowered for token in tokens)
+
+    def _looks_like_review_flow_question(self, text: str | None) -> bool:
+        if not text:
+            return False
+        return self._contains_any(
+            text,
+            (
+                "what happens after",
+                "what if i apply",
+                "what if i connect",
+                "what if i skip",
+                "how does this work",
+                "how does helly work",
+                "как это работает",
+                "что будет после",
+                "что будет если",
+                "что дальше после",
+                "что будет после apply",
+                "что будет после connect",
+                "что будет после skip",
+            ),
+        )
+
+    def _looks_like_review_object_question(self, text: str | None) -> bool:
+        normalized = " ".join((text or "").split()).strip().lower()
+        if not normalized:
+            return False
+        if self._looks_like_review_flow_question(normalized):
+            return False
+        if "?" in normalized:
+            return True
+        return self._contains_any(
+            normalized,
+            (
+                "detail",
+                "details",
+                "more",
+                "about",
+                "project",
+                "product",
+                "domain",
+                "role",
+                "responsibil",
+                "stack",
+                "tech",
+                "budget",
+                "salary",
+                "comp",
+                "rate",
+                "format",
+                "remote",
+                "hybrid",
+                "office",
+                "location",
+                "city",
+                "country",
+                "english",
+                "process",
+                "stage",
+                "interview",
+                "take-home",
+                "take home",
+                "live coding",
+                "why",
+                "fit",
+                "showed",
+                "show this",
+                "candidate",
+                "profile",
+                "skill",
+                "skills",
+                "summary",
+                "experience",
+                "assessment",
+                "детал",
+                "подроб",
+                "проект",
+                "продукт",
+                "домен",
+                "роль",
+                "задач",
+                "стек",
+                "технолог",
+                "бюдж",
+                "зарплат",
+                "ставк",
+                "формат",
+                "удален",
+                "гибрид",
+                "офис",
+                "локац",
+                "город",
+                "страна",
+                "англий",
+                "процесс",
+                "этап",
+                "собес",
+                "лайвкод",
+                "тестов",
+                "таск",
+                "почему",
+                "зачем",
+                "кандидат",
+                "профил",
+                "скилл",
+                "опыт",
+                "саммар",
+            ),
+        )
+
+    @staticmethod
+    def _format_country_codes(codes: list[str] | None) -> str | None:
+        values = [str(code).strip().upper() for code in (codes or []) if str(code).strip()]
+        if not values:
+            return None
+        return ", ".join(values[:6])
+
+    def _vacancy_setup_details(self, vacancy, *, ru: bool) -> str | None:
+        parts: list[str] = []
+        work_format = getattr(vacancy, "work_format", None)
+        office_city = getattr(vacancy, "office_city", None)
+        countries = self._format_country_codes(getattr(vacancy, "countries_allowed_json", None))
+        if work_format:
+            parts.append(f"формат {work_format}" if ru else f"{work_format} setup")
+        if office_city:
+            parts.append(f"город {office_city}" if ru else f"office city {office_city}")
+        if countries:
+            parts.append(f"страны {countries}" if ru else f"allowed countries {countries}")
+        if not parts:
+            return None
+        if ru:
+            return "По формату и локации вижу: " + "; ".join(parts) + "."
+        return "For format and location I have: " + "; ".join(parts) + "."
+
+    def _vacancy_process_details(self, vacancy, *, ru: bool) -> str | None:
+        parts: list[str] = []
+        english_level = display_english_level(getattr(vacancy, "required_english_level", None))
+        if english_level:
+            parts.append(f"English {english_level}")
+        hiring_stages = self._effective_hiring_stages(vacancy)
+        if hiring_stages:
+            parts.append(
+                ("этапы " + ", ".join(hiring_stages[:5])) if ru else ("stages " + ", ".join(hiring_stages[:5]))
+            )
+        take_home = getattr(vacancy, "has_take_home_task", None)
+        if take_home is True:
+            paid = getattr(vacancy, "take_home_paid", None)
+            if ru:
+                if paid is True:
+                    parts.append("есть оплачиваемая тестовая задача")
+                elif paid is False:
+                    parts.append("есть неоплачиваемая тестовая задача")
+                else:
+                    parts.append("есть тестовая задача")
+            else:
+                if paid is True:
+                    parts.append("a paid take-home task")
+                elif paid is False:
+                    parts.append("an unpaid take-home task")
+                else:
+                    parts.append("a take-home task")
+        elif take_home is False:
+            parts.append("тестовой задачи нет" if ru else "no take-home task")
+        live_coding = getattr(vacancy, "has_live_coding", None)
+        if live_coding is True:
+            parts.append("есть live coding" if ru else "live coding")
+        elif live_coding is False:
+            parts.append("live coding нет" if ru else "no live coding")
+        if not parts:
+            return None
+        if ru:
+            return "По процессу вижу: " + "; ".join(parts) + "."
+        return "For process details I have: " + "; ".join(parts) + "."
+
+    def _candidate_preferences_details(self, candidate, *, ru: bool) -> str | None:
+        parts: list[str] = []
+        salary = self._candidate_salary_label(candidate)
+        if salary:
+            parts.append(f"ожидание по компенсации {salary}" if ru else f"compensation expectation {salary}")
+        location = getattr(candidate, "location_text", None)
+        if location:
+            parts.append(f"локация {location}" if ru else f"location {location}")
+        work_formats = display_work_formats(candidate)
+        if work_formats:
+            parts.append(f"формат {work_formats}" if ru else f"preferred work format {work_formats}")
+        english = display_english_level(getattr(candidate, "english_level", None))
+        if english:
+            parts.append(f"English {english}")
+        domains = display_domains(getattr(candidate, "preferred_domains_json", None))
+        if domains:
+            parts.append(
+                ("домены " + ", ".join(domains[:5])) if ru else ("preferred domains " + ", ".join(domains[:5]))
+            )
+        if not parts:
+            return None
+        if ru:
+            return "По сохраненным предпочтениям вижу: " + "; ".join(parts) + "."
+        return "From saved preferences I have: " + "; ".join(parts) + "."
+
+    def _candidate_assessment_preferences_details(self, candidate, *, ru: bool) -> str | None:
+        parts: list[str] = []
+        show_take_home = getattr(candidate, "show_take_home_task_roles", None)
+        if show_take_home is True:
+            parts.append("готов к take-home" if ru else "take-home roles are okay")
+        elif show_take_home is False:
+            parts.append("take-home роли скрыты" if ru else "take-home roles are hidden")
+        show_live = getattr(candidate, "show_live_coding_roles", None)
+        if show_live is True:
+            parts.append("готов к live coding" if ru else "live-coding roles are okay")
+        elif show_live is False:
+            parts.append("live-coding роли скрыты" if ru else "live-coding roles are hidden")
+        if not parts:
+            return None
+        if ru:
+            return "По этапам оценки вижу: " + "; ".join(parts) + "."
+        return "For assessment preferences I have: " + "; ".join(parts) + "."
+
+    def _current_candidate_review_context(self, *, user):
+        candidate = self.candidates.get_active_by_user_id(user.id)
+        if candidate is None:
+            return None
+        review_matches = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=1)
+        if not review_matches:
+            return None
+        match = review_matches[0]
+        vacancy = self.vacancies.get_by_id(match.vacancy_id)
+        if vacancy is None:
+            return None
+        version = self.vacancies.get_current_version(vacancy) or self.vacancies.get_version_by_id(
+            getattr(match, "vacancy_version_id", None)
+        )
+        return candidate, match, vacancy, version
+
+    def _current_manager_review_context(self, *, user):
+        vacancy_ids = [vacancy.id for vacancy in self.vacancies.get_by_manager_user_id(user.id)]
+        latest = self.matches.get_latest_pre_interview_review_for_manager(vacancy_ids)
+        if latest is None:
+            return None
+        vacancy = self.vacancies.get_by_id(latest.vacancy_id)
+        if vacancy is None or getattr(vacancy, "manager_user_id", None) != user.id:
+            return None
+        review_matches = self.matches.list_pre_interview_review_for_vacancy(vacancy.id, limit=1)
+        if not review_matches:
+            return None
+        match = review_matches[0]
+        candidate = self.candidates.get_by_id(match.candidate_profile_id)
+        if candidate is None:
+            return None
+        version = self.candidates.get_current_version(candidate) or self.candidates.get_version_by_id(
+            getattr(match, "candidate_profile_version_id", None)
+        )
+        return vacancy, match, candidate, version
+
+    def answer_candidate_review_question(self, *, user, question_text: str) -> str | None:
+        if not self._looks_like_review_object_question(question_text):
+            return None
+        context = self._current_candidate_review_context(user=user)
+        if context is None:
+            return None
+        candidate, match, vacancy, vacancy_version = context
+        ru = self._has_cyrillic(question_text)
+        lowered = (question_text or "").lower()
+        role_title = getattr(vacancy, "role_title", None) or ("эта роль" if ru else "this role")
+        summary = self._truncate_text(
+            getattr(vacancy_version, "approval_summary_text", None)
+            or ((getattr(vacancy_version, "summary_json", None) or {}).get("approval_summary_text") if vacancy_version else None),
+            limit=240,
+        )
+        project = self._truncate_text(getattr(vacancy, "project_description", None), limit=240)
+        stack = list(getattr(vacancy, "primary_tech_stack_json", None) or [])[:8]
+        budget = self._vacancy_budget_label(vacancy)
+        setup = self._vacancy_setup_details(vacancy, ru=ru)
+        process = self._vacancy_process_details(vacancy, ru=ru)
+        fit_reason = self._match_reason_text(match)
+        gap_context = self._match_gap_context(match)
+
+        if self._contains_any(lowered, ("why", "fit", "showed", "selected", "почему", "зачем", "показал", "подходит")):
+            parts = []
+            if fit_reason:
+                parts.append(("Почему показал: " + fit_reason) if ru else ("Why I showed it: " + fit_reason))
+            if gap_context:
+                parts.append(("Компромисс по карточке: " + gap_context) if ru else ("Tradeoff on this match: " + gap_context))
+            if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+                parts.append(
+                    "Отдельно вижу, что менеджер уже одобрил этот матч."
+                    if ru
+                    else "I also see that the hiring manager already approved this match."
+                )
+            if parts:
+                return " ".join(parts)
+
+        if self._contains_any(lowered, ("project", "product", "domain", "company", "о чем", "проект", "продукт", "домен", "компан")):
+            if project:
+                return (
+                    f"По {role_title} у меня сохранено такое описание проекта: {project}"
+                    if ru
+                    else f"For {role_title}, the saved project description is: {project}"
+                )
+            if summary:
+                return (
+                    f"Отдельного описания проекта по {role_title} у меня нет, но в summary сохранено: {summary}"
+                    if ru
+                    else f"I do not have a separate project description for {role_title}, but the saved summary says: {summary}"
+                )
+
+        if self._contains_any(lowered, ("budget", "salary", "comp", "rate", "бюдж", "зарплат", "ставк", "деньг")):
+            if budget:
+                return (
+                    f"По этой вакансии вижу бюджет {budget}."
+                    if ru
+                    else f"For this role, I have the budget saved as {budget}."
+                )
+            return (
+                "По этой вакансии бюджет у меня не сохранен."
+                if ru
+                else "I do not have a saved budget for this role."
+            )
+
+        if self._contains_any(lowered, ("stack", "tech", "skill", "skills", "стек", "технолог", "скилл")):
+            if stack:
+                return (
+                    "По стеку у меня сохранено: " + ", ".join(stack) + "."
+                    if ru
+                    else "For the stack, I have: " + ", ".join(stack) + "."
+                )
+            return (
+                "По этой карточке стек отдельно не сохранен."
+                if ru
+                else "I do not have a separate stack list saved on this card."
+            )
+
+        if self._contains_any(lowered, ("format", "remote", "hybrid", "office", "location", "city", "country", "формат", "локац", "город", "страна")):
+            if setup:
+                return setup
+            return (
+                "По формату и локации в этой карточке у меня только базовые поля без дополнительных ограничений."
+                if ru
+                else "For format and location, I only have the basic card fields without extra constraints."
+            )
+
+        if self._contains_any(lowered, ("english", "англий")):
+            english_level = display_english_level(getattr(vacancy, "required_english_level", None))
+            if english_level:
+                return (
+                    f"По этой вакансии нужен английский примерно на уровне {english_level}."
+                    if ru
+                    else f"This role currently requires around {english_level} English."
+                )
+            return (
+                "По этой вакансии уровень английского у меня не сохранен."
+                if ru
+                else "I do not have a saved English requirement for this role."
+            )
+
+        if self._contains_any(lowered, ("process", "stage", "interview", "take-home", "take home", "live coding", "процесс", "этап", "собес", "тестов", "таск", "лайвкод")):
+            if process:
+                return process
+            return (
+                "По процессу у меня в этой карточке только базовые поля без дополнительных деталей."
+                if ru
+                else "For process details, I only have the basic fields on this card."
+            )
+
+        parts = []
+        if project:
+            parts.append(
+                f"По проекту вижу: {project}"
+                if ru
+                else f"For the project, I have: {project}"
+            )
+        elif summary:
+            parts.append(
+                f"По summary вижу: {summary}"
+                if ru
+                else f"From the saved summary, I have: {summary}"
+            )
+        if budget:
+            parts.append(
+                f"Бюджет: {budget}"
+                if ru
+                else f"Budget: {budget}"
+            )
+        if setup:
+            parts.append(setup.rstrip("."))
+        if stack:
+            parts.append(
+                "Стек: " + ", ".join(stack)
+                if ru
+                else "Stack: " + ", ".join(stack)
+            )
+        if process:
+            parts.append(process.rstrip("."))
+        if getattr(match, "status", None) == MATCH_STATUS_MANAGER_INTERVIEW_REQUESTED:
+            parts.append(
+                "Менеджер уже одобрил этот матч."
+                if ru
+                else "The hiring manager already approved this match."
+            )
+        if not parts:
+            return (
+                "По этой карточке у меня сейчас есть только базовые поля без дополнительных деталей."
+                if ru
+                else "On this card, I currently only have the basic saved fields without extra details."
+            )
+        return " ".join(parts)
+
+    def answer_manager_review_question(self, *, user, question_text: str) -> str | None:
+        if not self._looks_like_review_object_question(question_text):
+            return None
+        context = self._current_manager_review_context(user=user)
+        if context is None:
+            return None
+        vacancy, match, candidate, candidate_version = context
+        candidate_user = self.users.get_by_id(getattr(candidate, "user_id", None))
+        ru = self._has_cyrillic(question_text)
+        lowered = (question_text or "").lower()
+        candidate_name = (
+            getattr(candidate_user, "display_name", None)
+            or getattr(candidate_user, "username", None)
+            or ("кандидат" if ru else "the candidate")
+        )
+        summary_json = getattr(candidate_version, "summary_json", None) or {}
+        summary_text = self._truncate_text(summary_json.get("approval_summary_text") or summary_json.get("headline"), limit=240)
+        years = summary_json.get("years_experience")
+        skills = list(summary_json.get("skills") or [])[:8]
+        preferences = self._candidate_preferences_details(candidate, ru=ru)
+        assessments = self._candidate_assessment_preferences_details(candidate, ru=ru)
+        fit_reason = self._match_reason_text(match)
+        gap_context = self._match_gap_context(match)
+
+        if self._contains_any(lowered, ("why", "fit", "showed", "selected", "почему", "зачем", "показал", "подходит")):
+            parts = []
+            if fit_reason:
+                parts.append(("Почему я показал этого кандидата: " + fit_reason) if ru else ("Why I showed this candidate: " + fit_reason))
+            if gap_context:
+                parts.append(("Основной tradeoff: " + gap_context) if ru else ("Main tradeoff: " + gap_context))
+            if parts:
+                return " ".join(parts)
+
+        if self._contains_any(lowered, ("summary", "background", "experience", "опыт", "бэкгра", "саммар")):
+            if summary_text:
+                return (
+                    f"По {candidate_name} у меня сохранено такое summary: {summary_text}"
+                    if ru
+                    else f"For {candidate_name}, the saved summary is: {summary_text}"
+                )
+            if years is not None or skills:
+                parts = []
+                if years is not None:
+                    parts.append(f"{int(years)}+ лет опыта" if ru else f"{int(years)}+ years of experience")
+                if skills:
+                    parts.append(("скиллы " + ", ".join(skills)) if ru else ("skills " + ", ".join(skills)))
+                return (
+                    f"По {candidate_name} вижу: " + "; ".join(parts) + "."
+                    if ru
+                    else f"For {candidate_name}, I have: " + "; ".join(parts) + "."
+                )
+
+        if self._contains_any(lowered, ("stack", "tech", "skill", "skills", "стек", "технолог", "скилл")):
+            if skills:
+                return (
+                    f"По {candidate_name} в сохраненных данных вижу скиллы: " + ", ".join(skills) + "."
+                    if ru
+                    else f"For {candidate_name}, the saved skills are: " + ", ".join(skills) + "."
+                )
+            return (
+                "По этой карточке список скиллов отдельно не сохранен."
+                if ru
+                else "I do not have a separate skill list saved on this card."
+            )
+
+        if self._contains_any(lowered, ("budget", "salary", "comp", "rate", "зарплат", "ставк", "бюдж", "деньг")):
+            salary = self._candidate_salary_label(candidate)
+            if salary:
+                return (
+                    f"По {candidate_name} вижу ожидание по компенсации {salary}."
+                    if ru
+                    else f"For {candidate_name}, the saved compensation expectation is {salary}."
+                )
+            return (
+                "По этой карточке ожидание по компенсации не сохранено."
+                if ru
+                else "I do not have a saved compensation expectation on this card."
+            )
+
+        if self._contains_any(lowered, ("format", "remote", "hybrid", "office", "location", "city", "country", "формат", "локац", "город", "страна")):
+            if preferences:
+                return preferences
+            return (
+                "По локации и формату в этой карточке у меня только базовые поля."
+                if ru
+                else "For location and work format, I only have the basic saved fields on this card."
+            )
+
+        if self._contains_any(lowered, ("english", "англий")):
+            english_level = display_english_level(getattr(candidate, "english_level", None))
+            if english_level:
+                return (
+                    f"По {candidate_name} сохранен английский примерно на уровне {english_level}."
+                    if ru
+                    else f"For {candidate_name}, the saved English level is around {english_level}."
+                )
+            return (
+                "По этой карточке уровень английского отдельно не сохранен."
+                if ru
+                else "I do not have a saved English level on this card."
+            )
+
+        if self._contains_any(lowered, ("domain", "product", "домен", "продукт")):
+            domains = display_domains(getattr(candidate, "preferred_domains_json", None))
+            if domains:
+                return (
+                    f"По доменам у {candidate_name}: " + ", ".join(domains[:5]) + "."
+                    if ru
+                    else f"For domains, {candidate_name} prefers: " + ", ".join(domains[:5]) + "."
+                )
+            return (
+                "По этой карточке доменные предпочтения не указаны."
+                if ru
+                else "This card does not include explicit domain preferences."
+            )
+
+        if self._contains_any(lowered, ("process", "assessment", "take-home", "take home", "live coding", "процесс", "этап", "тестов", "таск", "лайвкод")):
+            if assessments:
+                return assessments
+            return (
+                "По assessment preferences у меня по этой карточке нет отдельных ограничений."
+                if ru
+                else "I do not have separate assessment-preference constraints on this card."
+            )
+
+        parts = []
+        if summary_text:
+            parts.append(
+                f"Summary: {summary_text}" if not ru else f"Summary: {summary_text}"
+            )
+        elif years is not None:
+            parts.append(f"{int(years)}+ лет опыта" if ru else f"{int(years)}+ years of experience")
+        if skills:
+            parts.append(
+                ("Скиллы: " + ", ".join(skills))
+                if ru
+                else ("Skills: " + ", ".join(skills))
+            )
+        if preferences:
+            parts.append(preferences.rstrip("."))
+        if assessments:
+            parts.append(assessments.rstrip("."))
+        if fit_reason:
+            parts.append(
+                ("Почему показан: " + fit_reason)
+                if ru
+                else ("Why it was shown: " + fit_reason)
+            )
+        if gap_context:
+            parts.append(
+                ("Tradeoff: " + gap_context)
+                if ru
+                else ("Tradeoff: " + gap_context)
+            )
+        if not parts:
+            return (
+                "По этой карточке у меня сейчас только базовые поля без дополнительных деталей."
+                if ru
+                else "On this card, I currently only have the basic saved fields without extra details."
+            )
+        return " ".join(parts)
 
     @classmethod
     def _match_reason_text(cls, match) -> str | None:
@@ -495,23 +1074,23 @@ class MatchingReviewService:
         fit_band = self._match_fit_band(batch[0]) if batch else None
         if fit_band == "medium":
             intro_text = (
-                f"I found {len(batch)} medium-fit candidate matches for {role_title}. "
-                "Strong-fit candidates are exhausted for now, so each card calls out the main gaps."
+                f"I found a medium-fit candidate for {role_title}. "
+                "The stronger options are exhausted for now, so I’m showing one current review card with the main gaps called out."
             )
         elif fit_band == "low":
             intro_text = (
-                f"I found {len(batch)} low-fit candidate matches for {role_title}. "
-                "Only review these if you want to stretch beyond the stronger options. Main gaps are called out in each card."
+                f"I found a low-fit candidate for {role_title}. "
+                "Only review this if you want to stretch beyond the stronger options. The main gaps are called out in the card."
             )
         elif fit_band == "not_fit":
             intro_text = (
-                f"I found {len(batch)} below-threshold candidate matches for {role_title}. "
-                "These do not meet the normal fit bar, so review only if you explicitly want broad stretch options."
+                f"I found a below-threshold candidate for {role_title}. "
+                "This does not meet the normal fit bar, so review it only if you explicitly want a broad stretch option."
             )
         else:
             intro_text = (
-                f"I found {len(batch)} strong-fit candidate matches for {role_title}. "
-                "Review the candidate cards below and use the buttons under each profile to connect or skip."
+                f"I found a strong-fit candidate for {role_title}. "
+                "Review the current candidate card and use Connect or Skip below."
             )
         entries = [
             {
@@ -535,8 +1114,8 @@ class MatchingReviewService:
         entries = [
             {
                 "text": self._copy(
-                    f"I found {len(batch)} matching roles for you. "
-                    "Review the vacancy cards below and use the buttons under each role to apply or skip."
+                    "I found a role worth reviewing for you. "
+                    "Review the current vacancy card and use Apply or Skip below."
                 )
             }
         ]
@@ -618,14 +1197,14 @@ class MatchingReviewService:
         current_batch = list(
             self.matches.list_pre_interview_review_for_vacancy(
                 vacancy_id,
-                limit=presentation_limit,
+                limit=1,
             )
         )
         preexisting_count = len(current_batch)
         current_batch_ids = {match.id for match in current_batch}
         newly_promoted: list = []
         promoted_count = 0
-        if len(current_batch) < presentation_limit:
+        if len(current_batch) < 1:
             shortlisted = self._sort_matches_for_manager_review(
                 self.matches.list_shortlisted_for_vacancy(
                     vacancy_id,
@@ -656,7 +1235,7 @@ class MatchingReviewService:
                 current_batch_ids.add(match.id)
                 newly_promoted.append(match)
                 promoted_count += 1
-                if len(current_batch) >= presentation_limit:
+                if len(current_batch) >= 1:
                     break
 
         if not current_batch:
@@ -668,7 +1247,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        if promoted_count == 0 and preexisting_count > 0:
+        if promoted_count == 0 and preexisting_count > 0 and not (force and trigger_type == "user_action"):
             return {
                 "status": "already_presented",
                 "vacancy_id": str(vacancy_id),
@@ -677,7 +1256,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        notification_batch = current_batch if preexisting_count == 0 else newly_promoted
+        notification_batch = current_batch if promoted_count == 0 else newly_promoted
         self.notifications.create(
             user_id=vacancy.manager_user_id,
             entity_type="vacancy",
@@ -703,7 +1282,7 @@ class MatchingReviewService:
         latest = self.matches.get_latest_pre_interview_review_for_manager(vacancy_ids)
         if latest is None:
             return 0
-        return len(self.matches.list_pre_interview_review_for_vacancy(latest.vacancy_id, limit=MATCH_BATCH_SIZE))
+        return len(self.matches.list_pre_interview_review_for_vacancy(latest.vacancy_id, limit=1))
 
     def dispatch_candidate_batch_for_profile(
         self,
@@ -748,14 +1327,14 @@ class MatchingReviewService:
         current_batch = list(
             self.matches.list_pre_interview_review_for_candidate(
                 candidate.id,
-                limit=presentation_limit,
+                limit=1,
             )
         )
         preexisting_count = len(current_batch)
         current_batch_ids = {match.id for match in current_batch}
         newly_promoted: list = []
         promoted_count = 0
-        if len(current_batch) < presentation_limit:
+        if len(current_batch) < 1:
             shortlisted = self.matches.list_shortlisted_for_candidate(
                 candidate.id,
                 limit=MATCH_BATCH_SIZE * 4,
@@ -778,7 +1357,7 @@ class MatchingReviewService:
                 current_batch_ids.add(match.id)
                 newly_promoted.append(match)
                 promoted_count += 1
-                if len(current_batch) >= presentation_limit:
+                if len(current_batch) >= 1:
                     break
 
         if not current_batch:
@@ -790,7 +1369,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        if promoted_count == 0 and preexisting_count > 0:
+        if promoted_count == 0 and preexisting_count > 0 and not (force and trigger_type == "user_action"):
             return {
                 "status": "already_presented",
                 "candidate_profile_id": str(candidate_profile_id),
@@ -799,7 +1378,7 @@ class MatchingReviewService:
                 "notified": False,
             }
 
-        notification_batch = current_batch if preexisting_count == 0 else newly_promoted
+        notification_batch = current_batch if promoted_count == 0 else newly_promoted
         self.notifications.create(
             user_id=candidate.user_id,
             entity_type="candidate_profile",
@@ -826,7 +1405,7 @@ class MatchingReviewService:
         latest = self.matches.get_latest_pre_interview_review_for_candidate(candidate.id)
         if latest is None:
             return 0
-        return len(self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=MATCH_BATCH_SIZE))
+        return len(self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=1))
 
     def execute_candidate_pre_interview_action(
         self,
@@ -844,10 +1423,10 @@ class MatchingReviewService:
         if candidate is None:
             return None
 
-        batch = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=MATCH_BATCH_SIZE)
+        batch = self.matches.list_pre_interview_review_for_candidate(candidate.id, limit=1)
         match = self.matches.get_by_id(match_id) if match_id else None
         if match is not None:
-            if not batch or all(vacancy_match.id != match.id for vacancy_match in batch):
+            if not batch or batch[0].id != match.id:
                 self.notifications.create(
                     user_id=user.id,
                     entity_type="candidate_profile",
@@ -855,13 +1434,13 @@ class MatchingReviewService:
                     template_key="candidate_vacancy_review_ready",
                     payload_json={
                         "text": self._copy(
-                            "That vacancy card is no longer active. Use the latest buttons under the current role cards in chat and I’ll keep the queue moving from there."
+                            "That vacancy card is no longer active. Use the latest buttons under the current role card in chat and I’ll keep the queue moving from there."
                         ),
                     },
                     allow_duplicate=True,
                 )
                 return CandidateVacancyActionResult(status="invalid_match")
-        elif not batch or vacancy_slot is None or vacancy_slot < 1 or vacancy_slot > len(batch):
+        elif not batch:
             self.notifications.create(
                 user_id=user.id,
                 entity_type="candidate_profile",
@@ -869,7 +1448,7 @@ class MatchingReviewService:
                 template_key="candidate_vacancy_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That option is out of date. Use the latest buttons under the current role cards in chat."
+                        "That vacancy card is no longer active. Use the latest buttons under the current role card in chat."
                     ),
                 },
                 allow_duplicate=True,
@@ -877,7 +1456,7 @@ class MatchingReviewService:
             return CandidateVacancyActionResult(status="invalid_slot")
 
         if match is None:
-            match = batch[vacancy_slot - 1]
+            match = batch[0]
         vacancy = self.vacancies.get_by_id(match.vacancy_id)
         if vacancy is None:
             return None
@@ -1013,7 +1592,7 @@ class MatchingReviewService:
                 template_key="candidate_vacancy_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That was the last role in your current batch. I’ll send the next ones as soon as matching produces them."
+                        "That was the last role in your current review queue. I’ll send the next one as soon as matching produces it."
                     ),
                 },
                 allow_duplicate=True,
@@ -1048,10 +1627,10 @@ class MatchingReviewService:
 
         batch = self.matches.list_pre_interview_review_for_vacancy(
             vacancy.id,
-            limit=MATCH_BATCH_SIZE,
+            limit=1,
         )
         if match is not None:
-            if not batch or all(candidate_match.id != match.id for candidate_match in batch):
+            if not batch or batch[0].id != match.id:
                 self.notifications.create(
                     user_id=user.id,
                     entity_type="vacancy",
@@ -1059,13 +1638,13 @@ class MatchingReviewService:
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
                         "text": self._copy(
-                            "That candidate card is no longer active. Use the latest buttons under the current candidate cards in chat and I’ll keep the queue moving from there."
+                            "That candidate card is no longer active. Use the latest buttons under the current candidate card in chat and I’ll keep the queue moving from there."
                         ),
                     },
                     allow_duplicate=True,
                 )
                 return ManagerPreInterviewActionResult(status="invalid_match")
-        elif not batch or candidate_slot is None or candidate_slot < 1 or candidate_slot > len(batch):
+        elif not batch:
             self.notifications.create(
                 user_id=user.id,
                 entity_type="vacancy",
@@ -1073,7 +1652,7 @@ class MatchingReviewService:
                 template_key="manager_pre_interview_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That option is out of date. Use the latest buttons under the current candidate cards in chat."
+                        "That candidate card is no longer active. Use the latest buttons under the current candidate card in chat."
                     ),
                 },
                 allow_duplicate=True,
@@ -1081,7 +1660,7 @@ class MatchingReviewService:
             return ManagerPreInterviewActionResult(status="invalid_slot")
 
         if match is None:
-            match = batch[candidate_slot - 1]
+            match = batch[0]
         candidate = self.candidates.get_by_id(match.candidate_profile_id)
         if candidate is None:
             return None
@@ -1252,7 +1831,7 @@ class MatchingReviewService:
                 template_key="manager_pre_interview_review_ready",
                 payload_json={
                     "text": self._copy(
-                        "That was the last candidate in the current review batch. I will send more as soon as matching produces them."
+                        "That was the last candidate in the current review queue. I will send the next one as soon as matching produces it."
                     ),
                 },
                 allow_duplicate=True,

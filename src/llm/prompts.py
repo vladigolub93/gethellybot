@@ -124,22 +124,23 @@ def pre_interview_review_decision_prompt(
 
 Valid outcomes:
 - help question or clarification
-- explicit connect-candidate intent for one numbered candidate
-- explicit skip-candidate intent for one numbered candidate
+- explicit connect-candidate intent for the current candidate card or one numbered candidate
+- explicit skip-candidate intent for the current candidate card or one numbered candidate
 - explicit update-vacancy intent
 - explicit feedback-about-bad-candidate-fit intent
 
 Rules:
+- if there is only one active candidate card in review, plain commands like `Connect`, `Approve`, `Interview`, or `Skip` refer to that current card
 - if the manager uses text instead of tapping buttons, they may still write things like `Connect 1`, `Approve 2`, `Interview 1`, or `Skip 3`
-- only propose `interview_candidate` when the manager is clearly approving that numbered candidate for the next step
-- only propose `skip_candidate` when the manager is clearly skipping that numbered candidate
+- only propose `interview_candidate` when the manager is clearly approving the current candidate card or that numbered candidate for the next step
+- only propose `skip_candidate` when the manager is clearly skipping the current candidate card or that numbered candidate
 - propose `update_vacancy_preferences` when the manager is clearly changing budget, format, city, countries, English, hiring stages, assessment requirements, project description, or stack after reviewing candidates
 - if the manager is clearly updating the vacancy, include the original update request in `answer_text`
 - propose `record_vacancy_feedback` when the manager is clearly explaining why these candidates keep missing but does not give a concrete vacancy update yet
 - if the manager is clearly giving qualitative feedback, include that feedback in `answer_text`
 - treat questions like "why did you show this candidate?", "what are the current vacancy settings?", and "what do you have saved for this role?" as help
 - treat complaints like "these profiles are not right" or "I keep skipping these candidates" as help unless the manager also gives a concrete vacancy change
-- extract the numbered candidate slot into `candidate_slot`
+- extract the numbered candidate slot into `candidate_slot` when a slot is explicitly given
 - treat questions like "what does this mean?", "why was candidate 1 selected?", and "what happens after connect?" as help
 - do not invent a slot number if the manager did not specify one
 - do not transition stages yourself
@@ -416,22 +417,23 @@ def candidate_vacancy_review_decision_prompt(
 
 Valid outcomes:
 - help question or clarification
-- explicit apply intent for one numbered vacancy
-- explicit skip intent for one numbered vacancy
+- explicit apply intent for the current vacancy card or one numbered vacancy
+- explicit skip intent for the current vacancy card or one numbered vacancy
 - explicit update-preferences intent
 - explicit feedback-about-bad-matches intent
 
 Rules:
+- if there is only one active vacancy card in review, plain commands like `Apply`, `Connect`, or `Skip` refer to that current card
 - if the candidate uses text instead of tapping buttons, they may still write things like `Apply 1`, `Connect 1`, `Skip 2`, or `Apply vacancy 3`
-- only propose `apply_to_vacancy` when the candidate is clearly applying to or connecting with that numbered vacancy
-- only propose `skip_vacancy` when the candidate is clearly skipping that numbered vacancy
+- only propose `apply_to_vacancy` when the candidate is clearly applying to or connecting with the current vacancy card or that numbered vacancy
+- only propose `skip_vacancy` when the candidate is clearly skipping the current vacancy card or that numbered vacancy
 - propose `update_matching_preferences` when the candidate is clearly changing salary, work format, location, English, domain preferences, or assessment preferences after reviewing roles
 - if the candidate is clearly updating preferences, include the original update request in `answer_text`
 - propose `record_matching_feedback` when the candidate is clearly explaining why these roles keep missing but does not give a concrete new preference yet
 - if the candidate is clearly giving qualitative feedback, include that feedback in `answer_text`
 - treat questions like "why did you show this?", "what do you have saved for me?", and "what are my current preferences?" as help
 - treat complaints like "these roles are not right for me" or "I keep skipping these" as help unless the candidate also gives a concrete change to saved preferences
-- extract the numbered vacancy slot into `vacancy_slot`
+- extract the numbered vacancy slot into `vacancy_slot` when a slot is explicitly given
 - treat questions like "what does this mean?", "what happens after I apply?", "what happens after I connect?", and "how does this work?" as help
 - do not invent a slot number if the candidate did not specify one
 - do not transition stages yourself

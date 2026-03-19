@@ -397,6 +397,27 @@ class TelegramUpdateService:
             return None
         return []
 
+    def _handle_candidate_single_card_text_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+    ) -> List[str] | None:
+        command = normalize_command_text(latest_user_message or "")
+        if command not in {"apply", "connect", "apply vacancy", "connect vacancy", "skip", "skip vacancy"}:
+            return None
+        action = "skip_vacancy" if command.startswith("skip") else "apply_to_vacancy"
+        result = self.matching_review_service.execute_candidate_pre_interview_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=action,
+            vacancy_slot=None,
+        )
+        if result is None:
+            return None
+        return []
+
     def _handle_manager_delete_stage_action(
         self,
         *,
@@ -528,6 +549,36 @@ class TelegramUpdateService:
             raw_message_id=raw_message_id,
             action=stage_result.proposed_action,
             candidate_slot=(stage_result.structured_payload or {}).get("candidate_slot"),
+        )
+        if result is None:
+            return None
+        return []
+
+    def _handle_manager_single_card_text_action(
+        self,
+        *,
+        user,
+        raw_message_id,
+        latest_user_message: str,
+    ) -> List[str] | None:
+        command = normalize_command_text(latest_user_message or "")
+        if command not in {
+            "connect",
+            "approve",
+            "interview",
+            "connect candidate",
+            "approve candidate",
+            "interview candidate",
+            "skip",
+            "skip candidate",
+        }:
+            return None
+        action = "skip_candidate" if command.startswith("skip") else "interview_candidate"
+        result = self.matching_review_service.execute_manager_pre_interview_action(
+            user=user,
+            raw_message_id=raw_message_id,
+            action=action,
+            candidate_slot=None,
         )
         if result is None:
             return None
@@ -1287,6 +1338,26 @@ class TelegramUpdateService:
         if templates is not None:
             return templates
         if stage_result is not None and stage_result.stage == "VACANCY_REVIEW":
+            direct_action_templates = self._handle_candidate_single_card_text_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                latest_user_message=latest_user_message,
+            )
+            if direct_action_templates is not None:
+                return direct_action_templates
+            review_answer = self.matching_review_service.answer_candidate_review_question(
+                user=user,
+                question_text=latest_user_message,
+            )
+            if review_answer:
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key="candidate_vacancy_review_ready",
+                        text=review_answer,
+                        allow_duplicate=True,
+                    )
+                ]
             assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=latest_user_message,
@@ -1525,6 +1596,26 @@ class TelegramUpdateService:
         if templates is not None:
             return templates
         if stage_result is not None and stage_result.stage == "PRE_INTERVIEW_REVIEW":
+            direct_action_templates = self._handle_manager_single_card_text_action(
+                user=user,
+                raw_message_id=raw_message_id,
+                latest_user_message=latest_user_message,
+            )
+            if direct_action_templates is not None:
+                return direct_action_templates
+            review_answer = self.matching_review_service.answer_manager_review_question(
+                user=user,
+                question_text=latest_user_message,
+            )
+            if review_answer:
+                return [
+                    self._notify_result(
+                        user_id=user.id,
+                        template_key="manager_pre_interview_review_ready",
+                        text=review_answer,
+                        allow_duplicate=True,
+                    )
+                ]
             assistance_templates = self._maybe_handle_graph_help(
                 user=user,
                 latest_user_message=latest_user_message,

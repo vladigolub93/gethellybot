@@ -3287,7 +3287,7 @@ def safe_candidate_vacancy_review_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Review the current vacancy cards and use the Apply or Skip buttons under each role.",
+        or "Review the current vacancy card and use Apply or Skip under that role.",
         "proposed_action": None,
         "answer_text": None,
         "vacancy_slot": None,
@@ -3297,7 +3297,29 @@ def safe_candidate_vacancy_review_decision(
     }
 
     match = re.search(r"\b(apply|connect|skip)(?:\s+vacancy)?\s+(\d+)\b", command)
-    if match is not None:
+    if command in {"apply", "connect", "apply vacancy", "connect vacancy"}:
+        payload.update(
+            {
+                "intent": "apply_to_vacancy",
+                "response_text": "Understood. I will move forward with the current vacancy.",
+                "proposed_action": "apply_to_vacancy",
+                "vacancy_slot": None,
+                "needs_follow_up": False,
+                "reason_code": "candidate_vacancy_review_apply_current_vacancy",
+            }
+        )
+    elif command in {"skip", "skip vacancy"}:
+        payload.update(
+            {
+                "intent": "skip_vacancy",
+                "response_text": "Understood. I will skip the current vacancy.",
+                "proposed_action": "skip_vacancy",
+                "vacancy_slot": None,
+                "needs_follow_up": False,
+                "reason_code": "candidate_vacancy_review_skip_current_vacancy",
+            }
+        )
+    elif match is not None:
         verb = match.group(1)
         slot = int(match.group(2))
         if verb in {"apply", "connect"}:
@@ -3323,11 +3345,11 @@ def safe_candidate_vacancy_review_decision(
                 }
             )
     elif any(
-        token in lowered
-        for token in [
-            "what does this mean",
-            "how does this work",
-            "what happens after",
+                token in lowered
+                for token in [
+                    "what does this mean",
+                    "how does this work",
+                    "what happens after",
             "what if i apply",
             "what if i skip",
             "explain",
@@ -3338,7 +3360,7 @@ def safe_candidate_vacancy_review_decision(
             {
                 "intent": "help",
                 "response_text": current_step_guidance
-                or "Review the current vacancy cards and use the Apply or Skip buttons under each role.",
+                or "Review the current vacancy card and use Apply or Skip under that role.",
                 "needs_follow_up": True,
                 "reason_code": "candidate_vacancy_review_help_question",
             }
@@ -3619,7 +3641,7 @@ def safe_pre_interview_review_decision(
     payload = {
         "intent": "help",
         "response_text": current_step_guidance
-        or "Review the current candidate cards and use the Connect or Skip buttons under each profile.",
+        or "Review the current candidate card and use Connect or Skip under that profile.",
         "proposed_action": None,
         "answer_text": None,
         "candidate_slot": None,
@@ -3629,7 +3651,36 @@ def safe_pre_interview_review_decision(
     }
 
     match = re.search(r"\b(connect|approve|interview|skip)(?:\s+candidate)?\s+(\d+)\b", command)
-    if match is not None:
+    if command in {
+        "connect",
+        "approve",
+        "interview",
+        "connect candidate",
+        "approve candidate",
+        "interview candidate",
+    }:
+        payload.update(
+            {
+                "intent": "interview_candidate",
+                "response_text": "Understood. I will approve the current candidate for the next step.",
+                "proposed_action": "interview_candidate",
+                "candidate_slot": None,
+                "needs_follow_up": False,
+                "reason_code": "pre_interview_review_connect_current_candidate",
+            }
+        )
+    elif command in {"skip", "skip candidate"}:
+        payload.update(
+            {
+                "intent": "skip_candidate",
+                "response_text": "Understood. I will skip the current candidate.",
+                "proposed_action": "skip_candidate",
+                "candidate_slot": None,
+                "needs_follow_up": False,
+                "reason_code": "pre_interview_review_skip_current_candidate",
+            }
+        )
+    elif match is not None:
         verb = match.group(1)
         slot = int(match.group(2))
         if verb in {"connect", "approve", "interview"}:
@@ -3670,7 +3721,7 @@ def safe_pre_interview_review_decision(
             {
                 "intent": "help",
                 "response_text": current_step_guidance
-                or "Review the current candidate cards and use the Interview or Skip buttons under each profile.",
+                or "Review the current candidate card and use Connect or Skip under that profile.",
                 "needs_follow_up": True,
                 "reason_code": "pre_interview_review_help_question",
             }
