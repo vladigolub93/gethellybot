@@ -150,7 +150,106 @@ class MatchingReviewService:
             ),
         )
 
-    def _candidate_label(self, candidate_profile) -> str:
+    @staticmethod
+    def _strip_name_candidate(value: str | None) -> str | None:
+        normalized = " ".join(str(value or "").split()).strip(" ,.-")
+        return normalized or None
+
+    @classmethod
+    def _looks_like_person_name(cls, value: str | None) -> bool:
+        normalized = cls._strip_name_candidate(value)
+        if not normalized:
+            return False
+        words = normalized.split()
+        if len(words) < 2 or len(words) > 4:
+            return False
+        if any(any(ch.isdigit() for ch in word) for word in words):
+            return False
+        banned = {
+            "senior",
+            "junior",
+            "middle",
+            "lead",
+            "principal",
+            "backend",
+            "frontend",
+            "full-stack",
+            "fullstack",
+            "engineer",
+            "developer",
+            "architect",
+            "python",
+            "javascript",
+            "typescript",
+            "node",
+            "node.js",
+            "react",
+            "nest",
+            "nest.js",
+            "express",
+            "remote",
+            "ukraine",
+        }
+        lowered = {word.lower().strip(" ,.-") for word in words}
+        if lowered & banned:
+            return False
+        return all(word[:1].isupper() for word in words if word[:1])
+
+    @classmethod
+    def _extract_candidate_name_from_summary_text(cls, value: str | None) -> str | None:
+        normalized = " ".join(str(value or "").split()).strip()
+        if not normalized:
+            return None
+        match = re.match(
+            r"^You are (?P<name>[A-ZА-ЯЁІЇЄҐ][A-Za-zА-Яа-яЁёІіЇїЄєҐґ'’.-]*(?: [A-ZА-ЯЁІЇЄҐ][A-Za-zА-Яа-яЁёІіЇїЄєҐґ'’.-]*){0,3})(?:,|\s+(?:a|an)\b)",
+            normalized,
+        )
+        if match is None:
+            return None
+        candidate_name = cls._strip_name_candidate(match.group("name"))
+        if cls._looks_like_person_name(candidate_name):
+            return candidate_name
+        return None
+
+    @classmethod
+    def _extract_candidate_name_from_source_text(cls, value: str | None) -> str | None:
+        text = str(value or "")
+        if not text:
+            return None
+        for raw_line in text.splitlines()[:6]:
+            line = cls._strip_name_candidate(raw_line)
+            if cls._looks_like_person_name(line):
+                return line
+        return None
+
+    @classmethod
+    def _candidate_resume_name(cls, candidate_version) -> str | None:
+        if candidate_version is None:
+            return None
+        summary_json = getattr(candidate_version, "summary_json", None) or {}
+        for value in (
+            summary_json.get("approval_summary_text"),
+            summary_json.get("headline"),
+            summary_json.get("experience_excerpt"),
+        ):
+            extracted = cls._extract_candidate_name_from_summary_text(value)
+            if extracted:
+                return extracted
+            if cls._looks_like_person_name(value):
+                return cls._strip_name_candidate(value)
+        for value in (
+            getattr(candidate_version, "extracted_text", None),
+            getattr(candidate_version, "transcript_text", None),
+        ):
+            extracted = cls._extract_candidate_name_from_source_text(value)
+            if extracted:
+                return extracted
+        return None
+
+    def _candidate_label(self, candidate_profile, *, candidate_version=None) -> str:
+        resume_name = self._candidate_resume_name(candidate_version)
+        if resume_name:
+            return resume_name
         candidate_user = self.users.get_by_id(candidate_profile.user_id)
         if candidate_user is None:
             return "Candidate"
@@ -1073,14 +1172,11 @@ class MatchingReviewService:
         if context is None:
             return None
         vacancy, match, candidate, candidate_version = context
-        candidate_user = self.users.get_by_id(getattr(candidate, "user_id", None))
         ru = self._has_cyrillic(question_text)
         lowered = (question_text or "").lower()
-        candidate_name = (
-            getattr(candidate_user, "display_name", None)
-            or getattr(candidate_user, "username", None)
-            or ("кандидат" if ru else "the candidate")
-        )
+        candidate_name = self._candidate_label(candidate, candidate_version=candidate_version)
+        if not candidate_name:
+            candidate_name = "кандидат" if ru else "the candidate"
         summary_json = getattr(candidate_version, "summary_json", None) or {}
         summary_text = self._truncate_text(summary_json.get("approval_summary_text") or summary_json.get("headline"), limit=240)
         source_excerpt = self._truncate_text(getattr(candidate_version, "extracted_text", None), limit=420)
@@ -1401,11 +1497,7 @@ class MatchingReviewService:
         candidate_version = self.candidates.get_version_by_id(match.candidate_profile_version_id)
         summary = (candidate_version.summary_json or {}) if candidate_version else {}
         role_title = getattr(vacancy, "role_title", None) or "this role"
-        candidate_name = (
-            getattr(candidate_user, "display_name", None)
-            or getattr(candidate_user, "username", None)
-            or "a candidate"
-        )
+        candidate_name = self._candidate_label(candidate, candidate_version=candidate_version) or "a candidate"
         approval_summary = self._truncate_text(summary.get("approval_summary_text"), limit=190)
         match_reason = self._match_reason_text(match)
         fit_band = fit_band_label(self._match_fit_band(match)) or "Relevant fit"
@@ -1604,11 +1696,11 @@ class MatchingReviewService:
         return f"{slot_no}.\n{body}"
 
     @staticmethod
-    def _build_counterparty_payload(user) -> dict:
+    def _build_counterparty_payload(user, *, preferred_name: str | None = None) -> dict:
         if user is None:
             return {}
         payload = {
-            "name": getattr(user, "display_name", None),
+            "name": preferred_name or getattr(user, "display_name", None),
             "username": getattr(user, "username", None),
             "phone_number": getattr(user, "phone_number", None),
         }
@@ -1621,6 +1713,7 @@ class MatchingReviewService:
         candidate_user,
         manager_user,
         vacancy,
+        candidate_name: str | None = None,
         candidate_text: str,
         manager_text: str,
     ) -> None:
@@ -1648,7 +1741,7 @@ class MatchingReviewService:
             template_key="manager_candidate_approved",
             payload_json={
                 "text": manager_text,
-                "counterparty": self._build_counterparty_payload(candidate_user),
+                "counterparty": self._build_counterparty_payload(candidate_user, preferred_name=candidate_name),
                 "reply_to_match_id": str(match.id),
             },
         )
@@ -2058,6 +2151,10 @@ class MatchingReviewService:
         role_title = getattr(vacancy, "role_title", None) or "this role"
         manager_user = self.users.get_by_id(getattr(vacancy, "manager_user_id", None))
         candidate_user = self.users.get_by_id(getattr(candidate, "user_id", None))
+        candidate_version = self.candidates.get_version_by_id(getattr(match, "candidate_profile_version_id", None))
+        if candidate_version is None:
+            candidate_version = self.candidates.get_current_version(candidate)
+        candidate_name = self._candidate_label(candidate, candidate_version=candidate_version) or "The candidate"
         shared_contacts = False
 
         if action == "apply_to_vacancy":
@@ -2078,11 +2175,12 @@ class MatchingReviewService:
                     candidate_user=candidate_user,
                     manager_user=manager_user,
                     vacancy=vacancy,
+                    candidate_name=candidate_name,
                     candidate_text=self._copy(
                         f"You and the hiring manager both approved {role_title}. Here is the manager contact for the next step."
                     ),
                     manager_text=self._copy(
-                        f"{candidate_user.display_name if candidate_user and getattr(candidate_user, 'display_name', None) else 'The candidate'} accepted the connection for {role_title}. Here is the candidate contact for the next step."
+                        f"{candidate_name} accepted the connection for {role_title}. Here is the candidate contact for the next step."
                     ),
                 )
                 status = "approved"
@@ -2147,7 +2245,7 @@ class MatchingReviewService:
                     template_key="manager_pre_interview_review_ready",
                     payload_json={
                         "text": self._copy(
-                            f"{candidate_user.display_name if candidate_user and getattr(candidate_user, 'display_name', None) else 'The candidate'} skipped the approved opportunity for {role_title}."
+                            f"{candidate_name} skipped the approved opportunity for {role_title}."
                         ),
                     },
                     allow_duplicate=True,
@@ -2260,7 +2358,10 @@ class MatchingReviewService:
         if candidate is None:
             return None
 
-        candidate_name = self._candidate_label(candidate)
+        candidate_version = self.candidates.get_version_by_id(getattr(match, "candidate_profile_version_id", None))
+        if candidate_version is None:
+            candidate_version = self.candidates.get_current_version(candidate)
+        candidate_name = self._candidate_label(candidate, candidate_version=candidate_version)
         previous_status = getattr(match, "status", None)
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
         candidate_user = self.users.get_by_id(candidate.user_id)
@@ -2300,6 +2401,7 @@ class MatchingReviewService:
                     candidate_user=candidate_user,
                     manager_user=manager_user,
                     vacancy=vacancy,
+                    candidate_name=candidate_name,
                     candidate_text=self._copy(
                         f"You and the hiring manager both approved {role_title}. Here is the manager contact for the next step."
                     ),

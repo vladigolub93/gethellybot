@@ -260,6 +260,54 @@ def test_dispatch_manager_batch_for_vacancy_promotes_shortlisted_and_notifies() 
     assert notification.payload_json["message_entries"][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"] == "mgr_pre:int:match-1"
 
 
+def test_dispatch_manager_batch_prefers_candidate_name_from_resume_over_telegram_name() -> None:
+    vacancy = SimpleNamespace(id="vacancy-name-1", manager_user_id="manager-name-1", role_title="Senior Backend Engineer")
+    candidate = SimpleNamespace(id="candidate-name-1", user_id="candidate-user-name-1")
+    match = SimpleNamespace(
+        id="match-name-1",
+        vacancy_id=vacancy.id,
+        candidate_profile_id=candidate.id,
+        candidate_profile_version_id="cpv-name-1",
+        status="shortlisted",
+        rationale_json={"fit_band": "strong", "gap_signals": []},
+    )
+
+    service = MatchingReviewService(FakeSession())
+    service.candidates = FakeCandidateRepository(
+        candidate_by_id={candidate.id: candidate},
+        versions={
+            "cpv-name-1": SimpleNamespace(
+                summary_json={
+                    "approval_summary_text": "You are Andrii Derkach, a Senior Full-Stack Engineer with strong backend depth."
+                }
+            )
+        },
+    )
+    service.verifications = FakeVerificationRepository()
+    service.matches = FakeMatchingRepository(shortlisted_for_vacancy=[match])
+    service.notifications = FakeNotificationsRepository()
+    service.evaluations = FakeEvaluationsRepository()
+    service.users = FakeUsersRepository(
+        {
+            candidate.user_id: SimpleNamespace(id=candidate.user_id, display_name="xXdarklordXx"),
+            vacancy.manager_user_id: SimpleNamespace(id=vacancy.manager_user_id, display_name="Manager"),
+        }
+    )
+    service.vacancies = FakeVacanciesRepository(
+        vacancies={vacancy.id: vacancy},
+        manager_vacancies={vacancy.manager_user_id: [vacancy]},
+    )
+    service.messaging = FakeMessagingService()
+    service.state_service = FakeStateService(service.matches)
+
+    result = service.dispatch_manager_batch_for_vacancy(vacancy_id=vacancy.id, force=False, trigger_type="job")
+
+    assert result["status"] == "dispatched"
+    body = service.notifications.rows[0].payload_json["message_entries"][1]["text"]
+    assert "Andrii Derkach" in body
+    assert "xXdarklordXx" not in body
+
+
 def test_dispatch_candidate_batch_for_profile_promotes_shortlisted_and_notifies() -> None:
     candidate = SimpleNamespace(id="candidate-2", user_id="candidate-user-2")
     vacancy = SimpleNamespace(
@@ -2151,7 +2199,13 @@ def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_c
     service = MatchingReviewService(FakeSession())
     service.candidates = FakeCandidateRepository(
         candidate_by_id={candidate.id: candidate},
-        versions={"cpv-connect": SimpleNamespace(summary_json={})},
+        versions={
+            "cpv-connect": SimpleNamespace(
+                summary_json={
+                    "approval_summary_text": "You are Milana Trofimova, a Senior Backend Engineer with strong product backend experience."
+                }
+            )
+        },
     )
     service.verifications = FakeVerificationRepository()
     service.evaluations = FakeEvaluationsRepository()
@@ -2161,7 +2215,7 @@ def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_c
         {
             candidate.user_id: SimpleNamespace(
                 id=candidate.user_id,
-                display_name="Applied Candidate",
+                display_name="weird_telegram_name",
                 username="applied_candidate",
                 phone_number="+380222222222",
             ),
@@ -2191,6 +2245,8 @@ def test_execute_manager_pre_interview_action_shares_contacts_immediately_when_c
     assert service.notifications.rows[1].template_key == "manager_candidate_approved"
     assert service.notifications.rows[0].payload_json["reply_to_match_id"] == str(match.id)
     assert service.notifications.rows[1].payload_json["reply_to_match_id"] == str(match.id)
+    assert service.notifications.rows[1].payload_json["counterparty"]["name"] == "Milana Trofimova"
+    assert "Milana Trofimova" in service.notifications.rows[1].payload_json["text"]
 
 
 def test_execute_candidate_pre_interview_action_shares_contacts_immediately_when_manager_already_approved() -> None:
