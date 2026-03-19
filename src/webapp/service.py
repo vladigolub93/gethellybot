@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -360,6 +361,115 @@ class WebAppService:
         return getattr(user, "display_name", None) or getattr(user, "username", None) or fallback_display_name
 
     @staticmethod
+    def _strip_candidate_name(value: Any) -> Optional[str]:
+        normalized = " ".join(str(value or "").split()).strip(" ,.-")
+        return normalized or None
+
+    @classmethod
+    def _looks_like_person_name(cls, value: Any) -> bool:
+        normalized = cls._strip_candidate_name(value)
+        if not normalized:
+            return False
+        words = normalized.split()
+        if len(words) < 2 or len(words) > 4:
+            return False
+        if any(any(ch.isdigit() for ch in word) for word in words):
+            return False
+        banned = {
+            "senior",
+            "junior",
+            "middle",
+            "lead",
+            "principal",
+            "backend",
+            "frontend",
+            "full-stack",
+            "fullstack",
+            "engineer",
+            "developer",
+            "architect",
+            "python",
+            "javascript",
+            "typescript",
+            "node",
+            "node.js",
+            "react",
+            "nest",
+            "nest.js",
+            "express",
+            "remote",
+            "ukraine",
+        }
+        lowered = {word.lower().strip(" ,.-") for word in words}
+        if lowered & banned:
+            return False
+        return all(word[:1].isupper() for word in words if word[:1])
+
+    @classmethod
+    def _extract_candidate_name_from_summary_text(cls, value: Any) -> Optional[str]:
+        normalized = " ".join(str(value or "").split()).strip()
+        if not normalized:
+            return None
+        match = re.match(
+            r"^You are (?P<name>[A-ZА-ЯЁІЇЄҐ][A-Za-zА-Яа-яЁёІіЇїЄєҐґ'’.-]*(?: [A-ZА-ЯЁІЇЄҐ][A-Za-zА-Яа-яЁёІіЇїЄєҐґ'’.-]*){0,3})(?:,|\s+(?:a|an)\b)",
+            normalized,
+        )
+        if match is None:
+            return None
+        candidate_name = cls._strip_candidate_name(match.group("name"))
+        if cls._looks_like_person_name(candidate_name):
+            return candidate_name
+        return None
+
+    @classmethod
+    def _extract_candidate_name_from_source_text(cls, value: Any) -> Optional[str]:
+        text = str(value or "")
+        if not text:
+            return None
+        for raw_line in text.splitlines()[:6]:
+            line = cls._strip_candidate_name(raw_line)
+            if cls._looks_like_person_name(line):
+                return line
+        return None
+
+    @classmethod
+    def _candidate_resume_name(cls, candidate_version: Any) -> Optional[str]:
+        if candidate_version is None:
+            return None
+        summary_json = getattr(candidate_version, "summary_json", None) or {}
+        for value in (
+            summary_json.get("approval_summary_text"),
+            summary_json.get("headline"),
+            summary_json.get("experience_excerpt"),
+        ):
+            extracted = cls._extract_candidate_name_from_summary_text(value)
+            if extracted:
+                return extracted
+            if cls._looks_like_person_name(value):
+                return cls._strip_candidate_name(value)
+        for value in (
+            getattr(candidate_version, "extracted_text", None),
+            getattr(candidate_version, "transcript_text", None),
+        ):
+            extracted = cls._extract_candidate_name_from_source_text(value)
+            if extracted:
+                return extracted
+        return None
+
+    @classmethod
+    def _candidate_display_name(
+        cls,
+        candidate_user: Optional[User],
+        candidate_version: Any,
+        fallback_display_name: Optional[str],
+    ) -> Optional[str]:
+        return (
+            cls._candidate_resume_name(candidate_version)
+            or cls._display_name(candidate_user, fallback_display_name)
+            or fallback_display_name
+        )
+
+    @staticmethod
     def _extract_bearer_token(authorization_header: str) -> str:
         if not authorization_header or not authorization_header.startswith("Bearer "):
             raise HTTPException(
@@ -483,7 +593,7 @@ class WebAppService:
             "summary": summary,
         }
         if include_identity:
-            response["name"] = self._display_name(candidate_user, "Candidate")
+            response["name"] = self._candidate_display_name(candidate_user, current_version, "Candidate")
         return response
 
     def _serialize_candidate_opportunity_card(self, match) -> Dict[str, Any]:
@@ -592,7 +702,7 @@ class WebAppService:
         return {
             "id": str(match.id),
             "candidateProfileId": str(match.candidate_profile_id),
-            "candidateName": self._display_name(candidate_user, "Candidate"),
+            "candidateName": self._candidate_display_name(candidate_user, candidate_version, "Candidate"),
             "location": getattr(profile, "location_text", None),
             "salaryExpectation": format_money_range(
                 getattr(profile, "salary_min", None),
@@ -657,7 +767,7 @@ class WebAppService:
             if candidate_profile is not None
             else {
                 "profileId": None,
-                "name": self._display_name(candidate_user, "Candidate"),
+                "name": self._candidate_display_name(candidate_user, candidate_version, "Candidate"),
                 "location": None,
                 "countryCode": None,
                 "city": None,

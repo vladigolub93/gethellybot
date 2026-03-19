@@ -265,7 +265,7 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
         ),
         version=SimpleNamespace(
             source_type="cv_file",
-            extracted_text="Senior backend engineer with Node.js and PostgreSQL background.",
+            extracted_text="Andrii Derkach\nSenior backend engineer with Node.js and PostgreSQL background.",
             transcript_text=None,
             summary_json={
                 "headline": "Senior Backend Engineer",
@@ -280,7 +280,7 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
         {
             str(user_id): SimpleNamespace(
                 id=user_id,
-                display_name="Candidate Name",
+                display_name="trash_telegram_name",
                 username="candidate_name",
             )
         }
@@ -293,7 +293,7 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
         )
     )
 
-    assert payload["profile"]["name"] == "Candidate Name"
+    assert payload["profile"]["name"] == "Andrii Derkach"
     assert payload["profile"]["summary"]["approvalSummaryText"] == "Built scalable backend products."
     assert payload["profile"]["fullHardSkills"] == ["Node.js", "PostgreSQL"]
     assert payload["profile"]["answers"] == {
@@ -309,7 +309,7 @@ def test_candidate_profile_detail_includes_summary_answers_and_source_text() -> 
         "showLiveCodingRoles": False,
     }
     assert payload["profile"]["source"]["sourceType"] == "cv_file"
-    assert payload["profile"]["source"]["text"] == "Senior backend engineer with Node.js and PostgreSQL background."
+    assert payload["profile"]["source"]["text"] == "Andrii Derkach\nSenior backend engineer with Node.js and PostgreSQL background."
 
 
 def test_candidate_opportunity_detail_includes_why_this_role() -> None:
@@ -698,7 +698,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             extracted_text="Built scalable Node.js backends for product teams.",
             transcript_text=None,
             summary_json={
-                "approval_summary_text": "Built scalable Node.js backends.",
+                "approval_summary_text": "You are Milana Trofimova, a Senior Backend Engineer who built scalable Node.js backends.",
                 "skills": ["Node.js", "TypeScript"],
             }
         ),
@@ -712,7 +712,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             ),
             str(candidate_user_id): SimpleNamespace(
                 id=candidate_user_id,
-                display_name="Candidate Name",
+                display_name="weird_candidate_handle",
                 username="candidate_name",
             ),
         }
@@ -744,7 +744,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
         {
             "id": str(match_id),
             "candidateProfileId": str(profile_id),
-            "candidateName": "Candidate Name",
+            "candidateName": "Milana Trofimova",
             "location": "Kyiv",
             "salaryExpectation": "5000-6000 USD per month",
             "workFormat": "remote",
@@ -757,7 +757,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
             "needsAction": False,
             "summary": {
                 "headline": None,
-                "approvalSummaryText": "Built scalable Node.js backends.",
+                "approvalSummaryText": "You are Milana Trofimova, a Senior Backend Engineer who built scalable Node.js backends.",
                 "skills": ["Node.js", "TypeScript"],
                 "yearsExperience": None,
                 "targetRole": None,
@@ -773,6 +773,7 @@ def test_manager_webapp_payloads_follow_direct_contact_flow() -> None:
     assert match_detail_payload["match"]["statusDescription"] == "Contacts were shared and this candidate moved into direct communication."
     assert match_detail_payload["match"]["needsCandidateAction"] is False
     assert match_detail_payload["match"]["needsManagerAction"] is False
+    assert match_detail_payload["candidate"]["name"] == "Milana Trofimova"
     assert match_detail_payload["vacancy"]["whyThisRole"] == (
         "Your profile overlaps with this role on Node.js. "
         "It also matches your preferred work setup: remote."
