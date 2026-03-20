@@ -355,6 +355,7 @@ class AdminService:
             self.users.set_blocked(user, blocked=True, reason=reason)
             cancelled_notifications += self._cancel_pending_notifications_for_user(user.id)
             updated.append(str(user.id))
+        self.session.commit()
         return {
             "status": "ok",
             "updatedUserIds": updated,
@@ -376,6 +377,7 @@ class AdminService:
                 continue
             self.users.set_blocked(user, blocked=False)
             updated.append(str(user.id))
+        self.session.commit()
         return {
             "status": "ok",
             "updatedUserIds": updated,
@@ -445,6 +447,7 @@ class AdminService:
                 allow_duplicate=True,
             )
             created.append(str(notification.id))
+        self.session.commit()
         return {
             "status": "ok",
             "notificationIds": created,
@@ -766,6 +769,7 @@ class AdminService:
 
         plan = self._build_delete_plan(user_id=target_user_id)
         summary = self._delete_user_with_plan(user_id=target_user_id, plan=plan)
+        self.session.commit()
         return {
             "status": "ok",
             "userId": str(target_user_id),
