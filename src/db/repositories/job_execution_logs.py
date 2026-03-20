@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from uuid import UUID as PyUUID
 
 from sqlalchemy import not_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -93,6 +94,24 @@ class JobExecutionLogsRepository:
         self.session.flush()
         return row
 
+    def enqueue_returning_id(
+        self,
+        *,
+        job_type: str,
+        idempotency_key: str,
+        payload_json: dict,
+        entity_type: Optional[str] = None,
+        entity_id=None,
+    ) -> PyUUID:
+        row = self.enqueue(
+            job_type=job_type,
+            idempotency_key=idempotency_key,
+            payload_json=payload_json,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+        return row.id
+
     def claim_by_id_if_queued(self, job_id) -> Optional[JobExecutionLog]:
         stmt = (
             select(JobExecutionLog)
@@ -113,6 +132,12 @@ class JobExecutionLogsRepository:
             .with_for_update(skip_locked=True)
         )
         return self.session.execute(stmt).scalar_one_or_none()
+
+    def claim_next_queued_prefer_non_notification(self) -> Optional[JobExecutionLog]:
+        job = self.claim_next_queued_non_notification()
+        if job is not None:
+            return job
+        return self.claim_next_queued()
 
     def claim_next_queued_non_notification(self) -> Optional[JobExecutionLog]:
         stmt = (

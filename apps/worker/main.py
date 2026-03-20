@@ -13,7 +13,7 @@ def process_once() -> bool:
     session = session_factory()
     try:
         repo = JobExecutionLogsRepository(session)
-        job = repo.claim_next_queued()
+        job = repo.claim_next_queued_prefer_non_notification()
         if job is None:
             session.commit()
             return False

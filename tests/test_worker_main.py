@@ -25,8 +25,10 @@ class FakeJobRepo:
     def __init__(self, job) -> None:
         self.job = job
         self.failed = []
+        self.claim_prefer_non_notification_calls = 0
 
-    def claim_next_queued(self):
+    def claim_next_queued_prefer_non_notification(self):
+        self.claim_prefer_non_notification_calls += 1
         return self.job
 
     def mark_started(self, _job):
@@ -77,6 +79,7 @@ def test_process_once_sends_error_alert_when_job_fails(monkeypatch) -> None:
     assert repo.failed[0][1] == "boom"
     assert alerts[0]["source"] == "worker_process_once"
     assert alerts[0]["context"]["job_type"] == "matching_run_for_vacancy_v1"
+    assert repo.claim_prefer_non_notification_calls == 1
 
 
 def test_process_batch_drains_until_queue_is_empty(monkeypatch) -> None:

@@ -10,7 +10,7 @@ class DatabaseQueueClient(QueueClient):
         self.repo = JobExecutionLogsRepository(session)
 
     def enqueue(self, message: JobMessage) -> None:
-        row = self.repo.enqueue(
+        row_id = self.repo.enqueue_returning_id(
             job_type=message.job_type,
             idempotency_key=message.idempotency_key,
             payload_json=message.payload,
@@ -18,6 +18,6 @@ class DatabaseQueueClient(QueueClient):
             entity_id=message.entity_id,
         )
         created_job_ids = self.session.info.setdefault("created_job_ids", [])
-        row_id = str(row.id)
+        row_id = str(row_id)
         if row_id not in created_job_ids:
             created_job_ids.append(row_id)
