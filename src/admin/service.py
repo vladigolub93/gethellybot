@@ -6,12 +6,12 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import bindparam, select, text
+from sqlalchemy import bindparam, desc, select, text
 
 from src.admin.session import AdminSessionContext
 from src.candidate_profile.work_formats import display_work_formats
 from src.db.models.candidates import CandidateProfile, CandidateProfileVersion
-from src.db.models.core import Notification, RawMessage, User
+from src.db.models.core import Notification, RawMessage, StateTransitionLog, User
 from src.db.models.evaluations import IntroductionEvent
 from src.db.models.matching import Match, MatchingRun
 from src.db.models.vacancies import Vacancy, VacancyVersion
@@ -85,6 +85,60 @@ class AdminService:
         if " " in shortened:
             shortened = shortened.rsplit(" ", 1)[0]
         return f"{shortened}..."
+
+    @staticmethod
+    def _isoformat(value: Any) -> str | None:
+        if value is None:
+            return None
+        return value.isoformat()
+
+    def _serialize_notification_row(self, notification: Notification) -> dict[str, Any]:
+        payload = getattr(notification, "payload_json", None) or {}
+        return {
+            "id": str(notification.id),
+            "templateKey": getattr(notification, "template_key", None),
+            "status": getattr(notification, "status", None),
+            "entityType": getattr(notification, "entity_type", None),
+            "entityId": str(getattr(notification, "entity_id", "")) if getattr(notification, "entity_id", None) else None,
+            "textPreview": self._compact_text(payload.get("text"), limit=180),
+            "lastError": self._compact_text(getattr(notification, "last_error", None), limit=160),
+            "createdAt": self._isoformat(getattr(notification, "created_at", None)),
+            "updatedAt": self._isoformat(getattr(notification, "updated_at", None)),
+            "sentAt": self._isoformat(getattr(notification, "sent_at", None)),
+        }
+
+    def _serialize_raw_message_row(self, raw_message: RawMessage) -> dict[str, Any]:
+        return {
+            "id": str(raw_message.id),
+            "direction": getattr(raw_message, "direction", None),
+            "contentType": getattr(raw_message, "content_type", None),
+            "telegramMessageId": getattr(raw_message, "telegram_message_id", None),
+            "telegramChatId": getattr(raw_message, "telegram_chat_id", None),
+            "textPreview": self._compact_text(getattr(raw_message, "text_content", None), limit=180),
+            "createdAt": self._isoformat(getattr(raw_message, "created_at", None)),
+        }
+
+    def _serialize_transition_row(self, transition: StateTransitionLog) -> dict[str, Any]:
+        metadata = getattr(transition, "metadata_json", None) or {}
+        return {
+            "id": str(transition.id),
+            "entityType": getattr(transition, "entity_type", None),
+            "entityId": str(getattr(transition, "entity_id", "")) if getattr(transition, "entity_id", None) else None,
+            "fromState": getattr(transition, "from_state", None),
+            "toState": getattr(transition, "to_state", None),
+            "triggerType": getattr(transition, "trigger_type", None),
+            "actorUserId": str(getattr(transition, "actor_user_id", "")) if getattr(transition, "actor_user_id", None) else None,
+            "metadata": self._serialize_decimal(metadata),
+            "createdAt": self._isoformat(getattr(transition, "created_at", None)),
+        }
+
+    def _serialize_recent_matches(self, matches: list[Match], *, limit: int = 8) -> list[dict[str, Any]]:
+        ordered = sorted(
+            matches,
+            key=lambda match: getattr(match, "updated_at", None) or getattr(match, "created_at", None),
+            reverse=True,
+        )[:limit]
+        return self._serialize_matches(ordered)
 
     def build_session_payload(self, session_context: AdminSessionContext) -> dict[str, Any]:
         self._require_admin(session_context)
@@ -290,6 +344,22 @@ class AdminService:
             | (Match.vacancy_id.in_([vacancy.id for vacancy in active_vacancies] or [None]))
         )
         matches = list(self.session.execute(match_stmt).scalars().all())
+        notifications = list(
+            self.session.execute(
+                select(Notification)
+                .where(Notification.user_id == data.user.id)
+                .order_by(desc(Notification.created_at))
+                .limit(12)
+            ).scalars().all()
+        )
+        raw_messages = list(
+            self.session.execute(
+                select(RawMessage)
+                .where(RawMessage.user_id == data.user.id)
+                .order_by(desc(RawMessage.created_at))
+                .limit(12)
+            ).scalars().all()
+        )
         return {
             "user": self._serialize_user_row(data),
             "candidate": (
@@ -335,6 +405,9 @@ class AdminService:
                 "notificationCount": self._count_rows(Notification, Notification.user_id == data.user.id),
                 "rawMessageCount": self._count_rows(RawMessage, RawMessage.user_id == data.user.id),
             },
+            "recentMatches": self._serialize_recent_matches(matches),
+            "recentNotifications": [self._serialize_notification_row(row) for row in notifications],
+            "recentMessages": [self._serialize_raw_message_row(row) for row in raw_messages],
         }
 
     def block_users(
@@ -519,6 +592,21 @@ class AdminService:
         run = self.session.execute(select(MatchingRun).where(MatchingRun.id == match.matching_run_id)).scalar_one_or_none()
         candidate_user = self.users.get_by_id(candidate.user_id) if candidate is not None else None
         manager_user = self.users.get_by_id(vacancy.manager_user_id) if vacancy is not None else None
+        transitions = list(
+            self.session.execute(
+                select(StateTransitionLog)
+                .where(StateTransitionLog.entity_type == "match", StateTransitionLog.entity_id == match.id)
+                .order_by(desc(StateTransitionLog.created_at))
+            ).scalars().all()
+        )
+        notifications = list(
+            self.session.execute(
+                select(Notification)
+                .where(Notification.entity_type == "match", Notification.entity_id == match.id)
+                .order_by(desc(Notification.created_at))
+                .limit(20)
+            ).scalars().all()
+        )
         return {
             "match": serialized,
             "vacancy": (
@@ -591,11 +679,13 @@ class AdminService:
                     "id": str(intro.id),
                     "status": getattr(intro, "status", None),
                     "mode": getattr(intro, "introduction_mode", None),
-                    "introducedAt": getattr(intro, "introduced_at", None).isoformat() if getattr(intro, "introduced_at", None) else None,
+                    "introducedAt": self._isoformat(getattr(intro, "introduced_at", None)),
                 }
                 if intro is not None
                 else None
             ),
+            "timeline": [self._serialize_transition_row(row) for row in transitions],
+            "notifications": [self._serialize_notification_row(row) for row in notifications],
         }
 
     def analytics_overview(self, session_context: AdminSessionContext) -> dict[str, Any]:
