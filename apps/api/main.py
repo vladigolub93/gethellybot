@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from src.admin.router import ADMIN_STATIC_DIR, router as admin_router
 from src.config.logging import configure_logging
 from src.config.settings import get_settings
 from src.health.router import router as health_router
@@ -20,7 +21,9 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.is_dev else None,
     )
     app.mount("/webapp/assets", StaticFiles(directory=str(WEBAPP_STATIC_DIR)), name="webapp-assets")
+    app.mount("/admin/assets", StaticFiles(directory=str(ADMIN_STATIC_DIR)), name="admin-assets")
     app.include_router(health_router)
+    app.include_router(admin_router)
     app.include_router(telegram_router)
     app.include_router(webapp_router)
 

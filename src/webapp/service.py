@@ -93,6 +93,12 @@ class WebAppService:
             )
 
         session_context = self._build_session_context(identity.telegram_user_id, identity.display_name or identity.username)
+        user = self.users.get_by_telegram_user_id(identity.telegram_user_id)
+        if user is not None and getattr(user, "is_blocked", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied.",
+            )
         try:
             token = issue_webapp_session_token(
                 session_context=session_context,
@@ -341,6 +347,8 @@ class WebAppService:
 
     def _resolve_role(self, user: Optional[User], telegram_user_id: int) -> str:
         if user is None:
+            return WEBAPP_ROLE_UNKNOWN
+        if getattr(user, "is_blocked", False):
             return WEBAPP_ROLE_UNKNOWN
         if getattr(user, "is_hiring_manager", False):
             return WEBAPP_ROLE_HIRING_MANAGER

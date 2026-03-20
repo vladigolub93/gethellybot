@@ -9,9 +9,11 @@ from src.candidate_profile.work_formats import candidate_work_formats, display_w
 from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.db.repositories.candidate_profiles import CandidateProfilesRepository
 from src.db.repositories.matching import MatchingRepository
+from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.llm.service import safe_rerank_candidates
 from src.matching.filters import evaluate_hard_filters
+from src.monitoring.match_alerts import TelegramMatchAlertService
 from src.matching.scoring import (
     build_gap_signals,
     classify_fit_band,
@@ -35,6 +37,30 @@ class MatchingService:
         self.candidates = CandidateProfilesRepository(session)
         self.vacancies = VacanciesRepository(session)
         self.matching = MatchingRepository(session)
+        self.users = UsersRepository(session)
+        self.match_alerts = TelegramMatchAlertService()
+
+    def _send_match_created_alert(
+        self,
+        *,
+        match,
+        vacancy,
+        candidate,
+        candidate_version,
+        note: str | None = None,
+    ) -> None:
+        candidate_user_id = getattr(candidate, "user_id", None)
+        manager_user_id = getattr(vacancy, "manager_user_id", None)
+        self.match_alerts.send_match_alert(
+            event_type="match_created",
+            match=match,
+            vacancy=vacancy,
+            candidate_profile=candidate,
+            candidate_version=candidate_version,
+            candidate_user=self.users.get_by_id(candidate_user_id) if candidate_user_id else None,
+            manager_user=self.users.get_by_id(manager_user_id) if manager_user_id else None,
+            note=note,
+        )
 
     @staticmethod
     def _recent_feedback_categories(context_json: dict | None, *, key: str) -> list[str]:
@@ -256,7 +282,7 @@ class MatchingService:
             filter_reasons = evaluate_hard_filters(candidate, vacancy)
             if filter_reasons:
                 hard_filtered_count += 1
-                self.matching.create_match(
+                created_match = self.matching.create_match(
                     matching_run_id=run.id,
                     vacancy_id=vacancy.id,
                     vacancy_version_id=vacancy_version.id,
@@ -266,6 +292,13 @@ class MatchingService:
                     hard_filter_passed=False,
                     filter_reason_codes_json=filter_reasons,
                     rationale_json={"stage": "hard_filters"},
+                )
+                self._send_match_created_alert(
+                    match=created_match,
+                    vacancy=vacancy,
+                    candidate=candidate,
+                    candidate_version=candidate_version,
+                    note=f"hard_filters={', '.join(filter_reasons)}",
                 )
                 continue
 
@@ -408,7 +441,7 @@ class MatchingService:
             rerank_item = entry["rerank_item"]
             fit_band = entry["fit_band"]
             gap_signals = entry["gap_signals"]
-            self.matching.create_match(
+            created_match = self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
                 vacancy_version_id=vacancy_version.id,
@@ -434,6 +467,13 @@ class MatchingService:
                     "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
             )
+            self._send_match_created_alert(
+                match=created_match,
+                vacancy=vacancy,
+                candidate=item["candidate"],
+                candidate_version=item["candidate_version"],
+                note=f"status=shortlisted fit_band={fit_band}",
+            )
 
         for entry in reranked_entries:
             item = entry["item"]
@@ -445,7 +485,7 @@ class MatchingService:
             filter_reason = (
                 "below_fit_band_cutoff" if fit_band == "not_fit" else "below_llm_rerank_cutoff"
             )
-            self.matching.create_match(
+            created_match = self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
                 vacancy_version_id=vacancy_version.id,
@@ -471,10 +511,17 @@ class MatchingService:
                     "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
             )
+            self._send_match_created_alert(
+                match=created_match,
+                vacancy=vacancy,
+                candidate=item["candidate"],
+                candidate_version=item["candidate_version"],
+                note=f"status=filtered_out reason={filter_reason} fit_band={fit_band}",
+            )
 
         for item in non_shortlisted:
             gap_signals = build_gap_signals(score_breakdown=item["score_breakdown"])
-            self.matching.create_match(
+            created_match = self.matching.create_match(
                 matching_run_id=run.id,
                 vacancy_id=vacancy.id,
                 vacancy_version_id=vacancy_version.id,
@@ -493,6 +540,13 @@ class MatchingService:
                     "score_breakdown": item["score_breakdown"],
                     "feedback_categories": item["score_breakdown"].get("feedback_categories") or [],
                 },
+            )
+            self._send_match_created_alert(
+                match=created_match,
+                vacancy=vacancy,
+                candidate=item["candidate"],
+                candidate_version=item["candidate_version"],
+                note="status=filtered_out reason=below_deterministic_cutoff",
             )
 
         self.matching.update_run_counts(

@@ -12,6 +12,7 @@ from src.db.repositories.notifications import NotificationsRepository
 from src.db.repositories.users import UsersRepository
 from src.db.repositories.vacancies import VacanciesRepository
 from src.messaging.service import MessagingService
+from src.monitoring.match_alerts import TelegramMatchAlertService
 from src.candidate_profile.work_formats import display_work_formats
 from src.llm.service import (
     safe_answer_candidate_review_object_question,
@@ -68,6 +69,7 @@ class MatchingReviewService:
         self.vacancies = VacanciesRepository(session)
         self.messaging = MessagingService(session)
         self.state_service = StateService(session)
+        self.match_alerts = TelegramMatchAlertService()
 
     def _copy(self, approved_intent: str) -> str:
         return self.messaging.compose(approved_intent)
@@ -1706,6 +1708,29 @@ class MatchingReviewService:
         }
         return {key: value for key, value in payload.items() if value}
 
+    def _send_match_alert(
+        self,
+        *,
+        event_type: str,
+        match,
+        vacancy,
+        candidate,
+        candidate_version=None,
+        note: str | None = None,
+    ) -> None:
+        candidate_user = self.users.get_by_id(getattr(candidate, "user_id", None)) if candidate is not None else None
+        manager_user = self.users.get_by_id(getattr(vacancy, "manager_user_id", None)) if vacancy is not None else None
+        self.match_alerts.send_match_alert(
+            event_type=event_type,
+            match=match,
+            vacancy=vacancy,
+            candidate_profile=candidate,
+            candidate_version=candidate_version,
+            candidate_user=candidate_user,
+            manager_user=manager_user,
+            note=note,
+        )
+
     def _share_contacts(
         self,
         *,
@@ -1745,6 +1770,27 @@ class MatchingReviewService:
                 "reply_to_match_id": str(match.id),
             },
         )
+        candidate = self.candidates.get_by_id(getattr(match, "candidate_profile_id", None))
+        candidate_version = (
+            self.candidates.get_version_by_id(getattr(match, "candidate_profile_version_id", None))
+            if candidate is not None and getattr(match, "candidate_profile_version_id", None) is not None
+            else None
+        )
+        if candidate is not None:
+            self._send_match_alert(
+                event_type="contacts_shared",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+            )
+            self._send_match_alert(
+                event_type="match_successful",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+            )
 
     def _build_manager_batch_entries(self, *, vacancy, batch: list) -> list[dict]:
         role_title = getattr(vacancy, "role_title", None) or "this vacancy"
@@ -2170,6 +2216,14 @@ class MatchingReviewService:
                     state_field="status",
                     metadata_json={"vacancy_id": str(vacancy.id), "source": "candidate_direct_connect"},
                 )
+                self._send_match_alert(
+                    event_type="candidate_approved",
+                    match=match,
+                    vacancy=vacancy,
+                    candidate=candidate,
+                    candidate_version=candidate_version,
+                    note="candidate accepted manager-approved match",
+                )
                 self._share_contacts(
                     match=match,
                     candidate_user=candidate_user,
@@ -2195,6 +2249,14 @@ class MatchingReviewService:
                     actor_user_id=user.id,
                     state_field="status",
                     metadata_json={"vacancy_id": str(vacancy.id), "source": "candidate_vacancy_review"},
+                )
+                self._send_match_alert(
+                    event_type="candidate_approved",
+                    match=match,
+                    vacancy=vacancy,
+                    candidate=candidate,
+                    candidate_version=candidate_version,
+                    note="candidate applied from vacancy review",
                 )
                 self.notifications.create(
                     user_id=user.id,
@@ -2250,6 +2312,21 @@ class MatchingReviewService:
                     },
                     allow_duplicate=True,
                 )
+            self._send_match_alert(
+                event_type="candidate_skipped",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+            )
+            self._send_match_alert(
+                event_type="match_unsuccessful",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+                note="candidate skipped",
+            )
             if self._should_prompt_skip_feedback(skip_streak):
                 self.notifications.create(
                     user_id=user.id,
@@ -2396,6 +2473,14 @@ class MatchingReviewService:
                     state_field="status",
                     metadata_json={"vacancy_id": str(vacancy.id), "source": "manager_direct_connect"},
                 )
+                self._send_match_alert(
+                    event_type="manager_approved",
+                    match=match,
+                    vacancy=vacancy,
+                    candidate=candidate,
+                    candidate_version=candidate_version,
+                    note="manager approved after candidate already applied",
+                )
                 self._share_contacts(
                     match=match,
                     candidate_user=candidate_user,
@@ -2421,6 +2506,14 @@ class MatchingReviewService:
                     actor_user_id=user.id,
                     state_field="status",
                     metadata_json={"vacancy_id": str(vacancy.id), "source": "manager_pre_interview_review"},
+                )
+                self._send_match_alert(
+                    event_type="manager_approved",
+                    match=match,
+                    vacancy=vacancy,
+                    candidate=candidate,
+                    candidate_version=candidate_version,
+                    note="manager approved and waiting for candidate confirmation",
                 )
                 self.notifications.create(
                     user_id=candidate.user_id,
@@ -2480,8 +2573,8 @@ class MatchingReviewService:
                 payload_json={
                     "text": self._copy(f"Skipped {candidate_name} for this vacancy."),
                 },
-                allow_duplicate=True,
-            )
+                    allow_duplicate=True,
+                )
             if previous_status == MATCH_STATUS_CANDIDATE_APPLIED:
                 self.notifications.create(
                     user_id=candidate.user_id,
@@ -2495,6 +2588,21 @@ class MatchingReviewService:
                     },
                     allow_duplicate=True,
                 )
+            self._send_match_alert(
+                event_type="manager_skipped",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+            )
+            self._send_match_alert(
+                event_type="match_unsuccessful",
+                match=match,
+                vacancy=vacancy,
+                candidate=candidate,
+                candidate_version=candidate_version,
+                note="manager skipped",
+            )
             if self._should_prompt_skip_feedback(skip_streak):
                 self.notifications.create(
                     user_id=user.id,

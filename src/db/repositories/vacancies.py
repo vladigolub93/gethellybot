@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.db.models.core import User
 from src.db.models.vacancies import Vacancy, VacancyVersion
 
 
@@ -40,37 +41,53 @@ class VacanciesRepository:
         return self.session.execute(stmt).scalar_one_or_none()
 
     def get_open_vacancies(self) -> list[Vacancy]:
-        stmt = select(Vacancy).where(
-            Vacancy.state == "OPEN",
-            Vacancy.deleted_at.is_(None),
+        stmt = (
+            select(Vacancy)
+            .join(User, Vacancy.manager_user_id == User.id)
+            .where(
+                Vacancy.state == "OPEN",
+                Vacancy.deleted_at.is_(None),
+                User.is_blocked.is_(False),
+                User.deleted_at.is_(None),
+            )
         )
         return list(self.session.execute(stmt).scalars().all())
 
     def get_open_by_manager_user_id(self, manager_user_id) -> list[Vacancy]:
         stmt = (
             select(Vacancy)
+            .join(User, Vacancy.manager_user_id == User.id)
             .where(
                 Vacancy.manager_user_id == manager_user_id,
                 Vacancy.state == "OPEN",
                 Vacancy.deleted_at.is_(None),
+                User.is_blocked.is_(False),
+                User.deleted_at.is_(None),
             )
             .order_by(Vacancy.updated_at.desc(), Vacancy.created_at.desc())
         )
         return list(self.session.execute(stmt).scalars().all())
 
     def get_by_manager_user_id(self, manager_user_id) -> list[Vacancy]:
-        stmt = select(Vacancy).where(
-            Vacancy.manager_user_id == manager_user_id,
-            Vacancy.deleted_at.is_(None),
+        stmt = (
+            select(Vacancy)
+            .join(User, Vacancy.manager_user_id == User.id)
+            .where(
+                Vacancy.manager_user_id == manager_user_id,
+                Vacancy.deleted_at.is_(None),
+                User.deleted_at.is_(None),
+            )
         )
         return list(self.session.execute(stmt).scalars().all())
 
     def get_latest_active_by_manager_user_id(self, manager_user_id) -> Optional[Vacancy]:
         stmt = (
             select(Vacancy)
+            .join(User, Vacancy.manager_user_id == User.id)
             .where(
                 Vacancy.manager_user_id == manager_user_id,
                 Vacancy.deleted_at.is_(None),
+                User.deleted_at.is_(None),
             )
             .order_by(Vacancy.updated_at.desc())
             .limit(1)

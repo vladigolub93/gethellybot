@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
@@ -62,5 +63,16 @@ class UsersRepository:
             user.is_hiring_manager = True
         else:
             raise ValueError(f"Unsupported role: {role}")
+        self.session.flush()
+        return user
+
+    def set_blocked(self, user: User, *, blocked: bool, reason: Optional[str] = None) -> User:
+        user.is_blocked = blocked
+        if blocked:
+            user.blocked_at = datetime.now(timezone.utc)
+            user.blocked_reason = reason
+        else:
+            user.blocked_at = None
+            user.blocked_reason = None
         self.session.flush()
         return user

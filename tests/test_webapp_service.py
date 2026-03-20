@@ -2,6 +2,9 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+from fastapi import HTTPException
+
 from src.webapp.service import WebAppService
 
 
@@ -125,6 +128,9 @@ class FakeUsersRepository:
     def get_by_id(self, user_id):
         return self.users_by_id.get(str(user_id))
 
+    def get_by_telegram_user_id(self, telegram_user_id):
+        return self.users_by_id.get(str(telegram_user_id))
+
 
 class FakeEvaluationsRepository:
     def __init__(self, evaluation):
@@ -132,6 +138,34 @@ class FakeEvaluationsRepository:
 
     def get_by_match_id(self, _match_id):
         return self.evaluation
+
+
+def test_authenticate_init_data_rejects_blocked_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = WebAppService(session=FakeSession())
+    blocked_user = SimpleNamespace(
+        id=uuid4(),
+        telegram_user_id=123456,
+        display_name="Blocked User",
+        username="blocked",
+        is_blocked=True,
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+    service.users = FakeUsersRepository({str(blocked_user.telegram_user_id): blocked_user})
+    monkeypatch.setattr(
+        "src.webapp.service.verify_telegram_webapp_init_data",
+        lambda **kwargs: SimpleNamespace(
+            telegram_user_id=blocked_user.telegram_user_id,
+            display_name="Blocked User",
+            username="blocked",
+        ),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.authenticate_init_data("signed-init-data")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Access denied."
 
 
 def test_list_candidate_opportunities_includes_challenge_card_and_serialized_matches() -> None:

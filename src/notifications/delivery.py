@@ -88,6 +88,12 @@ class NotificationDeliveryService:
             target_chat_id = payload.get("telegram_chat_id") or getattr(user, "telegram_chat_id", None)
             if user is None or not target_chat_id:
                 raise ValueError("Notification user or telegram_chat_id is not available.")
+            if getattr(user, "is_blocked", False):
+                self.notifications.mark_cancelled(notification, reason="user_blocked")
+                return {
+                    "status": "blocked_user",
+                    "notification_id": str(notification.id),
+                }
             if self.raw_messages.has_outbound_for_correlation(correlation_id=notification.id):
                 self.notifications.mark_sent(notification)
                 return {

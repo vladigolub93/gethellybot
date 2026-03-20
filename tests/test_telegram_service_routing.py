@@ -412,11 +412,17 @@ class FakeMatchingReviewService:
 
 
 class FakeIdentityService:
-    def __init__(self, *, consent: bool = False):
+    def __init__(self, *, consent: bool = False, ensured_user=None):
         self.consent = consent
+        self.ensured_user = ensured_user
         self.attach_calls = []
         self.grant_calls = []
         self.set_role_calls = []
+
+    def ensure_user(self, normalized_update):
+        if self.ensured_user is None:
+            raise AssertionError("ensure_user was called unexpectedly")
+        return self.ensured_user
 
     def attach_contact(self, user, normalized_update):
         self.attach_calls.append({"user": user, "update": normalized_update})
@@ -467,6 +473,28 @@ def build_service() -> TelegramUpdateService:
     service.stage_agents = FakeStageAgentService(None)
     service.matching_review_service = FakeMatchingReviewService()
     return service
+
+
+class FakeProcessSession:
+    def __init__(self):
+        self.info = {}
+        self.commit_calls = 0
+
+    def commit(self):
+        self.commit_calls += 1
+
+
+class FakeProcessRawMessagesRepository:
+    def __init__(self):
+        self.created = []
+
+    def get_by_update_id(self, _update_id):
+        return None
+
+    def create(self, **kwargs):
+        row = SimpleNamespace(id="raw-1", **kwargs)
+        self.created.append(row)
+        return row
 
 
 def make_summary_stage_result(action: str, *, edit_text: str | None = None) -> StageAgentExecutionResult:
@@ -523,6 +551,35 @@ def test_start_without_contact_requests_contact() -> None:
     assert templates == ["request_contact"]
     assert service.notifications_repo.calls[-1]["template_key"] == "request_contact"
     assert service.notifications_repo.calls[-1]["payload_json"]["reply_markup"] is not None
+
+
+def test_blocked_user_process_stops_after_raw_message_is_saved() -> None:
+    service = TelegramUpdateService(session=FakeProcessSession())
+    service.raw_messages_repo = FakeProcessRawMessagesRepository()
+    blocked_user = SimpleNamespace(
+        id="blocked-user-1",
+        is_blocked=True,
+        phone_number="+123",
+        username="blocked",
+        is_candidate=True,
+        is_hiring_manager=False,
+    )
+    service.identity_service = FakeIdentityService(ensured_user=blocked_user)
+    service.notifications_repo = FakeNotificationsRepository()
+    service.files_repo = FailIfCalledService()
+    service.candidate_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.stage_agents = FailIfCalledService()
+    service.notification_delivery = FailIfCalledService()
+
+    result = service.process(build_update(text="Hello"))
+
+    assert result.status == "blocked"
+    assert result.deduplicated is False
+    assert result.notification_templates == []
+    assert result.user_id == "blocked-user-1"
+    assert service.session.commit_calls == 1
+    assert len(service.raw_messages_repo.created) == 1
 
 
 def test_contact_required_help_intercepts_before_identity_gating() -> None:

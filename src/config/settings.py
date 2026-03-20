@@ -43,6 +43,9 @@ class Settings(BaseSettings):
         default=86400,
         alias="TELEGRAM_WEBAPP_SESSION_TTL_SECONDS",
     )
+    admin_panel_pin: str = Field(default="", alias="ADMIN_PANEL_PIN")
+    admin_session_secret: str = Field(default="", alias="ADMIN_SESSION_SECRET")
+    admin_session_ttl_seconds: int = Field(default=86400, alias="ADMIN_SESSION_TTL_SECONDS")
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     openai_model_extraction: str = Field(
@@ -107,6 +110,14 @@ class Settings(BaseSettings):
             except ValueError:
                 continue
         return values
+
+    @property
+    def effective_admin_panel_pin(self) -> str:
+        return self.admin_panel_pin or "6088"
+
+    @property
+    def effective_admin_session_secret(self) -> str:
+        return self.admin_session_secret or self.webapp_session_secret or self.telegram_bot_token
 
 
 @lru_cache(maxsize=1)

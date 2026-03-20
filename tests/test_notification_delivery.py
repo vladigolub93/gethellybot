@@ -8,6 +8,7 @@ from src.notifications.delivery import NotificationDeliveryService
 class FakeNotificationsRepository:
     def __init__(self):
         self.rows = {}
+        self.cancelled = []
 
     def get_by_id(self, notification_id):
         return self.rows.get(str(notification_id))
@@ -26,6 +27,12 @@ class FakeNotificationsRepository:
     def mark_failed(self, notification, *, error_message: str):
         notification.status = "failed"
         notification.last_error = error_message
+        return notification
+
+    def mark_cancelled(self, notification, *, reason: str):
+        notification.status = "cancelled"
+        notification.cancel_reason = reason
+        self.cancelled.append({"id": notification.id, "reason": reason})
         return notification
 
 
@@ -224,3 +231,25 @@ def test_send_notification_replies_to_original_review_card_when_reply_anchor_is_
 
     assert result["status"] == "sent"
     assert service.telegram.calls[0]["reply_to_message_id"] == 777
+
+
+def test_send_notification_cancels_for_blocked_user() -> None:
+    service = _build_service()
+    service.users = FakeUsersRepository(
+        SimpleNamespace(id="user-1", telegram_chat_id=12345, is_blocked=True),
+    )
+    notification = SimpleNamespace(
+        id="notification-8",
+        user_id="user-1",
+        template_key="request_role",
+        payload_json={"text": "Choose your role."},
+        status="pending",
+    )
+
+    result = service.send_notification(notification)
+
+    assert result["status"] == "blocked_user"
+    assert notification.status == "cancelled"
+    assert notification.cancel_reason == "user_blocked"
+    assert service.notifications.cancelled == [{"id": "notification-8", "reason": "user_blocked"}]
+    assert service.telegram.calls == []

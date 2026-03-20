@@ -2156,6 +2156,14 @@ class TelegramUpdateService:
                 user_id=user.id,
                 normalized_update=normalized_update,
             )
+            if getattr(user, "is_blocked", False):
+                self.session.commit()
+                return ProcessedTelegramUpdate(
+                    status="blocked",
+                    deduplicated=False,
+                    notification_templates=[],
+                    user_id=str(user.id),
+                )
             persisted_file = self._persist_file_if_present(user.id, raw_message, normalized_update)
 
             notification_templates = self._apply_identity_flow(

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from src.candidate_profile.states import CANDIDATE_READY_LIKE_STATES
 from src.candidate_profile.work_formats import build_work_formats_payload, normalize_work_format
 from src.db.models.candidates import CandidateProfile, CandidateProfileVersion
+from src.db.models.core import User
 
 
 class CandidateProfilesRepository:
@@ -27,9 +28,15 @@ class CandidateProfilesRepository:
         return self.session.execute(stmt).scalar_one_or_none()
 
     def get_ready_profiles(self) -> list[CandidateProfile]:
-        stmt = select(CandidateProfile).where(
-            CandidateProfile.state.in_(tuple(CANDIDATE_READY_LIKE_STATES)),
-            CandidateProfile.deleted_at.is_(None),
+        stmt = (
+            select(CandidateProfile)
+            .join(User, CandidateProfile.user_id == User.id)
+            .where(
+                CandidateProfile.state.in_(tuple(CANDIDATE_READY_LIKE_STATES)),
+                CandidateProfile.deleted_at.is_(None),
+                User.is_blocked.is_(False),
+                User.deleted_at.is_(None),
+            )
         )
         return list(self.session.execute(stmt).scalars().all())
 
@@ -45,10 +52,13 @@ class CandidateProfilesRepository:
                 CandidateProfileVersion,
                 CandidateProfile.current_version_id == CandidateProfileVersion.id,
             )
+            .join(User, CandidateProfile.user_id == User.id)
             .where(
                 CandidateProfile.state.in_(tuple(CANDIDATE_READY_LIKE_STATES)),
                 CandidateProfile.deleted_at.is_(None),
                 CandidateProfileVersion.semantic_embedding.is_not(None),
+                User.is_blocked.is_(False),
+                User.deleted_at.is_(None),
             )
             .order_by(distance_expr.asc())
             .limit(limit)
