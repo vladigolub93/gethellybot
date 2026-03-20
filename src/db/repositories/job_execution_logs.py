@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import not_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from src.db.models.core import JobExecutionLog
@@ -52,6 +53,27 @@ class JobExecutionLogsRepository:
         entity_type: Optional[str] = None,
         entity_id=None,
     ) -> JobExecutionLog:
+        if self.session.bind is not None and self.session.bind.dialect.name == "postgresql":
+            insert_stmt = (
+                pg_insert(JobExecutionLog)
+                .values(
+                    job_type=job_type,
+                    idempotency_key=idempotency_key,
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    status="queued",
+                    attempt_no=1,
+                    payload_json=payload_json,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["job_type", "idempotency_key", "attempt_no"]
+                )
+                .returning(JobExecutionLog.id)
+            )
+            inserted_id = self.session.execute(insert_stmt).scalar_one_or_none()
+            if inserted_id is not None:
+                return self.get_by_id(inserted_id)
+
         existing = self.get_by_idempotency_key(
             job_type=job_type,
             idempotency_key=idempotency_key,

@@ -5,6 +5,7 @@ from src.interview.processing import InterviewProcessingService
 from src.matching.processing import MatchingProcessingService
 from src.notifications.delivery import NotificationDeliveryService
 from src.storage.service import FileStorageService
+from src.telegram.processing import TelegramProcessingService
 from src.vacancy.processing import VacancyProcessingService
 
 
@@ -26,6 +27,8 @@ def process_job(session, job):
         return NotificationDeliveryService(session).process_job(job)
     if job.job_type.startswith("file_"):
         return FileStorageService(session).process_job(job)
+    if job.job_type.startswith("telegram_"):
+        return TelegramProcessingService(session).process_job(job)
     if job.job_type.startswith("vacancy_"):
         return VacancyProcessingService(session).process_job(job)
     raise ValueError(f"Unsupported job type: {job.job_type}")

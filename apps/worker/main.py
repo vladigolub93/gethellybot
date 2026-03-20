@@ -55,6 +55,16 @@ def process_once() -> bool:
         session.close()
 
 
+def process_batch(*, max_jobs: int) -> int:
+    processed_jobs = 0
+    while processed_jobs < max_jobs:
+        processed = process_once()
+        if not processed:
+            break
+        processed_jobs += 1
+    return processed_jobs
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -65,16 +75,20 @@ def main() -> None:
         environment=settings.app_env,
         queue_backend=settings.queue_backend,
         poll_interval_seconds=settings.worker_poll_interval_seconds,
+        worker_concurrency=settings.worker_concurrency,
+        max_jobs_per_tick=settings.worker_max_jobs_per_tick,
     )
 
     try:
         while True:
             try:
-                processed = process_once()
-                logger.debug("worker_poll_tick", processed_job=processed)
+                processed_jobs = process_batch(max_jobs=settings.worker_max_jobs_per_tick)
+                logger.debug("worker_poll_tick", processed_jobs=processed_jobs)
             except Exception as exc:
                 logger.exception("worker_poll_failed", error=str(exc))
-            time.sleep(settings.worker_poll_interval_seconds)
+                processed_jobs = 0
+            if processed_jobs == 0:
+                time.sleep(settings.worker_poll_interval_seconds)
     except KeyboardInterrupt:
         logger.info("worker_stopped")
 

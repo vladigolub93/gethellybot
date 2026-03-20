@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.candidate_profile.service import CandidateProfileService
 from src.config.logging import get_logger
+from src.config.settings import get_settings
 from src.db.repositories.files import FilesRepository
 from src.db.repositories.job_execution_logs import JobExecutionLogsRepository
 from src.db.repositories.notifications import NotificationsRepository
@@ -116,6 +117,22 @@ class TelegramUpdateService:
                 "reply_markup": self._entry_stage_reply_markup(stage),
             },
         )
+
+    @staticmethod
+    def _resolve_role_selection_action(text_value: str) -> str | None:
+        normalized = " ".join((text_value or "").strip().lower().split())
+        if normalized in {"candidate", "i am candidate", "i'm candidate", "кандидат"}:
+            return "candidate"
+        if normalized in {
+            "hiring manager",
+            "manager",
+            "recruiter",
+            "hr",
+            "нанимающий менеджер",
+            "менеджер",
+        }:
+            return "hiring_manager"
+        return None
 
     def _handle_contact_share(
         self,
@@ -1994,6 +2011,9 @@ class TelegramUpdateService:
         normalized_update: NormalizedTelegramUpdate,
         text_value: str,
     ) -> List[str] | None:
+        if text_value == "/start":
+            return self._handle_start_command(user=user)
+
         if normalized_update.contact_phone_number:
             return self._handle_contact_share(
                 user=user,
@@ -2005,6 +2025,24 @@ class TelegramUpdateService:
             not has_primary_contact_channel(user)
             or (not user.is_candidate and not user.is_hiring_manager)
         )
+
+        if has_primary_contact_channel(user) and not user.is_candidate and not user.is_hiring_manager:
+            role_action = self._resolve_role_selection_action(text_value)
+            if role_action is not None:
+                from types import SimpleNamespace
+
+                entry_templates = self._handle_entry_stage_result(
+                    user=user,
+                    raw_message_id=raw_message_id,
+                    entry_result=SimpleNamespace(
+                        action_accepted=True,
+                        proposed_action=role_action,
+                        reply_text=None,
+                        stage="ROLE_SELECTION",
+                    ),
+                )
+                if entry_templates is not None:
+                    return entry_templates
 
         if should_offer_entry_assistance and normalized_update.content_type == "text":
             entry_result = self.stage_agents.maybe_run_entry_stage(
@@ -2019,9 +2057,6 @@ class TelegramUpdateService:
             )
             if entry_templates is not None:
                 return entry_templates
-
-        if text_value == "/start":
-            return self._handle_start_command(user=user)
 
         return None
 
@@ -2293,6 +2328,10 @@ class TelegramUpdateService:
         return template_key
 
     def _flush_immediate_jobs(self) -> None:
+        settings = get_settings()
+        if not settings.telegram_immediate_job_flush_enabled:
+            self.session.info.pop("created_job_ids", [])
+            return
         created_job_ids = list(self.session.info.pop("created_job_ids", []))
         if not created_job_ids:
             return

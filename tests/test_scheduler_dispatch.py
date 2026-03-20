@@ -95,3 +95,59 @@ def test_scheduler_dispatch_sends_error_alert_on_failure(monkeypatch) -> None:
         scheduler_main.dispatch_once()
 
     assert alerts[0]["source"] == "scheduler_dispatch_once"
+
+
+def test_dispatch_until_idle_accumulates_multiple_cycles(monkeypatch) -> None:
+    cycles = iter(
+        [
+            {
+                "notifications_enqueued": 2,
+                "files_enqueued": 0,
+                "invite_wave_reminders_enqueued": 1,
+                "invite_wave_evaluations_enqueued": 0,
+            },
+            {
+                "notifications_enqueued": 1,
+                "files_enqueued": 1,
+                "invite_wave_reminders_enqueued": 0,
+                "invite_wave_evaluations_enqueued": 1,
+            },
+            {
+                "notifications_enqueued": 0,
+                "files_enqueued": 0,
+                "invite_wave_reminders_enqueued": 0,
+                "invite_wave_evaluations_enqueued": 0,
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        scheduler_main,
+        "dispatch_once",
+        lambda *, batch_limit: next(cycles),
+    )
+
+    result = scheduler_main.dispatch_until_idle(batch_limit=100, max_cycles=10)
+
+    assert result["notifications_enqueued"] == 3
+    assert result["files_enqueued"] == 1
+    assert result["invite_wave_reminders_enqueued"] == 1
+    assert result["invite_wave_evaluations_enqueued"] == 1
+    assert result["cycles"] == 3
+
+
+def test_dispatch_until_idle_stops_at_max_cycles(monkeypatch) -> None:
+    monkeypatch.setattr(
+        scheduler_main,
+        "dispatch_once",
+        lambda *, batch_limit: {
+            "notifications_enqueued": 1,
+            "files_enqueued": 0,
+            "invite_wave_reminders_enqueued": 0,
+            "invite_wave_evaluations_enqueued": 0,
+        },
+    )
+
+    result = scheduler_main.dispatch_until_idle(batch_limit=100, max_cycles=2)
+
+    assert result["notifications_enqueued"] == 2
+    assert result["cycles"] == 2

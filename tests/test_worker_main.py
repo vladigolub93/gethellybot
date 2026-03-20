@@ -77,3 +77,20 @@ def test_process_once_sends_error_alert_when_job_fails(monkeypatch) -> None:
     assert repo.failed[0][1] == "boom"
     assert alerts[0]["source"] == "worker_process_once"
     assert alerts[0]["context"]["job_type"] == "matching_run_for_vacancy_v1"
+
+
+def test_process_batch_drains_until_queue_is_empty(monkeypatch) -> None:
+    results = iter([True, True, False])
+    monkeypatch.setattr(worker_main, "process_once", lambda: next(results))
+
+    processed_jobs = worker_main.process_batch(max_jobs=10)
+
+    assert processed_jobs == 2
+
+
+def test_process_batch_stops_at_max_jobs(monkeypatch) -> None:
+    monkeypatch.setattr(worker_main, "process_once", lambda: True)
+
+    processed_jobs = worker_main.process_batch(max_jobs=3)
+
+    assert processed_jobs == 3

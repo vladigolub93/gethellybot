@@ -1,4 +1,6 @@
 import time
+from collections import Counter
+from typing import Optional
 
 from src.config.logging import configure_logging, get_logger
 from src.config.settings import get_settings
@@ -11,7 +13,9 @@ from src.jobs.queue import JobMessage
 from src.monitoring.telegram_alerts import TelegramErrorAlertService
 
 
-def dispatch_once() -> dict:
+def dispatch_once(*, batch_limit: Optional[int] = None) -> dict:
+    settings = get_settings()
+    limit = int(batch_limit or settings.scheduler_dispatch_batch_size)
     session_factory = get_session_factory()
     session = session_factory()
     try:
@@ -21,7 +25,7 @@ def dispatch_once() -> dict:
         queue = DatabaseQueueClient(session)
 
         enqueued_notifications = 0
-        for notification in notifications.list_pending_dispatchable(limit=20):
+        for notification in notifications.list_pending_dispatchable(limit=limit):
             queue.enqueue(
                 JobMessage(
                     job_type="notification_send_telegram_v1",
@@ -35,7 +39,7 @@ def dispatch_once() -> dict:
             enqueued_notifications += 1
 
         enqueued_files = 0
-        for file_row in files.list_pending_storage(limit=20):
+        for file_row in files.list_pending_storage(limit=limit):
             queue.enqueue(
                 JobMessage(
                     job_type="file_store_telegram_v1",
@@ -50,7 +54,7 @@ def dispatch_once() -> dict:
 
         enqueued_wave_evaluations = 0
         enqueued_wave_reminders = 0
-        for wave in matching.list_due_invite_wave_reminders(limit=20):
+        for wave in matching.list_due_invite_wave_reminders(limit=limit):
             queue.enqueue(
                 JobMessage(
                     job_type="matching_send_invite_wave_reminder_v1",
@@ -62,8 +66,7 @@ def dispatch_once() -> dict:
             )
             enqueued_wave_reminders += 1
 
-        enqueued_wave_evaluations = 0
-        for wave in matching.list_due_invite_wave_evaluations(limit=20):
+        for wave in matching.list_due_invite_wave_evaluations(limit=limit):
             queue.enqueue(
                 JobMessage(
                     job_type="matching_evaluate_invite_wave_v1",
@@ -94,6 +97,20 @@ def dispatch_once() -> dict:
         session.close()
 
 
+def dispatch_until_idle(*, batch_limit: int, max_cycles: int) -> dict:
+    totals: Counter[str] = Counter()
+    cycles = 0
+    while cycles < max_cycles:
+        dispatched = dispatch_once(batch_limit=batch_limit)
+        cycles += 1
+        totals.update(dispatched)
+        if sum(dispatched.values()) == 0:
+            break
+    payload = dict(totals)
+    payload["cycles"] = cycles
+    return payload
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -103,13 +120,22 @@ def main() -> None:
         "scheduler_started",
         environment=settings.app_env,
         poll_interval_seconds=settings.scheduler_poll_interval_seconds,
+        dispatch_batch_size=settings.scheduler_dispatch_batch_size,
+        max_cycles_per_tick=settings.scheduler_max_cycles_per_tick,
     )
 
     try:
         while True:
-            dispatched = dispatch_once()
+            dispatched = dispatch_until_idle(
+                batch_limit=settings.scheduler_dispatch_batch_size,
+                max_cycles=settings.scheduler_max_cycles_per_tick,
+            )
             logger.debug("scheduler_tick", **dispatched)
-            time.sleep(settings.scheduler_poll_interval_seconds)
+            dispatched_total = sum(
+                value for key, value in dispatched.items() if key != "cycles"
+            )
+            if dispatched_total == 0:
+                time.sleep(settings.scheduler_poll_interval_seconds)
     except KeyboardInterrupt:
         logger.info("scheduler_stopped")
 

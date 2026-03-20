@@ -4,9 +4,7 @@ from src.llm.service import (
     safe_build_interview_invitation_copy,
     safe_build_match_card_copy,
     safe_build_recovery_message,
-    safe_build_role_selection_reply,
     safe_build_small_talk_reply,
-    safe_copywrite_response,
 )
 
 
@@ -15,10 +13,7 @@ class MessagingService:
         self.session = session
 
     def compose(self, approved_intent: str) -> str:
-        return safe_copywrite_response(
-            self.session,
-            approved_intent=approved_intent,
-        ).payload["message"]
+        return str(approved_intent or "").strip()
 
     def compose_match_card(
         self,
@@ -68,10 +63,10 @@ class MessagingService:
         ).payload["message"]
 
     def compose_role_selection(self, *, latest_user_message: str | None = None) -> str:
-        return safe_build_role_selection_reply(
-            self.session,
-            latest_user_message=latest_user_message,
-        ).payload["message"]
+        return (
+            "Hi. Choose your role to get started: Candidate if you're looking for a job, "
+            "or Hiring Manager if you're hiring. Just send: Candidate or Hiring Manager."
+        )
 
     def compose_interview_invitation(self, *, role_title: str | None) -> str:
         return safe_build_interview_invitation_copy(
