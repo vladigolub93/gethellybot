@@ -97,7 +97,7 @@ class TelegramMatchAlertService:
             f"role: {role_title}",
             f"candidate: {candidate_name}",
             f"manager: {manager_name}",
-            f"link: {self.settings.app_base_url.rstrip('/')}/admin#/matches/{getattr(match, 'id', '')}",
+            f"link: {getattr(self.settings, 'effective_admin_base_url', self.settings.app_base_url.rstrip('/'))}/admin#/matches/{getattr(match, 'id', '')}",
         ]
         if note:
             lines.append(f"note: {' '.join(str(note).split())}")

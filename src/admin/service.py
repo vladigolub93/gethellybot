@@ -758,7 +758,8 @@ class AdminService:
     def _app_base_url(self) -> str:
         from src.config.settings import get_settings
 
-        return get_settings().app_base_url
+        settings = get_settings()
+        return getattr(settings, "effective_admin_base_url", settings.app_base_url)
 
     def delete_user(self, session_context: AdminSessionContext, *, user_id: str) -> dict[str, Any]:
         self._require_admin(session_context)

@@ -2140,6 +2140,19 @@ class TelegramUpdateService:
         if isinstance(session_info, dict):
             session_info["telegram_reply_chat_id"] = normalized_update.telegram_chat_id
         try:
+            if normalized_update.chat_type not in (None, "private"):
+                self.logger.info(
+                    "telegram_non_private_chat_ignored",
+                    chat_type=normalized_update.chat_type,
+                    telegram_chat_id=normalized_update.telegram_chat_id,
+                    telegram_user_id=normalized_update.telegram_user_id,
+                )
+                return ProcessedTelegramUpdate(
+                    status="ignored_non_private_chat",
+                    deduplicated=False,
+                    notification_templates=[],
+                    user_id="",
+                )
             self.session.info["created_job_ids"] = []
             self.session.info["created_notification_ids"] = []
             existing = self.raw_messages_repo.get_by_update_id(normalized_update.update_id)

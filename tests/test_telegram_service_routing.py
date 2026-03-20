@@ -447,6 +447,7 @@ def build_update(
     content_type: str = "text",
     contact_phone_number: Optional[str] = None,
     callback_data: Optional[str] = None,
+    chat_type: Optional[str] = None,
 ) -> NormalizedTelegramUpdate:
     return NormalizedTelegramUpdate(
         update_id=1,
@@ -461,6 +462,7 @@ def build_update(
         language_code="en",
         file=None,
         payload={},
+        chat_type=chat_type,
         callback_query_id="cb-1" if content_type == "callback" else None,
         callback_data=callback_data,
     )
@@ -580,6 +582,27 @@ def test_blocked_user_process_stops_after_raw_message_is_saved() -> None:
     assert result.user_id == "blocked-user-1"
     assert service.session.commit_calls == 1
     assert len(service.raw_messages_repo.created) == 1
+
+
+def test_non_private_chat_is_ignored_before_user_or_raw_message_side_effects() -> None:
+    service = TelegramUpdateService(session=FakeProcessSession())
+    service.raw_messages_repo = FakeProcessRawMessagesRepository()
+    service.identity_service = FailIfCalledService()
+    service.notifications_repo = FakeNotificationsRepository()
+    service.files_repo = FailIfCalledService()
+    service.candidate_service = FailIfCalledService()
+    service.vacancy_service = FailIfCalledService()
+    service.stage_agents = FailIfCalledService()
+    service.notification_delivery = FailIfCalledService()
+
+    result = service.process(build_update(text="@gethellybot", content_type="text", chat_type="supergroup"))
+
+    assert result.status == "ignored_non_private_chat"
+    assert result.deduplicated is False
+    assert result.notification_templates == []
+    assert result.user_id == ""
+    assert service.session.commit_calls == 0
+    assert service.raw_messages_repo.created == []
 
 
 def test_contact_required_help_intercepts_before_identity_gating() -> None:

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = Field(default="helly", alias="APP_NAME")
     log_level: str = Field(default="INFO", alias="APP_LOG_LEVEL")
     app_base_url: str = Field(default="http://localhost:8000", alias="APP_BASE_URL")
+    admin_base_url: str = Field(default="", alias="ADMIN_BASE_URL")
 
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(
@@ -118,6 +119,10 @@ class Settings(BaseSettings):
     @property
     def effective_admin_session_secret(self) -> str:
         return self.admin_session_secret or self.webapp_session_secret or self.telegram_bot_token
+
+    @property
+    def effective_admin_base_url(self) -> str:
+        return (self.admin_base_url or self.app_base_url).rstrip("/")
 
 
 @lru_cache(maxsize=1)
